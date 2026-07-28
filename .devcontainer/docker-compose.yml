@@ -1,0 +1,18 @@
+# .devcontainer/docker-compose.yml
+
+version: "3.9"
+
+services:
+  dev:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+
+    volumes:
+      - ..:/workspace:cached  # host 코드 → 컨테이너 공유
+      - /var/run/docker.sock:/var/run/docker.sock   # ⭐ 핵심
+
+    command: sleep infinity  # DevContainer에서 attach 유지
+
+    # 필요 시 추가
+    # runtime: nvidia

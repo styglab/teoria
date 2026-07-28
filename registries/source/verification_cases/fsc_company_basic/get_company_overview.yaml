@@ -1,0 +1,6 @@
+query:
+  numOfRows: 10
+  pageNo: 1
+  resultType: json
+  crno: "1301110006246"  # 실제 조회할 13자리 법인등록번호로 교체
+  # corpNm: "법인명"      # 법인명으로 조회할 때 사용

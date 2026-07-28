@@ -1,0 +1,403 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-07-22"
+
+source:
+  id: fsc_company_basic
+  name: 금융위원회 기업기본정보
+  provider:
+    organization: 금융위원회
+    distribution: 공공데이터포털
+  type: api
+  specification:
+    format: manual
+    version: "1.0"
+    source_document: 금융위원회_기업기본정보.docx
+  access:
+    base_url: http://apis.data.go.kr/1160100/service/GetCorpBasicInfoService_V2
+    authentication:
+      type: api_key
+      in: query
+      name: serviceKey
+      credential_env: FSC_COMPANY_BASIC_SERVICEKEY
+  components:
+    objects:
+      - id: corporate_outline
+        name: 기업개요
+        fields:
+          - id: crno
+            name: 법인등록번호
+            type: string
+            format: corporate_registration_number
+          - id: corpNm
+            name: 법인명
+            type: string
+          - id: corpEnsnNm
+            name: 법인영문명
+            type: string
+          - id: enpPbanCmpyNm
+            name: 기업공시회사명
+            type: string
+          - id: enpRprFnm
+            name: 기업대표자성명
+            type: string
+          - id: corpRegMrktDcd
+            name: 법인등록시장구분코드
+            type: string
+          - id: corpRegMrktDcdNm
+            name: 법인등록시장구분코드명
+            type: string
+          - id: corpDcd
+            name: 법인구분코드
+            type: string
+          - id: corpDcdNm
+            name: 법인구분코드명
+            type: string
+          - id: bzno
+            name: 사업자등록번호
+            type: string
+            format: business_registration_number
+          - id: enpOzpno
+            name: 기업구우편번호
+            type: string
+          - id: enpBsadr
+            name: 기업기본주소
+            type: string
+          - id: enpDtadr
+            name: 기업상세주소
+            type: string
+          - id: enpHmpgUrl
+            name: 기업홈페이지URL
+            type: string
+          - id: enpTlno
+            name: 기업전화번호
+            type: string
+          - id: enpFxno
+            name: 기업팩스번호
+            type: string
+          - id: sicNm
+            name: 표준산업분류명
+            type: string
+          - id: enpEstbDt
+            name: 기업설립일자
+            type: string
+            format: date_yyyymmdd
+          - id: enpStacMm
+            name: 기업결산월
+            type: string
+          - id: enpXchgLstgDt
+            name: 기업거래소상장일자
+            type: string
+            format: date_yy_mm_dd_slash
+          - id: enpXchgLstgAbolDt
+            name: 기업거래소상장폐지일자
+            type: string
+            format: date_yy_mm_dd_slash
+          - id: enpKosdaqLstgDt
+            name: 기업코스닥상장일자
+            type: string
+            format: date_yy_mm_dd_slash
+          - id: enpKosdaqLstgAbolDt
+            name: 기업코스닥상장폐지일자
+            type: string
+            format: date_yy_mm_dd_slash
+          - id: enpKrxLstgDt
+            name: 기업KONEX상장일자
+            type: string
+            format: date_yy_mm_dd_slash
+          - id: enpKrxLstgAbolDt
+            name: 기업KONEX상장폐지일자
+            type: string
+            format: date_yy_mm_dd_slash
+          - id: smenpYn
+            name: 중소기업여부
+            type: string
+            values:
+              - value: "Y"
+              - value: "N"
+          - id: enpMntrBnkNm
+            name: 기업주거래은행명
+            type: string
+          - id: enpEmpeCnt
+            name: 기업종업원수
+            type: string
+          - id: empeAvgCnwkTermCtt
+            name: 종업원평균근속기간내용
+            type: string
+          - id: enpPn1AvgSlryAmt
+            name: 기업1인평균급여금액
+            type: string
+          - id: actnAudpnNm
+            name: 회계감사인명
+            type: string
+          - id: audtRptOpnnCtt
+            name: 감사보고서의견내용
+            type: string
+          - id: enpMainBizNm
+            name: 기업주요사업명
+            type: string
+          - id: fssCorpUnqNo
+            name: 금융감독원법인고유번호
+            type: string
+          - id: fssCorpChgDtm
+            name: 금융감독원법인변경일시
+            type: string
+            format: date_yyyy_mm_dd_slash
+          - id: fstOpegDt
+            name: 최초개방일자
+            type: string
+            format: date_yyyymmdd
+          - id: lastOpegDt
+            name: 최종개방일자
+            type: string
+            format: date_yyyymmdd
+      - id: affiliate_company
+        name: 계열회사
+        fields:
+          - id: basDt
+            name: 기준일자
+            type: string
+            format: date_yyyymmdd
+          - id: crno
+            name: 법인등록번호
+            type: string
+            format: corporate_registration_number
+          - id: afilCmpyNm
+            name: 계열회사명
+            type: string
+          - id: afilCmpyCrno
+            name: 계열회사법인등록번호
+            type: string
+            format: corporate_registration_number
+          - id: lstgYn
+            name: 상장여부
+            type: string
+            values:
+              - value: "상장"
+              - value: "비상장"
+      - id: consolidated_subsidiary_company
+        name: 연결대상종속기업
+        fields:
+          - id: basDt
+            name: 기준일자
+            type: string
+            format: date_yyyymmdd
+          - id: crno
+            name: 법인등록번호
+            type: string
+            format: corporate_registration_number
+          - id: sbrdEnpNm
+            name: 종속기업명
+            type: string
+          - id: sbrdEnpEstbDt
+            name: 종속기업설립일자
+            type: string
+          - id: sbrdEnpAdr
+            name: 종속기업주소
+            type: string
+          - id: sbrdEnpMainBizCtt
+            name: 종속기업주요사업내용
+            type: string
+          - id: sbrdEnpLtstEbzyrTastAmt
+            name: 종속기업최근사업연도말총자산금액
+            type: string
+          - id: dntRltBsisCtt
+            name: 지배관계근거내용
+            type: string
+          - id: mainSbrdEnpYnCtt
+            name: 주요종속기업여부내용
+            type: string
+
+  operations:
+    # get_company_overview
+    - id: get_company_overview
+      name: 기업개요조회
+      method: GET
+      path: /getCorpOutline_V2
+      description: 기준일자, 법인등록번호, 법인명을 통하여 기업개요를 조회한다.
+      request:
+        query:
+          fields:
+            - id: numOfRows
+              name: 페이지당 결과수
+              type: integer
+              default: 10
+            - id: pageNo
+              name: 페이지번호
+              type: integer
+              default: 1
+            - id: resultType
+              name: 결과형식
+              type: string
+              default: "json"
+              values:
+                - value: "json"
+                - value: "xml"
+            - id: crno
+              name: 법인등록번호
+              type: string
+              format: corporate_registration_number
+            - id: corpNm
+              name: 법인명
+              type: string
+          required:
+            - numOfRows
+            - pageNo
+            - resultType
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          fields:
+            - id: resultCode
+              name: 결과코드
+              type: string
+              values:
+                - value: "00"
+                  label: 정상
+            - id: resultMsg
+              name: 결과메시지
+              type: string
+            - id: numOfRows
+              name: 페이지당 결과수
+              type: integer
+            - id: pageNo
+              name: 페이지번호
+              type: integer
+            - id: totalCount
+              name: 전체건수
+              type: integer
+        data:
+          record_path: response.body.items.item[]
+          ref: corporate_outline
+    # list_affiliates
+    - id: list_affiliates
+      name: 계열회사조회
+      method: GET
+      path: /getAffiliate_V2
+      description: 기준일자, 법인등록번호, 계열회사명을 기준으로 계열회사 법인등록번호와 상장여부를 조회한다.
+      request:
+        query:
+          fields:
+            - id: numOfRows
+              name: 한 페이지 결과 수
+              type: integer
+              default: 10
+            - id: pageNo
+              name: 페이지 번호
+              type: integer
+              default: 1
+            - id: resultType
+              name: 결과형식
+              type: string
+              default: "json"
+              values:
+                - value: "json"
+                - value: "xml"
+            - id: basDt
+              name: 기준일자
+              type: string
+              format: date_yyyymmdd
+            - id: crno
+              name: 법인등록번호
+              type: string
+              format: corporate_registration_number
+            - id: afilCmpyNm
+              name: 계열회사명
+              type: string
+          required:
+            - numOfRows
+            - pageNo
+            - resultType
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          fields:
+            - id: resultCode
+              name: 결과코드
+              type: string
+              values:
+                - value: "00"
+                  label: 정상
+            - id: resultMsg
+              name: 결과메시지
+              type: string
+            - id: numOfRows
+              name: 한 페이지 결과 수
+              type: integer
+            - id: pageNo
+              name: 페이지 번호
+              type: integer
+            - id: totalCount
+              name: 전체 결과 수
+              type: integer
+        data:
+          record_path: response.body.items.item[]
+          ref: affiliate_company
+    # list_subsidiaries
+    - id: list_subsidiaries
+      name: 연결대상종속기업조회
+      method: GET
+      path: /getConsSubsComp_V2
+      description: 기준일자, 법인등록번호, 종속기업명을 기준으로 종속기업설립일자, 종속기업주소, 종속기업주요사업내용 등을 조회한다.
+      request:
+        query:
+          fields:
+            - id: numOfRows
+              name: 한 페이지 결과 수
+              type: integer
+              default: 10
+            - id: pageNo
+              name: 페이지 번호
+              type: integer
+              default: 1
+            - id: resultType
+              name: 결과형식
+              type: string
+              default: "json"
+              values:
+                - value: "json"
+                - value: "xml"
+            - id: basDt
+              name: 기준일자
+              type: string
+              format: date_yyyymmdd
+            - id: crno
+              name: 법인등록번호
+              type: string
+              format: corporate_registration_number
+            - id: sbrdEnpNm
+              name: 종속기업명
+              type: string
+          required:
+            - numOfRows
+            - pageNo
+            - resultType
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          fields:
+            - id: resultCode
+              name: 결과코드
+              type: string
+              values:
+                - value: "00"
+                  label: 정상
+            - id: resultMsg
+              name: 결과메시지
+              type: string
+            - id: numOfRows
+              name: 한 페이지 결과 수
+              type: integer
+            - id: pageNo
+              name: 페이지 번호
+              type: integer
+            - id: totalCount
+              name: 전체 결과 수
+              type: integer
+        data:
+          record_path: response.body.items.item[]
+          ref: consolidated_subsidiary_company
+

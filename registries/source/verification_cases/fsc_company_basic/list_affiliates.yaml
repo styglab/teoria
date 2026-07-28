@@ -1,0 +1,7 @@
+query:
+  numOfRows: 10
+  pageNo: 1
+  resultType: json
+  basDt: "20260101"       # YYYYMMDD 기준일자
+  crno: "1301110006246"   # 실제 조회할 13자리 법인등록번호로 교체
+  # afilCmpyNm: "계열회사명"
