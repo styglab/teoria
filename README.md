@@ -1,84 +1,85 @@
-1. 프로젝트명
-- 프로젝트 테오리아
-- teoria (theoria) - 높은 곳에서 전체를 관찰하여 본질을 이해
-- AI context
-- source > ontology > mapping > capability
+# Teoria
 
-2. 구조
-```
-Source Registry
-↓
-Ontology Registry
-세상을 정의 (명사)
- - Object
- - Property
- - Relationship
-↓
-Mapping Registry
-↓
-Capability Registry
-업무를 수행 (동사)
-- operation
-- decision
-- action
-- workflow
+Teoria는 외부 데이터 소스를 온톨로지 의미로 연결하고, AI가 실행 가능한 Capability로 제공하는 AI context platform이다.
 
+```text
+Source Registry → Ontology Registry → Mapping Registry → Capability Registry
+     원천 계약          도메인 의미           의미 연결             실행 단위
 ```
 
-3. 프로젝트 구조
-```
-registries/             사람이 작성하는 Registry YAML
-  core/
-    data_types.yaml
-    value_sets.yaml
-  sources/
-  ontologies/
-  mappings/
-  capabilities/
+## 현재 제공 기능
+
+- API Source 계약, 공통 Data Type과 Value Set 정의
+- 한국 기업정보 Ontology와 Source–Ontology Mapping
+- Capability 입력 바인딩, Source 호출, 응답 검증, 객체·링크 materialization
+- 객체 및 속성 provenance
+- Registry와 Provider Reference 정적 검증
+- timeout, retry, 최대 페이지 및 Capability deadline
+- Registry Capability를 자동 공개하는 MCP stdio 서버
+- CLI와 Docker 기반 검증 실행
+
+Registry 편집용 HTTP API와 Console은 현재 구조에 경계를 확보해 둔 향후 구현 범위다.
+
+## 프로젝트 구조
+
+```text
+registries/
+  core/                 공통 data types와 value sets
+  sources/              원천 API 계약
+  sources/verification_cases/
+  domains/company/      ontology, mappings, capabilities
+references/providers/   Source 작성 근거 문서와 metadata
 src/teoria/
-  models/               Registry Pydantic 모델
-  registry/             로딩, 참조 해결, 검증 및 진단
-tests/
-  unit/
-  fixtures/
-  registry_cases/
+  registry/             schema, loader, resolver, validator, verification
+  runtime/              source, mapping, capability 실행
+  adapters/             CLI, MCP, secret provider
+  transforms/           Mapping codec 함수
+apps/console/            향후 Registry Explorer·관리 UI
+deploy/                  Dockerfile과 Compose 구성
+tests/                   단위·Registry 검증 테스트
+archive/                 시점별 실행 결과와 과거 설계 산출물
 ```
 
-Source의 필드 ID와 요청 파라미터는 원본 시스템의 표기를 보존한다.
-snake_case 규칙은 Registry ID와 Teoria가 정의하는 ID에 적용한다.
+## 개발 시작
 
-4. 개발 및 검증
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest
-.venv/bin/teoria validate registries
-.venv/bin/teoria validate registries --source nts_business_registration
+uv sync --locked
+cp .env.example .env
+uv run --locked pytest
+uv run --locked teoria validate registries
 ```
 
-Source 요청 생성 검증:
+`.env`에는 필요한 Source API 키만 입력한다. 실제 비밀값이 든 `.env`는 Git에 포함하지 않는다.
+
+특정 Source의 요청 생성까지 검증하려면 다음과 같이 실행한다.
 
 ```bash
-.venv/bin/teoria verify source \
+uv run --locked teoria verify source \
   --profile build \
   --source nts_business_registration \
   --operation get_business_registration_status \
   --input registries/sources/verification_cases/nts_business_registration/get_business_registration_status.yaml
 ```
 
-`--profile live`는 같은 순서로 실제 API를 호출하고 응답 계약까지 검증한다. 인증정보는 출력이나 Registry에 저장하지 않고 CLI가 안내하는 환경변수로만 주입한다.
+`--profile live`는 실제 API 호출과 응답 계약 검증까지 수행한다.
 
-현재 검증기는 다음 항목을 확인한다.
+Docker에서 전체 Registry를 검증할 수도 있다.
 
-- YAML 및 Pydantic 모델 구조
-- Source와 Data Type ID 중복
-- Source 내부 Object `ref`
-- 공통 Data Type 참조
-- Object 및 Operation ID 중복
-- 요청의 `required` 필드 선언 여부
-- 필드 타입별 `items`, `fields`, `default`, `max_items` 규칙
-- HTTP method, path, content type, 오류 상태 코드
-- 응답 `record_path` 문법과 Object 순환 참조
+```bash
+docker compose -f deploy/compose.yaml build registry-check
+docker compose -f deploy/compose.yaml run --rm registry-check
+```
 
-전체 검증 구조와 규칙은 [Source Registry 검증 구조](docs/registry/validation.md)를 참고한다.
+## 문서
 
+- [문서 안내](docs/README.md)
+- [Architecture](docs/architecture/overview.md)
+- [Registry 공통 원칙](docs/registry/common.md)
+- [Data Type과 Value Set](docs/registry/core_registry.md)
+- [Ontology Registry](docs/registry/ontology_registry.md)
+- [Registry 검증](docs/registry/validation.md)
+- [Configuration](docs/configuration.md)
+- [MCP 서버](docs/mcp.md)
+- [Provider References](references/README.md)
+
+Source 필드와 요청 파라미터 ID는 원본 시스템 표기를 보존한다. Teoria가 정의하는 Registry, Ontology, Mapping, Capability ID에는 `snake_case`를 사용한다.

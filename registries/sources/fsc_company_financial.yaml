@@ -19,7 +19,7 @@ source:
       type: api_key
       in: query
       name: serviceKey
-      credential_env: FSC_COMPANY_FINANCIAL_SERVICEKEY
+      credential_env: TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY
   components:
     objects:
       - id: summary_financial_statement
@@ -368,4 +368,3 @@ source:
         data:
           record_path: response.body.items.item[]
           ref: income_statement
-

@@ -20,7 +20,7 @@ source:
       type: api_key
       in: query
       name: serviceKey
-      credential_env: NTS_BUSINESS_REGISTRATION_SERVICEKEY
+      credential_env: TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY
   components:
     objects:
       - id: business_status

@@ -19,7 +19,7 @@ source:
       type: api_key
       in: query
       name: serviceKey
-      credential_env: FSC_COMPANY_BASIC_SERVICEKEY
+      credential_env: TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY
   components:
     objects:
       - id: corporate_outline
@@ -410,4 +410,3 @@ source:
         data:
           record_path: response.body.items.item[]
           ref: consolidated_subsidiary_company
-

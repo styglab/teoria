@@ -1,0 +1,8 @@
+services:
+  registry-check:
+    volumes:
+      - ../registries:/app/registries:ro
+
+  mcp-stdio:
+    volumes:
+      - ../registries:/app/registries:ro

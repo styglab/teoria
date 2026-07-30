@@ -1,5 +1,7 @@
 FROM node:20
 
+COPY --from=ghcr.io/astral-sh/uv:0.12.0 /uv /uvx /usr/local/bin/
+
 # 기본 패키지 + Docker CLI
 RUN apt-get update && apt-get install -y \
     git curl bash sudo \
@@ -32,9 +34,9 @@ RUN mkdir -p /home/vscode/.npm-global \
  && npm config set prefix /home/vscode/.npm-global
 
 ENV PATH="/home/vscode/.npm-global/bin:${PATH}"
+ENV UV_LINK_MODE=copy
 
 # Codex CLI
 RUN npm install -g @openai/codex
 
 WORKDIR /workspace
-

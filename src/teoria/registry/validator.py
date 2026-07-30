@@ -69,10 +69,72 @@ class RegistryValidator:
                 if operation.response.data.fields:
                     self._validate_fields(operation.response.data.fields, objects, catalog, path, f"{operation.id}.response.data.fields", diagnostics, require_id=True)
         self._validate_value_sets(catalog, diagnostics)
+        self._validate_references(catalog, diagnostics)
         self._validate_ontologies(catalog, diagnostics)
         self._validate_mappings(catalog, diagnostics)
         self._validate_capabilities(catalog, diagnostics)
         return diagnostics
+
+    def _validate_references(self, catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
+        project_root = catalog.root.parent.resolve()
+        for source_id, source_registry in catalog.sources.items():
+            source_document = source_registry.source.specification.source_document
+            reference = catalog.references.get(source_id)
+            if source_document and reference is None:
+                diagnostics.append(
+                    Diagnostic(
+                        "missing_source_reference",
+                        f"source '{source_id}' declares source_document but has no provider reference metadata",
+                        catalog.source_paths[source_id],
+                        location="source.specification.source_document",
+                    )
+                )
+                continue
+            if reference is None:
+                continue
+            metadata_path = catalog.reference_paths[source_id]
+            registry_path = (project_root / reference.registry).resolve()
+            expected_registry_path = catalog.source_paths[source_id].resolve()
+            if registry_path != expected_registry_path:
+                diagnostics.append(
+                    Diagnostic(
+                        "reference_registry_mismatch",
+                        f"reference registry points to '{reference.registry}', expected '{catalog.source_paths[source_id]}'",
+                        metadata_path,
+                        location="registry",
+                    )
+                )
+            file_names = {item.path for item in reference.files}
+            for index, item in enumerate(reference.files):
+                if not (metadata_path.parent / item.path).is_file():
+                    diagnostics.append(
+                        Diagnostic(
+                            "reference_file_not_found",
+                            f"reference file '{item.path}' does not exist",
+                            metadata_path,
+                            location=f"files.{index}.path",
+                        )
+                    )
+            if source_document and source_document not in file_names:
+                diagnostics.append(
+                    Diagnostic(
+                        "source_document_mismatch",
+                        f"source_document '{source_document}' is not listed in provider reference files",
+                        catalog.source_paths[source_id],
+                        location="source.specification.source_document",
+                    )
+                )
+
+        for source_id, reference in catalog.references.items():
+            if source_id not in catalog.sources:
+                diagnostics.append(
+                    Diagnostic(
+                        "unknown_reference_source",
+                        f"provider reference points to unknown source '{reference.source}'",
+                        catalog.reference_paths[source_id],
+                        location="source",
+                    )
+                )
 
     def _validate_capabilities(self, catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
         for capability_id, capability in catalog.capabilities.items():
@@ -423,7 +485,8 @@ class RegistryValidator:
     def _validate_ontologies(self, catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
         for ontology_id, ontology in catalog.ontologies.items():
             path = catalog.ontology_paths[ontology_id]
-            if path.stem != ontology.id:
+            domain_ontology = path.name == "ontology.yaml" and path.parent.name == ontology.id
+            if path.stem != ontology.id and not domain_ontology:
                 diagnostics.append(Diagnostic("ontology_filename_mismatch", f"filename must match ontology id '{ontology.id}.yaml'", path, location="ontology.id"))
 
             object_types = {item.id: item for item in ontology.object_types}

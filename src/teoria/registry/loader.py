@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from yaml.constructor import ConstructorError
 from yaml.resolver import BaseResolver
 
-from teoria.models import (
+from teoria.registry.schema import (
     CapabilityDefinition,
     CapabilityRegistry,
     DataTypeDefinition,
@@ -16,6 +16,7 @@ from teoria.models import (
     MappingRegistry,
     OntologyDefinition,
     OntologyRegistry,
+    ProviderReference,
     SourceRegistry,
     ValueSetDefinition,
     ValueSetRegistry,
@@ -58,6 +59,8 @@ class RegistryCatalog:
     mapping_paths: dict[str, Path] = field(default_factory=dict)
     capabilities: dict[str, CapabilityDefinition] = field(default_factory=dict)
     capability_paths: dict[str, Path] = field(default_factory=dict)
+    references: dict[str, ProviderReference] = field(default_factory=dict)
+    reference_paths: dict[str, Path] = field(default_factory=dict)
 
 
 class RegistryLoadError(Exception):
@@ -67,11 +70,20 @@ class RegistryLoadError(Exception):
 
 
 class RegistryLoader:
-    def __init__(self, root: Path | str = "registries") -> None:
+    def __init__(
+        self,
+        root: Path | str = "registries",
+        reference_root: Path | str | None = None,
+    ) -> None:
         self.root = Path(root)
+        self.reference_root = Path(reference_root) if reference_root is not None else self.root.parent / "references" / "providers"
 
     def load(self) -> RegistryCatalog:
         diagnostics: list[Diagnostic] = []
+        if not self.root.is_dir():
+            raise RegistryLoadError(
+                [Diagnostic("registry_root_not_found", "registry root directory does not exist", self.root)]
+            )
         sources: dict[str, SourceRegistry] = {}
         source_paths: dict[str, Path] = {}
         data_types: dict[str, DataTypeDefinition] = {}
@@ -82,6 +94,8 @@ class RegistryLoader:
         mapping_paths: dict[str, Path] = {}
         capabilities: dict[str, CapabilityDefinition] = {}
         capability_paths: dict[str, Path] = {}
+        references: dict[str, ProviderReference] = {}
+        reference_paths: dict[str, Path] = {}
 
         data_type_paths = [self.root / "core" / "data_types.yaml"]
         for path in data_type_paths:
@@ -108,7 +122,9 @@ class RegistryLoader:
                             diagnostics.append(Diagnostic("duplicate_value_set", f"duplicate value set id '{definition.id}'", value_set_path))
                         value_sets[definition.id] = definition
 
-        for path in sorted((self.root / "ontologies").glob("*.yaml")):
+        ontology_paths_to_load = list((self.root / "ontologies").glob("*.yaml"))
+        ontology_paths_to_load.extend((self.root / "domains").glob("*/ontology.yaml"))
+        for path in sorted(ontology_paths_to_load):
             document = self._parse(path, diagnostics)
             if document is None:
                 continue
@@ -132,7 +148,9 @@ class RegistryLoader:
                 sources[source_id] = registry
                 source_paths[source_id] = path
 
-        for path in sorted((self.root / "mappings").glob("*.yaml")):
+        mapping_paths_to_load = list((self.root / "mappings").glob("*.yaml"))
+        mapping_paths_to_load.extend((self.root / "domains").glob("*/mappings/*.yaml"))
+        for path in sorted(mapping_paths_to_load):
             document = self._parse(path, diagnostics)
             if document is None:
                 continue
@@ -144,7 +162,9 @@ class RegistryLoader:
                 mappings[mapping_id] = registry.mapping
                 mapping_paths[mapping_id] = path
 
-        for path in sorted((self.root / "capabilities").glob("*.yaml")):
+        capability_paths_to_load = list((self.root / "capabilities").glob("*.yaml"))
+        capability_paths_to_load.extend((self.root / "domains").glob("*/capabilities/*.yaml"))
+        for path in sorted(capability_paths_to_load):
             document = self._parse(path, diagnostics)
             if document is None:
                 continue
@@ -156,6 +176,20 @@ class RegistryLoader:
                 capabilities[capability_id] = registry.capability
                 capability_paths[capability_id] = path
 
+        if self.reference_root.is_dir():
+            for path in sorted(self.reference_root.glob("*/*/metadata.yaml")):
+                document = self._parse(path, diagnostics)
+                if document is None:
+                    continue
+                reference = self._validate(ProviderReference, document, path, diagnostics)
+                if reference:
+                    if reference.source in references:
+                        diagnostics.append(Diagnostic("duplicate_reference", f"duplicate provider reference for source '{reference.source}'", path))
+                    references[reference.source] = reference
+                    reference_paths[reference.source] = path
+
+        if not any((sources, data_types, value_sets, ontologies, mappings, capabilities)):
+            diagnostics.append(Diagnostic("empty_registry", "registry root contains no recognized registry documents", self.root))
         if diagnostics:
             raise RegistryLoadError(diagnostics)
         return RegistryCatalog(
@@ -170,6 +204,8 @@ class RegistryLoader:
             mapping_paths=mapping_paths,
             capabilities=capabilities,
             capability_paths=capability_paths,
+            references=references,
+            reference_paths=reference_paths,
         )
 
     @staticmethod

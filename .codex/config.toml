@@ -1,0 +1,25 @@
+[mcp_servers.teoria]
+  command = "uv"
+  args = ["run", "--locked", "teoria-mcp"]
+  cwd = "/workspace"
+  startup_timeout_sec = 30
+  tool_timeout_sec = 150
+  required = true
+
+  [mcp_servers.teoria.env]
+  TEORIA_REGISTRY_PATH = "/workspace/registries"
+
+[mcp_servers.teoria.tools.get_business_registration_status]
+approval_mode = "approve"
+
+[mcp_servers.teoria.tools.get_company_profile]
+approval_mode = "approve"
+
+[mcp_servers.teoria.tools.get_company_financials]
+approval_mode = "approve"
+
+[mcp_servers.teoria.tools.get_company_relationships]
+approval_mode = "approve"
+
+[mcp_servers.teoria.tools.verify_business_registration]
+approval_mode = "approve"

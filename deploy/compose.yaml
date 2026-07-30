@@ -1,0 +1,19 @@
+services:
+  registry-check:
+    build:
+      context: ..
+      dockerfile: deploy/docker/python.Dockerfile
+    command: ["teoria", "validate", "/app/registries"]
+
+  mcp-stdio:
+    build:
+      context: ..
+      dockerfile: deploy/docker/python.Dockerfile
+    command: ["teoria-mcp"]
+    stdin_open: true
+    environment:
+      TEORIA_REGISTRY_PATH: /app/registries
+    env_file:
+      - path: ../.env
+        required: false
+    profiles: ["stdio"]

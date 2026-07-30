@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 
-from teoria.models.common import FieldDefinition
-from teoria.models.source import FieldContainer, SourceRegistry
+from teoria.registry.schema.common import FieldDefinition
+from teoria.registry.schema.source import FieldContainer, SourceRegistry
 
 
 def iter_fields(container: FieldContainer | FieldDefinition) -> Iterator[FieldDefinition]:
