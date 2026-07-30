@@ -1,0 +1,20 @@
+registry:
+  version: 2.0.0
+  registered_at: "2026-07-30"
+
+capability:
+  id: get_company_profile
+  name: 기업 기본정보 조회
+  description: 법인등록번호를 금융위원회 기업개요 조회에 전달하여 법인 기본정보, 소재지 주소 및 사업자등록번호를 반환한다
+  inputs:
+    corporate_registration_number:
+      property: company.legal_entity.corporate_registration_number
+      required: true
+  steps:
+    - call: fsc_company_basic.get_company_overview
+  returns:
+    - company.legal_entity
+    - company.postal_address
+    - company.business_registration
+    - company.legal_entity_has_address
+    - company.legal_entity_has_business_registration

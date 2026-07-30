@@ -96,7 +96,16 @@ def main() -> int:
         return 1
 
     source_count = 1 if args.source else len(catalog.sources)
-    print(f"Validated {source_count} sources and {len(catalog.formats)} formats.")
+    ontology_count = len(catalog.ontologies)
+    mapping_count = len(catalog.mappings)
+    capability_count = len(catalog.capabilities)
+    mapping_label = "mapping" if mapping_count == 1 else "mappings"
+    ontology_label = "ontology" if ontology_count == 1 else "ontologies"
+    print(
+        f"Validated {source_count} sources, {ontology_count} {ontology_label}, "
+        f"{mapping_count} {mapping_label}, {len(catalog.data_types)} data types, "
+        f"{len(catalog.value_sets)} value sets, and {capability_count} capabilities."
+    )
     return 0
 
 

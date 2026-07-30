@@ -2,7 +2,7 @@ registry:
   version: 1.0.0
   registered_at: "2026-07-22"
 
-formats:
+data_types:
 
   - id: business_registration_number
     name: 사업자등록번호
@@ -42,5 +42,22 @@ formats:
     name: ISO4217 통화코드
     base_type: string
     pattern: "^[A-Z]{3}$"
+
+  - id: financial_supervisory_unique_number
+    name: 금융감독원 법인고유번호
+    base_type: string
+    pattern: "^[0-9]{8}$"
+
+  - id: fiscal_month
+    name: 결산월
+    base_type: integer
+
+  - id: fiscal_year
+    name: 사업연도
+    base_type: integer
+
+  - id: monetary_amount
+    name: 통화 금액
+    base_type: number
 
 

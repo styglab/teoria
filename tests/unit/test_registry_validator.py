@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from teoria.models import FormatDefinition, SourceRegistry
+from teoria.models import DataTypeDefinition, SourceRegistry
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.registry.validator import RegistryValidator
 
@@ -30,7 +30,7 @@ def source_document() -> dict:
                 "objects": [
                     {
                         "id": "item",
-                        "fields": [{"id": "code", "type": "string", "format": "code"}],
+                        "fields": [{"id": "code", "data_type": "code"}],
                     }
                 ]
             },
@@ -41,7 +41,7 @@ def source_document() -> dict:
                     "path": "/items",
                     "request": {
                         "query": {
-                            "fields": [{"id": "limit", "type": "integer", "default": 10}],
+                            "fields": [{"id": "limit", "data_type": "integer", "default": 10}],
                             "required": ["limit"],
                         }
                     },
@@ -56,14 +56,14 @@ def source_document() -> dict:
     }
 
 
-def catalog_for(document: dict, path: str = "registries/source/example_source.yaml") -> RegistryCatalog:
+def catalog_for(document: dict, path: str = "registries/sources/example_source.yaml") -> RegistryCatalog:
     source = SourceRegistry.model_validate(document)
-    format_definition = FormatDefinition(id="code", base_type="string", pattern="^[A-Z]+$")
+    data_type_definition = DataTypeDefinition(id="code", base_type="string", pattern="^[A-Z]+$")
     return RegistryCatalog(
         root=Path("registries"),
         sources={source.source.id: source},
         source_paths={source.source.id: Path(path)},
-        formats={format_definition.id: format_definition},
+        data_types={data_type_definition.id: data_type_definition},
     )
 
 
@@ -80,8 +80,8 @@ def test_rejects_duplicate_yaml_keys(tmp_path: Path) -> None:
 def test_model_rejects_invalid_array_shape_and_unknown_keys() -> None:
     document = source_document()
     field = document["source"]["components"]["objects"][0]["fields"][0]
-    field.update({"type": "array"})
-    field.pop("format")
+    field["type"] = "array"
+    field.pop("data_type")
 
     with pytest.raises(ValidationError) as exc_info:
         SourceRegistry.model_validate(document)
@@ -99,18 +99,18 @@ def test_model_rejects_invalid_array_shape_and_unknown_keys() -> None:
 def test_reports_cross_registry_and_semantic_errors() -> None:
     document = source_document()
     source = document["source"]
-    source["components"]["objects"][0]["fields"][0]["format"] = "missing_format"
+    source["components"]["objects"][0]["fields"][0]["data_type"] = "missing_data_type"
     operation = source["operations"][0]
     operation["request"]["query"]["required"] = ["missing", "missing"]
     operation["response"]["data"]["record_path"] = "data[0]"
     operation["response"]["data"]["ref"] = "missing_object"
 
-    diagnostics = RegistryValidator().validate(catalog_for(document, "registries/source/wrong_name.yaml"))
+    diagnostics = RegistryValidator().validate(catalog_for(document, "registries/sources/wrong_name.yaml"))
     codes = {diagnostic.code for diagnostic in diagnostics}
 
     assert {
         "source_filename_mismatch",
-        "unknown_format",
+        "unknown_data_type",
         "duplicate_required_field",
         "unknown_required_field",
         "invalid_record_path",

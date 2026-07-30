@@ -7,9 +7,7 @@ old/
 infra/postgres/data/
 infra/qdrant/storage/
 .codex
-sources/
 data/
-models/
 archive/
 raw/
 

@@ -15,11 +15,19 @@ def test_loads_current_registries() -> None:
         "fsc_company_financial",
         "nts_business_registration",
     }
-    assert "business_registration_number" in catalog.formats
+    assert "business_registration_number" in catalog.data_types
+    assert set(catalog.ontologies) == {"company"}
+    assert "business_operating_status_kr" in catalog.value_sets
+    assert set(catalog.capabilities) == {
+        "get_business_registration_status",
+        "get_company_financials",
+        "get_company_profile",
+        "get_company_relationships",
+        "verify_business_registration",
+    }
 
 
 def test_current_registries_have_resolvable_references() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
 
     assert RegistryValidator().validate(catalog) == []
-

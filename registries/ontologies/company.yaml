@@ -1,0 +1,398 @@
+registry:
+  version: 2.0.0
+  registered_at: "2026-07-29"
+
+ontology:
+  id: company
+  name: 한국 기업정보
+  description: >-
+    대한민국 법인의 기본정보, 사업자등록과 과세상태, 증권시장 상장,
+    기업 간 관계, 재무제표 및 최근 확인된 감사정보를 일관된 객체와 관계로 표현한다.
+  object_types:
+    - id: legal_entity
+      name: 법인
+      description: >-
+        대한민국 법률에 따라 설립되어 법인등록번호를 부여받은 법적 실체.
+        개인사업자는 포함하지 않는다. 사업자등록은 세무상 사업 활동의
+        등록이므로 법인과 구분되며, 하나의 법인은 여러 사업자등록을 가질 수 있다.
+      primary_key: corporate_registration_number
+      examples:
+        - corporate_registration_number: "1301110006246"
+          legal_name: 삼성전자(주)
+      properties:
+        - id: corporate_registration_number
+          name: 법인등록번호
+          description: 대한민국 등기기관이 법인에 부여하는 13자리 고유 식별번호
+          data_type: corporate_registration_number
+        - id: legal_name
+          name: 법인명
+          description: 법적으로 등록된 법인의 공식 명칭
+          data_type: string
+        - id: english_name
+          name: 법인영문명
+          description: 법인이 사용하는 공식 영문 명칭
+          data_type: string
+        - id: disclosure_name
+          name: 공시회사명
+          description: 기업공시에서 사용하는 회사 명칭
+          data_type: string
+        - id: representative_names
+          name: 대표자명
+          description: 현재 확인된 하나 이상의 법인 대표자 성명이며 각 성명은 개인을 식별하는 정보가 아니다
+          data_type: string
+          collection: list
+        - id: legal_entity_type
+          name: 법인구분
+          description: 법률상 법인의 유형 또는 구분
+          data_type: string
+        - id: financial_supervisory_unique_number
+          name: 금융감독원 법인고유번호
+          description: 금융감독원이 법인에 부여한 8자리 고유번호
+          data_type: financial_supervisory_unique_number
+        - id: established_date
+          name: 설립일
+          description: 법인이 법적으로 설립된 날짜
+          data_type: date
+        - id: fiscal_year_end_month
+          name: 결산월
+          description: 법인의 회계연도가 종료되는 월
+          data_type: fiscal_month
+        - id: standard_industry_classification_name
+          name: 표준산업분류명
+          description: 법인의 주된 산업활동에 대응하는 표준산업분류 명칭
+          data_type: string
+        - id: primary_business_description
+          name: 주요사업
+          description: 법인이 주로 영위하는 사업에 대한 설명
+          data_type: string
+        - id: website_url
+          name: 홈페이지 URL
+          description: 법인이 운영하는 대표 홈페이지 주소
+          data_type: string
+        - id: telephone_number
+          name: 전화번호
+          description: 법인의 대표 전화번호
+          data_type: string
+        - id: fax_number
+          name: 팩스번호
+          description: 법인의 대표 팩스번호
+          data_type: string
+        - id: is_small_or_medium_enterprise
+          name: 중소기업 여부
+          description: 법인이 중소기업에 해당하는지 여부
+          data_type: boolean
+        - id: primary_bank_name
+          name: 주거래은행명
+          description: 현재 확인된 법인의 주된 금융거래 은행 명칭
+          data_type: string
+        - id: employee_count
+          name: 종업원 수
+          description: 현재 확인된 법인의 종업원 수
+          data_type: integer
+        - id: average_employee_tenure_years
+          name: 평균 근속연수
+          description: 현재 확인된 종업원 평균 근속기간을 연 단위로 나타낸 값
+          data_type: number
+        - id: average_employee_salary_amount
+          name: 1인 평균 급여금액
+          description: 현재 확인된 종업원 한 명당 평균 급여금액
+          data_type: monetary_amount
+        - id: profile_observed_at
+          name: 기업 프로필 관측시점
+          description: 중소기업 여부, 주거래은행 및 종업원 관련 변동 정보를 조회하거나 확인한 시점
+          data_type: datetime
+        - id: latest_auditor_name
+          name: 최근 확인 감사인명
+          description: 현재 소스에서 가장 최근에 확인된 회계법인 또는 감사인의 명칭
+          data_type: string
+        - id: latest_audit_opinion
+          name: 최근 확인 감사의견
+          description: 현재 소스에서 가장 최근에 확인된 감사의견
+          data_type: string
+        - id: audit_information_observed_at
+          name: 감사정보 관측시점
+          description: 최근 감사인명과 감사의견을 조회하거나 확인한 시점
+          data_type: datetime
+          
+    - id: postal_address
+      name: 주소
+      description: 법인 또는 사업장의 우편 주소
+      primary_key: address_id
+      properties:
+        - id: address_id
+          name: 주소 식별자
+          description: 주소 구성 값을 정규화하여 시스템에서 생성하는 내부 식별자이며 원천기관이 부여한 번호가 아니다
+          data_type: string
+        - id: postal_code
+          name: 우편번호
+          description: 주소에 대응하는 우편번호
+          data_type: string
+        - id: base_address
+          name: 기본주소
+          description: 도로명과 건물번호 등을 포함하는 주소의 기본 부분
+          data_type: string
+        - id: detail_address
+          name: 상세주소
+          description: 기본주소 뒤에 이어지는 동·층·호 등의 상세 부분
+          data_type: string
+        - id: full_address
+          name: 전체주소
+          description: 기본주소와 상세주소를 결합한 전체 주소
+          data_type: string
+
+    - id: business_registration
+      name: 사업자등록
+      description: 대한민국 과세당국에 등록된 사업 활동의 세무상 등록
+      primary_key: business_registration_number
+      properties:
+        - id: business_registration_number
+          name: 사업자등록번호
+          description: 대한민국 과세당국이 사업자에게 부여한 10자리 식별번호
+          data_type: business_registration_number
+        - id: business_name
+          name: 상호
+          description: 사업자등록에 등록된 사업의 명칭
+          data_type: string
+        - id: opened_date
+          name: 개업일
+          description: 사업자등록상 사업을 개시한 날짜
+          data_type: date
+        - id: closed_date
+          name: 폐업일
+          description: 사업자등록상 사업을 종료한 날짜
+          data_type: date
+        - id: primary_business_sector
+          name: 주업태
+          description: 사업자등록에 기재된 주된 사업 업태
+          data_type: string
+        - id: primary_business_item
+          name: 주종목
+          description: 사업자등록에 기재된 주된 사업 종목
+          data_type: string
+
+    - id: taxpayer_status_observation
+      name: 납세자 상태 관측
+      description: 특정 시점에 확인한 사업자의 영업상태와 과세유형
+      primary_key: observation_id
+      properties:
+        - id: observation_id
+          name: 관측 식별자
+          description: 사업자등록번호와 관측시점을 조합하여 시스템에서 생성하는 내부 관측 레코드 식별자
+          data_type: string
+        - id: operating_status
+          name: 사업자 영업상태
+          description: 관측 시점의 사업자 영업상태
+          value_set: business_operating_status_kr
+        - id: current_taxation_type
+          name: 현재 과세유형
+          description: 관측 시점에 적용되는 부가가치세 과세유형
+          value_set: vat_taxation_type_kr
+        - id: previous_taxation_type
+          name: 직전 과세유형
+          description: 현재 과세유형으로 변경되기 직전에 적용된 과세유형
+          value_set: vat_taxation_type_kr
+        - id: taxation_type_changed_date
+          name: 최근 과세유형 전환일
+          description: 현재 과세유형으로 마지막 전환된 날짜
+          data_type: date
+        - id: invoice_application_date
+          name: 세금계산서 적용일
+          description: 세금계산서 발급 관련 과세유형이 적용되기 시작한 날짜
+          data_type: date
+        - id: is_closed_due_to_unit_tax_conversion
+          name: 단위과세전환 폐업 여부
+          description: 단위과세 전환으로 인해 종전 사업자등록이 폐업 처리되었는지 여부
+          data_type: boolean
+        - id: observed_at
+          name: 관측시점
+          description: 납세자 상태를 조회하거나 확인한 시점
+          data_type: datetime
+
+    - id: registration_verification
+      name: 사업자등록정보 확인
+      description: 제출한 사업자 정보가 과세당국의 등록정보와 일치하는지 확인한 결과
+      primary_key: verification_id
+      properties:
+        - id: verification_id
+          name: 확인 식별자
+          description: 사업자등록번호와 확인시점을 조합하여 시스템에서 생성하는 내부 확인 레코드 식별자
+          data_type: string
+        - id: result
+          name: 확인 결과
+          description: 제출한 사업자 정보가 등록정보와 일치하는지 나타내는 결과
+          value_set: registration_verification_result
+        - id: message
+          name: 확인 결과 메시지
+          description: 과세당국이 반환한 확인 결과의 설명 메시지
+          data_type: string
+        - id: verified_at
+          name: 확인시점
+          description: 사업자등록정보의 일치 여부를 확인한 시점
+          data_type: datetime
+
+    - id: market_listing
+      name: 증권시장 상장
+      description: 법인의 주식이 특정 증권시장에 상장된 이력
+      primary_key: listing_id
+      properties:
+        - id: listing_id
+          name: 상장 식별자
+          description: 법인과 증권시장을 조합하여 시스템에서 생성하는 내부 상장 레코드 식별자
+          data_type: string
+        - id: market
+          name: 증권시장
+          description: 법인의 주식이 거래되는 대한민국 증권시장
+          value_set: securities_market_kr
+        - id: status
+          name: 상장상태
+          description: 특정 증권시장에서의 현재 상장상태
+          value_set: listing_status
+        - id: listed_date
+          name: 상장일
+          description: 법인의 주식이 해당 증권시장에 최초로 상장된 날짜
+          data_type: date
+        - id: delisted_date
+          name: 상장폐지일
+          description: 법인의 주식이 해당 증권시장에서 상장폐지된 날짜
+          data_type: date
+
+    - id: organization_relationship
+      name: 기업관계
+      description: 특정 기준일에 기준 법인과 상대 조직 사이에서 확인된 계열 또는 지배 관계
+      primary_key: relationship_id
+      properties:
+        - id: relationship_id
+          name: 관계 식별자
+          description: 기준 법인, 상대 조직, 관계유형 및 기준일을 조합하여 시스템에서 생성하는 내부 관계 레코드 식별자
+          data_type: string
+        - id: relationship_type
+          name: 관계유형
+          description: 두 법인 사이에 성립하는 기업관계의 유형
+          value_set: organization_relationship_type
+        - id: reference_date
+          name: 기준일
+          description: 기업관계가 관측되거나 확인된 정보의 기준일
+          data_type: date
+        - id: related_organization_name
+          name: 상대 조직명
+          description: 소스에서 제공된 관계 상대 조직의 명칭이며 상대 법인이 식별되지 않아도 원본 명칭을 보존한다
+          data_type: string
+        - id: control_basis
+          name: 지배관계 근거
+          description: 상대 법인이 종속기업으로 판단된 지배관계의 근거
+          data_type: string
+        - id: is_major_subsidiary
+          name: 주요 종속기업 여부
+          description: 상대 법인이 주요 종속기업에 해당하는지 여부
+          data_type: boolean
+
+    - id: financial_statement
+      name: 재무제표
+      description: 특정 법인, 사업연도, 기준일, 유형 및 범위에 해당하는 재무제표
+      primary_key: statement_id
+      properties:
+        - id: statement_id
+          name: 재무제표 식별자
+          description: 법인, 사업연도, 기준일, 재무제표 유형 및 범위를 조합하여 시스템에서 생성하는 내부 재무제표 식별자
+          data_type: string
+        - id: reference_date
+          name: 기준일
+          description: 재무정보가 기준으로 삼는 날짜
+          data_type: date
+        - id: fiscal_year
+          name: 사업연도
+          description: 재무제표가 다루는 회계연도
+          data_type: fiscal_year
+        - id: statement_type
+          name: 재무제표 유형
+          description: 요약재무제표, 재무상태표 또는 손익계산서의 구분
+          value_set: financial_statement_type
+        - id: statement_scope
+          name: 재무제표 범위
+          description: 연결재무제표 또는 별도재무제표의 구분
+          value_set: financial_statement_scope
+        - id: currency
+          name: 통화
+          description: 재무제표 금액에 적용되는 ISO 4217 통화코드
+          data_type: iso_4217_currency_code
+        - id: debt_ratio
+          name: 부채비율
+          description: 총부채를 총자본으로 나눈 비율
+          data_type: number
+
+    - id: financial_fact
+      name: 재무계정 값
+      description: 재무제표의 특정 계정과 비교기간에 대응하는 금액
+      primary_key: fact_id
+      properties:
+        - id: fact_id
+          name: 재무계정 값 식별자
+          description: 재무제표, 계정 및 비교기간 역할을 조합하여 시스템에서 생성하는 내부 재무계정 값 식별자
+          data_type: string
+        - id: account_id
+          name: 계정 식별자
+          description: 재무보고 계정체계에서 계정을 식별하는 코드
+          data_type: string
+        - id: account_name
+          name: 계정명
+          description: 재무계정의 사람이 읽을 수 있는 명칭
+          data_type: string
+        - id: period_role
+          name: 비교기간 역할
+          description: 금액이 당분기, 당기, 전분기, 전기 또는 전전기 중 어디에 해당하는지 나타내는 값
+          value_set: financial_period_role
+        - id: amount
+          name: 금액
+          description: 해당 계정과 비교기간에 보고된 통화 금액
+          data_type: monetary_amount
+
+  link_types:
+    - id: legal_entity_has_address
+      description: 법인을 현재 확인된 법인 소재지 주소와 연결한다.
+      source: legal_entity
+      target: postal_address
+
+    - id: legal_entity_has_business_registration
+      description: 법인을 해당 법인이 보유한 하나 이상의 사업자등록과 연결한다.
+      source: legal_entity
+      target: business_registration
+
+    - id: business_registration_has_address
+      description: 사업자등록을 현재 확인된 등록 사업장 주소와 연결한다.
+      source: business_registration
+      target: postal_address
+
+    - id: business_registration_has_taxpayer_status
+      description: 사업자등록을 서로 다른 시점에 확인된 납세자 상태 관측과 연결한다.
+      source: business_registration
+      target: taxpayer_status_observation
+
+    - id: business_registration_has_verification
+      description: 사업자등록을 해당 등록정보에 대해 수행한 하나 이상의 확인 결과와 연결한다.
+      source: business_registration
+      target: registration_verification
+
+    - id: legal_entity_has_market_listing
+      description: 법인을 해당 법인의 증권시장별 상장 이력과 연결한다.
+      source: legal_entity
+      target: market_listing
+
+    - id: organization_relationship_has_reference_entity
+      description: 기업관계를 관계 판단의 기준이 되는 법인과 연결한다.
+      source: organization_relationship
+      target: legal_entity
+
+    - id: organization_relationship_has_related_entity
+      description: 기업관계를 법인등록번호 등으로 식별된 관계 상대 법인과 연결한다.
+      source: organization_relationship
+      target: legal_entity
+
+    - id: legal_entity_has_financial_statement
+      description: 법인을 해당 법인의 사업연도·기준일·유형·범위별 재무제표와 연결한다.
+      source: legal_entity
+      target: financial_statement
+
+    - id: financial_statement_has_fact
+      description: 재무제표를 그 재무제표에 포함된 계정·비교기간별 재무 값과 연결한다.
+      source: financial_statement
+      target: financial_fact

@@ -1,0 +1,25 @@
+registry:
+  version: 2.0.0
+  registered_at: "2026-07-30"
+
+capability:
+  id: get_company_financials
+  name: 기업 재무정보 조회
+  description: 법인등록번호와 사업연도를 이용하여 요약재무정보, 재무상태표 및 손익계산서를 함께 조회한다
+  inputs:
+    corporate_registration_number:
+      property: company.legal_entity.corporate_registration_number
+      required: true
+    fiscal_year:
+      property: company.financial_statement.fiscal_year
+      required: true
+  steps:
+    - call: fsc_company_financial.get_financial_summary
+    - call: fsc_company_financial.get_balance_sheet
+    - call: fsc_company_financial.get_income_statement
+  returns:
+    - company.legal_entity
+    - company.financial_statement
+    - company.financial_fact
+    - company.legal_entity_has_financial_statement
+    - company.financial_statement_has_fact

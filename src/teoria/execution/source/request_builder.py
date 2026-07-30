@@ -25,7 +25,7 @@ class SourceRequestBuilder:
     ) -> PreparedRequest:
         diagnostics: list[Diagnostic] = []
         registry = catalog.sources.get(source_id)
-        path = catalog.source_paths.get(source_id, catalog.root / "source")
+        path = catalog.source_paths.get(source_id, catalog.root / "sources")
         if registry is None:
             raise RequestBuildError([Diagnostic("unknown_source", f"unknown source '{source_id}'", path)])
 
@@ -59,6 +59,7 @@ class SourceRequestBuilder:
             headers={key: str(value) for key, value in headers.items()},
             body=body if request and request.body else None,
             authentication=authentication,
+            idempotent=operation.idempotent or operation.method in {"GET", "HEAD", "OPTIONS"},
         )
 
     def _build_container(
@@ -124,22 +125,24 @@ class SourceRequestBuilder:
         if field.type == "object":
             return self._validate_object(value, field.fields, field.required, registry, catalog, path, location, diagnostics)
 
+        data_type = field.data_type
+        definition = catalog.data_types.get(data_type) if data_type else None
+        base_type = definition.base_type if definition else data_type
         expected = {
             "string": lambda item: isinstance(item, str),
             "integer": lambda item: isinstance(item, int) and not isinstance(item, bool),
             "number": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),
             "boolean": lambda item: isinstance(item, bool),
         }
-        if field.type in expected and not expected[field.type](value):
-            diagnostics.append(Diagnostic("input_type_mismatch", f"expected {field.type}", path, location=location))
+        if base_type in expected and not expected[base_type](value):
+            diagnostics.append(Diagnostic("input_type_mismatch", f"expected {base_type}", path, location=location))
             return value
         allowed = {item.value for item in field.values}
         if allowed and str(value) not in allowed:
             diagnostics.append(Diagnostic("input_value_not_allowed", f"value {value!r} is not allowed", path, location=location))
-        if field.format and isinstance(value, str):
-            definition = catalog.formats.get(field.format)
-            if definition and definition.pattern and not re.fullmatch(definition.pattern, value):
-                diagnostics.append(Diagnostic("input_format_mismatch", f"value does not match format '{field.format}'", path, location=location))
+        if definition and definition.pattern and isinstance(value, str):
+            if not re.fullmatch(definition.pattern, value):
+                diagnostics.append(Diagnostic("input_data_type_mismatch", f"value does not match data type '{field.data_type}'", path, location=location))
         return value
 
     def _validate_object(self, value: Any, fields: list[FieldDefinition], required: list[str], registry: SourceRegistry, catalog: RegistryCatalog, path: Path, location: str, diagnostics: list[Diagnostic]) -> Any:

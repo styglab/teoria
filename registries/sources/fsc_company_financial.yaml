@@ -1,0 +1,371 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-07-24"
+
+source:
+  id: fsc_company_financial
+  name: 금융위원회 기업재무정보
+  provider:
+    organization: 금융위원회
+    distribution: 공공데이터포털
+  type: api
+  specification:
+    format: manual
+    version: "1.0"
+    source_document: 금융위원회_기업재무정보.docx
+  access:
+    base_url: http://apis.data.go.kr/1160100/service/GetFinaStatInfoService_V2
+    authentication:
+      type: api_key
+      in: query
+      name: serviceKey
+      credential_env: FSC_COMPANY_FINANCIAL_SERVICEKEY
+  components:
+    objects:
+      - id: summary_financial_statement
+        name: 요약재무제표
+        fields:
+          - id: basDt
+            name: 기준일자
+            data_type: date_yyyymmdd
+          - id: crno
+            name: 법인등록번호
+            data_type: corporate_registration_number
+          - id: curCd
+            name: 통화코드
+            data_type: iso_4217_currency_code
+          - id: bizYear
+            name: 사업연도
+            data_type: year
+          - id: fnclDcd
+            name: 재무제표구분코드
+            data_type: string
+          - id: fnclDcdNm
+            name: 재무제표구분코드명
+            data_type: string
+          - id: enpSaleAmt
+            name: 기업매출금액
+            data_type: string
+          - id: enpBzopPft
+            name: 기업영업이익
+            data_type: string
+          - id: iclsPalClcAmt
+            name: 포괄손익계산금액
+            data_type: string
+          - id: enpCrtmNpf
+            name: 기업당기순이익
+            data_type: string
+          - id: enpTastAmt
+            name: 기업총자산금액
+            data_type: string
+          - id: enpTdbtAmt
+            name: 기업총부채금액
+            data_type: string
+          - id: enpTcptAmt
+            name: 기업총자본금액
+            data_type: string
+          - id: enpCptlAmt
+            name: 기업자본금액
+            data_type: string
+          - id: fnclDebtRto
+            name: 재무제표부채비율
+            data_type: string
+      - id: balance_sheet
+        name: 재무상태표
+        fields:
+          - id: basDt
+            name: 기준일자
+            data_type: date_yyyymmdd
+          - id: crno
+            name: 법인등록번호
+            data_type: corporate_registration_number
+          - id: curCd
+            name: 통화코드
+            data_type: iso_4217_currency_code
+          - id: bizYear
+            name: 사업연도
+            data_type: year
+          - id: fnclDcd
+            name: 재무제표구분코드
+            data_type: string
+          - id: fnclDcdNm
+            name: 재무제표구분코드명
+            data_type: string
+          - id: acitId
+            name: 계정과목ID
+            data_type: string
+          - id: acitNm
+            name: 계정과목명
+            data_type: string
+          - id: thqrAcitAmt
+            name: 당분기계정과목금액
+            data_type: string
+          - id: crtmAcitAmt
+            name: 당기계정과목금액
+            data_type: string
+          - id: lsqtAcitAmt
+            name: 전분기계정과목금액
+            data_type: string
+          - id: pvtrAcitAmt
+            name: 전기계정과목금액
+            data_type: string
+          - id: bpvtrAcitAmt
+            name: 전전기계정과목금액
+            data_type: string
+      - id: income_statement
+        name: 손익계산서
+        fields:
+          - id: basDt
+            name: 기준일자
+            data_type: date_yyyymmdd
+          - id: crno
+            name: 법인등록번호
+            data_type: corporate_registration_number
+          - id: curCd
+            name: 통화코드
+            data_type: iso_4217_currency_code
+          - id: bizYear
+            name: 사업연도
+            data_type: year
+          - id: fnclDcd
+            name: 재무제표구분코드
+            data_type: string
+          - id: fnclDcdNm
+            name: 재무제표구분코드명
+            data_type: string
+          - id: acitId
+            name: 계정과목ID
+            data_type: string
+          - id: acitNm
+            name: 계정과목명
+            data_type: string
+          - id: thqrAcitAmt
+            name: 당분기계정과목금액
+            data_type: string
+          - id: crtmAcitAmt
+            name: 당기계정과목금액
+            data_type: string
+          - id: lsqtAcitAmt
+            name: 전분기계정과목금액
+            data_type: string
+          - id: pvtrAcitAmt
+            name: 전기계정과목금액
+            data_type: string
+          - id: bpvtrAcitAmt
+            name: 전전기계정과목금액
+            data_type: string
+  operations:
+    # get_financial_summary
+    - id: get_financial_summary
+      name: 요약재무제표조회
+      method: GET
+      path: /getSummFinaStat_V2
+      description: 법인등록번호와 사업연도를 기준으로 요약재무제표를 조회한다.
+      pagination:
+        type: page_number
+        page:
+          request: query.pageNo
+        page_size:
+          request: query.numOfRows
+        total_count: response.body.totalCount
+      request:
+        query:
+          fields:
+            - id: numOfRows
+              name: 페이지당 결과수
+              data_type: integer
+              default: 10
+            - id: pageNo
+              name: 페이지번호
+              data_type: integer
+              default: 1
+            - id: resultType
+              name: 결과형식
+              data_type: string
+              default: "json"
+              values:
+                - value: "json"
+                - value: "xml"
+            - id: crno
+              name: 법인등록번호
+              data_type: corporate_registration_number
+            - id: bizYear
+              name: 사업연도
+              data_type: year
+          required:
+            - numOfRows
+            - pageNo
+            - resultType
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          record_path: response.header
+          success:
+            field: resultCode
+            equals: "00"
+          fields:
+            - id: resultCode
+              name: 결과코드
+              data_type: string
+              values:
+                - value: "00"
+                  label: 정상
+            - id: resultMsg
+              name: 결과메시지
+              data_type: string
+            - id: numOfRows
+              name: 페이지당 결과수
+              data_type: integer
+            - id: pageNo
+              name: 페이지번호
+              data_type: integer
+            - id: totalCount
+              name: 전체건수
+              data_type: integer
+        data:
+          record_path: response.body.items.item[]
+          ref: summary_financial_statement
+    # get_balance_sheet
+    - id: get_balance_sheet
+      name: 재무상태표조회
+      method: GET
+      path: /getBs_V2
+      description: 법인등록번호와 사업연도를 기준으로 재무상태표를 조회한다.
+      pagination:
+        type: page_number
+        page:
+          request: query.pageNo
+        page_size:
+          request: query.numOfRows
+        total_count: response.body.totalCount
+      request:
+        query:
+          fields:
+            - id: numOfRows
+              name: 한 페이지 결과 수
+              data_type: integer
+              default: 10
+            - id: pageNo
+              name: 페이지 번호
+              data_type: integer
+              default: 1
+            - id: resultType
+              name: 결과형식
+              data_type: string
+              default: "json"
+              values:
+                - value: "json"
+                - value: "xml"
+            - id: crno
+              name: 법인등록번호
+              data_type: corporate_registration_number
+            - id: bizYear
+              name: 사업연도
+              data_type: year
+          required:
+            - numOfRows
+            - pageNo
+            - resultType
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          record_path: response.header
+          success:
+            field: resultCode
+            equals: "00"
+          fields:
+            - id: resultCode
+              name: 결과코드
+              data_type: string
+              values:
+                - value: "00"
+                  label: 정상
+            - id: resultMsg
+              name: 결과메시지
+              data_type: string
+            - id: numOfRows
+              name: 한 페이지 결과 수
+              data_type: integer
+            - id: pageNo
+              name: 페이지 번호
+              data_type: integer
+            - id: totalCount
+              name: 전체 결과 수
+              data_type: integer
+        data:
+          record_path: response.body.items.item[]
+          ref: balance_sheet
+    # get_income_statement
+    - id: get_income_statement
+      name: 손익계산서조회
+      method: GET
+      path: /getIncoStat_V2
+      description: 법인등록번호와 사업연도를 기준으로 손익계산서를 조회한다.
+      pagination:
+        type: page_number
+        page:
+          request: query.pageNo
+        page_size:
+          request: query.numOfRows
+        total_count: response.body.totalCount
+      request:
+        query:
+          fields:
+            - id: numOfRows
+              name: 한 페이지 결과 수
+              data_type: integer
+              default: 10
+            - id: pageNo
+              name: 페이지 번호
+              data_type: integer
+              default: 1
+            - id: resultType
+              name: 결과형식
+              data_type: string
+              default: "json"
+              values:
+                - value: "json"
+                - value: "xml"
+            - id: crno
+              name: 법인등록번호
+              data_type: corporate_registration_number
+            - id: bizYear
+              name: 사업연도
+              data_type: year
+          required:
+            - numOfRows
+            - pageNo
+            - resultType
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          record_path: response.header
+          success:
+            field: resultCode
+            equals: "00"
+          fields:
+            - id: resultCode
+              name: 결과코드
+              data_type: string
+              values:
+                - value: "00"
+                  label: 정상
+            - id: resultMsg
+              name: 결과메시지
+              data_type: string
+            - id: numOfRows
+              name: 한 페이지 결과 수
+              data_type: integer
+            - id: pageNo
+              name: 페이지 번호
+              data_type: integer
+            - id: totalCount
+              name: 전체 결과 수
+              data_type: integer
+        data:
+          record_path: response.body.items.item[]
+          ref: income_statement
+

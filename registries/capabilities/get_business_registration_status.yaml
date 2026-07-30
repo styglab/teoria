@@ -1,0 +1,19 @@
+registry:
+  version: 2.0.0
+  registered_at: "2026-07-30"
+
+capability:
+  id: get_business_registration_status
+  name: 사업자 상태 조회
+  description: 하나 이상의 사업자등록번호를 국세청 상태조회에 전달하여 현재 영업상태와 과세유형 관측을 반환한다
+  inputs:
+    business_registration_numbers:
+      property: company.business_registration.business_registration_number
+      collection: list
+      required: true
+  steps:
+    - call: nts_business_registration.get_business_registration_status
+  returns:
+    - company.business_registration
+    - company.taxpayer_status_observation
+    - company.business_registration_has_taxpayer_status

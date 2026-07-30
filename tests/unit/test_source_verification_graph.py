@@ -44,7 +44,7 @@ class FakeExecutor:
             status_code=200,
             content_type="application/json",
             headers={},
-            body={"data": [{"b_no": "0000000000", "b_stt_cd": "01"}]},
+            body={"status_code": "OK", "data": [{"b_no": "0000000000", "b_stt_cd": "01"}]},
             elapsed_ms=1.0,
         )
 
@@ -58,7 +58,7 @@ class EmptyOptionalValuesExecutor:
             status_code=200,
             content_type="application/json",
             headers={},
-            body={"data": [{"b_no": "0000000000", "b_stt_cd": "", "end_dt": ""}]},
+            body={"status_code": "OK", "data": [{"b_no": "0000000000", "b_stt_cd": "", "end_dt": ""}]},
             elapsed_ms=1.0,
         )
 

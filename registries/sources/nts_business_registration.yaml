@@ -1,0 +1,284 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-07-21"
+
+source:
+  id: nts_business_registration
+  name: 국세청 사업자등록정보 진위확인 및 상태조회 서비스
+  provider:
+    organization: 국세청
+    distribution: 공공데이터포털   
+  type: api
+  specification:
+    format: swagger
+    version: "2.0"
+    api_version: "v1.1 (05.31)"
+    source_document: 국세청_사업자등록정보 진위확인 및 상태조회 서비스.md
+  access:
+    base_url: https://api.odcloud.kr/api/nts-businessman/v1
+    authentication:
+      type: api_key
+      in: query
+      name: serviceKey
+      credential_env: NTS_BUSINESS_REGISTRATION_SERVICEKEY
+  components:
+    objects:
+      - id: business_status
+        name: 사업자상태
+        fields:
+          - id: b_no
+            name: 사업자등록번호
+            data_type: business_registration_number
+          - id: b_stt
+            name: 납세자상태명
+            data_type: string
+          - id: b_stt_cd
+            name: 납세자상태코드
+            data_type: string
+            values:
+              - value: "01"
+                label: 계속사업자
+              - value: "02"
+                label: 휴업자
+              - value: "03"
+                label: 폐업자
+          - id: tax_type
+            name: 과세유형명
+            data_type: string
+          - id: tax_type_cd
+            name: 과세유형코드
+            data_type: string
+            values:
+              - value: "01"
+                label: 부가가치세 일반과세자
+              - value: "02"
+                label: 부가가치세 간이과세자
+              - value: "03"
+                label: 부가가치세 과세특례자
+              - value: "04"
+                label: 부가가치세 면세사업자
+              - value: "05"
+                label: 수익사업을 영위하지 않는 비영리법인이거나 고유번호가 부여된 단체,국가기관 등
+              - value: "06"
+                label: 고유번호가 부여된 단체
+              - value: "07"
+                label: 부가가치세 간이과세자(세금계산서 발급사업자)
+          - id: end_dt
+            name: 폐업일
+            data_type: date_yyyymmdd
+          - id: utcc_yn
+            name: 단위과세전환폐업여부
+            data_type: string
+            values:
+              - value: "Y"
+              - value: "N"         
+          - id: tax_type_change_dt
+            name: 최근과세유형전환일자
+            data_type: date_yyyymmdd
+          - id: invoice_apply_dt
+            name: 세금계산서적용일자
+            data_type: date_yyyymmdd
+          - id: rbf_tax_type
+            name: 직전과세유형명
+            data_type: string
+          - id: rbf_tax_type_cd
+            name: 직전과세유형코드
+            data_type: string
+            values:
+              - value: "01"
+                label: 부가가치세 일반과세자
+              - value: "02"
+                label: 부가가치세 간이과세자
+              - value: "07"
+                label: 부가가치세 간이과세자(세금계산서 발급사업자)
+              - value: "99"
+                label: 해당없음
+      - id: business_description
+        name: 사업자정보
+        fields:
+          - id: b_no
+            name: 사업자등록번호
+            data_type: business_registration_number
+          - id: start_dt
+            name: 개업일자
+            data_type: date_yyyymmdd
+          - id: p_nm
+            name: 대표자성명
+            data_type: string
+          - id: p_nm2
+            name: 대표자성명2
+            data_type: string
+          - id: b_nm
+            name: 상호
+            data_type: string
+          - id: corp_no
+            name: 법인등록번호
+            data_type: corporate_registration_number
+          - id: b_sector
+            name: 주업태명
+            data_type: string
+          - id: b_type
+            name: 주종목명
+            data_type: string
+          - id: b_adr
+            name: 사업장주소
+            data_type: string
+  operations:
+    # business_registration_status
+    - id: get_business_registration_status
+      name: 사업자등록 상태조회
+      method: POST
+      idempotent: true
+      path: /status
+      description: 사업자 상태조회 정보 제공. 1회 호출 시 최대 100개에 해당하는 사업자 상태정보 요청 가능.
+      request:
+        content_type: application/json
+        query:
+          fields:
+            - id: returnType
+              name: 응답형식
+              data_type: string
+              default: "JSON"
+              values:
+                - value: "JSON"
+                - value: "XML"
+        body:
+          type: object
+          fields:
+            - id: b_no
+              name: 사업자등록번호
+              type: array
+              max_items: 100
+              items:
+                data_type: business_registration_number
+          required:
+            - b_no
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          record_path: "."
+          success:
+            field: status_code
+            equals: OK
+          fields:
+            - id: status_code
+              name: API 상태코드
+              data_type: string
+              values:
+                - value: "OK"
+            - id: request_cnt
+              name: 요청건수
+              data_type: integer
+            - id: match_cnt
+              name: 조회건수
+              data_type: integer
+        data:
+          record_path: data[]
+          ref: business_status
+      errors:
+        - http_status: 400
+          source_code: BAD_JSON_REQUEST
+          message: JSON 포맷 오류
+        - http_status: 404
+          message: 서비스를 찾을 수 없음
+        - http_status: 411
+          source_code: REQUEST_DATA_MALFORMED
+          message: 필수 요청 데이터 누락
+        - http_status: 413
+          source_code: TOO_LARGE_REQUEST
+          message: 최대 요청 건수 초과
+        - http_status: 500
+          source_code: INTERNAL_ERROR
+          message: 내부 서버 오류
+    # verify_business_registration
+    - id: verify_business_registration
+      name: 사업자등록정보 진위확인
+      method: POST
+      idempotent: true
+      path: /validate
+      description: 입력한 사업자 정보에 대한 진위 여부를 확인한다.      
+      request:
+        content_type: application/json
+        query:
+          fields:
+            - id: returnType
+              name: 응답형식
+              data_type: string
+              default: "JSON"
+              values:
+                - value: "JSON"
+                - value: "XML"
+        body:
+          type: object
+          fields:
+            - id: businesses
+              name: 사업자정보목록
+              type: array
+              max_items: 100
+              items:
+                ref: business_description
+                required:
+                  - b_no
+                  - start_dt
+                  - p_nm 
+          required:
+            - businesses            
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          record_path: "."
+          success:
+            field: status_code
+            equals: OK
+          fields:
+            - id: status_code
+              name: API 상태코드
+              data_type: string
+              values:
+                - value: "OK"
+            - id: request_cnt
+              name: 요청건수
+              data_type: integer
+            - id: valid_cnt
+              name: 진위확인건수
+              data_type: integer
+        data:
+          record_path: data[]
+          fields:
+            - id: b_no
+              name: 사업자등록번호
+              data_type: business_registration_number
+            - id: valid
+              name: 진위확인결과코드
+              data_type: string
+              values:
+                - value: "01"
+                  label: Valid
+                - value: "02"
+                  label: Invalid
+            - id: valid_msg
+              name: 진위확인결과메시지
+              data_type: string
+            - id: request_param
+              name: 요청정보
+              ref: business_description
+            - id: status
+              name: 사업자상태
+              ref: business_status
+      errors:
+        - http_status: 400
+          source_code: BAD_JSON_REQUEST
+          message: JSON 포맷 오류
+        - http_status: 404
+          message: 서비스를 찾을 수 없음
+        - http_status: 411
+          source_code: REQUEST_DATA_MALFORMED
+          message: 필수 요청 데이터 누락
+        - http_status: 413
+          source_code: TOO_LARGE_REQUEST
+          message: 최대 요청 건수 초과
+        - http_status: 500
+          source_code: INTERNAL_ERROR
+          message: 내부 서버 오류

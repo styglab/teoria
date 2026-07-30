@@ -19,6 +19,7 @@ class PreparedRequest(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
     body: Any = None
     authentication: AuthenticationRequirement | None = None
+    idempotent: bool = False
 
     def safe_dump(self) -> dict[str, Any]:
         return self.model_dump(mode="json")

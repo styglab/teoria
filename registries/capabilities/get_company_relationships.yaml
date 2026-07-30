@@ -1,0 +1,22 @@
+registry:
+  version: 2.0.0
+  registered_at: "2026-07-30"
+
+capability:
+  id: get_company_relationships
+  name: 기업관계 조회
+  description: 법인등록번호와 선택 기준일을 이용하여 계열회사 및 연결대상 종속기업 관계를 함께 조회한다
+  inputs:
+    corporate_registration_number:
+      property: company.legal_entity.corporate_registration_number
+      required: true
+    reference_date:
+      property: company.organization_relationship.reference_date
+  steps:
+    - call: fsc_company_basic.list_affiliates
+    - call: fsc_company_basic.list_subsidiaries
+  returns:
+    - company.organization_relationship
+    - company.legal_entity
+    - company.organization_relationship_has_reference_entity
+    - company.organization_relationship_has_related_entity

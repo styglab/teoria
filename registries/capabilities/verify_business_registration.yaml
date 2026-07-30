@@ -1,0 +1,42 @@
+registry:
+  version: 2.0.0
+  registered_at: "2026-07-30"
+
+capability:
+  id: verify_business_registration
+  name: 사업자등록정보 진위확인
+  description: 사용자가 제출한 하나 이상의 사업자 정보를 국세청 등록정보와 비교하여 일치 여부를 확인한다
+  inputs:
+    businesses:
+      collection: list
+      required: true
+      fields:
+        business_registration_number:
+          property: company.business_registration.business_registration_number
+          required: true
+        opened_date:
+          property: company.business_registration.opened_date
+          required: true
+        representative_name:
+          data_type: string
+          field: nts_business_registration.verify_business_registration.request.body.businesses[].p_nm
+          required: true
+        alternate_representative_name:
+          data_type: string
+          field: nts_business_registration.verify_business_registration.request.body.businesses[].p_nm2
+        business_name:
+          property: company.business_registration.business_name
+        corporate_registration_number:
+          property: company.legal_entity.corporate_registration_number
+        primary_business_sector:
+          property: company.business_registration.primary_business_sector
+        primary_business_item:
+          property: company.business_registration.primary_business_item
+        full_address:
+          property: company.postal_address.full_address
+  steps:
+    - call: nts_business_registration.verify_business_registration
+  returns:
+    - company.business_registration
+    - company.registration_verification
+    - company.business_registration_has_verification

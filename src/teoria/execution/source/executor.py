@@ -1,5 +1,7 @@
+import asyncio
 import os
 from collections.abc import Mapping
+from typing import Any
 
 import httpx
 
@@ -11,9 +13,24 @@ class MissingCredentialError(Exception):
 
 
 class SourceExecutor:
-    def __init__(self, timeout_seconds: float = 15.0, environment: Mapping[str, str] | None = None) -> None:
+    RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+    def __init__(
+        self,
+        timeout_seconds: float = 15.0,
+        environment: Mapping[str, str] | None = None,
+        *,
+        max_attempts: int = 3,
+        backoff_seconds: float = 0.25,
+        client_factory: Any = httpx.AsyncClient,
+    ) -> None:
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be at least 1")
         self.timeout_seconds = timeout_seconds
         self.environment = environment if environment is not None else os.environ
+        self.max_attempts = max_attempts
+        self.backoff_seconds = backoff_seconds
+        self.client_factory = client_factory
 
     def credential(self, request: PreparedRequest) -> str | None:
         authentication = request.authentication
@@ -33,14 +50,29 @@ class SourceExecutor:
             target = query if authentication.location == "query" else headers
             target[authentication.name] = secret
 
-        async with httpx.AsyncClient(timeout=self.timeout_seconds, follow_redirects=False) as client:
-            response = await client.request(
-                request.method,
-                request.url,
-                params=query,
-                headers=headers,
-                json=request.body,
-            )
+        attempts = self.max_attempts if request.idempotent else 1
+        async with self.client_factory(timeout=self.timeout_seconds, follow_redirects=False) as client:
+            for attempt in range(1, attempts + 1):
+                try:
+                    response = await client.request(
+                        request.method,
+                        request.url,
+                        params=query,
+                        headers=headers,
+                        json=request.body,
+                    )
+                except (httpx.TimeoutException, httpx.NetworkError):
+                    if attempt == attempts:
+                        raise
+                    await asyncio.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
+                    continue
+                if response.status_code not in self.RETRYABLE_STATUS_CODES or attempt == attempts:
+                    return self._execution_response(response)
+                await asyncio.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
+        raise RuntimeError("source execution exhausted without a response")
+
+    @staticmethod
+    def _execution_response(response: httpx.Response) -> ExecutionResponse:
         content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
         try:
             body = response.json()

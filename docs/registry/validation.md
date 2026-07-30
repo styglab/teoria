@@ -1,6 +1,6 @@
-# Source Registry 검증 구조
+# Registry 검증 구조
 
-Source Registry 검증은 원본 문서(`raw/`)와 네트워크에 의존하지 않는다. 사람이 작성한 YAML이 Teoria의 Source Registry 계약을 만족하는지만 결정한다.
+Registry 정적 검증은 원본 문서(`raw/`)와 네트워크에 의존하지 않는다. 사람이 작성한 Source, Data Type, Value Set, Ontology YAML이 Teoria 계약을 만족하는지 결정한다.
 
 ## 책임 경계
 
@@ -31,7 +31,9 @@ cli.py               종료 코드와 사용자 출력
 src/teoria/
 ├── models/
 │   ├── common.py
-│   ├── format.py
+│   ├── data_type.py
+│   ├── ontology.py
+│   ├── value_set.py
 │   └── source.py
 ├── registry/
 │   ├── diagnostics.py
@@ -64,12 +66,17 @@ tests/
 2. Pydantic 메타모델
 3. 파일명과 Source ID
 4. Source, Object, Operation, Field ID 중복
-5. Object `ref`와 공통 `format` 참조
+5. Object `ref`와 공통 `data_type` 참조
 6. 배열, 객체, 기본값, enum 등 필드 규칙
 7. `required` 범위와 대상 필드
 8. HTTP method, path, content type, 오류 상태
 9. 응답 schema와 `record_path`
 10. 객체 참조 순환
+11. Value Set 및 표준값 ID 중복
+12. Ontology Object type과 Property ID 중복
+13. Property의 Data Type 및 Value Set 참조
+14. Object primary key 참조
+15. Link type endpoint 및 cardinality
 
 ## 실행
 
@@ -112,7 +119,7 @@ teoria verify source \
   --profile build \
   --source nts_business_registration \
   --operation get_business_registration_status \
-  --input registries/source/verification_cases/nts_business_registration/get_business_registration_status.yaml
+  --input registries/sources/verification_cases/nts_business_registration/get_business_registration_status.yaml
 ```
 
 실제 API 호출과 응답 검증:
@@ -124,7 +131,7 @@ teoria verify source \
   --profile live \
   --source nts_business_registration \
   --operation get_business_registration_status \
-  --input registries/source/verification_cases/nts_business_registration/get_business_registration_status.yaml
+  --input registries/sources/verification_cases/nts_business_registration/get_business_registration_status.yaml
 ```
 
 자격증명이 없으면 Live Workflow는 통과하지 않으며 `BLOCKED`로 종료한다. 비밀값은 Graph State나 출력에 기록하지 않는다. 최종 성공 상태는 프로필별로 `VALID`(static), `BUILDABLE`(build), `VERIFIED`(live)로 구분한다.

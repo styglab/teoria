@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -7,7 +7,19 @@ from pydantic import ValidationError
 from yaml.constructor import ConstructorError
 from yaml.resolver import BaseResolver
 
-from teoria.models import FormatRegistry, SourceRegistry
+from teoria.models import (
+    CapabilityDefinition,
+    CapabilityRegistry,
+    DataTypeDefinition,
+    DataTypeRegistry,
+    MappingDefinition,
+    MappingRegistry,
+    OntologyDefinition,
+    OntologyRegistry,
+    SourceRegistry,
+    ValueSetDefinition,
+    ValueSetRegistry,
+)
 from teoria.registry.diagnostics import Diagnostic
 
 
@@ -38,7 +50,14 @@ class RegistryCatalog:
     root: Path
     sources: dict[str, SourceRegistry]
     source_paths: dict[str, Path]
-    formats: dict[str, Any]
+    data_types: dict[str, DataTypeDefinition]
+    value_sets: dict[str, ValueSetDefinition] = field(default_factory=dict)
+    ontologies: dict[str, OntologyDefinition] = field(default_factory=dict)
+    ontology_paths: dict[str, Path] = field(default_factory=dict)
+    mappings: dict[str, MappingDefinition] = field(default_factory=dict)
+    mapping_paths: dict[str, Path] = field(default_factory=dict)
+    capabilities: dict[str, CapabilityDefinition] = field(default_factory=dict)
+    capability_paths: dict[str, Path] = field(default_factory=dict)
 
 
 class RegistryLoadError(Exception):
@@ -55,20 +74,53 @@ class RegistryLoader:
         diagnostics: list[Diagnostic] = []
         sources: dict[str, SourceRegistry] = {}
         source_paths: dict[str, Path] = {}
-        formats: dict[str, Any] = {}
+        data_types: dict[str, DataTypeDefinition] = {}
+        value_sets: dict[str, ValueSetDefinition] = {}
+        ontologies: dict[str, OntologyDefinition] = {}
+        ontology_paths: dict[str, Path] = {}
+        mappings: dict[str, MappingDefinition] = {}
+        mapping_paths: dict[str, Path] = {}
+        capabilities: dict[str, CapabilityDefinition] = {}
+        capability_paths: dict[str, Path] = {}
 
-        for path in sorted((self.root / "format").glob("*.yaml")):
+        data_type_paths = [self.root / "core" / "data_types.yaml"]
+        for path in data_type_paths:
+            if not path.exists():
+                continue
             document = self._parse(path, diagnostics)
             if document is None:
                 continue
-            registry = self._validate(FormatRegistry, document, path, diagnostics)
+            registry = self._validate(DataTypeRegistry, document, path, diagnostics)
             if registry:
-                for definition in registry.formats:
-                    if definition.id in formats:
-                        diagnostics.append(Diagnostic("duplicate_format", f"duplicate format id '{definition.id}'", path))
-                    formats[definition.id] = definition
+                for definition in registry.data_types:
+                    if definition.id in data_types:
+                        diagnostics.append(Diagnostic("duplicate_data_type", f"duplicate data type id '{definition.id}'", path))
+                    data_types[definition.id] = definition
 
-        for path in sorted((self.root / "source").glob("*.yaml")):
+        value_set_path = self.root / "core" / "value_sets.yaml"
+        if value_set_path.exists():
+            document = self._parse(value_set_path, diagnostics)
+            if document is not None:
+                registry = self._validate(ValueSetRegistry, document, value_set_path, diagnostics)
+                if registry:
+                    for definition in registry.value_sets:
+                        if definition.id in value_sets:
+                            diagnostics.append(Diagnostic("duplicate_value_set", f"duplicate value set id '{definition.id}'", value_set_path))
+                        value_sets[definition.id] = definition
+
+        for path in sorted((self.root / "ontologies").glob("*.yaml")):
+            document = self._parse(path, diagnostics)
+            if document is None:
+                continue
+            registry = self._validate(OntologyRegistry, document, path, diagnostics)
+            if registry:
+                ontology_id = registry.ontology.id
+                if ontology_id in ontologies:
+                    diagnostics.append(Diagnostic("duplicate_ontology", f"duplicate ontology id '{ontology_id}'", path))
+                ontologies[ontology_id] = registry.ontology
+                ontology_paths[ontology_id] = path
+
+        for path in sorted((self.root / "sources").glob("*.yaml")):
             document = self._parse(path, diagnostics)
             if document is None:
                 continue
@@ -80,9 +132,45 @@ class RegistryLoader:
                 sources[source_id] = registry
                 source_paths[source_id] = path
 
+        for path in sorted((self.root / "mappings").glob("*.yaml")):
+            document = self._parse(path, diagnostics)
+            if document is None:
+                continue
+            registry = self._validate(MappingRegistry, document, path, diagnostics)
+            if registry:
+                mapping_id = registry.mapping.id
+                if mapping_id in mappings:
+                    diagnostics.append(Diagnostic("duplicate_mapping", f"duplicate mapping id '{mapping_id}'", path))
+                mappings[mapping_id] = registry.mapping
+                mapping_paths[mapping_id] = path
+
+        for path in sorted((self.root / "capabilities").glob("*.yaml")):
+            document = self._parse(path, diagnostics)
+            if document is None:
+                continue
+            registry = self._validate(CapabilityRegistry, document, path, diagnostics)
+            if registry:
+                capability_id = registry.capability.id
+                if capability_id in capabilities:
+                    diagnostics.append(Diagnostic("duplicate_capability", f"duplicate capability id '{capability_id}'", path))
+                capabilities[capability_id] = registry.capability
+                capability_paths[capability_id] = path
+
         if diagnostics:
             raise RegistryLoadError(diagnostics)
-        return RegistryCatalog(root=self.root, sources=sources, source_paths=source_paths, formats=formats)
+        return RegistryCatalog(
+            root=self.root,
+            sources=sources,
+            source_paths=source_paths,
+            data_types=data_types,
+            value_sets=value_sets,
+            ontologies=ontologies,
+            ontology_paths=ontology_paths,
+            mappings=mappings,
+            mapping_paths=mapping_paths,
+            capabilities=capabilities,
+            capability_paths=capability_paths,
+        )
 
     @staticmethod
     def _parse(path: Path, diagnostics: list[Diagnostic]) -> dict[str, Any] | None:

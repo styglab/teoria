@@ -1,0 +1,414 @@
+registry:
+  version: 2.0.0
+  registered_at: "2026-07-30"
+
+mapping:
+  id: company
+  name: 한국 기업정보 매핑
+  description: 한국 기업정보 온톨로지의 속성을 금융위원회 및 국세청 소스 필드와 연결한다
+  ontology: company
+
+  bindings:
+    legal_entity.corporate_registration_number:
+      - field: fsc_company_basic.get_company_overview.response.crno
+      - field: fsc_company_basic.get_company_overview.request.query.crno
+      - field: fsc_company_basic.list_affiliates.response.crno
+        role: reference_entity
+      - field: fsc_company_basic.list_affiliates.response.afilCmpyCrno
+        role: related_entity
+      - field: fsc_company_basic.list_affiliates.request.query.crno
+      - field: fsc_company_basic.list_subsidiaries.response.crno
+        role: reference_entity
+      - field: fsc_company_basic.list_subsidiaries.request.query.crno
+      - field: fsc_company_financial.get_financial_summary.response.crno
+      - field: fsc_company_financial.get_financial_summary.request.query.crno
+      - field: fsc_company_financial.get_balance_sheet.response.crno
+      - field: fsc_company_financial.get_balance_sheet.request.query.crno
+      - field: fsc_company_financial.get_income_statement.response.crno
+      - field: fsc_company_financial.get_income_statement.request.query.crno
+      - field: nts_business_registration.verify_business_registration.request.body.businesses[].corp_no
+    legal_entity.legal_name:
+      - field: fsc_company_basic.get_company_overview.response.corpNm
+      - field: fsc_company_basic.list_affiliates.response.afilCmpyNm
+        role: related_entity
+    legal_entity.english_name:
+      - field: fsc_company_basic.get_company_overview.response.corpEnsnNm
+    legal_entity.disclosure_name:
+      - field: fsc_company_basic.get_company_overview.response.enpPbanCmpyNm
+    legal_entity.representative_names:
+      - field: fsc_company_basic.get_company_overview.response.enpRprFnm
+        decode: company.normalize_representative_names
+    legal_entity.legal_entity_type:
+      - field: fsc_company_basic.get_company_overview.response.corpDcdNm
+    legal_entity.financial_supervisory_unique_number:
+      - field: fsc_company_basic.get_company_overview.response.fssCorpUnqNo
+    legal_entity.established_date:
+      - field: fsc_company_basic.get_company_overview.response.enpEstbDt
+        decode: common.parse_date
+    legal_entity.fiscal_year_end_month:
+      - field: fsc_company_basic.get_company_overview.response.enpStacMm
+        decode: common.to_integer
+    legal_entity.standard_industry_classification_name:
+      - field: fsc_company_basic.get_company_overview.response.sicNm
+    legal_entity.primary_business_description:
+      - field: fsc_company_basic.get_company_overview.response.enpMainBizNm
+    legal_entity.website_url:
+      - field: fsc_company_basic.get_company_overview.response.enpHmpgUrl
+    legal_entity.telephone_number:
+      - field: fsc_company_basic.get_company_overview.response.enpTlno
+    legal_entity.fax_number:
+      - field: fsc_company_basic.get_company_overview.response.enpFxno
+    legal_entity.is_small_or_medium_enterprise:
+      - field: fsc_company_basic.get_company_overview.response.smenpYn
+        decode: common.yes_no_to_boolean
+    legal_entity.primary_bank_name:
+      - field: fsc_company_basic.get_company_overview.response.enpMntrBnkNm
+    legal_entity.employee_count:
+      - field: fsc_company_basic.get_company_overview.response.enpEmpeCnt
+        decode: common.to_integer
+    legal_entity.average_employee_tenure_years:
+      - field: fsc_company_basic.get_company_overview.response.empeAvgCnwkTermCtt
+        decode: common.to_number
+    legal_entity.average_employee_salary_amount:
+      - field: fsc_company_basic.get_company_overview.response.enpPn1AvgSlryAmt
+        decode: common.to_number
+    legal_entity.latest_auditor_name:
+      - field: fsc_company_basic.get_company_overview.response.actnAudpnNm
+    legal_entity.latest_audit_opinion:
+      - field: fsc_company_basic.get_company_overview.response.audtRptOpnnCtt
+    postal_address.postal_code:
+      - field: fsc_company_basic.get_company_overview.response.enpOzpno
+    postal_address.base_address:
+      - field: fsc_company_basic.get_company_overview.response.enpBsadr
+    postal_address.detail_address:
+      - field: fsc_company_basic.get_company_overview.response.enpDtadr
+    postal_address.full_address:
+      - field:
+          base_address: fsc_company_basic.get_company_overview.response.enpBsadr
+          detail_address: fsc_company_basic.get_company_overview.response.enpDtadr
+        decode: company.combine_korean_address
+      - field: nts_business_registration.verify_business_registration.request.body.businesses[].b_adr
+
+    business_registration.business_registration_number:
+      - field: fsc_company_basic.get_company_overview.response.bzno
+      - field: nts_business_registration.get_business_registration_status.response.b_no
+      - field: nts_business_registration.get_business_registration_status.request.body.b_no
+      - field: nts_business_registration.verify_business_registration.response.b_no
+      - field: nts_business_registration.verify_business_registration.request.body.businesses[].b_no
+    business_registration.business_name:
+      - field: nts_business_registration.verify_business_registration.request.body.businesses[].b_nm
+    business_registration.opened_date:
+      - field: nts_business_registration.verify_business_registration.request.body.businesses[].start_dt
+        encode: common.format_date_yyyymmdd
+    business_registration.closed_date:
+      - field: nts_business_registration.get_business_registration_status.response.end_dt
+        decode: common.parse_date
+    business_registration.primary_business_sector:
+      - field: nts_business_registration.verify_business_registration.request.body.businesses[].b_sector
+    business_registration.primary_business_item:
+      - field: nts_business_registration.verify_business_registration.request.body.businesses[].b_type
+    taxpayer_status_observation.operating_status:
+      - field: nts_business_registration.get_business_registration_status.response.b_stt_cd
+        decode: tax.resolve_operating_status
+    taxpayer_status_observation.current_taxation_type:
+      - field: nts_business_registration.get_business_registration_status.response.tax_type_cd
+        decode: tax.resolve_taxation_type
+    taxpayer_status_observation.previous_taxation_type:
+      - field: nts_business_registration.get_business_registration_status.response.rbf_tax_type_cd
+        decode: tax.resolve_taxation_type
+    taxpayer_status_observation.taxation_type_changed_date:
+      - field: nts_business_registration.get_business_registration_status.response.tax_type_change_dt
+        decode: common.parse_date
+    taxpayer_status_observation.invoice_application_date:
+      - field: nts_business_registration.get_business_registration_status.response.invoice_apply_dt
+        decode: common.parse_date
+    taxpayer_status_observation.is_closed_due_to_unit_tax_conversion:
+      - field: nts_business_registration.get_business_registration_status.response.utcc_yn
+        decode: common.yes_no_to_boolean
+    registration_verification.result:
+      - field: nts_business_registration.verify_business_registration.response.valid
+        decode: tax.resolve_verification_result
+    registration_verification.message:
+      - field: nts_business_registration.verify_business_registration.response.valid_msg
+    market_listing.status:
+      - field:
+          listed_date: fsc_company_basic.get_company_overview.response.enpXchgLstgDt
+          delisted_date: fsc_company_basic.get_company_overview.response.enpXchgLstgAbolDt
+        decode: company.resolve_listing_status
+        qualifiers: {market: kospi}
+      - field:
+          listed_date: fsc_company_basic.get_company_overview.response.enpKosdaqLstgDt
+          delisted_date: fsc_company_basic.get_company_overview.response.enpKosdaqLstgAbolDt
+        decode: company.resolve_listing_status
+        qualifiers: {market: kosdaq}
+      - field:
+          listed_date: fsc_company_basic.get_company_overview.response.enpKrxLstgDt
+          delisted_date: fsc_company_basic.get_company_overview.response.enpKrxLstgAbolDt
+        decode: company.resolve_listing_status
+        qualifiers: {market: konex}
+    market_listing.listed_date:
+      - field: fsc_company_basic.get_company_overview.response.enpXchgLstgDt
+        decode: common.parse_date
+        qualifiers: {market: kospi}
+      - field: fsc_company_basic.get_company_overview.response.enpKosdaqLstgDt
+        decode: common.parse_date
+        qualifiers: {market: kosdaq}
+      - field: fsc_company_basic.get_company_overview.response.enpKrxLstgDt
+        decode: common.parse_date
+        qualifiers: {market: konex}
+    market_listing.delisted_date:
+      - field: fsc_company_basic.get_company_overview.response.enpXchgLstgAbolDt
+        decode: common.parse_date
+        qualifiers: {market: kospi}
+      - field: fsc_company_basic.get_company_overview.response.enpKosdaqLstgAbolDt
+        decode: common.parse_date
+        qualifiers: {market: kosdaq}
+      - field: fsc_company_basic.get_company_overview.response.enpKrxLstgAbolDt
+        decode: common.parse_date
+        qualifiers: {market: konex}
+
+    organization_relationship.reference_date:
+      - field: fsc_company_basic.list_affiliates.response.basDt
+        decode: common.parse_date
+        qualifiers: {relationship_type: affiliate}
+      - field: fsc_company_basic.list_affiliates.request.query.basDt
+        encode: common.format_date_yyyymmdd
+      - field: fsc_company_basic.list_subsidiaries.response.basDt
+        decode: common.parse_date
+        qualifiers: {relationship_type: consolidated_subsidiary}
+      - field: fsc_company_basic.list_subsidiaries.request.query.basDt
+        encode: common.format_date_yyyymmdd
+    organization_relationship.related_organization_name:
+      - field: fsc_company_basic.list_affiliates.response.afilCmpyNm
+        qualifiers: {relationship_type: affiliate}
+      - field: fsc_company_basic.list_subsidiaries.response.sbrdEnpNm
+        qualifiers: {relationship_type: consolidated_subsidiary}
+    organization_relationship.control_basis:
+      - field: fsc_company_basic.list_subsidiaries.response.dntRltBsisCtt
+        qualifiers: {relationship_type: consolidated_subsidiary}
+    organization_relationship.is_major_subsidiary:
+      - field: fsc_company_basic.list_subsidiaries.response.mainSbrdEnpYnCtt
+        decode: common.yes_no_to_boolean
+        qualifiers: {relationship_type: consolidated_subsidiary}
+
+    financial_statement.reference_date:
+      - field: fsc_company_financial.get_financial_summary.response.basDt
+        decode: common.parse_date
+        qualifiers: {statement_type: summary}
+      - field: fsc_company_financial.get_balance_sheet.response.basDt
+        decode: common.parse_date
+        qualifiers: {statement_type: balance_sheet}
+      - field: fsc_company_financial.get_income_statement.response.basDt
+        decode: common.parse_date
+        qualifiers: {statement_type: income_statement}
+    financial_statement.fiscal_year:
+      - field: fsc_company_financial.get_financial_summary.response.bizYear
+        decode: common.to_integer
+        qualifiers: {statement_type: summary}
+      - field: fsc_company_financial.get_financial_summary.request.query.bizYear
+        encode: common.format_year
+      - field: fsc_company_financial.get_balance_sheet.response.bizYear
+        decode: common.to_integer
+        qualifiers: {statement_type: balance_sheet}
+      - field: fsc_company_financial.get_balance_sheet.request.query.bizYear
+        encode: common.format_year
+      - field: fsc_company_financial.get_income_statement.response.bizYear
+        decode: common.to_integer
+        qualifiers: {statement_type: income_statement}
+      - field: fsc_company_financial.get_income_statement.request.query.bizYear
+        encode: common.format_year
+    financial_statement.statement_scope:
+      - field:
+          code: fsc_company_financial.get_financial_summary.response.fnclDcd
+          name: fsc_company_financial.get_financial_summary.response.fnclDcdNm
+        decode: company.resolve_financial_statement_scope
+        qualifiers: {statement_type: summary}
+      - field:
+          code: fsc_company_financial.get_balance_sheet.response.fnclDcd
+          name: fsc_company_financial.get_balance_sheet.response.fnclDcdNm
+        decode: company.resolve_financial_statement_scope
+        qualifiers: {statement_type: balance_sheet}
+      - field:
+          code: fsc_company_financial.get_income_statement.response.fnclDcd
+          name: fsc_company_financial.get_income_statement.response.fnclDcdNm
+        decode: company.resolve_financial_statement_scope
+        qualifiers: {statement_type: income_statement}
+    financial_statement.currency:
+      - field: fsc_company_financial.get_financial_summary.response.curCd
+        qualifiers: {statement_type: summary}
+      - field: fsc_company_financial.get_balance_sheet.response.curCd
+        qualifiers: {statement_type: balance_sheet}
+      - field: fsc_company_financial.get_income_statement.response.curCd
+        qualifiers: {statement_type: income_statement}
+    financial_statement.debt_ratio:
+      - field: fsc_company_financial.get_financial_summary.response.fnclDebtRto
+        decode: common.to_number
+        qualifiers: {statement_type: summary}
+
+    financial_fact.account_id:
+      - field: fsc_company_financial.get_balance_sheet.response.acitId
+      - field: fsc_company_financial.get_income_statement.response.acitId
+    financial_fact.account_name:
+      - field: fsc_company_financial.get_balance_sheet.response.acitNm
+      - field: fsc_company_financial.get_income_statement.response.acitNm
+    financial_fact.amount:
+      - field: fsc_company_financial.get_financial_summary.response.enpSaleAmt
+        decode: common.to_number
+        qualifiers: {account_id: revenue, period_role: current_year}
+      - field: fsc_company_financial.get_financial_summary.response.enpBzopPft
+        decode: common.to_number
+        qualifiers: {account_id: operating_profit, period_role: current_year}
+      - field: fsc_company_financial.get_financial_summary.response.iclsPalClcAmt
+        decode: common.to_number
+        qualifiers: {account_id: comprehensive_income, period_role: current_year}
+      - field: fsc_company_financial.get_financial_summary.response.enpCrtmNpf
+        decode: common.to_number
+        qualifiers: {account_id: net_income, period_role: current_year}
+      - field: fsc_company_financial.get_financial_summary.response.enpTastAmt
+        decode: common.to_number
+        qualifiers: {account_id: total_assets, period_role: current_year}
+      - field: fsc_company_financial.get_financial_summary.response.enpTdbtAmt
+        decode: common.to_number
+        qualifiers: {account_id: total_liabilities, period_role: current_year}
+      - field: fsc_company_financial.get_financial_summary.response.enpTcptAmt
+        decode: common.to_number
+        qualifiers: {account_id: total_equity, period_role: current_year}
+      - field: fsc_company_financial.get_financial_summary.response.enpCptlAmt
+        decode: common.to_number
+        qualifiers: {account_id: capital, period_role: current_year}
+      - field: fsc_company_financial.get_balance_sheet.response.thqrAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: current_quarter}
+      - field: fsc_company_financial.get_balance_sheet.response.crtmAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: current_year}
+      - field: fsc_company_financial.get_balance_sheet.response.lsqtAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: previous_quarter}
+      - field: fsc_company_financial.get_balance_sheet.response.pvtrAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: previous_year}
+      - field: fsc_company_financial.get_balance_sheet.response.bpvtrAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: two_years_prior}
+      - field: fsc_company_financial.get_income_statement.response.thqrAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: current_quarter}
+      - field: fsc_company_financial.get_income_statement.response.crtmAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: current_year}
+      - field: fsc_company_financial.get_income_statement.response.lsqtAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: previous_quarter}
+      - field: fsc_company_financial.get_income_statement.response.pvtrAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: previous_year}
+      - field: fsc_company_financial.get_income_statement.response.bpvtrAcitAmt
+        decode: common.to_number
+        qualifiers: {period_role: two_years_prior}
+
+  materializations:
+    fsc_company_basic.get_company_overview:
+      record_order: lastOpegDt
+      objects:
+        legal_entity:
+          type: legal_entity
+          identity: [corporate_registration_number]
+          timestamp_properties: [profile_observed_at, audit_information_observed_at]
+        business_registration:
+          type: business_registration
+          identity: [business_registration_number]
+          parents: [legal_entity]
+        postal_address:
+          type: postal_address
+          identity: []
+          parents: [legal_entity]
+          id_property: address_id
+      links:
+        - {type: legal_entity_has_address, source: legal_entity, target: postal_address}
+        - {type: legal_entity_has_business_registration, source: legal_entity, target: business_registration}
+
+    nts_business_registration.get_business_registration_status:
+      objects:
+        business_registration:
+          type: business_registration
+          identity: [business_registration_number]
+        taxpayer_status_observation:
+          type: taxpayer_status_observation
+          identity: [observed_at]
+          parents: [business_registration]
+          id_property: observation_id
+          timestamp_properties: [observed_at]
+      links:
+        - {type: business_registration_has_taxpayer_status, source: business_registration, target: taxpayer_status_observation}
+
+    nts_business_registration.verify_business_registration:
+      objects:
+        business_registration:
+          type: business_registration
+          identity: [business_registration_number]
+        registration_verification:
+          type: registration_verification
+          identity: [verified_at]
+          parents: [business_registration]
+          id_property: verification_id
+          timestamp_properties: [verified_at]
+      links:
+        - {type: business_registration_has_verification, source: business_registration, target: registration_verification}
+
+    fsc_company_basic.list_affiliates:
+      objects:
+        reference_entity:
+          type: legal_entity
+          identity: [corporate_registration_number]
+        related_entity:
+          type: legal_entity
+          identity: [corporate_registration_number]
+        organization_relationship:
+          type: organization_relationship
+          identity: [reference_date, relationship_type]
+          parents: [reference_entity, related_entity]
+          id_property: relationship_id
+      links:
+        - {type: organization_relationship_has_reference_entity, source: organization_relationship, target: reference_entity}
+        - {type: organization_relationship_has_related_entity, source: organization_relationship, target: related_entity}
+
+    fsc_company_basic.list_subsidiaries:
+      objects:
+        reference_entity:
+          type: legal_entity
+          identity: [corporate_registration_number]
+        organization_relationship:
+          type: organization_relationship
+          identity: [reference_date, relationship_type, related_organization_name]
+          parents: [reference_entity]
+          id_property: relationship_id
+      links:
+        - {type: organization_relationship_has_reference_entity, source: organization_relationship, target: reference_entity}
+
+    fsc_company_financial.get_financial_summary:
+      objects: &financial_objects
+        legal_entity:
+          type: legal_entity
+          identity: [corporate_registration_number]
+        financial_statement:
+          type: financial_statement
+          identity: [reference_date, fiscal_year, statement_type, statement_scope]
+          parents: [legal_entity]
+          id_property: statement_id
+        financial_fact:
+          type: financial_fact
+          identity: [account_id, period_role]
+          parents: [financial_statement]
+          id_property: fact_id
+      links: &financial_links
+        - {type: legal_entity_has_financial_statement, source: legal_entity, target: financial_statement}
+        - {type: financial_statement_has_fact, source: financial_statement, target: financial_fact}
+
+    fsc_company_financial.get_balance_sheet:
+      objects: *financial_objects
+      links: *financial_links
+
+    fsc_company_financial.get_income_statement:
+      objects: *financial_objects
+      links: *financial_links
