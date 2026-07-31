@@ -1,33 +1,28 @@
 # Teoria architecture
 
-Teoria는 하나의 Python 코드베이스를 공유하는 모듈형 모놀리스로 개발한다. 현재 CLI와 MCP adapter를 제공하며, API와 Console은 같은 경계를 따라 독립 배포 가능하게 추가한다.
+Teoria는 세 배포 프로젝트와 하나의 공유 라이브러리로 구성한다.
 
 ```text
-Registry authoring and publication       Published registry execution
+pipelines ──SQL write──▶ Teoria Data DB ◀──SQL read── platform
+mcp ──Runtime HTTP API(target)────────────────────────▶ platform
 
-Teoria Console                           MCP / HTTP / CLI
-       │                                        │
-Registry API                              Runtime
-       │                                        │
-Registry validation ── published bundle ────────┘
+platform ──▶ teoria-provider ◀── pipelines
 ```
 
-## Module boundaries
+| 구성 | 책임 |
+|---|---|
+| Semantic Platform | Registry, 검증·발행, Source 실행, Mapping, Capability Runtime |
+| Data Pipelines | Connector, Prefect Flow·Task, raw·정규화·적재, DB migration |
+| MCP Gateway | MCP protocol과 Runtime API 변환 |
+| Provider library | API wire schema, 요청 생성, 응답 검증, retry와 오류 |
 
-- `teoria.registry`: Registry schema, loading, resolution, validation, graph, diff and bundle publication.
-- `teoria.registry.verification`: Authored Source verification workflows and their deterministic state.
-- `teoria.runtime`: Capability binding, Source execution, mapping, materialization and provenance.
-- `teoria.adapters`: CLI, MCP, HTTP API and persistence adapters.
-- `teoria.transforms`: Allow-listed semantic conversion functions referenced by Mapping Registry.
-- `teoria.observability`: 향후 tracing, metrics와 audit integration 위치.
-- `apps/console`: Browser UI. It accesses registries through the HTTP API, never through the filesystem.
+## 원칙
 
-Dependencies point inward: adapters may call registry and runtime; runtime may use registry schemas and catalogs; registry must not depend on MCP, HTTP API or Console code.
+- 프로젝트 간 연결은 HTTP, SQL 계약 또는 versioned Registry Bundle을 사용한다.
+- 수집 API는 `pipelines/connectors`, Runtime 직접 호출 API·DB는 `platform/registries/sources`가 소유한다.
+- Pipeline 정규화와 Semantic Mapping을 분리한다.
+- MCP는 목표 운영 구조에서 Source 키나 DB 권한을 갖지 않는다.
+- `packages/provider`는 라이브러리이며 서비스·DB·Registry를 갖지 않는다.
+- 하나의 `uv.lock`을 공유하되 프로젝트별 `pyproject.toml`과 Dockerfile로 독립 배포한다.
 
-## Deployment units
-
-- `teoria-mcp`: 현재 제공하는 로컬 STDIO Capability 서버. 원격 transport는 향후 추가한다.
-- `teoria-api`: 향후 Registry 조회, 검증 및 authoring workflow.
-- `teoria-console`: 향후 Registry Explorer와 관리 웹 애플리케이션.
-
-These are deployment units, not separate source repositories. Split Python distributions only after an independent consumer or release cycle actually requires it.
+현재 MCP STDIO는 Runtime API 구현 전까지 embedded Runtime을 사용하는 개발 호환 모드다. 세부 소유권은 [Repository Structure](repository-structure.md)를 따른다.

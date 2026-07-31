@@ -1,0 +1,25 @@
+name: teoria-data-pipelines
+prefect-version: 3.8.1
+
+build: null
+push: null
+pull: null
+
+deployments:
+  - name: pps-contract-daily
+    version: 1.0.0
+    description: 조달청 나라장터 계약정보를 일 단위로 수집하여 Teoria Data DB에 적재한다.
+    entrypoint: teoria_pipelines.flows.pps_contracts.sync_pps_contracts
+    parameters:
+      start_date: null
+      end_date: null
+      pipeline_root: /app/pipelines
+      window_days: 1
+      overlap_days: 2
+    schedules:
+      - cron: "0 2 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default

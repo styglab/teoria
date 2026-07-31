@@ -1,0 +1,4 @@
+interface:
+  display_name: "Source Registry Author"
+  short_description: "Reference 문서로 Source를 작성하고 실제 API까지 검증"
+  default_prompt: "Use $author-source-registry to create a Source Registry from provider references and validate every operation, including live API calls."

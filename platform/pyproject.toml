@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "teoria-platform"
+version = "0.1.0"
+description = "Teoria Semantic Platform registry and runtime"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "langgraph>=1.0,<2",
+  "pydantic>=2.7,<3",
+  "pydantic-settings>=2.10,<3",
+  "python-dotenv>=1.0,<2",
+  "PyYAML>=6.0,<7",
+  "teoria-provider",
+]
+
+[tool.uv.sources]
+teoria-provider = { workspace = true }
+
+[dependency-groups]
+dev = [
+  "pytest>=8,<9",
+  "pytest-asyncio>=0.24,<2",
+]
+
+[project.scripts]
+teoria = "teoria.entrypoints.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/teoria"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,12 +1,4 @@
 # Custom 
-data/
-logs/
-sandbox/
-tmp/
-old/
-infra/postgres/data/
-infra/qdrant/storage/
-data/
 archive/
 
 # Byte-compiled / optimized / DLL files

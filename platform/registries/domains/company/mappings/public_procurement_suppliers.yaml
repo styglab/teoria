@@ -1,0 +1,14 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-07-31"
+
+mapping:
+  id: public_procurement_suppliers
+  name: 공공조달 계약업체 매핑
+  description: Teoria 공공조달 Source의 계약업체를 기업정보 온톨로지의 사업자등록과 연결한다.
+  ontology: company
+  bindings:
+    business_registration.business_registration_number:
+      - field: teoria_public_procurement.contract_suppliers.business_registration_number
+    business_registration.business_name:
+      - field: teoria_public_procurement.contract_suppliers.supplier_name

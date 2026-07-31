@@ -1,8 +1,20 @@
+name: teoria
+
 services:
   registry-check:
     volumes:
-      - ../registries:/app/registries:ro
+      - ../platform/registries:/app/platform/registries:ro
+      - ../platform/references:/app/platform/references:ro
 
-  mcp-stdio:
+  pipeline-check:
     volumes:
-      - ../registries:/app/registries:ro
+      - ../pipelines/connectors:/app/pipelines/connectors:ro
+      - ../pipelines/definitions:/app/pipelines/definitions:ro
+      - ../pipelines/verification_cases:/app/pipelines/verification_cases:ro
+      - ../pipelines/references:/app/pipelines/references:ro
+      - ../platform/registries:/app/platform/registries:ro
+      - ../platform/references:/app/platform/references:ro
+
+  mcp:
+    volumes:
+      - ../platform/registries:/app/platform/registries:ro

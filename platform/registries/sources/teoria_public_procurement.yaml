@@ -1,0 +1,84 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-07-31"
+
+source:
+  id: teoria_public_procurement
+  name: Teoria 공공조달 데이터
+  description: 등록된 수집 Connector에서 정규화한 공공조달 계약, 업체와 기관 데이터를 Semantic Runtime에 제공하는 PostgreSQL Source
+  type: database
+  access:
+    engine: postgresql
+    connection_env: TEORIA_RUNTIME_DATA_DATABASE_URL
+  relations:
+    - id: contracts
+      name: 조달계약
+      relation: public_procurement.contracts
+      primary_key: [unified_contract_number]
+      fields:
+        - {id: unified_contract_number, name: 통합계약번호, data_type: string}
+        - {id: contract_type, name: 계약유형, data_type: string}
+        - {id: confirmed_contract_number, name: 확정계약번호, data_type: string}
+        - {id: contract_reference_number, name: 계약참조번호, data_type: string}
+        - {id: contract_name, name: 계약명, data_type: string}
+        - {id: is_joint_contract, name: 공동계약 여부, data_type: boolean}
+        - {id: long_term_continuation_type, name: 장기계속구분, data_type: string}
+        - {id: concluded_date, name: 계약체결일, data_type: date}
+        - {id: contract_date, name: 계약일, data_type: date}
+        - {id: contract_period_text, name: 계약기간 원문, data_type: string}
+        - {id: basis_law_name, name: 근거법률명, data_type: string}
+        - {id: total_amount, name: 총계약금액, data_type: number}
+        - {id: total_amount_currency, name: 총계약금액 통화, data_type: iso_4217_currency_code}
+        - {id: current_contract_amount, name: 금차계약금액, data_type: number}
+        - {id: current_contract_amount_currency, name: 금차계약금액 통화, data_type: iso_4217_currency_code}
+        - {id: guarantee_deposit_rate, name: 보증금률, data_type: number}
+        - {id: payment_method_name, name: 지급구분명, data_type: string}
+        - {id: request_number, name: 요청번호, data_type: string}
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: contract_method_name, name: 계약체결방법명, data_type: string}
+        - {id: contracting_organization_code, name: 계약기관코드, data_type: string}
+        - {id: contracting_department_name, name: 계약기관 담당부서명, data_type: string}
+        - {id: procurement_classification_number, name: 공공조달분류번호, data_type: string}
+        - {id: procurement_classification_name, name: 공공조달분류명, data_type: string}
+        - {id: contract_information_url, name: 계약정보 URL, data_type: string}
+        - {id: contract_detail_url, name: 계약상세정보 URL, data_type: string}
+        - {id: source_registered_at, name: 원천 등록일시, data_type: datetime}
+        - {id: source_changed_at, name: 원천 변경일시, data_type: datetime}
+
+    - id: contract_suppliers
+      name: 계약업체
+      relation: public_procurement.contract_suppliers
+      primary_key: [unified_contract_number, supplier_sequence]
+      fields:
+        - {id: unified_contract_number, name: 통합계약번호, data_type: string}
+        - {id: supplier_sequence, name: 업체 순번, data_type: integer}
+        - {id: supplier_role_name, name: 업체구분명, data_type: string}
+        - {id: joint_contract_method_name, name: 공동도급방식구분명, data_type: string}
+        - {id: business_registration_number, name: 사업자등록번호, data_type: business_registration_number}
+        - {id: supplier_name, name: 업체명, data_type: string}
+        - {id: representative_name, name: 대표자명, data_type: string}
+        - {id: nationality_name, name: 국적명, data_type: string}
+        - {id: participation_share_rate, name: 지분율, data_type: number}
+        - {id: creditor_name, name: 채권자명, data_type: string}
+        - {id: supplier_manager_name, name: 업체 담당자명, data_type: string}
+
+    - id: public_organizations
+      name: 공공기관
+      relation: public_procurement.public_organizations
+      primary_key: [organization_code]
+      fields:
+        - {id: organization_code, name: 기관코드, data_type: string}
+        - {id: organization_name, name: 기관명, data_type: string}
+        - {id: jurisdiction_type, name: 소관구분, data_type: string}
+
+    - id: contract_demand_organizations
+      name: 계약 수요기관
+      relation: public_procurement.contract_demand_organizations
+      primary_key: [unified_contract_number, demand_organization_sequence]
+      fields:
+        - {id: unified_contract_number, name: 통합계약번호, data_type: string}
+        - {id: demand_organization_sequence, name: 수요기관 순번, data_type: integer}
+        - {id: organization_code, name: 수요기관코드, data_type: string}
+        - {id: department_name, name: 담당부서명, data_type: string}
+        - {id: manager_name, name: 담당자명, data_type: string}
+        - {id: telephone_number, name: 담당자전화번호, data_type: string}

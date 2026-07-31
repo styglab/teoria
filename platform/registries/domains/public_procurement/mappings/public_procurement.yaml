@@ -1,0 +1,70 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-07-31"
+
+mapping:
+  id: public_procurement
+  name: 대한민국 공공조달 매핑
+  description: Teoria 공공조달 Database Source의 필드를 대한민국 공공조달 온톨로지 속성과 연결한다.
+  ontology: public_procurement
+  bindings:
+    contract.unified_contract_number:
+      - field: teoria_public_procurement.contracts.unified_contract_number
+    contract.contract_type:
+      - field: teoria_public_procurement.contracts.contract_type
+    contract.confirmed_contract_number:
+      - field: teoria_public_procurement.contracts.confirmed_contract_number
+    contract.contract_reference_number:
+      - field: teoria_public_procurement.contracts.contract_reference_number
+    contract.contract_name:
+      - field: teoria_public_procurement.contracts.contract_name
+    contract.is_joint_contract:
+      - field: teoria_public_procurement.contracts.is_joint_contract
+    contract.long_term_continuation_type:
+      - field: teoria_public_procurement.contracts.long_term_continuation_type
+    contract.concluded_date:
+      - field: teoria_public_procurement.contracts.concluded_date
+    contract.contract_date:
+      - field: teoria_public_procurement.contracts.contract_date
+    contract.contract_period_text:
+      - field: teoria_public_procurement.contracts.contract_period_text
+    contract.basis_law_name:
+      - field: teoria_public_procurement.contracts.basis_law_name
+    contract.total_amount:
+      - field: teoria_public_procurement.contracts.total_amount
+    contract.total_amount_currency:
+      - field: teoria_public_procurement.contracts.total_amount_currency
+    contract.current_contract_amount:
+      - field: teoria_public_procurement.contracts.current_contract_amount
+    contract.current_contract_amount_currency:
+      - field: teoria_public_procurement.contracts.current_contract_amount_currency
+    contract.guarantee_deposit_rate:
+      - field: teoria_public_procurement.contracts.guarantee_deposit_rate
+    contract.payment_method_name:
+      - field: teoria_public_procurement.contracts.payment_method_name
+    contract.request_number:
+      - field: teoria_public_procurement.contracts.request_number
+    contract.notice_number:
+      - field: teoria_public_procurement.contracts.notice_number
+    contract.contract_method_name:
+      - field: teoria_public_procurement.contracts.contract_method_name
+    contract.contracting_department_name:
+      - field: teoria_public_procurement.contracts.contracting_department_name
+    contract.procurement_classification_number:
+      - field: teoria_public_procurement.contracts.procurement_classification_number
+    contract.procurement_classification_name:
+      - field: teoria_public_procurement.contracts.procurement_classification_name
+    contract.contract_information_url:
+      - field: teoria_public_procurement.contracts.contract_information_url
+    contract.contract_detail_url:
+      - field: teoria_public_procurement.contracts.contract_detail_url
+    contract.source_registered_at:
+      - field: teoria_public_procurement.contracts.source_registered_at
+    contract.source_changed_at:
+      - field: teoria_public_procurement.contracts.source_changed_at
+    public_organization.organization_code:
+      - field: teoria_public_procurement.public_organizations.organization_code
+    public_organization.name:
+      - field: teoria_public_procurement.public_organizations.organization_name
+    public_organization.jurisdiction_type:
+      - field: teoria_public_procurement.public_organizations.jurisdiction_type

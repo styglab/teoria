@@ -1,6 +1,6 @@
 # Data Type와 Value Set Registry
 
-공통 값 정의는 `registries/core/`에서 관리한다.
+공통 값 정의는 `platform/registries/core/`에서 관리한다.
 
 ## Data Type
 

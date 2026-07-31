@@ -1,0 +1,1090 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-07-31'
+connector:
+  id: pps_contract_api
+  name: 조달청 나라장터 계약정보서비스
+  provider:
+    organization: 조달청
+    distribution: 공공데이터포털
+  type: api
+  specification:
+    format: manual
+    version: '1.0'
+    api_version: '1.0'
+    source_document: 조달청_OpenAPI참고자료_나라장터_계약정보서비스_1.0_extracted.docx
+  access:
+    base_url: http://apis.data.go.kr/1230000/ao/CntrctInfoService
+    authentication:
+      type: api_key
+      in: query
+      name: ServiceKey
+      credential_env: TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY
+  components:
+    objects:
+    - id: goods_contract
+      name: 물품 계약
+      fields:
+      - id: untyCntrctNo
+        name: 통합계약번호
+        data_type: string
+      - id: bsnsDivNm
+        name: 업무구분명
+        data_type: string
+      - id: dcsnCntrctNo
+        name: 확정계약번호
+        data_type: string
+      - id: cntrctRefNo
+        name: 계약참조번호
+        data_type: string
+      - id: cntrctNm
+        name: 계약명
+        data_type: string
+      - id: cmmnCntrctYn
+        name: 공동계약여부
+        data_type: string
+      - id: lngtrmCtnuDivNm
+        name: 장기계속구분명
+        data_type: string
+      - id: cntrctCnclsDate
+        name: 계약체결일자
+        data_type: string
+      - id: cntrctPrd
+        name: 계약기간
+        data_type: string
+      - id: baseLawNm
+        name: 근거법률명
+        data_type: string
+      - id: totCntrctAmt
+        name: 총계약금액
+        data_type: string
+      - id: thtmCntrctAmt
+        name: 금차계약금액
+        data_type: string
+      - id: grntymnyRate
+        name: 보증금률
+        data_type: string
+      - id: cntrctInfoUrl
+        name: 계약정보URL
+        data_type: string
+      - id: payDivNm
+        name: 지급구분명
+        data_type: string
+      - id: reqNo
+        name: 요청번호
+        data_type: string
+      - id: ntceNo
+        name: 공고번호
+        data_type: string
+      - id: cntrctInsttCd
+        name: 계약기관코드
+        data_type: string
+      - id: cntrctInsttNm
+        name: 계약기관명
+        data_type: string
+      - id: cntrctInsttJrsdctnDivNm
+        name: 계약기관소관구분명
+        data_type: string
+      - id: cntrctInsttChrgDeptNm
+        name: 계약기관담당부서명
+        data_type: string
+      - id: cntrctInsttOfclNm
+        name: 계약기관담당자명
+        data_type: string
+      - id: cntrctInsttOfclTelNo
+        name: 계약기관담당자전화번호
+        data_type: string
+      - id: cntrctInsttOfclFaxNo
+        name: 계약기관담당자팩스번호
+        data_type: string
+      - id: dminsttList
+        name: 수요기관목록
+        data_type: string
+      - id: corpList
+        name: 업체목록
+        data_type: string
+      - id: cntrctDtlInfoUrl
+        name: 계약상세정보URL
+        data_type: string
+      - id: crdtrNm
+        name: 채권자명
+        data_type: string
+      - id: baseDtls
+        name: 근거내역
+        data_type: string
+      - id: cntrctCnclsMthdNm
+        name: 계약체결방법명
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: chgDt
+        name: 변경일시
+        data_type: string
+      - id: dfrcmpnstRt
+        name: 지체상금율
+        data_type: string
+      - id: pubPrcrmntLrgClsfcNm
+        name: 공공조달대분류명
+        data_type: string
+      - id: pubPrcrmntMidClsfcNm
+        name: 공공조달중분류명
+        data_type: string
+      - id: pubPrcrmntClsfcNo
+        name: 공공조달분류번호
+        data_type: string
+      - id: pubPrcrmntClsfcNm
+        name: 공공조달분류명
+        data_type: string
+      - id: cntrctDate
+        name: 계약일자
+        data_type: string
+      - id: infoBizYn
+        name: 정보화사업여부
+        data_type: string
+    - id: construction_contract
+      name: 공사 계약
+      fields:
+      - id: untyCntrctNo
+        name: 통합계약번호
+        data_type: string
+      - id: bsnsDivNm
+        name: 업무구분명
+        data_type: string
+      - id: dcsnCntrctNo
+        name: 확정계약번호
+        data_type: string
+      - id: cntrctRefNo
+        name: 계약참조번호
+        data_type: string
+      - id: cnstwkNm
+        name: 공사명
+        data_type: string
+      - id: cmmnCntrctYn
+        name: 공동계약여부
+        data_type: string
+      - id: lngtrmCtnuDivNm
+        name: 장기계속구분명
+        data_type: string
+      - id: cntrctCnclsDate
+        name: 계약체결일자
+        data_type: string
+      - id: cntrctPrd
+        name: 계약기간
+        data_type: string
+      - id: baseLawNm
+        name: 근거법률명
+        data_type: string
+      - id: totCntrctAmt
+        name: 총계약금액
+        data_type: string
+      - id: thtmCntrctAmt
+        name: 금차계약금액
+        data_type: string
+      - id: grntymnyRate
+        name: 보증금률
+        data_type: string
+      - id: cntrctInfoUrl
+        name: 계약정보URL
+        data_type: string
+      - id: payDivNm
+        name: 지급구분명
+        data_type: string
+      - id: reqNo
+        name: 요청번호
+        data_type: string
+      - id: ntceNo
+        name: 공고번호
+        data_type: string
+      - id: cntrctInsttCd
+        name: 계약기관코드
+        data_type: string
+      - id: cntrctInsttNm
+        name: 계약기관명
+        data_type: string
+      - id: cntrctInsttJrsdctnDivNm
+        name: 계약기관소관구분명
+        data_type: string
+      - id: cntrctInsttChrgDeptNm
+        name: 계약기관담당부서명
+        data_type: string
+      - id: cntrctInsttOfclNm
+        name: 계약기관담당자명
+        data_type: string
+      - id: cntrctInsttOfclTelNo
+        name: 계약기관담당자전화번호
+        data_type: string
+      - id: cntrctInsttOfclFaxNo
+        name: 계약기관담당자팩스번호
+        data_type: string
+      - id: dminsttList
+        name: 수요기관목록
+        data_type: string
+      - id: corpList
+        name: 업체목록
+        data_type: string
+      - id: cntrctDtlInfoUrl
+        name: 계약상세정보URL
+        data_type: string
+      - id: crdtrNm
+        name: 채권자명
+        data_type: string
+      - id: baseDtls
+        name: 근거내역
+        data_type: string
+      - id: cntrctCnclsMthdNm
+        name: 계약체결방법명
+        data_type: string
+      - id: prcesChangeAplBssCd
+        name: 물가변동적용기준코드
+        data_type: string
+      - id: prcesChangeAplBssNm
+        name: 물가변동적용기준명
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: chgDt
+        name: 변경일시
+        data_type: string
+      - id: dfrcmpnstRt
+        name: 지체상금율
+        data_type: string
+      - id: cbgnDate
+        name: 착공일자
+        data_type: string
+      - id: thtmCcmpltDate
+        name: 금차준공일자
+        data_type: string
+      - id: ttalCcmpltDate
+        name: 총준공일자
+        data_type: string
+      - id: pubPrcrmntLrgClsfcNm
+        name: 공공조달대분류명
+        data_type: string
+      - id: pubPrcrmntMidClsfcNm
+        name: 공공조달중분류명
+        data_type: string
+      - id: pubPrcrmntClsfcNo
+        name: 공공조달분류번호
+        data_type: string
+      - id: pubPrcrmntClsfcNm
+        name: 공공조달분류명
+        data_type: string
+      - id: cntrctDate
+        name: 계약일자
+        data_type: string
+    - id: service_contract
+      name: 용역 계약
+      fields:
+      - id: untyCntrctNo
+        name: 통합계약번호
+        data_type: string
+      - id: bsnsDivNm
+        name: 업무구분명
+        data_type: string
+      - id: dcsnCntrctNo
+        name: 확정계약번호
+        data_type: string
+      - id: cntrctRefNo
+        name: 계약참조번호
+        data_type: string
+      - id: cntrctNm
+        name: 계약명
+        data_type: string
+      - id: cmmnCntrctYn
+        name: 공동계약여부
+        data_type: string
+      - id: lngtrmCtnuDivNm
+        name: 장기계속구분명
+        data_type: string
+      - id: cntrctCnclsDate
+        name: 계약체결일자
+        data_type: string
+      - id: cntrctPrd
+        name: 계약기간
+        data_type: string
+      - id: baseLawNm
+        name: 근거법률명
+        data_type: string
+      - id: totCntrctAmt
+        name: 총계약금액
+        data_type: string
+      - id: thtmCntrctAmt
+        name: 금차계약금액
+        data_type: string
+      - id: grntymnyRate
+        name: 보증금률
+        data_type: string
+      - id: cntrctInfoUrl
+        name: 계약정보URL
+        data_type: string
+      - id: payDivNm
+        name: 지급구분명
+        data_type: string
+      - id: reqNo
+        name: 요청번호
+        data_type: string
+      - id: ntceNo
+        name: 공고번호
+        data_type: string
+      - id: cntrctInsttCd
+        name: 계약기관코드
+        data_type: string
+      - id: cntrctInsttNm
+        name: 계약기관명
+        data_type: string
+      - id: cntrctInsttJrsdctnDivNm
+        name: 계약기관소관구분명
+        data_type: string
+      - id: cntrctInsttChrgDeptNm
+        name: 계약기관담당부서명
+        data_type: string
+      - id: cntrctInsttOfclNm
+        name: 계약기관담당자명
+        data_type: string
+      - id: cntrctInsttOfclTelNo
+        name: 계약기관담당자전화번호
+        data_type: string
+      - id: cntrctInsttOfclFaxNo
+        name: 계약기관담당자팩스번호
+        data_type: string
+      - id: dminsttList
+        name: 수요기관목록
+        data_type: string
+      - id: corpList
+        name: 업체목록
+        data_type: string
+      - id: cntrctDtlInfoUrl
+        name: 계약상세정보URL
+        data_type: string
+      - id: crdtrNm
+        name: 채권자명
+        data_type: string
+      - id: baseDtls
+        name: 근거내역
+        data_type: string
+      - id: cntrctCnclsMthdNm
+        name: 계약체결방법명
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: chgDt
+        name: 변경일시
+        data_type: string
+      - id: dfrcmpnstRt
+        name: 지체상금율
+        data_type: string
+      - id: wbgnDate
+        name: 착수일자
+        data_type: string
+      - id: thtmScmpltDate
+        name: 금차완수일자
+        data_type: string
+      - id: ttalScmpltDate
+        name: 총완수일자
+        data_type: string
+      - id: pubPrcrmntLrgClsfcNm
+        name: 공공조달대분류명
+        data_type: string
+      - id: pubPrcrmntMidClsfcNm
+        name: 공공조달중분류명
+        data_type: string
+      - id: pubPrcrmntClsfcNo
+        name: 공공조달분류번호
+        data_type: string
+      - id: pubPrcrmntClsfcNm
+        name: 공공조달분류명
+        data_type: string
+      - id: cntrctDate
+        name: 계약일자
+        data_type: string
+      - id: infoBizYn
+        name: 정보화사업여부
+        data_type: string
+    - id: foreign_procurement_contract
+      name: 외자 계약
+      fields:
+      - id: untyCntrctNo
+        name: 통합계약번호
+        data_type: string
+      - id: bsnsDivNm
+        name: 업무구분명
+        data_type: string
+      - id: dcsnCntrctNo
+        name: 확정계약번호
+        data_type: string
+      - id: cntrctRefNo
+        name: 계약참조번호
+        data_type: string
+      - id: cntrctNm
+        name: 계약명
+        data_type: string
+      - id: cmmnCntrctYn
+        name: 공동계약여부
+        data_type: string
+      - id: lngtrmCtnuDivNm
+        name: 장기계속구분명
+        data_type: string
+      - id: cntrctCnclsDate
+        name: 계약체결일자
+        data_type: string
+      - id: cntrctPrd
+        name: 계약기간
+        data_type: string
+      - id: baseLawNm
+        name: 근거법률명
+        data_type: string
+      - id: totCntrctAmt
+        name: 총계약금액
+        data_type: string
+      - id: totCntrctAmtCrncy
+        name: 총계약금액통화
+        data_type: string
+      - id: thtmCntrctAmt
+        name: 금차계약금액
+        data_type: string
+      - id: thtmCntrctAmtCrncy
+        name: 금차계약금액통화
+        data_type: string
+      - id: grntymnyRate
+        name: 보증금률
+        data_type: string
+      - id: cntrctInfoUrl
+        name: 계약정보URL
+        data_type: string
+      - id: payDivNm
+        name: 지급구분명
+        data_type: string
+      - id: reqNo
+        name: 요청번호
+        data_type: string
+      - id: ntceNo
+        name: 공고번호
+        data_type: string
+      - id: cntrctInsttCd
+        name: 계약기관코드
+        data_type: string
+      - id: cntrctInsttNm
+        name: 계약기관명
+        data_type: string
+      - id: cntrctInsttJrsdctnDivNm
+        name: 계약기관소관구분명
+        data_type: string
+      - id: cntrctInsttChrgDeptNm
+        name: 계약기관담당부서명
+        data_type: string
+      - id: cntrctInsttOfclNm
+        name: 계약기관담당자명
+        data_type: string
+      - id: cntrctInsttOfclTelNo
+        name: 계약기관담당자전화번호
+        data_type: string
+      - id: cntrctInsttOfclFaxNo
+        name: 계약기관담당자팩스번호
+        data_type: string
+      - id: dminsttList
+        name: 수요기관목록
+        data_type: string
+      - id: corpList
+        name: 업체목록
+        data_type: string
+      - id: cntrctDtlInfoUrl
+        name: 계약상세정보URL
+        data_type: string
+      - id: crdtrNm
+        name: 채권자명
+        data_type: string
+      - id: baseDtls
+        name: 근거내역
+        data_type: string
+      - id: cntrctCnclsMthdNm
+        name: 계약체결방법명
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: chgDt
+        name: 변경일시
+        data_type: string
+      - id: cntrctDate
+        name: 계약일자
+        data_type: string
+  operations:
+  - id: list_goods_contracts
+    name: 나라장터검색조건에 의한 계약현황 물품조회
+    method: GET
+    idempotent: true
+    path: /getCntrctInfoListThngPPSSrch
+    description: 나라장터 검색조건으로 물품 계약현황을 조회한다.
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+            label: 계약체결일자
+          - value: '2'
+            label: 확정계약번호
+          - value: '3'
+            label: 요청번호
+          - value: '4'
+            label: 공고번호
+        - id: inqryBgnDate
+          name: 조회시작일자
+          data_type: date_yyyymmdd
+        - id: inqryEndDate
+          name: 조회종료일자
+          data_type: date_yyyymmdd
+        - id: insttDivCd
+          name: 기관구분코드
+          data_type: string
+          default: '1'
+          values:
+          - value: '1'
+            label: 계약기관
+          - value: '2'
+            label: 수요기관
+        - id: insttClsfcCd
+          name: 기관분류코드
+          data_type: string
+          values:
+          - value: '01'
+            label: 국가기관
+          - value: '02'
+            label: 지방자치단체
+          - value: '03'
+            label: 교육기관
+          - value: '05'
+            label: 정부투자기관
+          - value: '07'
+            label: 임의기관
+          - value: '51'
+            label: 공기업
+          - value: '52'
+            label: 준정부기관
+          - value: '53'
+            label: 기타공공기관
+          - value: '71'
+            label: 지방공기업
+          - value: '72'
+            label: 기타기관
+        - id: insttCd
+          name: 기관코드
+          data_type: string
+        - id: insttNm
+          name: 기관명
+          data_type: string
+        - id: prdctClsfcNoNm
+          name: 품명
+          data_type: string
+        - id: cntrctMthdCd
+          name: 계약방법코드
+          data_type: string
+          values:
+          - value: '1'
+            label: 일반경쟁
+          - value: '2'
+            label: 제한경쟁
+          - value: '3'
+            label: 지명경쟁
+          - value: '4'
+            label: 수의계약
+        - id: cntrctRefNo
+          name: 계약참조번호
+          data_type: string
+        - id: cntrctDivCd
+          name: 계약구분코드
+          data_type: string
+          values:
+          - value: '1'
+            label: 자체계약
+          - value: '2'
+            label: 중앙조달
+        - id: dcsnCntrctNo
+          name: 확정계약번호
+          data_type: string
+        - id: reqNo
+          name: 요청번호
+          data_type: string
+        - id: ntceNo
+          name: 공고번호
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: goods_contract
+  - id: list_construction_contracts
+    name: 나라장터검색조건에 의한 계약현황 공사조회
+    method: GET
+    idempotent: true
+    path: /getCntrctInfoListCnstwkPPSSrch
+    description: 나라장터 검색조건으로 공사 계약현황을 조회한다.
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+            label: 계약체결일자
+          - value: '2'
+            label: 확정계약번호
+          - value: '3'
+            label: 요청번호
+          - value: '4'
+            label: 공고번호
+        - id: inqryBgnDate
+          name: 조회시작일자
+          data_type: date_yyyymmdd
+        - id: inqryEndDate
+          name: 조회종료일자
+          data_type: date_yyyymmdd
+        - id: insttDivCd
+          name: 기관구분코드
+          data_type: string
+          default: '1'
+          values:
+          - value: '1'
+            label: 계약기관
+          - value: '2'
+            label: 수요기관
+        - id: insttClsfcCd
+          name: 기관분류코드
+          data_type: string
+          values:
+          - value: '01'
+            label: 국가기관
+          - value: '02'
+            label: 지방자치단체
+          - value: '03'
+            label: 교육기관
+          - value: '05'
+            label: 정부투자기관
+          - value: '07'
+            label: 임의기관
+          - value: '51'
+            label: 공기업
+          - value: '52'
+            label: 준정부기관
+          - value: '53'
+            label: 기타공공기관
+          - value: '71'
+            label: 지방공기업
+          - value: '72'
+            label: 기타기관
+        - id: insttCd
+          name: 기관코드
+          data_type: string
+        - id: insttNm
+          name: 기관명
+          data_type: string
+        - id: cnsttyNm
+          name: 공종명
+          data_type: string
+        - id: cnstwkNm
+          name: 공사명
+          data_type: string
+        - id: cntrctMthdCd
+          name: 계약방법코드
+          data_type: string
+          values:
+          - value: '1'
+            label: 일반경쟁
+          - value: '2'
+            label: 제한경쟁
+          - value: '3'
+            label: 지명경쟁
+          - value: '4'
+            label: 수의계약
+        - id: cntrctRefNo
+          name: 계약참조번호
+          data_type: string
+        - id: cntrctDivCd
+          name: 계약구분코드
+          data_type: string
+          values:
+          - value: '1'
+            label: 자체계약
+          - value: '2'
+            label: 중앙조달
+        - id: dcsnCntrctNo
+          name: 확정계약번호
+          data_type: string
+        - id: reqNo
+          name: 요청번호
+          data_type: string
+        - id: ntceNo
+          name: 공고번호
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: construction_contract
+  - id: list_service_contracts
+    name: 나라장터검색조건에 의한 계약현황 용역조회
+    method: GET
+    idempotent: true
+    path: /getCntrctInfoListServcPPSSrch
+    description: 나라장터 검색조건으로 용역 계약현황을 조회한다.
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+            label: 계약체결일자
+          - value: '2'
+            label: 확정계약번호
+          - value: '3'
+            label: 요청번호
+          - value: '4'
+            label: 공고번호
+        - id: inqryBgnDate
+          name: 조회시작일자
+          data_type: date_yyyymmdd
+        - id: inqryEndDate
+          name: 조회종료일자
+          data_type: date_yyyymmdd
+        - id: insttDivCd
+          name: 기관구분코드
+          data_type: string
+          default: '1'
+          values:
+          - value: '1'
+            label: 계약기관
+          - value: '2'
+            label: 수요기관
+        - id: insttClsfcCd
+          name: 기관분류코드
+          data_type: string
+          values:
+          - value: '01'
+            label: 국가기관
+          - value: '02'
+            label: 지방자치단체
+          - value: '03'
+            label: 교육기관
+          - value: '05'
+            label: 정부투자기관
+          - value: '07'
+            label: 임의기관
+          - value: '51'
+            label: 공기업
+          - value: '52'
+            label: 준정부기관
+          - value: '53'
+            label: 기타공공기관
+          - value: '71'
+            label: 지방공기업
+          - value: '72'
+            label: 기타기관
+        - id: insttCd
+          name: 기관코드
+          data_type: string
+        - id: insttNm
+          name: 기관명
+          data_type: string
+        - id: cnsttyNm
+          name: 공종명
+          data_type: string
+        - id: cntrctNm
+          name: 계약명
+          data_type: string
+        - id: cntrctMthdCd
+          name: 계약방법코드
+          data_type: string
+          values:
+          - value: '1'
+            label: 일반경쟁
+          - value: '2'
+            label: 제한경쟁
+          - value: '3'
+            label: 지명경쟁
+          - value: '4'
+            label: 수의계약
+        - id: cntrctRefNo
+          name: 계약참조번호
+          data_type: string
+        - id: cntrctDivCd
+          name: 계약구분코드
+          data_type: string
+          values:
+          - value: '1'
+            label: 자체계약
+          - value: '2'
+            label: 중앙조달
+        - id: dcsnCntrctNo
+          name: 확정계약번호
+          data_type: string
+        - id: reqNo
+          name: 요청번호
+          data_type: string
+        - id: ntceNo
+          name: 공고번호
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: service_contract
+  - id: list_foreign_procurement_contracts
+    name: 나라장터검색조건에 의한 계약현황 외자조회
+    method: GET
+    idempotent: true
+    path: /getCntrctInfoListFrgcptPPSSrch
+    description: 나라장터 검색조건으로 외자 계약현황을 조회한다.
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+            label: 계약체결일자
+          - value: '2'
+            label: 확정계약번호
+          - value: '3'
+            label: 요청번호
+          - value: '4'
+            label: 공고번호
+        - id: inqryBgnDate
+          name: 조회시작일자
+          data_type: date_yyyymmdd
+        - id: inqryEndDate
+          name: 조회종료일자
+          data_type: date_yyyymmdd
+        - id: insttDivCd
+          name: 기관구분코드
+          data_type: string
+          default: '1'
+          values:
+          - value: '1'
+            label: 계약기관
+          - value: '2'
+            label: 수요기관
+        - id: insttClsfcCd
+          name: 기관분류코드
+          data_type: string
+          values:
+          - value: '01'
+            label: 국가기관
+          - value: '02'
+            label: 지방자치단체
+          - value: '03'
+            label: 교육기관
+          - value: '05'
+            label: 정부투자기관
+          - value: '07'
+            label: 임의기관
+          - value: '51'
+            label: 공기업
+          - value: '52'
+            label: 준정부기관
+          - value: '53'
+            label: 기타공공기관
+          - value: '71'
+            label: 지방공기업
+          - value: '72'
+            label: 기타기관
+        - id: insttCd
+          name: 기관코드
+          data_type: string
+        - id: insttNm
+          name: 기관명
+          data_type: string
+        - id: prdctClsfcNoNm
+          name: 품명
+          data_type: string
+        - id: cntrctRefNo
+          name: 계약참조번호
+          data_type: string
+        - id: splyCorpNm
+          name: 공급업체명
+          data_type: string
+        - id: makeCorpNm
+          name: 제작업체명
+          data_type: string
+        - id: dcsnCntrctNo
+          name: 확정계약번호
+          data_type: string
+        - id: reqNo
+          name: 요청번호
+          data_type: string
+        - id: ntceNo
+          name: 공고번호
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: foreign_procurement_contract

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "teoria-mcp"
+version = "0.1.0"
+description = "Teoria MCP Gateway"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "mcp>=1.27,<2",
+  "pydantic>=2.7,<3",
+  "pydantic-settings>=2.10,<3",
+  "python-dotenv>=1.0,<2",
+  "teoria-platform",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8,<9",
+  "pytest-asyncio>=0.24,<2",
+]
+
+[project.scripts]
+teoria-mcp = "teoria_mcp.stdio:main"
+
+[tool.uv.sources]
+teoria-platform = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/teoria_mcp"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "../platform/src"]
+testpaths = ["tests"]

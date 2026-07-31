@@ -1,0 +1,64 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-07-31"
+
+ontology:
+  id: public_procurement
+  name: 대한민국 공공조달
+  description: 대한민국 공공기관의 조달계약, 계약기관, 수요기관과 계약업체의 참여 관계를 표현한다.
+  object_types:
+    - id: contract
+      name: 공공조달계약
+      description: 공공기관과 하나 이상의 업체 사이에 체결되어 나라장터 통합계약번호로 식별되는 조달계약
+      primary_key: unified_contract_number
+      properties:
+        - {id: unified_contract_number, name: 통합계약번호, description: 나라장터가 계약을 통합 식별하기 위해 부여한 번호, data_type: string}
+        - {id: contract_type, name: 계약유형, description: 물품·공사·용역·외자 중 계약이 속하는 업무 유형, value_set: public_procurement_contract_type}
+        - {id: confirmed_contract_number, name: 확정계약번호, description: 계약 확정 후 부여된 계약번호, data_type: string}
+        - {id: contract_reference_number, name: 계약참조번호, description: 계약 업무에서 참조하는 번호, data_type: string}
+        - {id: contract_name, name: 계약명, description: 계약 대상 또는 사업을 설명하는 명칭, data_type: string}
+        - {id: is_joint_contract, name: 공동계약 여부, description: 둘 이상의 업체가 공동으로 참여한 계약인지 여부, data_type: boolean}
+        - {id: long_term_continuation_type, name: 장기계속구분, description: 계약의 장기계속 또는 차수 성격을 나타내는 구분, data_type: string}
+        - {id: concluded_date, name: 계약체결일, description: 계약 당사자가 계약을 체결한 날짜, data_type: date}
+        - {id: contract_date, name: 계약일, description: 나라장터 계약정보에서 계약일로 제공되는 날짜, data_type: date}
+        - {id: contract_period_text, name: 계약기간, description: 원천에서 제공된 계약기간 설명, data_type: string}
+        - {id: basis_law_name, name: 근거법률명, description: 계약 체결의 법적 근거가 되는 법령 또는 조항 명칭, data_type: string}
+        - {id: total_amount, name: 총계약금액, description: 전체 계약기간에 대한 총 계약금액, data_type: monetary_amount}
+        - {id: total_amount_currency, name: 총계약금액 통화, description: 총계약금액에 적용되는 ISO 4217 통화코드, data_type: iso_4217_currency_code}
+        - {id: current_contract_amount, name: 금차계약금액, description: 현재 차수에 해당하는 계약금액, data_type: monetary_amount}
+        - {id: current_contract_amount_currency, name: 금차계약금액 통화, description: 금차계약금액에 적용되는 ISO 4217 통화코드, data_type: iso_4217_currency_code}
+        - {id: guarantee_deposit_rate, name: 보증금률, description: 계약금액 대비 계약보증금의 비율, data_type: number}
+        - {id: payment_method_name, name: 지급구분명, description: 계약대금의 지급 방식을 나타내는 원천 구분명, data_type: string}
+        - {id: request_number, name: 요청번호, description: 계약과 연결된 조달 요청번호, data_type: string}
+        - {id: notice_number, name: 공고번호, description: 계약과 연결된 조달 공고번호, data_type: string}
+        - {id: contract_method_name, name: 계약체결방법, description: 일반경쟁·제한경쟁·수의계약 등 계약 체결 방식의 명칭, data_type: string}
+        - {id: contracting_department_name, name: 계약기관 담당부서명, description: 계약기관에서 해당 계약 업무를 담당하는 부서명, data_type: string}
+        - {id: procurement_classification_number, name: 공공조달분류번호, description: 계약 대상에 부여된 공공조달 분류번호, data_type: string}
+        - {id: procurement_classification_name, name: 공공조달분류명, description: 공공조달 분류번호에 대응하는 명칭, data_type: string}
+        - {id: contract_information_url, name: 계약정보 URL, description: 계약정보를 확인할 수 있는 웹 주소, data_type: string}
+        - {id: contract_detail_url, name: 계약상세정보 URL, description: 계약 상세화면의 웹 주소, data_type: string}
+        - {id: source_registered_at, name: 원천 등록일시, description: 나라장터에 계약정보가 등록된 시각, data_type: datetime}
+        - {id: source_changed_at, name: 원천 변경일시, description: 나라장터에서 계약정보가 마지막으로 변경된 시각, data_type: datetime}
+
+    - id: public_organization
+      name: 공공기관
+      description: 조달계약에서 계약기관 또는 수요기관 역할로 참여하는 공공 조직
+      primary_key: organization_code
+      properties:
+        - {id: organization_code, name: 기관코드, description: 나라장터에서 공공기관을 식별하는 코드, data_type: string}
+        - {id: name, name: 기관명, description: 기관의 공식 또는 원천 제공 명칭, data_type: string}
+        - {id: jurisdiction_type, name: 소관구분, description: 국가기관·지방자치단체·교육기관 등 기관의 소관 구분, data_type: string}
+
+  link_types:
+    - id: business_registration_is_supplier_of_contract
+      description: 사업자등록으로 식별되는 업체가 공공조달계약의 공급자 또는 계약업체로 참여함을 나타낸다.
+      source: company.business_registration
+      target: contract
+    - id: public_organization_awards_contract
+      description: 공공기관이 계약기관으로서 공공조달계약을 체결했음을 나타낸다.
+      source: public_organization
+      target: contract
+    - id: public_organization_demands_contract
+      description: 공공기관이 수요기관으로서 공공조달계약의 수요를 제기했음을 나타낸다.
+      source: public_organization
+      target: contract

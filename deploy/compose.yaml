@@ -1,19 +1,34 @@
+name: teoria
+
 services:
   registry-check:
     build:
       context: ..
-      dockerfile: deploy/docker/python.Dockerfile
-    command: ["teoria", "validate", "/app/registries"]
+      dockerfile: platform/Dockerfile
+    command: ["teoria", "validate", "/app/platform/registries"]
 
-  mcp-stdio:
+  pipeline-check:
     build:
       context: ..
-      dockerfile: deploy/docker/python.Dockerfile
+      dockerfile: pipelines/Dockerfile
+      target: check
+    command:
+      - teoria-pipelines
+      - validate-integration
+      - /app/pipelines
+      - --platform-registries
+      - /app/platform/registries
+
+  mcp:
+    build:
+      context: ..
+      dockerfile: mcp/Dockerfile
     command: ["teoria-mcp"]
     stdin_open: true
     environment:
-      TEORIA_REGISTRY_PATH: /app/registries
+      TEORIA_MCP_RUNTIME_MODE: embedded
+      TEORIA_MCP_EMBEDDED_REGISTRY_PATH: /app/platform/registries
     env_file:
       - path: ../.env
         required: false
-    profiles: ["stdio"]
+    profiles: ["mcp"]

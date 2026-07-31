@@ -1,0 +1,6 @@
+query:
+  numOfRows: 10
+  pageNo: 1
+  inqryDiv: "1"
+  inqryBgnDate: "20160801"
+  inqryEndDate: "20160831"

@@ -1,0 +1,159 @@
+registry:
+  version: 2.0.0
+  registered_at: "2026-07-29"
+
+value_sets:
+  - id: business_operating_status_kr
+    name: 대한민국 사업자 영업상태
+    description: 대한민국 과세당국에 등록된 사업자의 영업상태
+    values:
+      - id: active
+        name: 계속사업자
+        description: 휴업 또는 폐업 상태가 아닌 사업자
+      - id: suspended
+        name: 휴업자
+        description: 사업자등록을 유지하면서 일시적으로 영업을 중단한 사업자
+      - id: closed
+        name: 폐업자
+        description: 사업 활동을 종료하고 폐업 처리된 사업자
+
+  - id: vat_taxation_type_kr
+    name: 대한민국 부가가치세 과세유형
+    description: 대한민국 부가가치세 제도에서 사업자 또는 단체에 적용되는 과세유형
+    values:
+      - id: general_taxpayer
+        name: 부가가치세 일반과세자
+        description: 일반적인 부가가치세 신고·납부 의무가 적용되는 사업자
+      - id: simplified_taxpayer
+        name: 부가가치세 간이과세자
+        description: 일정 매출 기준에 따라 간소화된 부가가치세 제도가 적용되는 사업자
+      - id: special_taxpayer
+        name: 부가가치세 과세특례자
+        description: 과세특례 규정이 적용되는 사업자
+      - id: tax_exempt_business
+        name: 부가가치세 면세사업자
+        description: 부가가치세가 면제되는 재화 또는 용역을 주로 공급하는 사업자
+      - id: non_profit_or_public_entity
+        name: 수익사업을 영위하지 않는 비영리법인·단체·국가기관
+        description: 수익사업을 영위하지 않으며 고유번호가 부여된 비영리·공공 주체
+      - id: organization_with_identifier
+        name: 고유번호가 부여된 단체
+        description: 사업자등록번호 대신 고유번호가 부여된 단체
+      - id: simplified_taxpayer_invoice_issuer
+        name: 세금계산서 발급 간이과세자
+        description: 세금계산서 발급 의무 또는 자격이 있는 간이과세자
+      - id: not_applicable
+        name: 해당 없음
+        description: 적용 가능한 직전 과세유형이 없는 상태
+
+  - id: securities_market_kr
+    name: 대한민국 증권시장
+    description: 대한민국에서 주식이 상장되고 거래되는 증권시장
+    values:
+      - id: kospi
+        name: 유가증권시장
+        description: 한국거래소가 운영하는 유가증권시장
+      - id: kosdaq
+        name: 코스닥시장
+        description: 중소·벤처기업 중심의 한국거래소 코스닥시장
+      - id: konex
+        name: 코넥스시장
+        description: 초기 중소기업을 위한 한국거래소 코넥스시장
+
+  - id: listing_status
+    name: 상장상태
+    description: 특정 증권시장에서의 상장 상태
+    values:
+      - id: listed
+        name: 상장
+        description: 해당 증권시장에서 주식이 거래되는 상태
+      - id: delisted
+        name: 상장폐지
+        description: 과거 상장되었으나 현재는 해당 시장에서 거래되지 않는 상태
+      - id: unlisted
+        name: 비상장
+        description: 해당 증권시장에 상장된 이력이 확인되지 않는 상태
+
+  - id: organization_relationship_type
+    name: 기업관계 유형
+    description: 두 법인 사이에 성립하는 계열 또는 지배 관계의 유형
+    values:
+      - id: affiliate
+        name: 계열회사
+        description: 동일 기업집단에 속하는 법인 사이의 관계
+      - id: consolidated_subsidiary
+        name: 연결대상 종속기업
+        description: 지배기업의 연결재무제표에 포함되는 종속기업 관계
+
+  - id: financial_statement_type
+    name: 재무제표 유형
+    description: 재무정보가 표현되는 재무제표의 유형
+    values:
+      - id: summary
+        name: 요약재무제표
+        description: 주요 재무성과와 재무상태 항목을 요약해 제공하는 재무제표
+      - id: balance_sheet
+        name: 재무상태표
+        description: 기준일의 자산, 부채 및 자본을 나타내는 재무제표
+      - id: income_statement
+        name: 손익계산서
+        description: 일정 기간의 수익과 비용 및 손익을 나타내는 재무제표
+
+  - id: financial_statement_scope
+    name: 재무제표 범위
+    description: 재무제표가 연결 또는 별도 기준으로 작성되었는지 나타내는 범위
+    values:
+      - id: consolidated
+        name: 연결
+        description: 지배기업과 종속기업을 하나의 경제실체로 보아 작성한 범위
+      - id: separate
+        name: 별도
+        description: 지배기업 또는 개별 법인만을 대상으로 작성한 범위
+
+  - id: financial_period_role
+    name: 재무기간 역할
+    description: 재무계정 금액이 어느 비교기간에 해당하는지 나타내는 역할
+    values:
+      - id: current_quarter
+        name: 당분기
+        description: 현재 보고 대상 분기의 금액
+      - id: current_year
+        name: 당기
+        description: 현재 보고 대상 회계기간의 금액
+      - id: previous_quarter
+        name: 전분기
+        description: 현재 보고 분기의 직전 분기 금액
+      - id: previous_year
+        name: 전기
+        description: 현재 보고 회계기간의 직전 회계기간 금액
+      - id: two_years_prior
+        name: 전전기
+        description: 현재 보고 회계기간보다 두 기간 이전의 금액
+
+  - id: registration_verification_result
+    name: 사업자등록정보 확인 결과
+    description: 제출한 사업자정보가 과세당국의 등록정보와 일치하는지 나타내는 결과
+    values:
+      - id: verified
+        name: 확인됨
+        description: 제출한 사업자정보가 과세당국의 등록정보와 일치한 결과
+      - id: not_verified
+        name: 확인되지 않음
+        description: 제출한 사업자정보가 등록정보와 일치하지 않거나 확인할 수 없는 결과
+
+  - id: public_procurement_contract_type
+    name: 공공조달 계약유형
+    description: 나라장터 계약정보서비스가 구분하는 계약 업무 유형
+    values:
+      - id: goods
+        name: 물품
+        description: 물품의 구매 또는 공급을 대상으로 하는 계약
+      - id: construction
+        name: 공사
+        description: 시설 또는 구조물의 공사를 대상으로 하는 계약
+      - id: service
+        name: 용역
+        description: 전문 업무 또는 서비스를 대상으로 하는 계약
+      - id: foreign_procurement
+        name: 외자
+        description: 국외 조달 또는 외자를 대상으로 하는 계약

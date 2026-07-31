@@ -1,0 +1,21 @@
+registry:
+  version: 1.0.0
+  registered_at: "YYYY-MM-DD"
+
+source:
+  id: domain_data_store
+  name: 도메인 데이터 저장소
+  description: Runtime이 직접 조회하는 정규화된 PostgreSQL 데이터 계약
+  type: database
+  access:
+    engine: postgresql
+    connection_env: TEORIA_RUNTIME_DATA_DATABASE_URL
+  relations:
+    - id: records
+      name: 레코드
+      relation: domain.records
+      primary_key: [record_id]
+      fields:
+        - id: record_id
+          name: 레코드 식별자
+          data_type: string

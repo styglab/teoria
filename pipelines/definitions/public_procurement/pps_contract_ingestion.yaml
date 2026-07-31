@@ -1,0 +1,27 @@
+pipeline:
+  id: pps_contract_ingestion
+  description: 조달청 나라장터 계약정보 API를 날짜 구간별로 수집하고 정규화하여 조달계약 데이터 저장소에 적재한다.
+  connector: pps_contract_api
+  operations:
+    - list_goods_contracts
+    - list_construction_contracts
+    - list_service_contracts
+    - list_foreign_procurement_contracts
+  cursor:
+    field: contract_date
+    window_days: 1
+    overlap_days: 2
+  sink:
+    source: teoria_public_procurement
+    relations:
+      - contracts
+      - contract_suppliers
+      - public_organizations
+      - contract_demand_organizations
+  provenance:
+    retain_raw_records: true
+    fields:
+      - connector
+      - operation
+      - fetched_at
+      - source_record_hash

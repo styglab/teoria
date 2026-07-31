@@ -1,0 +1,11 @@
+provider: 국세청
+source: nts_business_registration
+title: 사업자등록정보 진위확인 및 상태조회 서비스 문서
+retrieved_at: "2026-07-30"
+official_url: null
+
+files:
+  - path: 국세청_사업자등록정보 진위확인 및 상태조회 서비스.md
+    format: markdown
+
+registry: registries/sources/nts_business_registration.yaml

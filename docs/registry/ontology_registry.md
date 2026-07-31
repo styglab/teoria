@@ -1,6 +1,16 @@
 # Ontology Registry
 
-Ontology Registry는 AI와 애플리케이션이 공유할 도메인 의미를 Object Type, Property, Link Type으로 표현한다. 현재 한국 기업정보 도메인은 `registries/domains/company/ontology.yaml`에 있다.
+Ontology Registry는 AI와 애플리케이션이 공유할 도메인 의미를 Object Type, Property, Link Type으로 표현한다. 현재 `company`와 `public_procurement` 도메인을 제공한다.
+
+## Domain 경계
+
+Domain은 제공기관이나 API별로 나누지 않는다. 같은 식별자로 객체를 합치고, 같은 관계와 사용자 질문 안에서 함께 탐색하는 개념을 하나의 의미 경계로 둔다.
+
+- `company`: 금융위원회와 국세청 등에서 얻은 법인, 사업자등록, 재무와 기업관계를 통합한다.
+- `public_procurement`: 조달청 및 향후 다른 Source에서 얻을 입찰공고, 투찰, 낙찰, 계약과 이행정보를 통합한다.
+- 두 Domain은 사업자등록을 통해 계약업체 관계로 연결하되 서로의 객체를 복제하지 않는다.
+
+Source와 Connector는 데이터를 어디서 어떻게 얻는지를, Domain은 그 데이터가 무엇을 의미하는지를 정의한다. 수집 방식이 실시간 API에서 Database Source로 바뀌어도 Domain 경계는 바뀌지 않는다.
 
 ## Object Type
 

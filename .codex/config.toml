@@ -1,13 +1,14 @@
 [mcp_servers.teoria]
   command = "uv"
-  args = ["run", "--locked", "teoria-mcp"]
+  args = ["run", "--locked", "--package", "teoria-mcp", "teoria-mcp"]
   cwd = "/workspace"
   startup_timeout_sec = 30
   tool_timeout_sec = 150
   required = true
 
   [mcp_servers.teoria.env]
-  TEORIA_REGISTRY_PATH = "/workspace/registries"
+  TEORIA_MCP_RUNTIME_MODE = "embedded"
+  TEORIA_MCP_EMBEDDED_REGISTRY_PATH = "/workspace/platform/registries"
 
 [mcp_servers.teoria.tools.get_business_registration_status]
 approval_mode = "approve"

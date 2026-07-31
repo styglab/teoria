@@ -4,7 +4,9 @@ Registry는 원천 계약, 도메인 의미, 의미 대응, 실행 의도를 분
 
 | Registry | 정의하는 것 | 정의하지 않는 것 |
 |---|---|---|
-| Source | 원천 API의 필드, 요청·응답, 인증 참조 | 기업정보의 표준 의미 |
+| Source | Runtime이 직접 접근하는 API·Database 계약 | 도메인의 표준 의미, 수집 스케줄 |
+| Connector | Ingestion Worker가 호출하는 API 계약 | Runtime Capability, Ontology 의미 |
+| Pipeline | Connector Operation, cursor와 Database 적재 대상 | API 응답 의미와 Ontology Property 대응 |
 | Data Type | 재사용 가능한 값의 형태와 제약 | 원천별 코드 목록 |
 | Value Set | 표준 의미 코드와 값 | 원천 필드 경로 |
 | Ontology | Object Type, Property, Link Type | API 호출 방법 |
@@ -20,12 +22,13 @@ Registry는 원천 계약, 도메인 의미, 의미 대응, 실행 의도를 분
 - Ontology Property 참조: `<ontology>.<object_type>.<property>`
 - Ontology Object 또는 Link 참조: `<ontology>.<type>`
 - Source Operation 참조: `<source>.<operation>`
-- Source 필드 참조: `<source>.<operation>.(request|response).<path>`
+- API Source 필드 참조: `<source>.<operation>.(request|response).<path>`
+- Database Source 필드 참조: `<source>.<relation>.<field>`
 
 ## 값 모델링
 
-- 범용 표현 형식과 검증 규칙은 `registries/core/data_types.yaml`에 둔다.
-- 도메인 표준 코드 집합은 `registries/core/value_sets.yaml`에 둔다.
+- 범용 표현 형식과 검증 규칙은 `platform/registries/core/data_types.yaml`에 둔다.
+- 도메인 표준 코드 집합은 `platform/registries/core/value_sets.yaml`에 둔다.
 - 원천이 반환하는 코드와 라벨은 Source Registry에 보존한다.
 - 원천 코드에서 표준 Value Set으로의 변환은 Mapping codec으로 처리한다.
 - 빈 문자열, 날짜 형식, 숫자 변환 등 원천 표현의 의미를 임의로 Source Registry에서 바꾸지 않는다.
@@ -37,5 +40,5 @@ Registry는 원천 계약, 도메인 의미, 의미 대응, 실행 의도를 분
 작성 후에는 반드시 다음 명령을 실행한다.
 
 ```bash
-teoria validate registries
+uv run --locked --package teoria-platform teoria validate platform/registries
 ```
