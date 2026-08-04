@@ -14,7 +14,7 @@ source:
     version: "1.0"
     source_document: 금융위원회_기업기본정보.docx
   access:
-    base_url: http://apis.data.go.kr/1160100/service/GetCorpBasicInfoService_V2
+    base_url: https://apis.data.go.kr/1160100/service/GetCorpBasicInfoService_V2
     authentication:
       type: api_key
       in: query

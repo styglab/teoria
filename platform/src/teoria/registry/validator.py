@@ -8,6 +8,8 @@ from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from teoria.registry.diagnostics import Diagnostic
 from teoria.registry.loader import RegistryCatalog
+from teoria.registry.validation import validate_ontologies, validate_references, validate_value_sets
+from teoria.registry.validation.duplicates import check_duplicates
 from teoria_provider.validator import ProviderContractValidator
 
 BUILTIN_DATA_TYPES = {"string", "integer", "number", "boolean"}
@@ -37,9 +39,9 @@ class RegistryValidator:
             else:
                 self._validate_database_source(source, catalog, path, diagnostics)
 
-        self._validate_value_sets(catalog, diagnostics)
-        self._validate_references(catalog, diagnostics)
-        self._validate_ontologies(catalog, diagnostics)
+        validate_value_sets(catalog, diagnostics)
+        validate_references(catalog, diagnostics)
+        validate_ontologies(catalog, diagnostics)
         self._validate_mappings(catalog, diagnostics)
         self._validate_capabilities(catalog, diagnostics)
         return diagnostics
@@ -91,85 +93,6 @@ class RegistryValidator:
             )
             self._check_required(relation.fields, relation.primary_key, path, location, diagnostics)
 
-    def _validate_references(self, catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
-        project_root = catalog.root.parent.resolve()
-        for source_id, reference in catalog.references.items():
-            metadata_path = catalog.reference_paths[source_id]
-            for index, item in enumerate(reference.files):
-                if not (metadata_path.parent / item.path).is_file():
-                    diagnostics.append(
-                        Diagnostic(
-                            "reference_file_not_found",
-                            f"reference file '{item.path}' does not exist",
-                            metadata_path,
-                            location=f"files.{index}.path",
-                        )
-                    )
-
-        for source_id, source_registry in catalog.sources.items():
-            if source_registry.source.type != "api":
-                continue
-            source_document = source_registry.source.specification.source_document
-            reference = catalog.references.get(source_id)
-            if source_document and reference is None:
-                diagnostics.append(
-                    Diagnostic(
-                        "missing_source_reference",
-                        f"source '{source_id}' declares source_document but has no provider reference metadata",
-                        catalog.source_paths[source_id],
-                        location="source.specification.source_document",
-                    )
-                )
-                continue
-            if reference is None:
-                continue
-            metadata_path = catalog.reference_paths[source_id]
-            if reference.target != "source":
-                diagnostics.append(Diagnostic("reference_target_mismatch", f"reference for source '{source_id}' must use target: source", metadata_path, location="target"))
-            if reference.status == "draft":
-                diagnostics.append(
-                    Diagnostic(
-                        "draft_reference_for_registered_source",
-                        f"source '{source_id}' is registered but its provider reference is still draft",
-                        metadata_path,
-                        location="status",
-                    )
-                )
-                continue
-            registry_path = (project_root / reference.registry).resolve()
-            expected_registry_path = catalog.source_paths[source_id].resolve()
-            if registry_path != expected_registry_path:
-                diagnostics.append(
-                    Diagnostic(
-                        "reference_registry_mismatch",
-                        f"reference registry points to '{reference.registry}', expected '{catalog.source_paths[source_id]}'",
-                        metadata_path,
-                        location="registry",
-                    )
-                )
-            file_names = {item.path for item in reference.files}
-            if source_document and source_document not in file_names:
-                diagnostics.append(
-                    Diagnostic(
-                        "source_document_mismatch",
-                        f"source_document '{source_document}' is not listed in provider reference files",
-                        catalog.source_paths[source_id],
-                        location="source.specification.source_document",
-                    )
-                )
-
-        for source_id, reference in catalog.references.items():
-            known = source_id in catalog.sources
-            if reference.status == "active" and not known:
-                diagnostics.append(
-                    Diagnostic(
-                        "unknown_reference_target",
-                        f"provider reference points to unknown source '{reference.source}'",
-                        catalog.reference_paths[source_id],
-                        location="source",
-                    )
-                )
-
     def _validate_capabilities(self, catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
         for capability_id, capability in catalog.capabilities.items():
             path = catalog.capability_paths[capability_id]
@@ -196,8 +119,33 @@ class RegistryValidator:
                     (item for item in source.source.operations if item.id == operation_id),
                     None,
                 ) if source and source.source.type == "api" else None
-                if operation is None:
+                relation = next(
+                    (item for item in source.source.relations if item.id == operation_id),
+                    None,
+                ) if source and source.source.type == "database" else None
+                if operation is None and relation is None:
                     diagnostics.append(Diagnostic("unknown_capability_operation", f"unknown source operation '{step.call}'", path, location=f"{location}.call"))
+                    continue
+                if relation is not None:
+                    relation_prefix = f"{step.call}."
+                    for input_id, input_definition in input_leaves:
+                        if input_definition.field:
+                            if not input_definition.field.startswith(relation_prefix):
+                                diagnostics.append(Diagnostic("capability_input_field_operation_mismatch", f"field '{input_definition.field}' does not belong to '{step.call}'", path, location=location))
+                            else:
+                                self._validate_mapping_source_ref(input_definition.field, catalog, path, location, diagnostics)
+                        elif input_definition.property:
+                            ontology_id, object_id, property_id = input_definition.property.split(".")
+                            target = f"{object_id}.{property_id}"
+                            matches = [
+                                binding
+                                for mapping in catalog.mappings.values()
+                                if mapping.ontology == ontology_id
+                                for binding in mapping.bindings.get(target, [])
+                                if any(ref.startswith(relation_prefix) for ref in self._mapping_field_refs(binding.field))
+                            ]
+                            if len(matches) != 1:
+                                diagnostics.append(Diagnostic("missing_capability_input_binding", f"input '{input_id}' must have exactly one database binding for '{step.call}'", path, location=location))
                     continue
                 request_prefix = f"{step.call}.request."
                 for input_id, input_definition in input_leaves:
@@ -229,7 +177,12 @@ class RegistryValidator:
                     continue
                 if parts[1] in {item.id for item in ontology.link_types}:
                     continue
-                operation_prefixes = tuple(f"{step.call}.response." for step in capability.steps)
+                operation_prefixes = tuple(
+                    f"{step.call}.response."
+                    if catalog.sources[step.call.split('.', 1)[0]].source.type == "api"
+                    else f"{step.call}."
+                    for step in capability.steps
+                )
                 has_response_binding = any(
                     mapping.ontology == parts[0]
                     and target.startswith(f"{parts[1]}.")
@@ -282,13 +235,25 @@ class RegistryValidator:
             for target, rules in mapping.bindings.items():
                 parts = target.split(".")
                 location = f"mapping.bindings.{target}"
-                if len(parts) != 2 or parts[0] not in object_types:
+                if len(parts) == 2:
+                    target_ontology = ontology
+                    object_id, property_id = parts
+                elif len(parts) == 3 and parts[0] in catalog.ontologies:
+                    target_ontology = catalog.ontologies[parts[0]]
+                    object_id, property_id = parts[1:]
+                else:
                     diagnostics.append(Diagnostic("unknown_mapping_target", f"unknown mapping target '{target}'", path, location=location))
                     continue
-                obj = object_types[parts[0]]
+                obj = next(
+                    (item for item in target_ontology.object_types if item.id == object_id),
+                    None,
+                )
+                if obj is None:
+                    diagnostics.append(Diagnostic("unknown_mapping_target", f"unknown mapping target '{target}'", path, location=location))
+                    continue
                 properties = {item.id: item for item in obj.properties}
-                if parts[1] not in properties:
-                    diagnostics.append(Diagnostic("unknown_mapping_target", f"unknown property '{parts[1]}' on object type '{parts[0]}'", path, location=location))
+                if property_id not in properties:
+                    diagnostics.append(Diagnostic("unknown_mapping_target", f"unknown property '{property_id}' on object type '{object_id}'", path, location=location))
                     continue
                 for index, rule in enumerate(rules):
                     rule_location = f"{location}.{index}"
@@ -318,22 +283,31 @@ class RegistryValidator:
                                     diagnostics.append(Diagnostic("codec_input_mismatch", f"{codec_name} codec '{codec_path}' does not accept inputs {sorted(missing)}", path, location=rule_location))
                         except (ImportError, AttributeError, TypeError) as exc:
                             diagnostics.append(Diagnostic("unknown_codec", f"cannot resolve {codec_name} codec '{codec_path}': {exc}", path, location=rule_location))
-                    self._validate_binding_types(rule, properties[parts[1]], catalog, path, rule_location, diagnostics)
+                    self._validate_binding_types(rule, properties[property_id], catalog, path, rule_location, diagnostics)
 
             link_types = {item.id: item for item in ontology.link_types}
             for operation_ref, materialization in mapping.materializations.items():
                 location = f"mapping.materializations.{operation_ref}"
                 parts = operation_ref.split(".")
                 source = catalog.sources.get(parts[0]) if len(parts) == 2 else None
-                operation = next(
-                    (item for item in source.source.operations if item.id == parts[1]),
-                    None,
-                ) if source and source.source.type == "api" else None
-                if operation is None:
-                    diagnostics.append(Diagnostic("unknown_materialization_operation", f"unknown source operation '{operation_ref}'", path, location=location))
+                target_exists = False
+                if source and source.source.type == "api":
+                    target_exists = any(item.id == parts[1] for item in source.source.operations)
+                elif source and source.source.type == "database":
+                    target_exists = any(item.id == parts[1] for item in source.source.relations)
+                if not target_exists:
+                    diagnostics.append(Diagnostic("unknown_materialization_operation", f"unknown source operation or relation '{operation_ref}'", path, location=location))
                 roles = set(materialization.objects)
                 for role, spec in materialization.objects.items():
-                    obj = object_types.get(spec.type)
+                    if "." in spec.type:
+                        object_ontology_id, object_type_id = spec.type.split(".", 1)
+                        object_ontology = catalog.ontologies.get(object_ontology_id)
+                        obj = next(
+                            (item for item in object_ontology.object_types if item.id == object_type_id),
+                            None,
+                        ) if object_ontology else None
+                    else:
+                        obj = object_types.get(spec.type)
                     if obj is None:
                         diagnostics.append(Diagnostic("unknown_materialization_object", f"unknown object type '{spec.type}'", path, location=f"{location}.objects.{role}"))
                         continue
@@ -564,64 +538,9 @@ class RegistryValidator:
             return True
         return (actual, expected) == ("integer", "number")
 
-    def _validate_value_sets(self, catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
-        path = catalog.root / "core" / "value_sets.yaml"
-        for value_set in catalog.value_sets.values():
-            self._check_duplicates([value.id for value in value_set.values], "value_set_value", path, diagnostics, f"value_sets.{value_set.id}.values")
-
-    def _validate_ontologies(self, catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
-        for ontology_id, ontology in catalog.ontologies.items():
-            path = catalog.ontology_paths[ontology_id]
-            domain_ontology = path.name == "ontology.yaml" and path.parent.name == ontology.id
-            if path.stem != ontology.id and not domain_ontology:
-                diagnostics.append(Diagnostic("ontology_filename_mismatch", f"filename must match ontology id '{ontology.id}.yaml'", path, location="ontology.id"))
-
-            object_types = {item.id: item for item in ontology.object_types}
-            link_types = {item.id: item for item in ontology.link_types}
-            self._check_duplicates([item.id for item in ontology.object_types], "object_type", path, diagnostics, "ontology.object_types")
-            self._check_duplicates([item.id for item in ontology.link_types], "link_type", path, diagnostics, "ontology.link_types")
-
-            for obj in ontology.object_types:
-                location = f"ontology.object_types.{obj.id}"
-                properties = {prop.id: prop for prop in obj.properties}
-                self._check_duplicates([prop.id for prop in obj.properties], "ontology_property", path, diagnostics, f"{location}.properties")
-                if obj.primary_key not in properties:
-                    diagnostics.append(Diagnostic("unknown_primary_key", f"unknown property '{obj.primary_key}'", path, location=f"{location}.primary_key"))
-
-                for prop in obj.properties:
-                    prop_location = f"{location}.properties.{prop.id}"
-                    if prop.data_type and prop.data_type not in ONTOLOGY_BUILTIN_DATA_TYPES and prop.data_type not in catalog.data_types:
-                        diagnostics.append(Diagnostic("unknown_data_type", f"unknown data type '{prop.data_type}'", path, location=prop_location))
-                    if prop.value_set and prop.value_set not in catalog.value_sets:
-                        diagnostics.append(Diagnostic("unknown_value_set", f"unknown value set '{prop.value_set}'", path, location=prop_location))
-
-                for example_index, example in enumerate(obj.examples):
-                    for property_id in example:
-                        if property_id not in properties:
-                            diagnostics.append(Diagnostic("unknown_example_property", f"unknown example property '{property_id}'", path, location=f"{location}.examples.{example_index}"))
-            for link in ontology.link_types:
-                location = f"ontology.link_types.{link.id}"
-                for side_name, object_type in (("source", link.source), ("target", link.target)):
-                    if "." in object_type:
-                        referenced_ontology_id, referenced_object_id = object_type.split(".", 1)
-                        referenced_ontology = catalog.ontologies.get(referenced_ontology_id)
-                        exists = bool(
-                            referenced_ontology
-                            and referenced_object_id in {item.id for item in referenced_ontology.object_types}
-                        )
-                    else:
-                        exists = object_type in object_types
-                    if not exists:
-                        diagnostics.append(Diagnostic("unknown_link_object_type", f"unknown object type '{object_type}'", path, location=f"{location}.{side_name}"))
-
-
     @staticmethod
     def _check_duplicates(values: list[str], kind: str, path: Path, diagnostics: list[Diagnostic], location: str | None = None) -> None:
-        seen: set[str] = set()
-        for value in values:
-            if value in seen:
-                diagnostics.append(Diagnostic(f"duplicate_{kind}", f"duplicate {kind} '{value}'", path, location=location))
-            seen.add(value)
+        check_duplicates(values, kind, path, diagnostics, location)
 
     @staticmethod
     def _check_required(fields: list, required: list[str], path: Path, location: str, diagnostics: list[Diagnostic]) -> None:

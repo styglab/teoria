@@ -5,9 +5,9 @@
 - **Teoria Semantic Platform** / `platform/` / distribution `teoria-platform`
 - **Teoria Data Pipelines** / `pipelines/` / distribution `teoria-pipelines`
 - **Teoria MCP Gateway** / `mcp/` / distribution `teoria-mcp`
-- **Teoria Console** / `platform/console/`
+- **Teoria Admin UI** / `platform/admin-ui/` / package `teoria-platform-admin-ui`
 
-실행 명령은 `teoria`, `teoria-pipelines`, `teoria-mcp`를 사용한다. Docker 이미지도 각각 `teoria-platform`, `teoria-pipelines`, `teoria-mcp`로 명명한다.
+실행 명령은 `teoria`, `teoria-runtime-api`, `teoria-admin-api`, `teoria-pipelines`, `teoria-mcp`를 사용한다. Docker 이미지는 배포 책임에 따라 `teoria-platform-runtime`, `teoria-platform-admin-ui`, `teoria-pipelines`, `teoria-mcp`로 명명한다.
 
 ## 코드
 

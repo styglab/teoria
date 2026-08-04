@@ -18,15 +18,20 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_SOURCE_MAX_ATTEMPTS` | `3` | Runtime Source 요청 횟수 |
 | `TEORIA_SOURCE_MAX_PAGES` | `100` | Capability 최대 페이지 |
 | `TEORIA_CAPABILITY_TIMEOUT_SECONDS` | `120` | Capability deadline |
+| `TEORIA_RUNTIME_API_TOKEN` | 없음 | Runtime API Bearer token |
+| `TEORIA_RUNTIME_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Runtime API 앞에 붙이는 URL 경로 |
+| `TEORIA_ADMIN_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Admin API 앞에 붙이는 URL 경로 |
 | `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
 | `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `3` | Connector 요청 횟수 |
 | `TEORIA_RUNTIME_DATA_DATABASE_URL` | 없음 | Runtime 읽기 DB URL |
 | `TEORIA_PIPELINE_DATA_DATABASE_URL` | 없음 | Pipeline 쓰기 DB URL |
-| `TEORIA_MCP_RUNTIME_MODE` | `embedded` | MCP 실행 모드 |
+| `TEORIA_MCP_RUNTIME_MODE` | `remote` | MCP 실행 모드 |
 | `TEORIA_MCP_RUNTIME_API_URL` | 없음 | Remote Runtime URL |
-| `TEORIA_MCP_EMBEDDED_REGISTRY_PATH` | `platform/registries` | Embedded Registry |
+| `TEORIA_MCP_RUNTIME_API_TOKEN` | 없음 | MCP가 사용하는 Runtime API token |
+| `TEORIA_MCP_RUNTIME_TIMEOUT_SECONDS` | `150` | Runtime API 호출 timeout |
 
 로컬 Compose 암호 변수는 `.env.example`을 따른다. 공유·운영 환경에서는 managed secret으로 덮어쓴다.
+`TEORIA_RUNTIME_API_TOKEN`과 `TEORIA_LOCAL_RUNTIME_DB_PASSWORD`에는 기본값이 없으며 Compose 실행 전에 반드시 설정한다.
 
 ## Secret 규칙
 

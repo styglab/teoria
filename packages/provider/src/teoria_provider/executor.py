@@ -1,6 +1,8 @@
 import asyncio
 import os
 from collections.abc import Mapping
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -68,7 +70,10 @@ class ProviderExecutor:
                     raise ProviderExecutionError(code, f"source returned HTTP {response.status_code} after {attempts} attempt(s)",
                         source_id=request.source_id, operation_id=request.operation_id, attempts=attempts,
                         retryable=request.idempotent, http_status=response.status_code)
-                await asyncio.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
+                delay = self.backoff_seconds * (2 ** (attempt - 1))
+                if response.status_code == 429:
+                    delay = max(delay, self._retry_after_seconds(response.headers.get("retry-after")))
+                await asyncio.sleep(delay)
         raise RuntimeError("provider execution exhausted without a response")
 
     @staticmethod
@@ -81,3 +86,18 @@ class ProviderExecutor:
         return ExecutionResponse(status_code=response.status_code, content_type=content_type,
             headers=dict(response.headers), body=body,
             elapsed_ms=response.elapsed.total_seconds() * 1000)
+
+    @staticmethod
+    def _retry_after_seconds(value: str | None) -> float:
+        if not value:
+            return 0
+        try:
+            return max(0, float(value))
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(value)
+            except (TypeError, ValueError, OverflowError):
+                return 0
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            return max(0, (retry_at - datetime.now(timezone.utc)).total_seconds())

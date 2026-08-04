@@ -1,60 +1,95 @@
 # Docker Compose
 
-모든 Compose project name은 `teoria`다. 별도 `container_name`은 지정하지 않으며 Docker Compose가 다음처럼 일관된 이름을 만든다.
+`deploy/compose.yaml`이 전체 로컬 Teoria 스택의 단일 진입점이고 `compose.dev.yaml`은 검증 작업용 bind-mount override다.
 
 ```text
-container  teoria-data-db-1
-image      teoria-ingestion-worker
-network    teoria_default
-volume     teoria_data-db
+deploy/
+├── compose.yaml       전체 스택 + 선택 profile
+├── compose.dev.yaml   로컬 소스 mount override
+├── nginx/             공개 HTTP nginx 이미지와 설정
+│   ├── Dockerfile
+│   └── nginx.conf
+└── README.md
 ```
 
-한 호스트에서 환경을 나눌 때는 파일을 수정하지 않고 `-p teoria-dev`, `-p teoria-staging`처럼 project name을 덮어쓴다. 서비스 ID에는 `teoria-`를 반복하지 않는다.
+Compose project name은 `teoria`다. 별도 `container_name` 없이 다음 이름이 자동 생성된다.
 
-## 파일 선택
+```text
+teoria-data-db-1
+teoria-pipeline-worker-1
+teoria_default
+teoria_data-db
+```
 
-| 목적 | 파일 | 실행 방식 |
-|---|---|---|
-| Registry·Pipeline 이미지 검증 | `compose.yaml` | `run --rm` |
-| MCP STDIO | `compose.yaml` | `--profile mcp run --rm` |
-| 검증 시 로컬 파일 mount | `compose.dev.yaml` | `compose.yaml`과 함께 사용 |
-| Data DB + Prefect 전체 수집 스택 | `compose/ingestion.yaml` | `up -d` |
+환경 분리는 `-p teoria-dev`, `-p teoria-staging`처럼 project name을 덮어쓴다.
 
-`compose.dev.yaml`은 단독 실행 파일이 아니라 `compose.yaml`의 override다. `compose/ingestion.yaml`은 Data Plane과 Prefect를 함께 시작하는 독립 파일이다.
+## 기본 스택
 
-## 검증과 MCP
+루트 `.env`에 Prefect Basic Auth 계정을 설정한다.
+
+```env
+TEORIA_PREFECT_USERNAME=admin
+TEORIA_PREFECT_PASSWORD=충분히-긴-비밀번호
+TEORIA_RUNTIME_API_TOKEN=충분히-긴-임의-토큰
+TEORIA_LOCAL_RUNTIME_DB_PASSWORD=충분히-긴-로컬-비밀번호
+```
+
+Prefect 계정과 Runtime 비밀값이 없으면 Compose는 시작하지 않는다. 외부 HTTP 요청은 nginx의 단일 포트로만 받고, Admin UI/API, Runtime API와 Prefect Server는 Compose 내부 네트워크에만 노출한다.
 
 ```bash
-docker compose -f deploy/compose.yaml run --build --rm registry-check
-docker compose -f deploy/compose.yaml run --build --rm pipeline-check
+docker compose --env-file .env \
+  -f deploy/compose.yaml \
+  up --build -d
+```
+
+기본 `up`은 다음 순서로 실행한다.
+
+```text
+Data DB → migration ┐
+                    ├→ pipeline-worker
+Prefect DB → Server → work pool → prefect-deploy ┘
+```
+
+공개 주소는 다음과 같다.
+
+| 대상 | 주소 |
+|---|---|
+| Platform Admin UI | `http://localhost:8081/` |
+| Admin API docs | `http://localhost:8081/admin-api/docs` |
+| Runtime API docs | `http://localhost:8081/runtime-api/docs` |
+| Prefect UI | `http://localhost:8081/prefect/` |
+| nginx health | `http://localhost:8081/health` |
+
+공개 포트는 `TEORIA_HTTP_PORT`로 변경할 수 있으며 기본값은 `8081`이다. Data DB에 로컬 SQL client로 접근할 때는 포트를 공개하지 않고 `docker compose exec data-db psql`을 사용한다. MCP는 STDIO이므로 기본 백그라운드 서비스에 포함하지 않는다.
+
+## 선택 profile
+
+| Profile | 서비스 | 실행 방식 |
+|---|---|---|
+| `tools` | `platform-check`, `pipelines-check` | 일회성 검증 |
+| `mcp` | `mcp` | STDIO 실행 |
+
+```bash
+docker compose -f deploy/compose.yaml --profile tools run --build --rm platform-check
+docker compose -f deploy/compose.yaml --profile tools run --build --rm pipelines-check
 docker compose -f deploy/compose.yaml --profile mcp run --rm mcp
 ```
 
-로컬 Registry를 mount한 검증:
+로컬 Registry를 mount하려면 override를 추가한다.
 
 ```bash
 docker compose \
   -f deploy/compose.yaml \
   -f deploy/compose.dev.yaml \
-  run --rm registry-check
+  --profile tools run --rm platform-check
 ```
 
-## 수집 스택
+## 상태와 종료
 
 ```bash
-docker compose --env-file .env \
-  -f deploy/compose/ingestion.yaml \
-  up --build -d
-
-docker compose --env-file .env \
-  -f deploy/compose/ingestion.yaml \
-  ps
-
-docker compose --env-file .env \
-  -f deploy/compose/ingestion.yaml \
-  down
+docker compose -f deploy/compose.yaml ps
+docker compose -f deploy/compose.yaml logs -f pipeline-worker
+docker compose -f deploy/compose.yaml down
 ```
 
-시작 순서는 Data DB→migration, Prefect DB→Server→work pool→Deployment→Worker다. Prefect UI는 `http://localhost:4200`이다. `down -v`는 `teoria_data-db`와 `teoria_prefect-db`를 삭제하므로 데이터를 폐기할 때만 사용한다.
-
-`--env-file .env`는 루트 설정을 Compose 변수로 읽지만 Worker에는 파일 전체가 아니라 YAML에 선언한 Pipeline 변수만 전달한다. Flow 실행은 [Prefect 가이드](../docs/ingestion/prefect.md)를 따른다.
+`down -v`는 수집 데이터와 Prefect 이력을 삭제하므로 데이터를 폐기할 때만 사용한다. Worker에는 `.env` 전체가 아니라 Compose에 선언한 Pipeline 변수만 전달한다.

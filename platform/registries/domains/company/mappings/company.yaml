@@ -29,6 +29,7 @@ mapping:
       - field: nts_business_registration.verify_business_registration.request.body.businesses[].corp_no
     legal_entity.legal_name:
       - field: fsc_company_basic.get_company_overview.response.corpNm
+      - field: fsc_company_basic.get_company_overview.request.query.corpNm
       - field: fsc_company_basic.list_affiliates.response.afilCmpyNm
         role: related_entity
     legal_entity.english_name:
@@ -318,7 +319,6 @@ mapping:
         business_registration:
           type: business_registration
           identity: [business_registration_number]
-          parents: [legal_entity]
         postal_address:
           type: postal_address
           identity: []

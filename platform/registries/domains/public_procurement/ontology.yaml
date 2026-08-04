@@ -49,11 +49,32 @@ ontology:
         - {id: name, name: 기관명, description: 기관의 공식 또는 원천 제공 명칭, data_type: string}
         - {id: jurisdiction_type, name: 소관구분, description: 국가기관·지방자치단체·교육기관 등 기관의 소관 구분, data_type: string}
 
+    - id: contract_participation
+      name: 계약업체 참여
+      description: 사업자가 특정 공공조달계약에 주계약업체 또는 도급업체로 참여한 사실과 공동도급 방식 및 지분율을 표현한다.
+      primary_key: participation_id
+      properties:
+        - {id: participation_id, name: 계약참여 식별자, description: 통합계약번호와 업체 순번으로 생성한 Teoria 계약참여 식별자, data_type: string}
+        - {id: supplier_sequence, name: 업체 순번, description: 한 계약 안에서 계약업체를 구분하는 원천 순번, data_type: integer}
+        - {id: business_registration_number, name: 사업자등록번호, description: 계약 참여업체의 사업자등록번호, data_type: business_registration_number}
+        - {id: supplier_name, name: 업체명, description: 계약정보에 기록된 참여업체 명칭, data_type: string}
+        - {id: supplier_role_name, name: 업체 역할, description: 주계약업체·도급업체 등 계약에서의 업체 역할, data_type: string}
+        - {id: joint_contract_method_name, name: 공동도급 방식, description: 단독·공동·분담 등 계약 참여 방식, data_type: string}
+        - {id: participation_share_rate, name: 참여 지분율, description: 공동계약에서 해당 업체가 차지하는 참여 지분율, data_type: number}
+
   link_types:
     - id: business_registration_is_supplier_of_contract
       description: 사업자등록으로 식별되는 업체가 공공조달계약의 공급자 또는 계약업체로 참여함을 나타낸다.
       source: company.business_registration
       target: contract
+    - id: contract_participation_is_for_contract
+      description: 계약업체 참여 사실이 특정 공공조달계약에 속함을 나타낸다.
+      source: contract_participation
+      target: contract
+    - id: business_registration_has_contract_participation
+      description: 사업자등록으로 식별되는 업체가 특정 계약업체 참여 사실의 주체임을 나타낸다.
+      source: company.business_registration
+      target: contract_participation
     - id: public_organization_awards_contract
       description: 공공기관이 계약기관으로서 공공조달계약을 체결했음을 나타낸다.
       source: public_organization

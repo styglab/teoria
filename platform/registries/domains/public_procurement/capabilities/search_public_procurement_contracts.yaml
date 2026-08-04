@@ -1,0 +1,30 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-04"
+
+capability:
+  id: search_public_procurement_contracts
+  name: 공공조달 계약 검색
+  description: 계약체결 기간과 선택적인 계약유형·계약기관 조건으로 정규화된 공공조달 계약을 검색한다.
+  inputs:
+    concluded_date_from:
+      data_type: date
+      field: teoria_public_procurement.contracts.concluded_date
+      operator: gte
+      required: true
+    concluded_date_to:
+      data_type: date
+      field: teoria_public_procurement.contracts.concluded_date
+      operator: lte
+      required: true
+    contract_type:
+      property: public_procurement.contract.contract_type
+    contracting_organization_code:
+      data_type: string
+      field: teoria_public_procurement.contracts.contracting_organization_code
+  steps:
+    - call: teoria_public_procurement.contracts
+  returns:
+    - public_procurement.contract
+    - public_procurement.public_organization
+    - public_procurement.public_organization_awards_contract

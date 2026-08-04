@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     source_max_attempts: int = Field(default=3, ge=1, le=10)
     source_max_pages: int = Field(default=100, ge=1, le=10_000)
     capability_timeout_seconds: float = Field(default=120.0, gt=0)
+    runtime_api_token: str | None = None
+    runtime_api_root_path: str = ""
+    admin_api_root_path: str = ""
 
 
 def bootstrap_settings(*, cwd: Path | None = None) -> Settings:

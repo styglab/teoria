@@ -6,18 +6,39 @@ push: null
 pull: null
 
 deployments:
-  - name: pps-contract-daily
+  - name: pps-contract-incremental
     version: 1.0.0
-    description: 조달청 나라장터 계약정보를 일 단위로 수집하여 Teoria Data DB에 적재한다.
-    entrypoint: teoria_pipelines.flows.pps_contracts.sync_pps_contracts
+    description: 최근 나라장터 계약정보를 4시간마다 다시 조회하여 신규·변경 데이터를 반영한다.
+    entrypoint: teoria_pipelines.flows.pps_contracts.sync_pps_contract_incremental
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
     parameters:
-      start_date: null
-      end_date: null
       pipeline_root: /app/pipelines
-      window_days: 1
-      overlap_days: 2
+      lookback_days: 3
     schedules:
-      - cron: "0 2 * * *"
+      - cron: "0 */4 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-contract-backfill
+    version: 1.0.0
+    description: 2026-01-01부터 2026-07-31까지 날짜 정방향으로 나라장터 계약정보를 Backfill한다.
+    entrypoint: teoria_pipelines.flows.pps_contracts.sync_pps_contract_backfill
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      checkpoint_id: pps_contract_backfill_2026
+      start_date: "2026-01-01"
+      end_date: "2026-07-31"
+      pipeline_root: /app/pipelines
+      batch_days: 30
+    schedules:
+      - cron: "20 * * * *"
         timezone: Asia/Seoul
         active: true
     work_pool:

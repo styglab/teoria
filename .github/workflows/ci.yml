@@ -30,6 +30,22 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: teoria_test
+          POSTGRES_USER: teoria_test
+          POSTGRES_PASSWORD: teoria_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U teoria_test -d teoria_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEORIA_TEST_DATA_DATABASE_URL: postgresql://teoria_test:teoria_test@localhost:5432/teoria_test
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

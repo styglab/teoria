@@ -1,34 +1,251 @@
 name: teoria
 
+x-pipeline-runner: &pipeline-runner
+  image: teoria-pipelines:latest
+  build:
+    context: ..
+    dockerfile: pipelines/Dockerfile
+    target: worker
+
 services:
-  registry-check:
+  nginx:
+    image: teoria-nginx:latest
+    build:
+      context: ..
+      dockerfile: deploy/nginx/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      runtime-api:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+      admin-ui:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "${TEORIA_HTTP_PORT:-8081}:80"
+
+  data-db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: teoria_data
+      POSTGRES_USER: teoria_pipeline
+      POSTGRES_PASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teoria_pipeline -d teoria_data"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "5432"
+    volumes:
+      - data-db:/var/lib/postgresql/data
+
+  data-db-migrate:
+    <<: *pipeline-runner
+    command: ["teoria-pipelines", "migrate", "--migrations", "/app/pipelines/database/migrations"]
+    environment:
+      TEORIA_PIPELINE_DATA_DATABASE_URL: postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@data-db:5432/teoria_data
+    depends_on:
+      data-db-runtime-role:
+        condition: service_completed_successfully
+
+  data-db-runtime-role:
+    image: postgres:17
+    command:
+      - sh
+      - -ec
+      - |
+        psql --set=ON_ERROR_STOP=1 --set=runtime_password="$${TEORIA_LOCAL_RUNTIME_DB_PASSWORD}" <<'SQL'
+        SELECT format('CREATE ROLE teoria_runtime LOGIN PASSWORD %L', :'runtime_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_runtime')
+        \gexec
+        ALTER ROLE teoria_runtime PASSWORD :'runtime_password';
+        ALTER ROLE teoria_runtime SET statement_timeout = '30s';
+        SQL
+    environment:
+      PGHOST: data-db
+      PGPORT: 5432
+      PGDATABASE: teoria_data
+      PGUSER: teoria_pipeline
+      PGPASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
+      TEORIA_LOCAL_RUNTIME_DB_PASSWORD: ${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}
+    depends_on:
+      data-db:
+        condition: service_healthy
+
+  prefect-db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: prefect
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: ${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - prefect-db:/var/lib/postgresql/data
+
+  prefect-server:
+    image: prefecthq/prefect:3-python3.12
+    restart: unless-stopped
+    command: ["prefect", "server", "start", "--host", "0.0.0.0"]
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}@prefect-db:5432/prefect
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_SERVER_UI_API_URL: /prefect/api
+      PREFECT_SERVER_UI_SERVE_BASE: /prefect
+      PREFECT_SERVER_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    expose:
+      - "4200"
+
+  prefect-init:
+    <<: *pipeline-runner
+    command: ["prefect", "work-pool", "create", "--type", "process", "--overwrite", "teoria-ingestion"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+
+  prefect-deploy:
+    <<: *pipeline-runner
+    command: ["prefect", "deploy", "--all", "--prefect-file", "/app/pipelines/prefect.yaml"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-init:
+        condition: service_completed_successfully
+
+  pipeline-worker:
+    <<: *pipeline-runner
+    restart: unless-stopped
+    command: ["prefect", "worker", "start", "--pool", "teoria-ingestion"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+      TEORIA_PIPELINE_PATH: /app/pipelines
+      TEORIA_PIPELINE_DATA_DATABASE_URL: postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@data-db:5432/teoria_data
+      TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY: ${TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY:-}
+      TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS: ${TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS:-30}
+      TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS: ${TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS:-2}
+      TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS: ${TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS:-60}
+    depends_on:
+      data-db-migrate:
+        condition: service_completed_successfully
+      prefect-deploy:
+        condition: service_completed_successfully
+
+  platform-check:
+    profiles: ["tools"]
+    image: teoria-platform-runtime:latest
     build:
       context: ..
       dockerfile: platform/Dockerfile
     command: ["teoria", "validate", "/app/platform/registries"]
 
-  pipeline-check:
+  runtime-api:
+    image: teoria-platform-runtime:latest
+    build:
+      context: ..
+      dockerfile: platform/Dockerfile
+    restart: unless-stopped
+    command: ["teoria-runtime-api"]
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_REGISTRY_PATH: /app/platform/registries
+      TEORIA_RUNTIME_API_ROOT_PATH: /runtime-api
+      TEORIA_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
+      TEORIA_RUNTIME_DATA_DATABASE_URL: postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@data-db:5432/teoria_data
+      TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY: ${TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY:-}
+      TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY:-}
+      TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY:-}
+    depends_on:
+      data-db-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "8000"
+
+  admin-api:
+    image: teoria-platform-runtime:latest
+    build:
+      context: ..
+      dockerfile: platform/Dockerfile
+    restart: unless-stopped
+    command: ["teoria-admin-api"]
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_REGISTRY_PATH: /app/platform/registries
+      TEORIA_ADMIN_API_ROOT_PATH: /admin-api
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "8001"
+
+  admin-ui:
+    image: teoria-platform-admin-ui:latest
+    build:
+      context: ..
+      dockerfile: platform/admin-ui/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      admin-api:
+        condition: service_healthy
+    expose:
+      - "80"
+
+  pipelines-check:
+    profiles: ["tools"]
     build:
       context: ..
       dockerfile: pipelines/Dockerfile
       target: check
-    command:
-      - teoria-pipelines
-      - validate-integration
-      - /app/pipelines
-      - --platform-registries
-      - /app/platform/registries
+    command: ["teoria-pipelines", "validate-integration", "/app/pipelines", "--platform-registries", "/app/platform/registries"]
 
   mcp:
+    profiles: ["mcp"]
+    image: teoria-mcp:latest
     build:
       context: ..
       dockerfile: mcp/Dockerfile
     command: ["teoria-mcp"]
     stdin_open: true
     environment:
-      TEORIA_MCP_RUNTIME_MODE: embedded
-      TEORIA_MCP_EMBEDDED_REGISTRY_PATH: /app/platform/registries
-    env_file:
-      - path: ../.env
-        required: false
-    profiles: ["mcp"]
+      TEORIA_MCP_RUNTIME_MODE: remote
+      TEORIA_MCP_RUNTIME_API_URL: http://runtime-api:8000
+      TEORIA_MCP_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
+    depends_on:
+      runtime-api:
+        condition: service_healthy
+
+volumes:
+  data-db:
+  prefect-db:

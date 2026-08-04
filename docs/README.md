@@ -22,6 +22,7 @@
 - [Connector와 Pipeline](ingestion/connectors.md)
 - [Prefect 운영](ingestion/prefect.md)
 - [MCP Gateway](mcp.md)
+- [Platform Admin UI](admin-ui.md)
 - [Registry lifecycle](architecture/registry-lifecycle.md)
 - [Source 작성 Skill](skills/source-registry-author.md)
 

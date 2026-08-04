@@ -24,6 +24,11 @@ def test_company_mapping_loads_and_references_are_valid() -> None:
     assert sum(".response." in rule.field for rule in corporate_number_bindings) == 7
     assert all(rule.decode is None and rule.encode is None for rule in corporate_number_bindings)
     assert len(mapping.bindings["legal_entity.representative_names"]) == 1
+    business_registration = mapping.materializations[
+        "fsc_company_basic.get_company_overview"
+    ].objects["business_registration"]
+    assert business_registration.identity == ["business_registration_number"]
+    assert business_registration.parents == []
     assert all(
         "response.request_param" not in source
         for rules in mapping.bindings.values()

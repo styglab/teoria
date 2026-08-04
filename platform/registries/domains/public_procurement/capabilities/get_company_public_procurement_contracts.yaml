@@ -1,0 +1,21 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-04"
+
+capability:
+  id: get_company_public_procurement_contracts
+  name: 기업 공공조달 계약 조회
+  description: 사업자등록번호로 기업의 공공조달 계약 참여, 역할, 공동도급 방식과 지분율을 조회한다.
+  inputs:
+    business_registration_number:
+      data_type: business_registration_number
+      field: teoria_public_procurement.contract_suppliers.business_registration_number
+      required: true
+  steps:
+    - call: teoria_public_procurement.contract_suppliers
+  returns:
+    - company.business_registration
+    - public_procurement.contract_participation
+    - public_procurement.contract
+    - public_procurement.business_registration_has_contract_participation
+    - public_procurement.contract_participation_is_for_contract

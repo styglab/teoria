@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from teoria.runtime.mapping.codec import apply_codec
-from teoria.runtime.source.response import ExecutionResponse
+from teoria_provider.models import ExecutionResponse
 from teoria.registry.loader import RegistryCatalog
 
 
@@ -20,6 +20,66 @@ class MappedFragment(BaseModel):
 
 
 class MappingDecoder:
+    def decode_database_rows(
+        self,
+        catalog: RegistryCatalog,
+        source_id: str,
+        relation_id: str,
+        rows: list[dict[str, Any]],
+    ) -> list[MappedFragment]:
+        source = catalog.sources[source_id].source
+        relation = next(item for item in source.relations if item.id == relation_id)
+        call = f"{source_id}.{relation_id}"
+        prefix = f"{call}."
+        results: list[MappedFragment] = []
+
+        for record_index, row in enumerate(rows):
+            record_key = ":".join(str(row.get(key, "")) for key in relation.primary_key)
+            for mapping_id, mapping in catalog.mappings.items():
+                materialization = mapping.materializations.get(call)
+                if materialization is None:
+                    continue
+                fragments: dict[tuple[str, str], dict[str, Any]] = defaultdict(dict)
+                for target, bindings in mapping.bindings.items():
+                    target_parts = target.split(".")
+                    object_type = ".".join(target_parts[:-1])
+                    property_id = target_parts[-1]
+                    for binding in bindings:
+                        references = (
+                            [binding.field]
+                            if isinstance(binding.field, str)
+                            else list(binding.field.values())
+                        )
+                        if not references or not all(reference.startswith(prefix) for reference in references):
+                            continue
+                        if isinstance(binding.field, str):
+                            raw = row.get(binding.field[len(prefix):])
+                        else:
+                            raw = {
+                                name: row.get(reference[len(prefix):])
+                                for name, reference in binding.field.items()
+                            }
+                        value = apply_codec(binding.decode, raw)
+                        if value is None or value == "":
+                            continue
+                        role = binding.role or object_type
+                        fragments[(role, object_type)][property_id] = value
+                        fragments[(role, object_type)].update(binding.qualifiers)
+
+                order = row.get(materialization.record_order) if materialization.record_order else None
+                for (role, object_type), properties in fragments.items():
+                    results.append(MappedFragment(
+                        mapping_id=mapping_id,
+                        operation=call,
+                        record_key=f"{call}:{record_key or record_index}",
+                        record_order=str(order) if order is not None else None,
+                        ontology=mapping.ontology,
+                        object_type=object_type,
+                        role=role,
+                        properties=properties,
+                    ))
+        return results
+
     def decode(
         self,
         catalog: RegistryCatalog,
@@ -45,7 +105,9 @@ class MappingDecoder:
                 base: dict[tuple[str, str], dict[str, Any]] = defaultdict(dict)
                 variants: dict[tuple[str, str], dict[tuple[tuple[str, str], ...], dict[str, Any]]] = defaultdict(lambda: defaultdict(dict))
                 for target, bindings in mapping.bindings.items():
-                    object_type, property_id = target.split(".", 1)
+                    target_parts = target.split(".")
+                    object_type = ".".join(target_parts[:-1])
+                    property_id = target_parts[-1]
                     for binding in bindings:
                         references = [binding.field] if isinstance(binding.field, str) else list(binding.field.values())
                         if not references or not all(reference.startswith(prefix) for reference in references):

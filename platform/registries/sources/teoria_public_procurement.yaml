@@ -44,6 +44,8 @@ source:
         - {id: contract_detail_url, name: 계약상세정보 URL, data_type: string}
         - {id: source_registered_at, name: 원천 등록일시, data_type: datetime}
         - {id: source_changed_at, name: 원천 변경일시, data_type: datetime}
+        - {id: created_at, name: DB 생성일시, data_type: datetime}
+        - {id: updated_at, name: DB 수정일시, data_type: datetime}
 
     - id: contract_suppliers
       name: 계약업체
@@ -61,6 +63,8 @@ source:
         - {id: participation_share_rate, name: 지분율, data_type: number}
         - {id: creditor_name, name: 채권자명, data_type: string}
         - {id: supplier_manager_name, name: 업체 담당자명, data_type: string}
+        - {id: created_at, name: DB 생성일시, data_type: datetime}
+        - {id: updated_at, name: DB 수정일시, data_type: datetime}
 
     - id: public_organizations
       name: 공공기관
@@ -70,6 +74,8 @@ source:
         - {id: organization_code, name: 기관코드, data_type: string}
         - {id: organization_name, name: 기관명, data_type: string}
         - {id: jurisdiction_type, name: 소관구분, data_type: string}
+        - {id: created_at, name: DB 생성일시, data_type: datetime}
+        - {id: updated_at, name: DB 수정일시, data_type: datetime}
 
     - id: contract_demand_organizations
       name: 계약 수요기관
@@ -82,3 +88,5 @@ source:
         - {id: department_name, name: 담당부서명, data_type: string}
         - {id: manager_name, name: 담당자명, data_type: string}
         - {id: telephone_number, name: 담당자전화번호, data_type: string}
+        - {id: created_at, name: DB 생성일시, data_type: datetime}
+        - {id: updated_at, name: DB 수정일시, data_type: datetime}

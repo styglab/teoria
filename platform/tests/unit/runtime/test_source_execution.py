@@ -4,9 +4,9 @@ from datetime import timedelta
 import pytest
 import httpx
 
-from teoria.runtime.source.response import ExecutionResponse
-from teoria.runtime.source.errors import SourceExecutionError
-from teoria.runtime.source.executor import SourceExecutor
+from teoria_provider.errors import ProviderExecutionError
+from teoria_provider.executor import ProviderExecutor
+from teoria_provider.models import ExecutionResponse
 from teoria.runtime.source.request_builder import RequestBuildError, SourceRequestBuilder
 from teoria.runtime.source.response_validator import SourceResponseValidator
 from teoria.registry.loader import RegistryLoader
@@ -105,7 +105,7 @@ async def test_retries_idempotent_source_request_on_temporary_failure() -> None:
             FakeHTTPResponse(200, {"status_code": "OK", "data": []}),
         ]
     )
-    executor = SourceExecutor(
+    executor = ProviderExecutor(
         environment={"TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY": "secret"},
         backoff_seconds=0,
         client_factory=lambda **kwargs: client,
@@ -128,14 +128,14 @@ async def test_reports_structured_source_timeout_after_retries() -> None:
         {"body": {"b_no": ["0000000000"]}},
     )
     client = TimeoutClient([])
-    executor = SourceExecutor(
+    executor = ProviderExecutor(
         environment={"TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY": "secret"},
         max_attempts=2,
         backoff_seconds=0,
         client_factory=lambda **kwargs: client,
     )
 
-    with pytest.raises(SourceExecutionError) as exc_info:
+    with pytest.raises(ProviderExecutionError) as exc_info:
         await executor.execute(request)
 
     assert exc_info.value.to_dict() == {

@@ -1,65 +1,58 @@
-from datetime import date
-from pathlib import Path
-
 import pytest
 
-from teoria.runtime.capability.runner import CapabilityResult
 from teoria_mcp.tools import CapabilityMCPService
-from teoria.registry.loader import RegistryLoader
 
 
-REGISTRIES = Path(__file__).parents[2] / "platform" / "registries"
+CAPABILITIES = [
+    {
+        "id": "find_contracts",
+        "name": "Find contracts",
+        "description": "Find contracts by date",
+        "returns": ["public_procurement.contract"],
+        "input_schema": {
+            "type": "object",
+            "properties": {"date_from": {"type": "string", "format": "date"}},
+            "required": ["date_from"],
+            "additionalProperties": False,
+        },
+    }
+]
 
 
-class CapturingRunner:
+class CapturingRuntimeClient:
     def __init__(self) -> None:
         self.call = None
 
-    async def run(self, catalog, capability_id, inputs):
-        self.call = (catalog, capability_id, inputs)
-        return CapabilityResult(capability_id=capability_id)
+    async def execute(self, capability_id, inputs, options):
+        self.call = capability_id, inputs, options
+        return {"status": "success", "capability": capability_id}
 
 
-def test_generates_tools_from_all_capabilities() -> None:
-    catalog = RegistryLoader(REGISTRIES).load()
-    tools = {tool.name: tool for tool in CapabilityMCPService(catalog).list_tools()}
+def test_generates_tools_from_runtime_api_metadata() -> None:
+    service = CapabilityMCPService(CAPABILITIES, CapturingRuntimeClient())
+    tool = service.list_tools()[0]
 
-    assert set(tools) == set(catalog.capabilities)
-    profile_input = tools["get_company_profile"].inputSchema["properties"]["corporate_registration_number"]
-    assert profile_input["type"] == "string"
-    assert profile_input["pattern"] == "^[0-9]{13}$"
-    verification_business = tools["verify_business_registration"].inputSchema["properties"]["businesses"]["items"]
-    assert verification_business["properties"]["opened_date"]["format"] == "date"
-    assert "business_registration_number" in verification_business["required"]
+    assert tool.name == "find_contracts"
+    assert tool.inputSchema["properties"]["date_from"]["format"] == "date"
+    assert "_options" in tool.inputSchema["properties"]
 
 
 @pytest.mark.asyncio
-async def test_coerces_json_dates_before_capability_execution() -> None:
-    catalog = RegistryLoader(REGISTRIES).load()
-    runner = CapturingRunner()
-    service = CapabilityMCPService(catalog, runner=runner)
+async def test_delegates_execution_to_runtime_api() -> None:
+    client = CapturingRuntimeClient()
+    service = CapabilityMCPService(CAPABILITIES, client)
 
     result = await service.call_tool(
-        "verify_business_registration",
-        {
-            "businesses": [
-                {
-                    "business_registration_number": "0000000000",
-                    "opened_date": "2020-01-02",
-                    "representative_name": "홍길동",
-                }
-            ]
-        },
+        "find_contracts",
+        {"date_from": "2026-01-01", "_options": {"max_objects": 10}},
     )
 
-    assert runner.call[1] == "verify_business_registration"
-    assert runner.call[2]["businesses"][0]["opened_date"] == date(2020, 1, 2)
-    assert result == {
-        "status": "success",
-        "capability": "verify_business_registration",
-        "objects": [],
-        "links": [],
-        "total_objects": 0,
-        "total_links": 0,
-        "truncated": False,
-    }
+    assert client.call == ("find_contracts", {"date_from": "2026-01-01"}, {"max_objects": 10})
+    assert result["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_rejects_unknown_capability_before_runtime_call() -> None:
+    service = CapabilityMCPService(CAPABILITIES, CapturingRuntimeClient())
+    with pytest.raises(ValueError, match="unknown capability"):
+        await service.call_tool("unknown", {})

@@ -13,17 +13,12 @@ COPY platform/pyproject.toml ./platform/pyproject.toml
 COPY pipelines/pyproject.toml ./pipelines/pyproject.toml
 COPY mcp/pyproject.toml ./mcp/pyproject.toml
 COPY packages/provider/pyproject.toml ./packages/provider/pyproject.toml
-COPY packages/provider/src ./packages/provider/src
-COPY platform/src ./platform/src
 COPY mcp/src ./mcp/src
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --package teoria-mcp --no-dev --no-editable
 
 RUN useradd --create-home --uid 10001 teoria
-COPY --chown=teoria:teoria platform/registries ./platform/registries
-
 USER teoria
-ENV TEORIA_MCP_RUNTIME_MODE=embedded \
-    TEORIA_MCP_EMBEDDED_REGISTRY_PATH=/app/platform/registries
+ENV TEORIA_MCP_RUNTIME_MODE=remote
 CMD ["teoria-mcp"]

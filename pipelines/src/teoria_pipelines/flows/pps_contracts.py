@@ -20,7 +20,14 @@ from teoria_pipelines.tasks import (
     update_checkpoint,
     upsert_contracts,
 )
-from teoria_pipelines.tasks.pps_contracts import OPERATIONS
+from teoria_pipelines.tasks.pps_contracts import (
+    BACKFILL_PIPELINE_ID,
+    INCREMENTAL_PIPELINE_ID,
+    OPERATIONS,
+    PIPELINE_ID,
+    determine_backfill_windows,
+    determine_incremental_window,
+)
 
 
 OPERATION_TASK_NAMES = {
@@ -34,13 +41,15 @@ OPERATION_TASK_NAMES = {
 @flow(name="나라장터 계약정보 일별 수집")
 async def sync_pps_contract_window(window: CollectionWindow,
                                    pipeline_root: str = "/app/pipelines",
-                                   parent_window: CollectionWindow | None = None) -> LoadSummary:
+                                   parent_window: CollectionWindow | None = None,
+                                   pipeline_id: str = PIPELINE_ID,
+                                   checkpoint_cursor: date | None = None) -> LoadSummary:
     del parent_window  # keeps the parent task-to-subflow dependency visible
     # Use the Prefect child Flow Run ID as the DB audit identity when executed
     # by Prefect, while keeping static visualization callable without a backend.
     prefect_run_id = flow_run.get_id()
     execution_id = UUID(prefect_run_id) if prefect_run_id else uuid4()
-    started_execution_id = start_pipeline_run(execution_id, window)
+    started_execution_id = start_pipeline_run(execution_id, pipeline_id, window)
     try:
         batches = []
         previous_batch = None
@@ -62,7 +71,8 @@ async def sync_pps_contract_window(window: CollectionWindow,
         loaded = upsert_contracts(normalized)
         checkpointed = update_checkpoint(
             execution_id,
-            window,
+            pipeline_id,
+            checkpoint_cursor or window.end,
             raw_count,
             loaded,
         )
@@ -85,5 +95,52 @@ async def sync_pps_contracts(start_date: date | None = None,
     for window in split_windows(collection_window, window_days):
         summaries.append(
             await sync_pps_contract_window(window, pipeline_root, collection_window)
+        )
+    return summaries
+
+
+@flow(name="나라장터 계약정보 증분 수집")
+async def sync_pps_contract_incremental(
+    pipeline_root: str = "/app/pipelines",
+    lookback_days: int = 3,
+) -> list[LoadSummary]:
+    """Refresh recent contracts independently of historical backfill progress."""
+
+    collection_window = determine_incremental_window(lookback_days)
+    summaries: list[LoadSummary] = []
+    for window in split_windows(collection_window, 1):
+        summaries.append(
+            await sync_pps_contract_window(
+                window,
+                pipeline_root,
+                collection_window,
+                INCREMENTAL_PIPELINE_ID,
+                window.end,
+            )
+        )
+    return summaries
+
+
+@flow(name="나라장터 계약정보 Backfill")
+async def sync_pps_contract_backfill(
+    checkpoint_id: str,
+    start_date: date,
+    end_date: date,
+    pipeline_root: str = "/app/pipelines",
+    batch_days: int = 30,
+) -> list[LoadSummary]:
+    """Move forward through an independently checkpointed historical range."""
+
+    windows = determine_backfill_windows(checkpoint_id, start_date, end_date, batch_days)
+    summaries: list[LoadSummary] = []
+    for window in windows:
+        summaries.append(
+            await sync_pps_contract_window(
+                window,
+                pipeline_root,
+                None,
+                checkpoint_id,
+                window.end,
+            )
         )
     return summaries

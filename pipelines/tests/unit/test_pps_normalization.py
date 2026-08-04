@@ -41,3 +41,28 @@ def test_normalizes_contract_supplier_and_demand_organization() -> None:
     assert suppliers[0]["supplier_sequence"] == 1
     assert demands[0]["organization_code"] == "Z000001"
     assert {item["organization_code"] for item in organizations} == {"1230000", "Z000001"}
+
+
+def test_preserves_brackets_inside_supplier_name() -> None:
+    record = RawProviderRecord(
+        raw_record_id=uuid4(),
+        execution_id=uuid4(),
+        connector_id="pps_contract_api",
+        operation_id="list_service_contracts",
+        window=CollectionWindow(date(2026, 2, 10), date(2026, 2, 10)),
+        fetched_at=datetime.now(timezone.utc),
+        source_record_hash="bracketed-supplier",
+        payload={
+            "untyCntrctNo": "R26TE11983434",
+            "corpList": (
+                "[1^주계약업체^단독^베리즈 코퍼레이션[Verys corp.]^김자영^대한민국^"
+                "100^베리즈 코퍼레이션[Verys corp.]^^1470901465]"
+            ),
+        },
+    )
+
+    _, suppliers, _, _ = normalize_contract_record(record)
+
+    assert suppliers[0]["supplier_name"] == "베리즈 코퍼레이션[Verys corp.]"
+    assert suppliers[0]["creditor_name"] == "베리즈 코퍼레이션[Verys corp.]"
+    assert suppliers[0]["business_registration_number"] == "1470901465"

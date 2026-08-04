@@ -56,6 +56,11 @@ class OntologyMaterializer:
             for record_fragments in by_record.values():
                 record_instances: dict[str, list[str]] = defaultdict(list)
                 for role, spec in definition.objects.items():
+                    object_ontology, object_type = (
+                        spec.type.split(".", 1)
+                        if "." in spec.type
+                        else (mapping.ontology, spec.type)
+                    )
                     candidates = [fragment for fragment in record_fragments if fragment.role == role]
                     for candidate in candidates:
                         properties = dict(candidate.properties)
@@ -74,7 +79,7 @@ class OntologyMaterializer:
                             if any(value is None or value == "" for value in identity.values()):
                                 continue
                             identity["parents"] = list(parent_ids)
-                            object_id = self._id(mapping.ontology, spec.type, identity)
+                            object_id = self._id(object_ontology, object_type, identity)
                             if spec.id_property:
                                 properties[spec.id_property] = object_id
                                 generated_properties.add(spec.id_property)
@@ -86,8 +91,8 @@ class OntologyMaterializer:
                             order = candidate.record_order or ""
                             if current is None:
                                 objects[object_id] = MaterializedObject(
-                                    ontology=mapping.ontology,
-                                    object_type=spec.type,
+                                    ontology=object_ontology,
+                                    object_type=object_type,
                                     object_id=object_id,
                                     properties=dict(properties),
                                     provenance=[provenance, execution_provenance] if generated_properties else [provenance],

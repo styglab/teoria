@@ -5,12 +5,12 @@ from pathlib import Path
 
 import yaml
 
-from teoria.adapters.secrets import EnvironmentSecretProvider
+from teoria_provider.executor import ProviderExecutor
+from teoria_provider.secrets import EnvironmentSecretProvider
 from teoria.config import Settings, bootstrap_settings
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
 from teoria.registry.validator import RegistryValidator
 from teoria.registry.verification.source.graph import SourceVerificationServices, create_source_verification_graph
-from teoria.runtime.source.executor import SourceExecutor
 
 
 def _add_verify_parser(subparsers: argparse._SubParsersAction, settings: Settings) -> None:
@@ -42,7 +42,7 @@ async def _verify_source(args: argparse.Namespace, settings: Settings) -> int:
         return 1
     graph = create_source_verification_graph(
         SourceVerificationServices(
-            executor=SourceExecutor(
+            executor=ProviderExecutor(
                 timeout_seconds=settings.source_timeout_seconds,
                 max_attempts=settings.source_max_attempts,
                 secret_provider=EnvironmentSecretProvider(),

@@ -10,11 +10,12 @@ from pydantic import BaseModel, Field
 from teoria.runtime.capability.binder import CapabilityBinder
 from teoria.runtime.mapping.decoder import MappedFragment, MappingDecoder
 from teoria.runtime.mapping.materializer import MaterializedLink, MaterializedObject, OntologyMaterializer
-from teoria.runtime.source.executor import SourceExecutor
-from teoria.runtime.source.errors import SourceExecutionError
-from teoria.runtime.source.response import ExecutionResponse
+from teoria_provider.errors import ProviderExecutionError
+from teoria_provider.executor import ProviderExecutor
+from teoria_provider.models import ExecutionResponse
 from teoria.runtime.source.request_builder import SourceRequestBuilder
 from teoria.runtime.source.response_validator import SourceResponseValidator
+from teoria.runtime.source.database import DatabaseSourceExecutionError, DatabaseSourceExecutor
 from teoria.registry.loader import RegistryCatalog
 
 
@@ -67,6 +68,7 @@ class CapabilityRunner:
         *,
         timeout_seconds: float = 120.0,
         max_pages: int = 100,
+        database_executor: DatabaseSourceExecutor | None = None,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be greater than zero")
@@ -74,12 +76,13 @@ class CapabilityRunner:
             raise ValueError("max_pages must be at least one")
         self.binder = CapabilityBinder()
         self.request_builder = SourceRequestBuilder()
-        self.executor = executor or SourceExecutor()
+        self.executor = executor or ProviderExecutor()
         self.response_validator = SourceResponseValidator()
         self.decoder = MappingDecoder()
         self.materializer = OntologyMaterializer()
         self.timeout_seconds = timeout_seconds
         self.max_pages = max_pages
+        self.database_executor = database_executor or DatabaseSourceExecutor()
 
     async def run(
         self,
@@ -121,6 +124,28 @@ class CapabilityRunner:
         for step in capability.steps:
             source_id, operation_id = step.call.split(".", 1)
             source = catalog.sources[source_id]
+            if source.source.type == "database":
+                query = self.binder.bind(catalog, capability, step, inputs)
+                try:
+                    rows = await asyncio.to_thread(
+                        self.database_executor.execute,
+                        catalog,
+                        source_id,
+                        operation_id,
+                        query,
+                    )
+                except DatabaseSourceExecutionError as exc:
+                    raise CapabilityExecutionError(
+                        "database_source_error",
+                        str(exc),
+                        capability_id=capability_id,
+                        source_id=source_id,
+                        operation_id=operation_id,
+                    ) from exc
+                fragments.extend(
+                    self.decoder.decode_database_rows(catalog, source_id, operation_id, rows)
+                )
+                continue
             operation = next(item for item in source.source.operations if item.id == operation_id)
             base_input = self.binder.bind(catalog, capability, step, inputs)
             page = 1
@@ -140,7 +165,7 @@ class CapabilityRunner:
                 request = self.request_builder.build(catalog, source_id, operation_id, input_data)
                 try:
                     response = await self.executor.execute(request)
-                except SourceExecutionError as exc:
+                except ProviderExecutionError as exc:
                     raise CapabilityExecutionError(
                         exc.code,
                         str(exc),

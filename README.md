@@ -5,7 +5,7 @@ Teoria는 의미 Registry와 Runtime, Prefect 기반 데이터 수집, MCP Gatew
 ```text
 Data Pipelines ──write──▶ Teoria Data DB ◀──read── Semantic Platform
                                                     ▲
-AI Client ──MCP──▶ MCP Gateway ──HTTP(target)───────┘
+AI Client ──MCP──▶ MCP Gateway ──HTTP───────────────┘
 ```
 
 ## 구성
@@ -13,6 +13,7 @@ AI Client ──MCP──▶ MCP Gateway ──HTTP(target)───────
 | 경로 | 책임 |
 |---|---|
 | `platform/` | Source·Ontology·Mapping·Capability Registry와 Runtime |
+| `platform/admin-ui/` | Semantic Registry 관리자용 React UI |
 | `pipelines/` | Connector, Prefect Flow, raw·정규 적재, DB migration |
 | `mcp/` | Capability를 MCP Tool로 제공 |
 | `packages/provider/` | 공통 API 요청·응답 계약과 HTTP 실행 |
@@ -54,11 +55,11 @@ Prefect와 Data DB:
 
 ```bash
 docker compose --env-file .env \
-  -f deploy/compose/ingestion.yaml \
+  -f deploy/compose.yaml \
   up --build -d
 ```
 
-Prefect UI는 `http://localhost:4200`에서 확인한다.
+Compose는 nginx의 8081 포트 하나만 공개한다. Platform Admin UI는 `http://localhost:8081/`, Prefect UI는 `http://localhost:8081/prefect/`, Runtime API docs는 `http://localhost:8081/runtime-api/docs`에서 확인한다.
 
 ## 문서
 

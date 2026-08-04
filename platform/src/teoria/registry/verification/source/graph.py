@@ -3,10 +3,9 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
-from teoria.runtime.source.executor import MissingCredentialError, SourceExecutor
-from teoria.runtime.source.errors import SourceExecutionError
-from teoria.runtime.source.request import PreparedRequest
-from teoria.runtime.source.response import ExecutionResponse
+from teoria_provider.errors import ProviderExecutionError
+from teoria_provider.executor import MissingCredentialError, ProviderExecutor
+from teoria_provider.models import ExecutionResponse, PreparedRequest
 from teoria.runtime.source.request_builder import RequestBuildError, SourceRequestBuilder
 from teoria.runtime.source.response_validator import SourceResponseValidator
 from teoria.registry.diagnostics import Diagnostic
@@ -19,11 +18,11 @@ class SourceVerificationServices:
     def __init__(
         self,
         request_builder: SourceRequestBuilder | None = None,
-        executor: SourceExecutor | None = None,
+        executor: ProviderExecutor | None = None,
         response_validator: SourceResponseValidator | None = None,
     ) -> None:
         self.request_builder = request_builder or SourceRequestBuilder()
-        self.executor = executor or SourceExecutor()
+        self.executor = executor or ProviderExecutor()
         self.response_validator = response_validator or SourceResponseValidator()
 
 
@@ -64,7 +63,7 @@ def create_source_verification_graph(services: SourceVerificationServices | None
         request = PreparedRequest.model_validate(state["prepared_request"])
         try:
             response = await services.executor.execute(request)
-        except SourceExecutionError as exc:
+        except ProviderExecutionError as exc:
             diagnostic = Diagnostic(exc.code, str(exc), Path(state["registry_root"]), location=request.operation_id)
             return {"diagnostics": [diagnostic.to_dict()], "completed_steps": ["execute_request"], "step_results": [{"name": "execute_request", "status": "failed"}], "status": "failed"}
         return {"response": response.model_dump(mode="json"), "completed_steps": ["execute_request"], "step_results": [{"name": "execute_request", "status": "passed"}], "status": "running"}

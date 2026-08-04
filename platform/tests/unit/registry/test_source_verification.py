@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from teoria.runtime.source.executor import SourceExecutor
-from teoria.runtime.source.response import ExecutionResponse
+from teoria_provider.executor import ProviderExecutor
+from teoria_provider.models import ExecutionResponse
 from teoria.registry.verification.source.graph import SourceVerificationServices, create_source_verification_graph
 
 
@@ -93,7 +93,7 @@ async def test_live_profile_executes_and_validates_response() -> None:
 @pytest.mark.asyncio
 async def test_live_profile_is_blocked_without_credentials() -> None:
     graph = create_source_verification_graph(
-        SourceVerificationServices(executor=SourceExecutor(environment={}))
+        SourceVerificationServices(executor=ProviderExecutor(environment={}))
     )
     result = await graph.ainvoke(
         {

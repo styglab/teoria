@@ -13,7 +13,8 @@ class PipelineSettings(BaseSettings):
 
     path: Path = Path("pipelines")
     source_timeout_seconds: float = Field(default=30.0, gt=0)
-    source_max_attempts: int = Field(default=3, ge=1, le=10)
+    source_max_attempts: int = Field(default=2, ge=1, le=10)
+    source_retry_backoff_seconds: float = Field(default=60.0, ge=0)
     data_database_url: str | None = None
 
 

@@ -1,4 +1,5 @@
 import ast
+from datetime import timedelta
 from pathlib import Path
 
 import httpx
@@ -62,6 +63,49 @@ async def test_provider_executor_reports_structured_timeout() -> None:
     assert exc_info.value.code == "source_timeout"
     assert exc_info.value.attempts == 2
     assert client.calls == 2
+
+
+class RateLimitedClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
+
+    async def request(self, *args, **kwargs):
+        self.calls += 1
+        request = httpx.Request("GET", "https://example.test/records")
+        if self.calls == 1:
+            response = httpx.Response(429, headers={"Retry-After": "2"}, request=request)
+        else:
+            response = httpx.Response(200, json={"items": []}, request=request)
+        response.elapsed = timedelta(milliseconds=1)
+        return response
+
+
+@pytest.mark.asyncio
+async def test_provider_executor_honors_retry_after(monkeypatch) -> None:
+    client = RateLimitedClient()
+    delays = []
+
+    async def record_sleep(delay):
+        delays.append(delay)
+
+    monkeypatch.setattr("teoria_provider.executor.asyncio.sleep", record_sleep)
+    request = PreparedRequest(
+        source_id="provider", operation_id="list_records", method="GET",
+        url="https://example.test/records", idempotent=True,
+    )
+    executor = ProviderExecutor(max_attempts=2, backoff_seconds=0.25,
+        client_factory=lambda **kwargs: client)
+
+    response = await executor.execute(request)
+
+    assert response.status_code == 200
+    assert delays == [2.0]
 
 
 def test_response_validator_accepts_omitted_records_only_when_total_is_zero() -> None:

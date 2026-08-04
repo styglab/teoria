@@ -1,0 +1,18 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-04"
+
+capability:
+  id: get_public_procurement_contract
+  name: 공공조달 계약 조회
+  description: 나라장터 통합계약번호로 정규화된 공공조달 계약과 계약기관 관계를 조회한다.
+  inputs:
+    unified_contract_number:
+      property: public_procurement.contract.unified_contract_number
+      required: true
+  steps:
+    - call: teoria_public_procurement.contracts
+  returns:
+    - public_procurement.contract
+    - public_procurement.public_organization
+    - public_procurement.public_organization_awards_contract

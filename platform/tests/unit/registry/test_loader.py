@@ -33,7 +33,11 @@ def test_loads_current_registries() -> None:
         "get_company_profile",
         "get_company_relationships",
         "verify_business_registration",
-    }
+        "get_public_procurement_contract",
+        "search_public_procurement_contracts",
+            "get_company_public_procurement_contracts",
+            "search_companies_by_name",
+        }
 
 
 def test_current_registries_have_resolvable_references() -> None:

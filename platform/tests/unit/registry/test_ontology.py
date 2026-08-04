@@ -39,6 +39,22 @@ def test_current_ontology_references_are_valid() -> None:
     assert "organization_relationship_has_subject" not in link_ids
     assert "organization_relationship_has_object" not in link_ids
 
+    procurement = catalog.ontologies["public_procurement"]
+    participation = next(
+        item for item in procurement.object_types if item.id == "contract_participation"
+    )
+    assert participation.primary_key == "participation_id"
+    assert {
+        "supplier_sequence",
+        "business_registration_number",
+        "supplier_role_name",
+        "joint_contract_method_name",
+        "participation_share_rate",
+    } <= {item.id for item in participation.properties}
+    assert "contract_participation_is_for_contract" in {
+        item.id for item in procurement.link_types
+    }
+
 
 def test_reports_ontology_reference_errors() -> None:
     catalog = deepcopy(RegistryLoader(REGISTRIES).load())

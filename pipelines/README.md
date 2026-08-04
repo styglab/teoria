@@ -18,7 +18,14 @@ uv run --locked --package teoria-pipelines --group validation \
 
 ## PPS 계약 Flow
 
-`pps_contract_ingestion`은 날짜를 일별 하위 Flow로 나누고 다음 Task를 순차 실행한다.
+나라장터 계약 수집은 최신 데이터용 `pps_contract_incremental`과 과거 데이터용
+`pps_contract_backfill`로 나뉜다. 두 Flow는 독립 checkpoint를 사용하고 날짜를 일별 하위 Flow로
+나누어 다음 Task를 순차 실행한다.
+
+Backfill은 `checkpoint_id`별로 날짜 정방향 진행 상태를 관리하므로 UI에서 기간별 작업을 독립적으로
+실행할 수 있다. 기본 작업은 `pps_contract_backfill_2026`을 사용하고 종료일이 없으면 실행 시점의
+어제까지 처리한다. 기본 Deployment는 Incremental과 역할이 겹치지 않도록 종료일을
+`2026-07-31`로 고정한다.
 
 ```text
 상품 → 공사 → 용역 → 외자 → Raw 저장 → 정규화 → Upsert → Checkpoint

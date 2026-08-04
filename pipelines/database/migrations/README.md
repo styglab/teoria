@@ -14,3 +14,14 @@ uv run --locked --package teoria-pipelines \
 ```
 
 실행에는 `TEORIA_PIPELINE_DATA_DATABASE_URL`이 필요하다. 로컬 Compose에서는 `data-db-migrate` 일회성 서비스가 같은 명령을 실행한다.
+
+## Timestamp convention
+
+- 변경 가능한 업무·정규화 테이블은 `created_at`, `updated_at`을 사용한다.
+- `created_at`은 최초 INSERT 시각이며 이후 변경하지 않는다.
+- `updated_at`은 실제 저장 값이 변경되는 UPDATE에서만 갱신한다.
+- 불변 원본과 실행·적용 이벤트는 의미가 명확한 `fetched_at`, `started_at`,
+  `finished_at`, `applied_at`을 유지한다.
+- 외부 제공기관이 기록한 시각은 `source_*_at`으로 DB 레코드의 감사 시각과
+  구분한다.
+- 모든 시각 컬럼은 PostgreSQL `timestamptz`를 사용한다.

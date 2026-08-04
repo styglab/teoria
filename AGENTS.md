@@ -55,7 +55,7 @@ Prefect Flow 또는 Data DB migration을 변경하면 Pipeline 단위 테스트�
 
 ```bash
 docker compose \
-  -f deploy/compose/ingestion.yaml \
+  -f deploy/compose.yaml \
   config --quiet
 ```
 

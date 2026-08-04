@@ -4,7 +4,7 @@
 
 ## 실행
 
-현재 STDIO 개발 모드는 embedded Runtime을 사용한다.
+MCP는 Runtime HTTP API를 호출하며 DB 권한과 Source 인증정보를 갖지 않는다.
 
 ```bash
 uv run --locked --package teoria-platform teoria validate platform/registries
@@ -20,11 +20,12 @@ args = ["run", "--locked", "--package", "teoria-mcp", "teoria-mcp"]
 cwd = "/absolute/path/to/teoria"
 
 [mcp_servers.teoria.env]
-TEORIA_MCP_RUNTIME_MODE = "embedded"
-TEORIA_MCP_EMBEDDED_REGISTRY_PATH = "/absolute/path/to/teoria/platform/registries"
+TEORIA_MCP_RUNTIME_MODE = "remote"
+TEORIA_MCP_RUNTIME_API_URL = "http://runtime-api:8000"
+TEORIA_MCP_RUNTIME_API_TOKEN = "development-token"
 ```
 
-목표 운영 구조는 `AI Client → MCP Gateway → Runtime HTTP API`다. Remote 전환 후 MCP는 Source 키, DB 권한, Registry Loader와 Capability Runner를 갖지 않는다. 현재 `remote` mode는 Runtime API client가 구현될 때까지 실행을 거부한다.
+운영 구조는 `AI Client → MCP Gateway → Runtime HTTP API`다. MCP는 Registry, Source 키와 DB 권한을 갖지 않는다.
 
 Tool은 Ontology Object·Link와 provenance를 반환한다. `_options.include_property_provenance`와 `_options.max_objects`로 응답 범위를 조절한다.
 

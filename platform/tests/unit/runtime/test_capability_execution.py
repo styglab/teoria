@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from teoria.runtime.capability import CapabilityBinder, CapabilityExecutionError, CapabilityRunner
-from teoria.runtime.source.response import ExecutionResponse
+from teoria_provider.models import ExecutionResponse
 from teoria.registry.loader import RegistryLoader
 
 

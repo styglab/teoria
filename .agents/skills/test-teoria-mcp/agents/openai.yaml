@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Teoria MCP"
+  short_description: "Teoria MCP 연결과 공공조달 도구를 종단 간 검증"
+  default_prompt: "Use $test-teoria-mcp to verify the Teoria MCP server and its procurement tools end to end."

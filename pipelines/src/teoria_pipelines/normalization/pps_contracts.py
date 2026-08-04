@@ -125,7 +125,11 @@ def _parse_bracket_list(value: Any, *, expected_fields: int) -> list[list[str]]:
     text = _text(value)
     if not text:
         return []
-    records = re.findall(r"\[([^\]]*)\]", text)
+    if not (text.startswith("[") and text.endswith("]")):
+        raise ContractNormalizationError("list value does not use documented bracket format")
+    # Provider values may contain literal brackets inside a field (for example a
+    # supplier's English name). Only `],[` separates records in this wire format.
+    records = re.split(r"\]\s*,\s*\[", text[1:-1])
     parsed: list[list[str]] = []
     for index, record in enumerate(records):
         fields = [field.strip() for field in record.split("^")]
@@ -134,8 +138,6 @@ def _parse_bracket_list(value: Any, *, expected_fields: int) -> list[list[str]]:
                 f"list entry {index} has {len(fields)} fields; expected {expected_fields}"
             )
         parsed.append(fields)
-    if not records:
-        raise ContractNormalizationError("list value does not use documented bracket format")
     return parsed
 
 

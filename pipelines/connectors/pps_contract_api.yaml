@@ -14,7 +14,7 @@ connector:
     api_version: '1.0'
     source_document: 조달청_OpenAPI참고자료_나라장터_계약정보서비스_1.0_extracted.docx
   access:
-    base_url: http://apis.data.go.kr/1230000/ao/CntrctInfoService
+    base_url: https://apis.data.go.kr/1230000/ao/CntrctInfoService
     authentication:
       type: api_key
       in: query

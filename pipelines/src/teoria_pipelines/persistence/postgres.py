@@ -88,7 +88,8 @@ class PostgresStore:
                         for record in values
                     ],
                 )
-        return len(values)
+                inserted = cursor.rowcount
+        return inserted
 
     def upsert_normalized(self, batch: NormalizedBatch) -> LoadSummary:
         with psycopg.connect(self.database_url) as connection:
@@ -119,10 +120,16 @@ class PostgresStore:
         assignments = [column for column in columns if column not in keys]
         placeholders = ", ".join(f"%({column})s" for column in columns)
         conflict = ", ".join(keys)
-        update = ", ".join(f"{column}=EXCLUDED.{column}" for column in assignments)
+        update = ", ".join(
+            [*(f"{column}=EXCLUDED.{column}" for column in assignments), "updated_at=now()"]
+        )
+        changed = " OR ".join(
+            f"{table}.{column} IS DISTINCT FROM EXCLUDED.{column}"
+            for column in assignments
+        )
         statement = (
             f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders}) "
-            f"ON CONFLICT ({conflict}) DO UPDATE SET {update}"
+            f"ON CONFLICT ({conflict}) DO UPDATE SET {update} WHERE {changed}"
         )
         with connection.cursor() as cursor:
             cursor.executemany(statement, rows)

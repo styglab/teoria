@@ -16,6 +16,9 @@ class CapabilityBinder:
         unknown = set(inputs) - set(capability.inputs)
         if unknown:
             raise CapabilityBindError(f"unknown capability inputs: {sorted(unknown)}")
+        source_id, _ = step.call.split(".", 1)
+        if catalog.sources[source_id].source.type == "database":
+            return self._bind_database(catalog, capability, step, inputs)
         result: dict[str, Any] = {}
         for input_path, definition, value, indices in self._values(capability.inputs, inputs):
             reference, codec = self._request_binding(catalog, step.call, definition)
@@ -27,6 +30,43 @@ class CapabilityBinder:
             prefix = f"{step.call}.request."
             self._set_path(result, reference[len(prefix):], encoded, indices)
         return result
+
+    def _bind_database(
+        self,
+        catalog: RegistryCatalog,
+        capability: CapabilityDefinition,
+        step: CapabilityStep,
+        inputs: dict[str, Any],
+    ) -> dict[str, Any]:
+        prefix = f"{step.call}."
+        filters = []
+        for _, definition, value, _ in self._values(capability.inputs, inputs):
+            reference = definition.field
+            codec = None
+            if reference is None and definition.property:
+                ontology_id, object_id, property_id = definition.property.split(".")
+                matches = [
+                    (binding.field, binding.encode)
+                    for mapping in catalog.mappings.values()
+                    if mapping.ontology == ontology_id
+                    for binding in mapping.bindings.get(f"{object_id}.{property_id}", [])
+                    if isinstance(binding.field, str) and binding.field.startswith(prefix)
+                ]
+                if len(matches) != 1:
+                    raise CapabilityBindError(
+                        f"expected one database binding for '{definition.property}' and '{step.call}'"
+                    )
+                reference, codec = matches[0]
+            if reference is None or not reference.startswith(prefix):
+                continue
+            encoded = apply_codec(codec, value)
+            if encoded is not None:
+                filters.append({
+                    "field": reference[len(prefix):],
+                    "operator": definition.operator,
+                    "value": encoded,
+                })
+        return {"filters": filters}
 
     def _request_binding(self, catalog: RegistryCatalog, call: str, definition: CapabilityInput) -> tuple[str | None, str | None]:
         prefix = f"{call}.request."

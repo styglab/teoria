@@ -10,6 +10,10 @@ mapping:
   bindings:
     contract.unified_contract_number:
       - field: teoria_public_procurement.contracts.unified_contract_number
+      - field: teoria_public_procurement.contract_suppliers.unified_contract_number
+        role: supplier_contract
+      - field: teoria_public_procurement.contract_demand_organizations.unified_contract_number
+        role: demand_contract
     contract.contract_type:
       - field: teoria_public_procurement.contracts.contract_type
     contract.confirmed_contract_number:
@@ -64,7 +68,75 @@ mapping:
       - field: teoria_public_procurement.contracts.source_changed_at
     public_organization.organization_code:
       - field: teoria_public_procurement.public_organizations.organization_code
+      - field: teoria_public_procurement.contracts.contracting_organization_code
+        role: contracting_organization
+      - field: teoria_public_procurement.contract_demand_organizations.organization_code
+        role: demand_organization
     public_organization.name:
       - field: teoria_public_procurement.public_organizations.organization_name
     public_organization.jurisdiction_type:
       - field: teoria_public_procurement.public_organizations.jurisdiction_type
+    contract_participation.supplier_sequence:
+      - field: teoria_public_procurement.contract_suppliers.supplier_sequence
+    contract_participation.business_registration_number:
+      - field: teoria_public_procurement.contract_suppliers.business_registration_number
+    contract_participation.supplier_name:
+      - field: teoria_public_procurement.contract_suppliers.supplier_name
+    contract_participation.supplier_role_name:
+      - field: teoria_public_procurement.contract_suppliers.supplier_role_name
+    contract_participation.joint_contract_method_name:
+      - field: teoria_public_procurement.contract_suppliers.joint_contract_method_name
+    contract_participation.participation_share_rate:
+      - field: teoria_public_procurement.contract_suppliers.participation_share_rate
+    company.business_registration.business_registration_number:
+      - field: teoria_public_procurement.contract_suppliers.business_registration_number
+        role: business_registration
+    company.business_registration.business_name:
+      - field: teoria_public_procurement.contract_suppliers.supplier_name
+        role: business_registration
+
+  materializations:
+    teoria_public_procurement.contracts:
+      objects:
+        contract:
+          type: contract
+          identity: [unified_contract_number]
+        contracting_organization:
+          type: public_organization
+          identity: [organization_code]
+      links:
+        - {type: public_organization_awards_contract, source: contracting_organization, target: contract}
+
+    teoria_public_procurement.public_organizations:
+      objects:
+        public_organization:
+          type: public_organization
+          identity: [organization_code]
+
+    teoria_public_procurement.contract_demand_organizations:
+      objects:
+        demand_contract:
+          type: contract
+          identity: [unified_contract_number]
+        demand_organization:
+          type: public_organization
+          identity: [organization_code]
+      links:
+        - {type: public_organization_demands_contract, source: demand_organization, target: demand_contract}
+
+    teoria_public_procurement.contract_suppliers:
+      objects:
+        supplier_contract:
+          type: contract
+          identity: [unified_contract_number]
+        contract_participation:
+          type: contract_participation
+          identity: [supplier_sequence]
+          parents: [supplier_contract]
+          id_property: participation_id
+        business_registration:
+          type: company.business_registration
+          identity: [business_registration_number]
+      links:
+        - {type: contract_participation_is_for_contract, source: contract_participation, target: supplier_contract}
+        - {type: business_registration_has_contract_participation, source: business_registration, target: contract_participation}
