@@ -1,0 +1,73 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-05"
+
+source:
+  id: mss_venture_company_disclosure
+  name: 중소벤처기업 벤처확인기업 공시
+  provider:
+    organization: 중소벤처기업부
+    distribution: 벤처기업확인기관
+  type: api
+  specification:
+    format: web-interface
+    version: "observed-2026-08-05"
+    source_document: 벤처확인기업_공시_웹조회_계약.md
+  access:
+    base_url: https://www.smes.go.kr
+    authentication:
+      type: none
+  components:
+    objects:
+      - id: venture_company_disclosure
+        name: 벤처확인기업 공시 목록 레코드
+        fields:
+          - {id: vnia_sn, name: 공시 내부 식별값, data_type: integer}
+          - {id: cmp_nm, name: 기업명, data_type: string}
+          - {id: rprsv_nm, name: 대표자명, data_type: string}
+          - {id: bizrno, name: 사업자번호, data_type: business_registration_number}
+          - {id: hdofc_addr, name: 본사주소, data_type: string}
+          - {id: indsty_cd, name: 업종 코드, data_type: string}
+          - {id: indsty_nm, name: 업종, data_type: string}
+  operations:
+    - id: search_venture_companies
+      name: 벤처확인기업 공시 목록 검색
+      method: POST
+      path: /venturein/pbntc/searchVntrCmpAction
+      description: 조회 시점에 공식 공시 목록으로 반환되는 벤처확인기업을 검색한다.
+      idempotent: true
+      pagination:
+        type: page_number
+        page: {request: body.pg}
+        page_size: {request: body.pageSize}
+        total_count: TOTAL_COUNT
+      request:
+        content_type: application/json; charset=UTF-8
+        body:
+          fields:
+            - {id: cmpNm, name: 기업명, data_type: string, default: ""}
+            - {id: rprsvNm, name: 대표자명, data_type: string, default: ""}
+            - {id: bizRNo, name: 사업자번호, data_type: business_registration_number, default: ""}
+            - {id: pg, name: 페이지 번호, data_type: integer, default: 1}
+            - id: pageSize
+              name: 페이지당 표시 건수
+              data_type: integer
+              default: 15
+              values: [{value: "15"}, {value: "30"}]
+            - {id: areaCd, name: 시·도 지역 코드, data_type: string, default: ""}
+            - {id: sigunguAreaCd, name: 시·군·구 지역 코드, data_type: string, default: ""}
+            - {id: indstyCd, name: 업종 코드, data_type: string, default: ""}
+          required: [pg, pageSize]
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          record_path: .
+          success: {field: RESULT, equals: SUCCESS}
+          fields:
+            - {id: RESULT, name: 조회 결과, data_type: string}
+            - {id: TOTAL_COUNT, name: 전체 건수, data_type: string}
+            - {id: NOW_PAGE, name: 현재 페이지, data_type: string}
+        data:
+          record_path: DATA_LIST[]
+          ref: venture_company_disclosure

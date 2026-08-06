@@ -21,6 +21,7 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_RUNTIME_API_TOKEN` | 없음 | Runtime API Bearer token |
 | `TEORIA_RUNTIME_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Runtime API 앞에 붙이는 URL 경로 |
 | `TEORIA_ADMIN_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Admin API 앞에 붙이는 URL 경로 |
+| `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | checksum이 일치하는 Published Registry만 Runtime에서 허용 |
 | `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
 | `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `3` | Connector 요청 횟수 |
 | `TEORIA_RUNTIME_DATA_DATABASE_URL` | 없음 | Runtime 읽기 DB URL |

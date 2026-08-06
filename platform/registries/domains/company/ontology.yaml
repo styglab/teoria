@@ -230,6 +230,94 @@ ontology:
           description: 사업자등록정보의 일치 여부를 확인한 시점
           data_type: datetime
 
+    - id: venture_company_disclosure
+      name: 벤처확인기업 공시 관측
+      description: 특정 조회 시점에 공식 벤처확인기업 공시 목록에서 사업자등록번호로 확인된 기업 공시
+      primary_key: disclosure_id
+      properties:
+        - id: disclosure_id
+          name: 공시 관측 식별자
+          description: 사업자등록번호와 관측시점을 조합해 시스템에서 생성한 식별자
+          data_type: string
+        - id: business_registration_number
+          name: 사업자등록번호
+          description: 공식 공시 목록에서 반환된 사업자등록번호
+          data_type: business_registration_number
+        - id: company_name
+          name: 기업명
+          description: 공식 공시 목록에 표시된 기업명
+          data_type: string
+        - id: representative_name
+          name: 대표자명
+          description: 공식 공시 목록에 표시된 대표자명
+          data_type: string
+        - id: head_office_address
+          name: 본사주소
+          description: 공식 공시 목록에 표시된 본사주소
+          data_type: string
+        - id: industry_code
+          name: 업종 코드
+          description: 공식 공시 목록이 반환한 업종 코드
+          data_type: string
+        - id: industry_name
+          name: 업종
+          description: 공식 공시 목록에 표시된 업종명
+          data_type: string
+        - id: status
+          name: 공시 상태
+          description: 조회 시점의 공식 벤처확인기업 공시 목록 등재 상태
+          value_set: venture_company_disclosure_status
+        - id: observed_at
+          name: 관측시점
+          description: 공식 공시 목록을 조회한 시점
+          data_type: datetime
+
+    - id: innovation_certification_observation
+      name: 혁신형 중소기업 인증 관측
+      description: 공식 이노비즈 또는 메인비즈 조회 화면에서 특정 시점에 확인한 인증 유효기간
+      primary_key: certification_observation_id
+      properties:
+        - id: certification_observation_id
+          name: 인증 관측 식별자
+          description: 사업자등록, 인증 종류와 유효기간을 조합해 시스템에서 생성한 식별자
+          data_type: string
+        - id: certification_kind
+          name: 인증 종류
+          description: 이노비즈 또는 메인비즈 확인 제도 구분
+          value_set: innovation_certification_kind
+        - id: company_name
+          name: 기업명
+          description: 공식 인증기업 조회 결과에 표시된 기업명
+          data_type: string
+        - id: representative_name
+          name: 대표자명
+          description: 공식 이노비즈 조회 결과에 표시된 대표자명
+          data_type: string
+        - id: region
+          name: 지역
+          description: 공식 인증기업 조회 결과에 표시된 지역
+          data_type: string
+        - id: industry
+          name: 관련 업종
+          description: 공식 이노비즈 조회 결과에 표시된 관련 업종과 평가지표
+          data_type: string
+        - id: valid_from
+          name: 인증 유효기간 시작일
+          description: 공식 조회 결과의 인증 유효기간 시작일
+          data_type: date
+        - id: valid_until
+          name: 인증 유효기간 종료일
+          description: 공식 조회 결과의 인증 유효기간 종료일
+          data_type: date
+        - id: renewal_application_period
+          name: 연장 신청 기간
+          description: 공식 메인비즈 조회 결과에 표시된 연장기간 원문
+          data_type: string
+        - id: observed_at
+          name: 관측시점
+          description: 공식 인증기업 조회 화면을 확인한 시점
+          data_type: datetime
+
     - id: market_listing
       name: 증권시장 상장
       description: 법인의 주식이 특정 증권시장에 상장된 이력
@@ -371,6 +459,16 @@ ontology:
       description: 사업자등록을 해당 등록정보에 대해 수행한 하나 이상의 확인 결과와 연결한다.
       source: business_registration
       target: registration_verification
+
+    - id: business_registration_has_venture_company_disclosure
+      description: 사업자등록을 조회 시점에 확인된 벤처확인기업 공시 관측과 연결한다.
+      source: business_registration
+      target: venture_company_disclosure
+
+    - id: business_registration_has_innovation_certification
+      description: 사업자등록을 공식 조회 결과에서 확인한 이노비즈 또는 메인비즈 인증 관측과 연결한다.
+      source: business_registration
+      target: innovation_certification_observation
 
     - id: legal_entity_has_market_listing
       description: 법인을 해당 법인의 증권시장별 상장 이력과 연결한다.

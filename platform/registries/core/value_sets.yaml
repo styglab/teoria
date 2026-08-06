@@ -3,6 +3,28 @@ registry:
   registered_at: "2026-07-29"
 
 value_sets:
+  - id: innovation_certification_kind
+    name: 혁신형 중소기업 인증 종류
+    description: 중소벤처기업부의 혁신형 중소기업 확인 제도 구분
+    values:
+      - id: innobiz
+        name: 이노비즈
+        description: 기술혁신형 중소기업 확인 제도
+      - id: mainbiz
+        name: 메인비즈
+        description: 경영혁신형 중소기업 확인 제도
+
+  - id: venture_company_disclosure_status
+    name: 벤처확인기업 공시 상태
+    description: 벤처확인기업 공식 공시 목록의 조회 시점 등재 상태
+    values:
+      - id: currently_disclosed
+        name: 현재 공시됨
+        description: 조회 시점에 공식 벤처확인기업 공시 목록에서 사업자등록번호가 정확히 확인된 상태
+      - id: not_disclosed
+        name: 공시되지 않음
+        description: 정상 조회했으나 공식 벤처확인기업 공시 목록에서 사업자등록번호가 확인되지 않은 상태
+
   - id: business_operating_status_kr
     name: 대한민국 사업자 영업상태
     description: 대한민국 과세당국에 등록된 사업자의 영업상태

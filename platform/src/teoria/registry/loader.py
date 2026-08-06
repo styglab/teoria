@@ -22,6 +22,7 @@ from teoria.registry.schema import (
     ValueSetRegistry,
 )
 from teoria.registry.diagnostics import Diagnostic
+from teoria.registry.release import RegistryRelease, load_registry_release
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -61,6 +62,7 @@ class RegistryCatalog:
     capability_paths: dict[str, Path] = field(default_factory=dict)
     references: dict[str, ProviderReference] = field(default_factory=dict)
     reference_paths: dict[str, Path] = field(default_factory=dict)
+    release: RegistryRelease | None = None
 
 
 class RegistryLoadError(Exception):
@@ -206,6 +208,7 @@ class RegistryLoader:
             capability_paths=capability_paths,
             references=references,
             reference_paths=reference_paths,
+            release=load_registry_release(self.root),
         )
 
     @staticmethod

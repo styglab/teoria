@@ -1,0 +1,53 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-06"
+
+source:
+  id: mss_mainbiz_company_lookup
+  name: 메인비즈 기업 조회
+  provider:
+    organization: 중소벤처기업부
+    distribution: 한국경영혁신중소기업협회
+  type: api
+  specification:
+    format: web-interface
+    version: "observed-2026-08-06"
+    source_document: 메인비즈_기업여부_웹조회_계약.md
+  access:
+    base_url: https://www.smes.go.kr
+    authentication: {type: none}
+  components:
+    objects:
+      - id: mainbiz_company
+        name: 메인비즈 인증기업 조회 레코드
+        fields:
+          - {id: company_name, name: 기업명, data_type: string}
+          - {id: region, name: 지역, data_type: string}
+          - {id: certification_period, name: 유효기간, data_type: string}
+          - {id: renewal_period, name: 연장기간, data_type: string}
+  operations:
+    - id: search_mainbiz_companies
+      name: 메인비즈 기업 조회
+      method: GET
+      path: /mainbiz/usr/main/certifiCheck.do
+      description: 사업자등록번호 또는 기업명으로 메인비즈 기업의 유효기간과 연장기간을 조회한다.
+      idempotent: true
+      request:
+        query:
+          fields:
+            - {id: certiCheck, name: 사업자등록번호(-없이) 또는 기업명, data_type: string}
+          required: [certiCheck]
+      response:
+        content_type: text/html
+        http_status: 200
+        extraction:
+          type: html_table
+          table_class: tb-08
+          columns:
+            - {index: 0, field: company_name}
+            - {index: 1, field: region}
+            - {index: 2, field: certification_period}
+            - {index: 3, field: renewal_period}
+        data:
+          record_path: records[]
+          ref: mainbiz_company

@@ -64,6 +64,16 @@ def response(body: dict) -> ExecutionResponse:
     )
 
 
+def html_records(records: list[dict]) -> ExecutionResponse:
+    return ExecutionResponse(
+        status_code=200,
+        content_type="text/html",
+        headers={},
+        body={"records": records},
+        elapsed_ms=1.0,
+    )
+
+
 def test_binds_composite_verification_input_to_source_request() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
     capability = catalog.capabilities["verify_business_registration"]
@@ -153,6 +163,100 @@ async def test_runs_capability_and_decodes_ontology_objects() -> None:
     assert len(result.links) == 1
     assert result.links[0].link_type == "business_registration_has_taxpayer_status"
     assert result.responses is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("records", "expected_status", "expected_match"),
+    [
+        ([{"vnia_sn": 1, "cmp_nm": "테스트벤처", "rprsv_nm": "대표자", "bizrno": "0000000000", "hdofc_addr": "서울특별시", "indsty_cd": "62", "indsty_nm": "정보통신업"}], "currently_disclosed", True),
+        ([], "not_disclosed", False),
+    ],
+)
+async def test_verifies_current_venture_company_disclosure(
+    records: list[dict], expected_status: str, expected_match: bool
+) -> None:
+    catalog = RegistryLoader(ROOT / "registries").load()
+    executor = FakeExecutor([response({"RESULT": "SUCCESS", "TOTAL_COUNT": str(len(records)), "NOW_PAGE": "1", "DATA_LIST": records})])
+
+    result = await CapabilityRunner(executor).run(
+        catalog,
+        "verify_venture_company",
+        {"business_registration_number": "0000000000"},
+    )
+
+    assert executor.requests[0].body["bizRNo"] == "0000000000"
+    assert result.outcome["status"] == expected_status
+    assert result.outcome["matched"] is expected_match
+    if expected_match:
+        objects = {item.object_type: item for item in result.objects}
+        disclosure = objects["venture_company_disclosure"].properties
+        assert disclosure["status"] == "currently_disclosed"
+        assert disclosure["observed_at"]
+        assert any(
+            item.link_type == "business_registration_has_venture_company_disclosure"
+            for item in result.links
+        )
+    else:
+        assert result.objects == []
+        assert result.links == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("capability_id", "query_field", "record", "expected_match"),
+    [
+        (
+            "verify_innobiz_company",
+            "Co_Name",
+            {
+                "company_name": "테스트이노비즈",
+                "representative_name": "대표자",
+                "region": "서울",
+                "industry": "정보통신 (SW)",
+                "certification_period": "2026-01-01 ~ 2026-12-31",
+            },
+            True,
+        ),
+        (
+            "verify_mainbiz_company",
+            "certiCheck",
+            {
+                "company_name": "테스트메인비즈",
+                "region": "경기",
+                "certification_period": "2025-01-01 ~ 2025-12-31",
+                "renewal_period": "2025-10-01 ~ 2026-01-31",
+            },
+            False,
+        ),
+    ],
+)
+async def test_verifies_innovation_certification_validity(
+    capability_id: str, query_field: str, record: dict, expected_match: bool
+) -> None:
+    catalog = RegistryLoader(ROOT / "registries").load()
+    executor = FakeExecutor([html_records([record])])
+
+    result = await CapabilityRunner(executor).run(
+        catalog,
+        capability_id,
+        {"business_registration_number": "0000000000"},
+    )
+
+    assert executor.requests[0].query[query_field] == "0000000000"
+    assert result.outcome["matched"] is expected_match
+    assert result.outcome["status"] == (
+        "currently_certified" if expected_match else "not_currently_certified"
+    )
+    objects = {item.object_type: item for item in result.objects}
+    assert objects["business_registration"].properties["business_registration_number"] == "0000000000"
+    certification = objects["innovation_certification_observation"].properties
+    assert certification["valid_from"] == date.fromisoformat(record["certification_period"].split(" ~ ")[0])
+    assert certification["valid_until"] == date.fromisoformat(record["certification_period"].split(" ~ ")[1])
+    assert any(
+        item.link_type == "business_registration_has_innovation_certification"
+        for item in result.links
+    )
 
 
 @pytest.mark.asyncio

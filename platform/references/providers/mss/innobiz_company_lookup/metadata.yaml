@@ -1,0 +1,12 @@
+status: active
+provider: 중소벤처기업부
+source: mss_innobiz_company_lookup
+title: 이노비즈 기업 여부 웹 조회 계약
+retrieved_at: "2026-08-06"
+official_url: https://www.innobiz.net/
+
+files:
+  - path: 이노비즈_기업여부_웹조회_계약.md
+    format: markdown
+
+registry: registries/sources/mss_innobiz_company_lookup.yaml

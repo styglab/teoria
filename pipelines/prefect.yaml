@@ -26,15 +26,15 @@ deployments:
 
   - name: pps-contract-backfill
     version: 1.0.0
-    description: 2026-01-01부터 2026-07-31까지 날짜 정방향으로 나라장터 계약정보를 Backfill한다.
+    description: 2020-01-01부터 2025-12-31까지 날짜 정방향으로 나라장터 계약정보를 Backfill한다.
     entrypoint: teoria_pipelines.flows.pps_contracts.sync_pps_contract_backfill
     concurrency_limit:
       limit: 1
       collision_strategy: CANCEL_NEW
     parameters:
-      checkpoint_id: pps_contract_backfill_2026
-      start_date: "2026-01-01"
-      end_date: "2026-07-31"
+      checkpoint_id: pps_contract_backfill_2020_2025
+      start_date: "2020-01-01"
+      end_date: "2025-12-31"
       pipeline_root: /app/pipelines
       batch_days: 30
     schedules:

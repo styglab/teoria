@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -59,6 +59,7 @@ class CapabilityResult(BaseModel):
     objects: list[MaterializedObject] = Field(default_factory=list)
     links: list[MaterializedLink] = Field(default_factory=list)
     responses: list[ExecutionResponse] | None = None
+    outcome: dict[str, Any] | None = None
 
 
 class CapabilityRunner:
@@ -120,6 +121,7 @@ class CapabilityRunner:
         fragments: list[MappedFragment] = []
         raw_responses: list[ExecutionResponse] = []
         observed_at = datetime.now(timezone.utc)
+        outcome_matched = False
 
         for step in capability.steps:
             source_id, operation_id = step.call.split(".", 1)
@@ -188,18 +190,70 @@ class CapabilityRunner:
                     )
                 if include_raw_responses:
                     raw_responses.append(response)
-                fragments.extend(self.decoder.decode(catalog, source_id, operation_id, response, record_key_prefix=str(page)))
+                outcome = capability.outcome
+                outcome_field = outcome.response_field if outcome and outcome.type == "exact_match_presence" else (
+                    outcome.period_field if outcome and outcome.type == "active_period_presence" else None
+                )
+                if outcome and outcome_field and outcome_field.startswith(f"{source_id}.{operation_id}.response."):
+                    field = outcome_field.split(".", 3)[3]
+                    records = self.decoder._resolve_path(response.body, operation.response.data.record_path)
+                    if not isinstance(records, list):
+                        records = [records]
+                    if outcome.type == "exact_match_presence":
+                        expected = str(inputs[outcome.input])
+                        outcome_matched = outcome_matched or any(
+                            str(self.decoder._resolve_path(record, field, missing="")) == expected
+                            for record in records
+                        )
+                    else:
+                        outcome_matched = outcome_matched or any(
+                            self._period_contains(
+                                self.decoder._resolve_path(record, field, missing=""), observed_at.date()
+                            )
+                            for record in records
+                        )
+                fragments.extend(self.decoder.decode(
+                    catalog, source_id, operation_id, response,
+                    request=request, record_key_prefix=str(page)
+                ))
                 if not operation.pagination or not self._has_next_page(operation, request, response, page):
                     break
                 page += 1
 
         objects, links = self.materializer.materialize(catalog, fragments, observed_at, allowed_objects, allowed_links)
+        outcome_result = None
+        if capability.outcome:
+            outcome_result = {
+                "type": capability.outcome.type,
+                "status": (
+                    capability.outcome.matched_status
+                    if outcome_matched
+                    else capability.outcome.unmatched_status
+                ),
+                "matched": outcome_matched,
+                "observed_at": observed_at.isoformat(),
+                "input": {capability.outcome.input: inputs[capability.outcome.input]},
+            }
         return CapabilityResult(
             capability_id=capability_id,
             objects=objects,
             links=links,
             responses=raw_responses if include_raw_responses else None,
+            outcome=outcome_result,
         )
+
+    @staticmethod
+    def _period_contains(value: Any, reference_date: date) -> bool:
+        if not isinstance(value, str):
+            return False
+        parts = [part.strip() for part in value.split("~", 1)]
+        if len(parts) != 2:
+            return False
+        try:
+            start, end = (date.fromisoformat(part) for part in parts)
+        except ValueError:
+            return False
+        return start <= reference_date <= end
 
     def _has_next_page(self, operation: Any, request: Any, response: ExecutionResponse, page: int) -> bool:
         pagination = operation.pagination

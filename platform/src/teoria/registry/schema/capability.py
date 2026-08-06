@@ -57,11 +57,46 @@ class CapabilityStep(RegistryModel):
         return value
 
 
+class CapabilityOutcome(RegistryModel):
+    type: Literal["exact_match_presence", "active_period_presence"]
+    input: str
+    response_field: str | None = None
+    period_field: str | None = None
+    matched_status: str
+    unmatched_status: str
+
+    @field_validator("input", "matched_status", "unmatched_status")
+    @classmethod
+    def values_must_be_snake_case(cls, value: str) -> str:
+        if not SNAKE_CASE_PATTERN.fullmatch(value):
+            raise ValueError("outcome values must be snake_case")
+        return value
+
+    @field_validator("response_field", "period_field")
+    @classmethod
+    def response_field_must_be_a_reference(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parts = value.split(".")
+        if len(parts) != 4 or parts[2] != "response" or not REFERENCE_PATTERN.fullmatch(value):
+            raise ValueError("response_field must use '<source>.<operation>.response.<field>'")
+        return value
+
+    @model_validator(mode="after")
+    def validate_field_for_type(self) -> "CapabilityOutcome":
+        if self.type == "exact_match_presence" and not self.response_field:
+            raise ValueError("exact_match_presence requires response_field")
+        if self.type == "active_period_presence" and not self.period_field:
+            raise ValueError("active_period_presence requires period_field")
+        return self
+
+
 class CapabilityDefinition(IdentifiedModel):
     description: str
     inputs: dict[str, CapabilityInput] = Field(default_factory=dict)
     steps: list[CapabilityStep] = Field(min_length=1)
     returns: list[str] = Field(min_length=1)
+    outcome: CapabilityOutcome | None = None
 
     @model_validator(mode="after")
     def validate_local_references(self) -> "CapabilityDefinition":
@@ -76,6 +111,8 @@ class CapabilityDefinition(IdentifiedModel):
             raise ValueError("step calls must be unique")
         if len(self.returns) != len(set(self.returns)):
             raise ValueError("returns must be unique")
+        if self.outcome and self.outcome.input not in self.inputs:
+            raise ValueError(f"outcome input '{self.outcome.input}' is not declared")
         return self
 
 

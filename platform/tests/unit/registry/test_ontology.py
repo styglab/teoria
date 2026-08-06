@@ -38,6 +38,18 @@ def test_current_ontology_references_are_valid() -> None:
     assert "organization_relationship_has_related_entity" in link_ids
     assert "organization_relationship_has_subject" not in link_ids
     assert "organization_relationship_has_object" not in link_ids
+    disclosure = next(item for item in ontology.object_types if item.id == "venture_company_disclosure")
+    assert disclosure.primary_key == "disclosure_id"
+    assert {"business_registration_number", "status", "observed_at"} <= {
+        item.id for item in disclosure.properties
+    }
+    disclosure_link = next(
+        item
+        for item in ontology.link_types
+        if item.id == "business_registration_has_venture_company_disclosure"
+    )
+    assert disclosure_link.source == "business_registration"
+    assert disclosure_link.target == "venture_company_disclosure"
 
     procurement = catalog.ontologies["public_procurement"]
     participation = next(

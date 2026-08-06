@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from teoria.runtime.mapping.codec import apply_codec
-from teoria_provider.models import ExecutionResponse
+from teoria_provider.models import ExecutionResponse, PreparedRequest
 from teoria.registry.loader import RegistryCatalog
 
 
@@ -86,6 +86,7 @@ class MappingDecoder:
         source_id: str,
         operation_id: str,
         response: ExecutionResponse,
+        request: PreparedRequest | None = None,
         record_key_prefix: str = "0",
     ) -> list[MappedFragment]:
         source = catalog.sources[source_id]
@@ -94,7 +95,8 @@ class MappingDecoder:
         if not isinstance(records, list):
             records = [records]
         call = f"{source_id}.{operation_id}"
-        prefix = f"{call}.response."
+        response_prefix = f"{call}.response."
+        request_prefix = f"{call}.request."
         results: list[MappedFragment] = []
 
         for record_index, record in enumerate(records):
@@ -110,17 +112,32 @@ class MappingDecoder:
                     property_id = target_parts[-1]
                     for binding in bindings:
                         references = [binding.field] if isinstance(binding.field, str) else list(binding.field.values())
-                        if not references or not all(reference.startswith(prefix) for reference in references):
+                        if not references or not all(
+                            reference.startswith((response_prefix, request_prefix)) for reference in references
+                        ):
                             continue
                         if isinstance(binding.field, str):
-                            raw = self._resolve_path(record, binding.field[len(prefix):], missing=None)
+                            raw = self._binding_value(
+                                binding.field, record, request, response_prefix, request_prefix
+                            )
                         else:
-                            raw = {name: self._resolve_path(record, reference[len(prefix):], missing=None) for name, reference in binding.field.items()}
+                            raw = {
+                                name: self._binding_value(
+                                    reference, record, request, response_prefix, request_prefix
+                                )
+                                for name, reference in binding.field.items()
+                            }
                         value = apply_codec(binding.decode, raw)
                         if value is None or value == "":
                             continue
                         role = binding.role or object_type
                         key = (role, object_type)
+                        if (
+                            isinstance(binding.field, str)
+                            and binding.field.startswith(request_prefix)
+                            and property_id in base[key]
+                        ):
+                            continue
                         if binding.qualifiers:
                             variants[key][tuple(sorted(binding.qualifiers.items()))][property_id] = value
                         else:
@@ -152,6 +169,18 @@ class MappingDecoder:
                             )
                         )
         return results
+
+    def _binding_value(
+        self, reference: str, record: Any, request: PreparedRequest | None,
+        response_prefix: str, request_prefix: str,
+    ) -> Any:
+        if reference.startswith(response_prefix):
+            return self._resolve_path(record, reference[len(response_prefix):], missing=None)
+        if request is None:
+            return None
+        return self._resolve_path(
+            request.model_dump(), reference[len(request_prefix):], missing=None
+        )
 
     @staticmethod
     def _resolve_path(value: Any, path: str | None, missing: Any = ...):

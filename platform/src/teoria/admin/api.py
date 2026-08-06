@@ -40,6 +40,12 @@ def create_admin_app(
     async def overview() -> dict[str, Any]:
         return build_registry_overview(resolved_catalog)
 
+    @app.get("/v1/admin/registry-release")
+    async def registry_release() -> dict[str, str | None]:
+        if resolved_catalog.release is None:
+            return {"version": None, "git_commit": None, "checksum": None, "published_at": None, "status": "draft"}
+        return resolved_catalog.release.public_dict()
+
     @app.get("/v1/admin/ontologies")
     async def list_ontologies() -> dict[str, list[dict[str, Any]]]:
         return {

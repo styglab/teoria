@@ -96,6 +96,52 @@ mapping:
       - field: nts_business_registration.get_business_registration_status.request.body.b_no
       - field: nts_business_registration.verify_business_registration.response.b_no
       - field: nts_business_registration.verify_business_registration.request.body.businesses[].b_no
+      - field: mss_venture_company_disclosure.search_venture_companies.request.body.bizRNo
+      - field: mss_venture_company_disclosure.search_venture_companies.response.bizrno
+      - field: mss_innobiz_company_lookup.search_innobiz_companies.request.query.Co_Name
+      - field: mss_mainbiz_company_lookup.search_mainbiz_companies.request.query.certiCheck
+    venture_company_disclosure.business_registration_number:
+      - field: mss_venture_company_disclosure.search_venture_companies.response.bizrno
+    venture_company_disclosure.company_name:
+      - field: mss_venture_company_disclosure.search_venture_companies.response.cmp_nm
+    venture_company_disclosure.representative_name:
+      - field: mss_venture_company_disclosure.search_venture_companies.response.rprsv_nm
+    venture_company_disclosure.head_office_address:
+      - field: mss_venture_company_disclosure.search_venture_companies.response.hdofc_addr
+    venture_company_disclosure.industry_code:
+      - field: mss_venture_company_disclosure.search_venture_companies.response.indsty_cd
+    venture_company_disclosure.industry_name:
+      - field: mss_venture_company_disclosure.search_venture_companies.response.indsty_nm
+    venture_company_disclosure.status:
+      - field: mss_venture_company_disclosure.search_venture_companies.response.bizrno
+        decode: company.resolve_venture_company_disclosure_status
+    innovation_certification_observation.certification_kind:
+      - field: mss_innobiz_company_lookup.search_innobiz_companies.response.company_name
+        decode: company.innobiz_certification_kind
+      - field: mss_mainbiz_company_lookup.search_mainbiz_companies.response.company_name
+        decode: company.mainbiz_certification_kind
+    innovation_certification_observation.company_name:
+      - field: mss_innobiz_company_lookup.search_innobiz_companies.response.company_name
+      - field: mss_mainbiz_company_lookup.search_mainbiz_companies.response.company_name
+    innovation_certification_observation.representative_name:
+      - field: mss_innobiz_company_lookup.search_innobiz_companies.response.representative_name
+    innovation_certification_observation.region:
+      - field: mss_innobiz_company_lookup.search_innobiz_companies.response.region
+      - field: mss_mainbiz_company_lookup.search_mainbiz_companies.response.region
+    innovation_certification_observation.industry:
+      - field: mss_innobiz_company_lookup.search_innobiz_companies.response.industry
+    innovation_certification_observation.valid_from:
+      - field: mss_innobiz_company_lookup.search_innobiz_companies.response.certification_period
+        decode: company.certification_period_start
+      - field: mss_mainbiz_company_lookup.search_mainbiz_companies.response.certification_period
+        decode: company.certification_period_start
+    innovation_certification_observation.valid_until:
+      - field: mss_innobiz_company_lookup.search_innobiz_companies.response.certification_period
+        decode: company.certification_period_end
+      - field: mss_mainbiz_company_lookup.search_mainbiz_companies.response.certification_period
+        decode: company.certification_period_end
+    innovation_certification_observation.renewal_application_period:
+      - field: mss_mainbiz_company_lookup.search_mainbiz_companies.response.renewal_period
     business_registration.business_name:
       - field: nts_business_registration.verify_business_registration.request.body.businesses[].b_nm
     business_registration.opened_date:
@@ -309,6 +355,48 @@ mapping:
         qualifiers: {period_role: two_years_prior}
 
   materializations:
+    mss_innobiz_company_lookup.search_innobiz_companies:
+      objects:
+        business_registration:
+          type: business_registration
+          identity: [business_registration_number]
+        innovation_certification_observation:
+          type: innovation_certification_observation
+          identity: [certification_kind, valid_from, valid_until]
+          parents: [business_registration]
+          id_property: certification_observation_id
+          timestamp_properties: [observed_at]
+      links:
+        - {type: business_registration_has_innovation_certification, source: business_registration, target: innovation_certification_observation}
+
+    mss_mainbiz_company_lookup.search_mainbiz_companies:
+      objects:
+        business_registration:
+          type: business_registration
+          identity: [business_registration_number]
+        innovation_certification_observation:
+          type: innovation_certification_observation
+          identity: [certification_kind, valid_from, valid_until]
+          parents: [business_registration]
+          id_property: certification_observation_id
+          timestamp_properties: [observed_at]
+      links:
+        - {type: business_registration_has_innovation_certification, source: business_registration, target: innovation_certification_observation}
+
+    mss_venture_company_disclosure.search_venture_companies:
+      objects:
+        business_registration:
+          type: business_registration
+          identity: [business_registration_number]
+        venture_company_disclosure:
+          type: venture_company_disclosure
+          identity: [observed_at]
+          parents: [business_registration]
+          id_property: disclosure_id
+          timestamp_properties: [observed_at]
+      links:
+        - {type: business_registration_has_venture_company_disclosure, source: business_registration, target: venture_company_disclosure}
+
     fsc_company_basic.get_company_overview:
       record_order: lastOpegDt
       objects:

@@ -155,6 +155,17 @@ class ResponseData(ContractModel):
         return self
 
 
+class HtmlTableColumn(ContractModel):
+    index: int = Field(ge=0)
+    field: str
+
+
+class HtmlTableExtraction(ContractModel):
+    type: Literal["html_table"]
+    table_class: str
+    columns: list[HtmlTableColumn] = Field(min_length=1)
+
+
 class SuccessCondition(ContractModel):
     field: str
     equals: str
@@ -168,6 +179,7 @@ class ResponseControl(FieldContainer):
 class Response(ContractModel):
     content_type: str
     http_status: int = Field(ge=100, le=599)
+    extraction: HtmlTableExtraction | None = None
     control: ResponseControl | None = None
     data: ResponseData
 

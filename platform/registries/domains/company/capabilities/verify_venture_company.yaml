@@ -1,0 +1,24 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-05"
+
+capability:
+  id: verify_venture_company
+  name: 현재 벤처기업 공시 여부 확인
+  description: 사업자등록번호를 공식 벤처확인기업 공시 목록에서 조회해 현재 공시 여부를 확인한다
+  inputs:
+    business_registration_number:
+      property: company.business_registration.business_registration_number
+      required: true
+  steps:
+    - call: mss_venture_company_disclosure.search_venture_companies
+  outcome:
+    type: exact_match_presence
+    input: business_registration_number
+    response_field: mss_venture_company_disclosure.search_venture_companies.response.bizrno
+    matched_status: currently_disclosed
+    unmatched_status: not_disclosed
+  returns:
+    - company.business_registration
+    - company.venture_company_disclosure
+    - company.business_registration_has_venture_company_disclosure

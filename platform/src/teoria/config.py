@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     runtime_api_token: str | None = None
     runtime_api_root_path: str = ""
     admin_api_root_path: str = ""
+    registry_require_published: bool = False
 
 
 def bootstrap_settings(*, cwd: Path | None = None) -> Settings:

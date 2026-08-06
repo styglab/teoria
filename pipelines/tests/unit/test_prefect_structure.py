@@ -66,16 +66,16 @@ def test_daily_flow_mermaid_graph_exposes_execution_order() -> None:
     assert "Checkpoint_갱신_0 --> 수집_실행_완료_0" in graph
 
 
-def test_backfill_deployment_has_a_fixed_2026_range() -> None:
+def test_backfill_deployment_has_a_fixed_historical_range() -> None:
     prefect = yaml.safe_load((PIPELINES / "prefect.yaml").read_text(encoding="utf-8"))
     deployment = next(
         item for item in prefect["deployments"] if item["name"] == "pps-contract-backfill"
     )
 
     assert deployment["parameters"] == {
-        "checkpoint_id": "pps_contract_backfill_2026",
-        "start_date": "2026-01-01",
-        "end_date": "2026-07-31",
+        "checkpoint_id": "pps_contract_backfill_2020_2025",
+        "start_date": "2020-01-01",
+        "end_date": "2025-12-31",
         "pipeline_root": "/app/pipelines",
         "batch_days": 30,
     }

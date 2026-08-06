@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, Boxes, Braces, CircleDot, Database, GitFork, Moon, Network, Search, Sun, Workflow, X } from "lucide-react";
-import { adminApi, type CapabilitySummary, type LineageLink, type LinkEdge, type MappingSummary, type ObjectNode, type OntologyGraph as GraphData, type OntologySummary, type Overview, type SourceSummary, type ValidationReport } from "../api/admin";
+import { adminApi, type CapabilitySummary, type LineageLink, type LinkEdge, type MappingSummary, type ObjectNode, type OntologyGraph as GraphData, type OntologySummary, type Overview, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/admin";
 import { MetricCard } from "../components/MetricCard";
 import { DetailPanel } from "../features/ontology/DetailPanel";
 import { OntologyGraph } from "../features/ontology/OntologyGraph";
@@ -24,6 +24,7 @@ export function App() {
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [selectedItem, setSelectedItem] = useState<ObjectNode | LinkEdge | null>(null);
   const [validation, setValidation] = useState<ValidationReport | null>(null);
+  const [registryRelease, setRegistryRelease] = useState<RegistryRelease | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilitySummary[]>([]);
   const [sources, setSources] = useState<SourceSummary[]>([]);
   const [mappings, setMappings] = useState<MappingSummary[]>([]);
@@ -43,11 +44,12 @@ export function App() {
   }, [theme]);
 
   useEffect(() => {
-    Promise.all([adminApi.overview(), adminApi.ontologies(), adminApi.validation(), adminApi.capabilities(), adminApi.sources(), adminApi.mappings(), adminApi.lineage()])
-      .then(([nextOverview, response, nextValidation, capabilityResponse, sourceResponse, mappingResponse, lineageResponse]) => {
+    Promise.all([adminApi.overview(), adminApi.ontologies(), adminApi.validation(), adminApi.registryRelease(), adminApi.capabilities(), adminApi.sources(), adminApi.mappings(), adminApi.lineage()])
+      .then(([nextOverview, response, nextValidation, nextRegistryRelease, capabilityResponse, sourceResponse, mappingResponse, lineageResponse]) => {
         setOverview(nextOverview);
         setOntologies(response.ontologies);
         setValidation(nextValidation);
+        setRegistryRelease(nextRegistryRelease);
         setCapabilities(capabilityResponse.capabilities);
         setSources(sourceResponse.sources);
         setMappings(mappingResponse.mappings);
@@ -70,6 +72,7 @@ export function App() {
         <div className="brand-mark"><CircleDot size={18} /></div>
         <div className="brand"><strong>Teoria</strong><span>Semantic Admin</span></div>
         <div className="global-search"><Search size={15} /><input placeholder="Registry 검색" disabled /><kbd>/</kbd></div>
+        <span className={`release-badge ${registryRelease?.status ?? "draft"}`} title={registryRelease?.checksum ?? undefined}>Registry {registryRelease?.version ?? "Draft"}</span>
         <button className="theme-toggle" aria-label={`${theme === "dark" ? "라이트" : "다크"} 모드로 전환`} onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
         <button className={`status ${overview?.validation.status === "valid" ? "ok" : ""}`} onClick={() => setValidationOpen(true)}><Activity size={14} /> Registry {overview?.validation.status ?? "loading"}</button>
       </header>

@@ -1,0 +1,24 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-06"
+
+capability:
+  id: verify_mainbiz_company
+  name: 현재 메인비즈 기업 여부 확인
+  description: 사업자등록번호로 공식 메인비즈 기업을 조회하고 인증 유효기간이 현재 날짜를 포함하는지 확인한다
+  inputs:
+    business_registration_number:
+      property: company.business_registration.business_registration_number
+      required: true
+  steps:
+    - call: mss_mainbiz_company_lookup.search_mainbiz_companies
+  outcome:
+    type: active_period_presence
+    input: business_registration_number
+    period_field: mss_mainbiz_company_lookup.search_mainbiz_companies.response.certification_period
+    matched_status: currently_certified
+    unmatched_status: not_currently_certified
+  returns:
+    - company.business_registration
+    - company.innovation_certification_observation
+    - company.business_registration_has_innovation_certification

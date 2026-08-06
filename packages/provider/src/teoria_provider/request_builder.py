@@ -44,7 +44,11 @@ class ProviderRequestBuilder:
             url=f"{definition.access.base_url}{operation.path}", query=query,
             headers={key: str(value) for key, value in headers.items()},
             body=body if request and request.body else None, authentication=requirement,
-            idempotent=operation.idempotent or operation.method in {"GET", "HEAD", "OPTIONS"})
+            idempotent=operation.idempotent or operation.method in {"GET", "HEAD", "OPTIONS"},
+            response_extraction=(
+                operation.response.extraction.model_dump(mode="json")
+                if operation.response.extraction else None
+            ))
 
     def _build_container(self, container: FieldContainer | None, supplied: Any, definition: ProviderDefinition,
                          data_types: Mapping[str, Any], path: Path, location: str,

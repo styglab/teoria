@@ -26,9 +26,10 @@ docker compose --env-file .env \
 | 서비스 | 역할 |
 |---|---|
 | `data-db`, `data-db-migrate` | 수집 DB와 migration |
-| `prefect-db`, `prefect-server` | Prefect 상태, API와 UI |
+| `prefect-db`, `prefect-redis` | Prefect 영속 상태, 메시징과 서비스 조정 |
+| `prefect-server`, `prefect-services` | Prefect API/UI와 Scheduler 등 백그라운드 서비스 |
 | `prefect-init`, `prefect-deploy` | Work pool과 Deployment 등록 |
-| `pipeline-worker` | Prefect Flow 실행 |
+| `prefect-worker` | Prefect Flow 실행 |
 
 Compose 배포 시 UI는 nginx의 `http://localhost:8081/prefect/`로 접근한다. Prefect Server의 4200 포트는 Compose 내부에서만 사용한다. Worker에는 `.env` 전체가 아니라 Compose에 선언한 Pipeline 변수만 전달한다.
 
@@ -37,15 +38,14 @@ Compose 배포 시 UI는 nginx의 `http://localhost:8081/prefect/`로 접근한�
 | Deployment | 주기 | 역할 |
 |---|---|---|
 | `pps-contract-incremental` | 4시간마다 | 오늘을 포함한 최근 3일을 재조회하여 신규·변경 계약을 반영 |
-| `pps-contract-backfill` | 매시 20분 | `2026-01-01`부터 `2026-07-31`까지 정방향으로 실행당 최대 30일 적재 |
+| `pps-contract-backfill` | 매시 20분 | `2020-01-01`부터 `2025-12-31`까지 정방향으로 실행당 최대 30일 적재 |
 
 두 Deployment는 독립 checkpoint를 사용한다. 기본 Backfill checkpoint는
-`pps_contract_backfill_2026`이고 `2026-01-01`부터 `2026-07-31`까지 정방향으로 진행한다. 범위를 완료하면
+`pps_contract_backfill_2020_2025`이고 `2020-01-01`부터 `2025-12-31`까지 정방향으로 진행한다. 범위를 완료하면
 이후 예약 실행은 API를 호출하지 않는다.
 
-2025년 범위를 적재할 때는 UI에서 같은 Flow의 Custom Run이나 Schedule 파라미터를
-`checkpoint_id: pps_contract_backfill_2025`, `start_date: 2025-01-01`,
-`end_date: 2025-12-31`로 변경한다. 서로 다른 Backfill에 같은
+별도 범위를 적재할 때는 UI에서 같은 Flow의 Custom Run이나 Schedule 파라미터에 고유한
+`checkpoint_id`, `start_date`, `end_date`를 지정한다. 서로 다른 Backfill에 같은
 `checkpoint_id`를 사용하면 진행 상태가 충돌하므로 사용하지 않는다.
 Backfill의 `checkpoint_id`, `start_date`, `end_date`는 필수이며 `end_date`는 오늘보다 이전이어야 한다.
 
@@ -59,8 +59,8 @@ docker compose --env-file .env \
   -f deploy/compose.yaml \
   run --rm prefect-deploy \
   prefect deployment run '나라장터 계약정보 Backfill/pps-contract-backfill' \
-  --param checkpoint_id=pps_contract_backfill_2025 \
-  --param start_date=2025-01-01 \
+  --param checkpoint_id=pps_contract_backfill_2020_2025 \
+  --param start_date=2020-01-01 \
   --param end_date=2025-12-31 \
   --param batch_days=30
 ```

@@ -7,6 +7,7 @@ import pytest
 
 from teoria_provider.errors import ProviderExecutionError
 from teoria_provider.executor import ProviderExecutor
+from teoria_provider.html_table import extract_html_table
 from teoria_provider.models import AuthenticationRequirement, PreparedRequest
 from teoria_provider.models import ExecutionResponse
 from teoria_provider.response_validator import ProviderResponseValidator
@@ -14,6 +15,21 @@ from teoria_provider.schema import ProviderDefinition
 
 
 SOURCE_ROOT = Path(__file__).parents[1] / "src" / "teoria_provider"
+
+
+def test_extracts_configured_html_table_columns() -> None:
+    html = """
+    <table class="other"><tr><td>무시</td></tr></table>
+    <table class="result target"><tr><th>기업명</th><th>유효기간</th></tr>
+      <tr><td>테스트 기업</td><td>2026-01-01<br>~ 2026-12-31</td></tr>
+    </table>
+    """
+
+    assert extract_html_table(
+        html,
+        table_class="target",
+        columns=[{"index": 0, "field": "company_name"}, {"index": 1, "field": "period"}],
+    ) == [{"company_name": "테스트 기업", "period": "2026-01-01 ~ 2026-12-31"}]
 
 
 def test_provider_package_does_not_import_teoria_projects() -> None:

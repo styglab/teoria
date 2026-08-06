@@ -1,0 +1,55 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-06"
+
+source:
+  id: mss_innobiz_company_lookup
+  name: 이노비즈 기업 여부 조회
+  provider:
+    organization: 중소벤처기업부
+    distribution: 중소기업기술혁신협회
+  type: api
+  specification:
+    format: web-interface
+    version: "observed-2026-08-06"
+    source_document: 이노비즈_기업여부_웹조회_계약.md
+  access:
+    base_url: https://www.innobiz.net
+    authentication: {type: none}
+  components:
+    objects:
+      - id: innobiz_company
+        name: 이노비즈 인증기업 조회 레코드
+        fields:
+          - {id: company_name, name: 기업명, data_type: string}
+          - {id: representative_name, name: 대표자, data_type: string}
+          - {id: region, name: 지역, data_type: string}
+          - {id: industry, name: 관련업종(평가지표), data_type: string}
+          - {id: certification_period, name: 인증유효기간, data_type: string}
+  operations:
+    - id: search_innobiz_companies
+      name: 이노비즈 기업 여부 확인
+      method: GET
+      path: /ajax.fill_com.asp
+      description: 기업명 또는 사업자등록번호로 이노비즈 기업과 인증 유효기간을 조회한다.
+      idempotent: true
+      request:
+        query:
+          fields:
+            - {id: Co_Name, name: 기업명 또는 사업자등록번호, data_type: string}
+          required: [Co_Name]
+      response:
+        content_type: text/html
+        http_status: 200
+        extraction:
+          type: html_table
+          table_class: table_list_style1
+          columns:
+            - {index: 0, field: company_name}
+            - {index: 1, field: representative_name}
+            - {index: 2, field: region}
+            - {index: 3, field: industry}
+            - {index: 4, field: certification_period}
+        data:
+          record_path: records[]
+          ref: innobiz_company

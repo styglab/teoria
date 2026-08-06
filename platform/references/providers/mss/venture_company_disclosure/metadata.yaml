@@ -1,0 +1,12 @@
+status: active
+provider: 중소벤처기업부
+source: mss_venture_company_disclosure
+title: 벤처확인기업 공시 웹 조회 계약
+retrieved_at: "2026-08-05"
+official_url: https://www.smes.go.kr/venturein/pbntc/searchVntrCmp
+
+files:
+  - path: 벤처확인기업_공시_웹조회_계약.md
+    format: markdown
+
+registry: registries/sources/mss_venture_company_disclosure.yaml

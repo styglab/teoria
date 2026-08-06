@@ -52,6 +52,14 @@ export type ValidationReport = {
   diagnostics: ValidationDiagnostic[];
 };
 
+export type RegistryRelease = {
+  version: string | null;
+  git_commit: string | null;
+  checksum: string | null;
+  published_at: string | null;
+  status: "draft" | "published" | "modified";
+};
+
 export type CapabilitySummary = { id: string; name: string; description: string; inputs: string[]; steps: string[]; returns: string[] };
 export type SourceSummary = { id: string; name: string; description: string | null; type: "api" | "database"; provider: string | null; items: number; item_label: string };
 export type MappingSummary = { id: string; name: string; description: string; ontology: string; binding_count: number; property_count: number };
@@ -74,4 +82,5 @@ export const adminApi = {
   mappings: () => getJson<{ mappings: MappingSummary[] }>("/mappings"),
   lineage: () => getJson<{ links: LineageLink[] }>("/lineage"),
   validation: () => getJson<ValidationReport>("/validation"),
+  registryRelease: () => getJson<RegistryRelease>("/registry-release"),
 };

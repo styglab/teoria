@@ -198,6 +198,11 @@ main { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; display: flex; 
 :root[data-theme="light"] .icon-button { color: #343a50; background: #f4f5f9; }
 :root[data-theme="light"] .validation-empty strong { color: #235b4e; }
 :root[data-theme="light"] .status.ok { color: #12745f; border-color: #a9d8cc; background: #edf9f5; }
+.release-badge { padding: 5px 8px; color: #aeb6cc; font-size: 9px; font-weight: 700; border: 1px solid var(--border); border-radius: 999px; white-space: nowrap; }
+.release-badge.published { color: #70d6bd; border-color: #28594f; background: #102c27; }
+.release-badge.modified { color: #f0b46c; border-color: #664923; background: #2e2415; }
+:root[data-theme="light"] .release-badge.published { color: #12745f; border-color: #a9d8cc; background: #edf9f5; }
+:root[data-theme="light"] .release-badge.modified { color: #9a5a11; border-color: #e4c291; background: #fff8ec; }
 
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 64px 1fr; }

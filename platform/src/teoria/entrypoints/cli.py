@@ -9,6 +9,7 @@ from teoria_provider.executor import ProviderExecutor
 from teoria_provider.secrets import EnvironmentSecretProvider
 from teoria.config import Settings, bootstrap_settings
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
+from teoria.registry.release import publish_registry
 from teoria.registry.validator import RegistryValidator
 from teoria.registry.verification.source.graph import SourceVerificationServices, create_source_verification_graph
 
@@ -86,6 +87,11 @@ def main() -> int:
     validate_parser = subparsers.add_parser("validate", help="validate authored registries")
     validate_parser.add_argument("path", nargs="?", default=settings.registry_path, type=Path)
     validate_parser.add_argument("--source", help="validate only one source id")
+    publish_parser = subparsers.add_parser("publish", help="validate and publish an immutable registry release")
+    publish_parser.add_argument("path", nargs="?", default=settings.registry_path, type=Path)
+    publish_parser.add_argument("--version", required=True)
+    publish_parser.add_argument("--output", type=Path)
+    publish_parser.add_argument("--git-commit")
     _add_verify_parser(subparsers, settings)
     args = parser.parse_args()
 
@@ -99,11 +105,28 @@ def main() -> int:
             print(diagnostic)
         return 1
 
-    diagnostics = RegistryValidator().validate(catalog, source_id=args.source)
+    diagnostics = RegistryValidator().validate(catalog, source_id=getattr(args, "source", None))
     for diagnostic in diagnostics:
         print(diagnostic)
     if diagnostics:
         return 1
+
+    if args.command == "publish":
+        try:
+            release = publish_registry(
+                args.path,
+                version=args.version,
+                output=args.output,
+                git_commit=args.git_commit,
+            )
+        except (OSError, ValueError) as exc:
+            print(f"ERROR registry_publish_failed: {exc}")
+            return 1
+        print(
+            f"Published Registry {release.version} ({release.checksum}) "
+            f"from commit {release.git_commit}."
+        )
+        return 0
 
     source_count = 1 if args.source else len(catalog.sources)
     source_label = "source" if source_count == 1 else "sources"

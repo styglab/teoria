@@ -36,6 +36,10 @@ def create_runtime_app(
     if not resolved_settings.runtime_api_token:
         raise RuntimeError("TEORIA_RUNTIME_API_TOKEN is required")
     resolved_catalog = catalog or RegistryLoader(resolved_settings.registry_path).load()
+    if resolved_settings.registry_require_published and (
+        resolved_catalog.release is None or resolved_catalog.release.status != "published"
+    ):
+        raise RuntimeError("a published, checksum-valid Registry release is required")
     resolved_runner = runner or CapabilityRunner(
         ProviderExecutor(
             timeout_seconds=resolved_settings.source_timeout_seconds,
@@ -59,6 +63,13 @@ def create_runtime_app(
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/v1/version", dependencies=[Depends(authorize)])
+    async def version() -> dict[str, Any]:
+        return {
+            "runtime_api": "1",
+            "registry": resolved_catalog.release.public_dict() if resolved_catalog.release else {"status": "draft"},
+        }
 
     @app.get("/v1/capabilities", dependencies=[Depends(authorize)])
     async def list_capabilities() -> dict[str, list[dict[str, Any]]]:
@@ -99,11 +110,15 @@ def create_runtime_app(
         except CapabilityExecutionError as exc:
             status_code = 504 if exc.code == "capability_timeout" else 502
             raise HTTPException(status_code=status_code, detail=exc.to_dict()) from exc
-        return serialize_capability_result(
+        response = serialize_capability_result(
             result,
             max_objects=request.options.max_objects,
             include_property_provenance=request.options.include_property_provenance,
         )
+        response["registry"] = (
+            resolved_catalog.release.public_dict() if resolved_catalog.release else {"status": "draft"}
+        )
+        return response
 
     return app
 

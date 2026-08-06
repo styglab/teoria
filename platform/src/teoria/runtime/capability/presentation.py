@@ -38,7 +38,7 @@ def serialize_capability_result(
         }
         for item in result.links
     ]
-    return {
+    output = {
         "status": "success",
         "capability": result.capability_id,
         "objects": objects,
@@ -47,6 +47,9 @@ def serialize_capability_result(
         "total_links": len(result.links),
         "truncated": len(result.objects) > max_objects,
     }
+    if result.outcome is not None:
+        output["outcome"] = result.outcome
+    return output
 
 
 def _serialize_provenance(values: list[Provenance]) -> list[dict[str, Any]]:

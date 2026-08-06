@@ -178,10 +178,13 @@ class RegistryValidator:
                 if parts[1] in {item.id for item in ontology.link_types}:
                     continue
                 operation_prefixes = tuple(
-                    f"{step.call}.response."
-                    if catalog.sources[step.call.split('.', 1)[0]].source.type == "api"
-                    else f"{step.call}."
+                    prefix
                     for step in capability.steps
+                    for prefix in (
+                        (f"{step.call}.response.", f"{step.call}.request.")
+                        if catalog.sources[step.call.split('.', 1)[0]].source.type == "api"
+                        else (f"{step.call}.",)
+                    )
                 )
                 has_response_binding = any(
                     mapping.ontology == parts[0]

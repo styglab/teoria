@@ -20,6 +20,7 @@ class PreparedRequest(BaseModel):
     body: Any = None
     authentication: AuthenticationRequirement | None = None
     idempotent: bool = False
+    response_extraction: dict[str, Any] | None = None
 
     def safe_dump(self) -> dict[str, Any]:
         return self.model_dump(mode="json")

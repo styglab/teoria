@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 def normalize_representative_names(value: str | None) -> list[str]:
     if not value:
         return []
@@ -31,3 +33,29 @@ def resolve_financial_statement_scope(*, code: str | None, name: str | None) -> 
     if "separate" in text or "별도" in text or code == "120":
         return "separate"
     return None
+
+
+def resolve_venture_company_disclosure_status(business_registration_number: str | None) -> str | None:
+    return "currently_disclosed" if business_registration_number else None
+
+
+def certification_period_start(value: str | None) -> date | None:
+    if not value or "~" not in value:
+        return None
+    raw = value.split("~", 1)[0].strip()
+    return date.fromisoformat(raw) if raw else None
+
+
+def certification_period_end(value: str | None) -> date | None:
+    if not value or "~" not in value:
+        return None
+    raw = value.split("~", 1)[1].strip()
+    return date.fromisoformat(raw) if raw else None
+
+
+def innobiz_certification_kind(_: str | None) -> str:
+    return "innobiz"
+
+
+def mainbiz_certification_kind(_: str | None) -> str:
+    return "mainbiz"

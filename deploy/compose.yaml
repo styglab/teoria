@@ -7,6 +7,15 @@ x-pipeline-runner: &pipeline-runner
     dockerfile: pipelines/Dockerfile
     target: worker
 
+x-prefect-services-environment: &prefect-services-environment
+  PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}@prefect-db:5432/prefect
+  PREFECT_MESSAGING_BROKER: prefect_redis.messaging
+  PREFECT_MESSAGING_CACHE: prefect_redis.messaging
+  PREFECT_REDIS_MESSAGING_HOST: prefect-redis
+  PREFECT_REDIS_MESSAGING_PORT: 6379
+  PREFECT_REDIS_MESSAGING_DB: 0
+  PREFECT_SERVER_DOCKET_URL: redis://prefect-redis:6379/1
+
 services:
   nginx:
     image: teoria-nginx:latest
@@ -96,18 +105,32 @@ services:
     volumes:
       - prefect-db:/var/lib/postgresql/data
 
+  prefect-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - prefect-redis:/data
+
   prefect-server:
     image: prefecthq/prefect:3-python3.12
     restart: unless-stopped
-    command: ["prefect", "server", "start", "--host", "0.0.0.0"]
+    command: ["prefect", "server", "start", "--host", "0.0.0.0", "--no-services"]
     environment:
-      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}@prefect-db:5432/prefect
+      <<: *prefect-services-environment
       PREFECT_SERVER_API_HOST: 0.0.0.0
       PREFECT_SERVER_UI_API_URL: /prefect/api
       PREFECT_SERVER_UI_SERVE_BASE: /prefect
       PREFECT_SERVER_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
     depends_on:
       prefect-db:
+        condition: service_healthy
+      prefect-redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
@@ -116,6 +139,20 @@ services:
       retries: 30
     expose:
       - "4200"
+
+  prefect-services:
+    image: prefecthq/prefect:3-python3.12
+    restart: unless-stopped
+    command: ["prefect", "server", "services", "start"]
+    environment:
+      <<: *prefect-services-environment
+    depends_on:
+      prefect-db:
+        condition: service_healthy
+      prefect-redis:
+        condition: service_healthy
+      prefect-server:
+        condition: service_healthy
 
   prefect-init:
     <<: *pipeline-runner
@@ -137,7 +174,7 @@ services:
       prefect-init:
         condition: service_completed_successfully
 
-  pipeline-worker:
+  prefect-worker:
     <<: *pipeline-runner
     restart: unless-stopped
     command: ["prefect", "worker", "start", "--pool", "teoria-ingestion"]
@@ -163,6 +200,9 @@ services:
       context: ..
       dockerfile: platform/Dockerfile
     command: ["teoria", "validate", "/app/platform/registries"]
+    volumes:
+      - ../platform/registries:/app/platform/registries:ro
+      - ../platform/references:/app/platform/references:ro
 
   runtime-api:
     image: teoria-platform-runtime:latest
@@ -174,6 +214,7 @@ services:
     environment:
       TEORIA_ENVIRONMENT: production
       TEORIA_REGISTRY_PATH: /app/platform/registries
+      TEORIA_REGISTRY_REQUIRE_PUBLISHED: "true"
       TEORIA_RUNTIME_API_ROOT_PATH: /runtime-api
       TEORIA_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
       TEORIA_RUNTIME_DATA_DATABASE_URL: postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@data-db:5432/teoria_data
@@ -229,6 +270,13 @@ services:
       dockerfile: pipelines/Dockerfile
       target: check
     command: ["teoria-pipelines", "validate-integration", "/app/pipelines", "--platform-registries", "/app/platform/registries"]
+    volumes:
+      - ../pipelines/connectors:/app/pipelines/connectors:ro
+      - ../pipelines/definitions:/app/pipelines/definitions:ro
+      - ../pipelines/verification_cases:/app/pipelines/verification_cases:ro
+      - ../pipelines/references:/app/pipelines/references:ro
+      - ../platform/registries:/app/platform/registries:ro
+      - ../platform/references:/app/platform/references:ro
 
   mcp:
     profiles: ["mcp"]
@@ -249,3 +297,4 @@ services:
 volumes:
   data-db:
   prefect-db:
+  prefect-redis:

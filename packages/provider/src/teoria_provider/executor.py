@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from teoria_provider.errors import ProviderExecutionError
+from teoria_provider.html_table import extract_html_table
 from teoria_provider.models import ExecutionResponse, PreparedRequest
 from teoria_provider.secrets import MappingSecretProvider, SecretProvider
 
@@ -64,7 +65,7 @@ class ProviderExecutor:
                     await asyncio.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
                     continue
                 if response.status_code not in self.RETRYABLE_STATUS_CODES:
-                    return self._execution_response(response)
+                    return self._execution_response(response, request.response_extraction)
                 if attempt == attempts:
                     code = "source_rate_limited" if response.status_code == 429 else "source_unavailable"
                     raise ProviderExecutionError(code, f"source returned HTTP {response.status_code} after {attempts} attempt(s)",
@@ -77,12 +78,18 @@ class ProviderExecutor:
         raise RuntimeError("provider execution exhausted without a response")
 
     @staticmethod
-    def _execution_response(response: httpx.Response) -> ExecutionResponse:
+    def _execution_response(response: httpx.Response, extraction: dict[str, Any] | None = None) -> ExecutionResponse:
         content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
         try:
             body = response.json()
         except ValueError:
             body = response.text
+        if extraction and extraction.get("type") == "html_table" and isinstance(body, str):
+            body = {"records": extract_html_table(
+                body,
+                table_class=extraction["table_class"],
+                columns=extraction["columns"],
+            )}
         return ExecutionResponse(status_code=response.status_code, content_type=content_type,
             headers=dict(response.headers), body=body,
             elapsed_ms=response.elapsed.total_seconds() * 1000)

@@ -1,11 +1,10 @@
 # Docker Compose
 
-`deploy/compose.yaml`이 전체 로컬 Teoria 스택의 단일 진입점이고 `compose.dev.yaml`은 검증 작업용 bind-mount override다.
+`deploy/compose.yaml`이 전체 로컬 Teoria 스택과 선택적 검증 작업의 단일 진입점이다.
 
 ```text
 deploy/
 ├── compose.yaml       전체 스택 + 선택 profile
-├── compose.dev.yaml   로컬 소스 mount override
 ├── nginx/             공개 HTTP nginx 이미지와 설정
 │   ├── Dockerfile
 │   └── nginx.conf
@@ -16,7 +15,7 @@ Compose project name은 `teoria`다. 별도 `container_name` 없이 다음 이�
 
 ```text
 teoria-data-db-1
-teoria-pipeline-worker-1
+teoria-prefect-worker-1
 teoria_default
 teoria_data-db
 ```
@@ -46,8 +45,9 @@ docker compose --env-file .env \
 
 ```text
 Data DB → migration ┐
-                    ├→ pipeline-worker
-Prefect DB → Server → work pool → prefect-deploy ┘
+                    ├→ prefect-worker
+Prefect DB ─┬→ Server → work pool → prefect-deploy ┘
+Redis ──────┴→ Background Services
 ```
 
 공개 주소는 다음과 같다.
@@ -75,12 +75,11 @@ docker compose -f deploy/compose.yaml --profile tools run --build --rm pipelines
 docker compose -f deploy/compose.yaml --profile mcp run --rm mcp
 ```
 
-로컬 Registry를 mount하려면 override를 추가한다.
+검증 서비스는 로컬 Registry와 Reference를 read-only로 mount한다.
 
 ```bash
 docker compose \
   -f deploy/compose.yaml \
-  -f deploy/compose.dev.yaml \
   --profile tools run --rm platform-check
 ```
 
@@ -88,7 +87,7 @@ docker compose \
 
 ```bash
 docker compose -f deploy/compose.yaml ps
-docker compose -f deploy/compose.yaml logs -f pipeline-worker
+docker compose -f deploy/compose.yaml logs -f prefect-worker
 docker compose -f deploy/compose.yaml down
 ```
 

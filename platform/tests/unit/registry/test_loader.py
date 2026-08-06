@@ -16,6 +16,9 @@ def test_loads_current_registries() -> None:
     assert set(catalog.sources) == {
         "fsc_company_basic",
         "fsc_company_financial",
+        "mss_venture_company_disclosure",
+        "mss_innobiz_company_lookup",
+        "mss_mainbiz_company_lookup",
         "nts_business_registration",
         "teoria_public_procurement",
     }
@@ -26,17 +29,27 @@ def test_loads_current_registries() -> None:
         source_id
         for source_id, reference in catalog.references.items()
         if reference.status == "active"
-    } == {"fsc_company_basic", "fsc_company_financial", "nts_business_registration"}
+    } == {
+        "fsc_company_basic",
+        "fsc_company_financial",
+            "mss_venture_company_disclosure",
+            "mss_innobiz_company_lookup",
+            "mss_mainbiz_company_lookup",
+            "nts_business_registration",
+    }
     assert set(catalog.capabilities) == {
         "get_business_registration_status",
         "get_company_financials",
         "get_company_profile",
         "get_company_relationships",
         "verify_business_registration",
+        "verify_innobiz_company",
+        "verify_mainbiz_company",
+        "verify_venture_company",
         "get_public_procurement_contract",
         "search_public_procurement_contracts",
-            "get_company_public_procurement_contracts",
-            "search_companies_by_name",
+        "get_company_public_procurement_contracts",
+        "search_companies_by_name",
         }
 
 
