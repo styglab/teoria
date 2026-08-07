@@ -1,0 +1,61 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+mapping:
+  id: bid_requirements
+  name: 입찰 참가요건 매핑
+  description: 최신 완료 추출본의 참가요건과 근거 요약을 입찰공고에 연결한다.
+  ontology: public_procurement
+  bindings:
+    bid_notice.bid_notice_id:
+      - {field: teoria_public_procurement.bid_requirements.bid_notice_id, role: requirement_notice}
+    bid_notice.notice_number:
+      - {field: teoria_public_procurement.bid_requirements.notice_number, role: requirement_notice}
+    bid_notice.notice_order:
+      - {field: teoria_public_procurement.bid_requirements.notice_order, role: requirement_notice}
+    bid_notice.notice_name:
+      - {field: teoria_public_procurement.bid_requirements.notice_name, role: requirement_notice}
+    bid_notice.bid_deadline_at:
+      - {field: teoria_public_procurement.bid_requirements.bid_deadline_at, role: requirement_notice}
+    bid_requirement.requirement_id:
+      - {field: teoria_public_procurement.bid_requirements.requirement_id}
+    bid_requirement.bid_notice_id:
+      - {field: teoria_public_procurement.bid_requirements.bid_notice_id}
+    bid_requirement.notice_number:
+      - {field: teoria_public_procurement.bid_requirements.notice_number}
+    bid_requirement.notice_order:
+      - {field: teoria_public_procurement.bid_requirements.notice_order}
+    bid_requirement.local_id:
+      - {field: teoria_public_procurement.bid_requirements.local_id}
+    bid_requirement.requirement_type:
+      - {field: teoria_public_procurement.bid_requirements.requirement_type}
+    bid_requirement.operator:
+      - {field: teoria_public_procurement.bid_requirements.operator}
+    bid_requirement.value_text:
+      - {field: teoria_public_procurement.bid_requirements.value_text}
+    bid_requirement.original_text:
+      - {field: teoria_public_procurement.bid_requirements.original_text}
+    bid_requirement.holder_scope:
+      - {field: teoria_public_procurement.bid_requirements.holder_scope}
+    bid_requirement.reference_date_type:
+      - {field: teoria_public_procurement.bid_requirements.reference_date_type}
+    bid_requirement.mandatory:
+      - {field: teoria_public_procurement.bid_requirements.mandatory}
+    bid_requirement.review_status:
+      - {field: teoria_public_procurement.bid_requirements.review_status}
+    bid_requirement.confidence:
+      - {field: teoria_public_procurement.bid_requirements.confidence}
+    bid_requirement.evidence_summary:
+      - {field: teoria_public_procurement.bid_requirements.evidence_summary}
+  materializations:
+    teoria_public_procurement.bid_requirements:
+      objects:
+        requirement_notice:
+          type: bid_notice
+          identity: [bid_notice_id]
+        bid_requirement:
+          type: bid_requirement
+          identity: [requirement_id]
+      links:
+        - {type: bid_notice_requires_bid_requirement, source: requirement_notice, target: bid_requirement}

@@ -1,0 +1,28 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+capability:
+  id: get_demand_organization
+  name: 나라장터 수요기관 조회
+  description: 나라장터 수요기관코드와 등록일 범위로 공고·계약과 동일한 공공기관 객체의 상세정보를 조회한다.
+  inputs:
+    organization_code:
+      property: public_procurement.public_organization.organization_code
+      required: true
+    query_mode:
+      data_type: string
+      field: pps_user.list_demand_organizations.request.query.inqryDiv
+      default: "1"
+    registered_at_from:
+      data_type: string
+      field: pps_user.list_demand_organizations.request.query.inqryBgnDt
+      required: true
+    registered_at_to:
+      data_type: string
+      field: pps_user.list_demand_organizations.request.query.inqryEndDt
+      required: true
+  steps:
+    - call: pps_user.list_demand_organizations
+  returns:
+    - public_procurement.public_organization

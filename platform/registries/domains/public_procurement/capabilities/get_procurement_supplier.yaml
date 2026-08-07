@@ -1,0 +1,18 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+capability:
+  id: get_procurement_supplier
+  name: 나라장터 조달업체 조회
+  description: 사업자등록번호로 나라장터 조달업체 기본정보와 연결된 사업자등록 객체를 조회한다.
+  inputs:
+    business_registration_number:
+      property: public_procurement.procurement_supplier.business_registration_number
+      required: true
+  steps:
+    - call: pps_user.list_procurement_companies
+  returns:
+    - company.business_registration
+    - public_procurement.procurement_supplier
+    - public_procurement.business_registration_identifies_procurement_supplier

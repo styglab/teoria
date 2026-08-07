@@ -1,0 +1,29 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+capability:
+  id: search_bid_notices
+  name: 입찰공고 검색
+  description: 게시기간과 선택적인 업무유형·입찰상태로 정규화된 입찰공고를 검색한다.
+  inputs:
+    notice_published_at_from:
+      data_type: datetime
+      field: teoria_public_procurement.bid_notices.notice_published_at
+      operator: gte
+      required: true
+    notice_published_at_to:
+      data_type: datetime
+      field: teoria_public_procurement.bid_notices.notice_published_at
+      operator: lte
+      required: true
+    work_type:
+      property: public_procurement.bid_notice.work_type
+    bid_status:
+      property: public_procurement.bid_notice.bid_status
+  steps:
+    - call: teoria_public_procurement.bid_notices
+  returns:
+    - public_procurement.bid_notice
+    - public_procurement.public_organization
+    - public_procurement.public_organization_publishes_bid_notice

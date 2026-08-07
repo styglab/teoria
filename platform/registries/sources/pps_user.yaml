@@ -1,0 +1,260 @@
+registry:
+  version: 1.1.0
+  registered_at: "2026-08-07"
+
+source:
+  id: pps_user
+  name: 조달청 나라장터 사용자정보서비스
+  provider:
+    organization: 조달청
+    distribution: 공공데이터포털
+  type: api
+  specification:
+    format: manual
+    version: "1.1"
+    api_version: "1.0"
+    source_document: 조달청_OpenAPI참고자료_나라장터_사용자정보서비스_1.1.docx
+  access:
+    base_url: http://apis.data.go.kr/1230000/ao/UsrInfoService02
+    authentication:
+      type: api_key
+      in: query
+      name: ServiceKey
+      credential_env: TEORIA_SOURCE_PPS_USER_API_KEY
+  components:
+    objects:
+      - id: demand_organization
+        name: 수요기관정보
+        fields:
+          - {id: dminsttCd, name: 수요기관코드, data_type: string}
+          - {id: vldPrdBgnDt, name: 유효기간시작일시, data_type: string}
+          - {id: vldPrdEndDt, name: 유효기간종료일시, data_type: string}
+          - {id: dminsttNm, name: 수요기관명, data_type: string}
+          - {id: dminsttAbrvtNm, name: 수요기관약어명, data_type: string}
+          - {id: dminsttEngNm, name: 수요기관영문명, data_type: string}
+          - {id: corprtRgstNo, name: 법인등록번호, data_type: string}
+          - {id: bizno, name: 사업자등록번호, data_type: string}
+          - {id: jrsdctnDivNm, name: 소관구분명, data_type: string}
+          - {id: insttTyCdLrgclsfcNm, name: 기관유형코드대분류명, data_type: string}
+          - {id: insttTyCdMidclsfcNm, name: 기관유형코드중분류명, data_type: string}
+          - {id: insttTyCdSmlclsfcNm, name: 기관유형코드소분류명, data_type: string}
+          - {id: bizcndtnNm, name: 업태명, data_type: string}
+          - {id: indstrytyNm, name: 업종명, data_type: string}
+          - {id: ofclFaxNo, name: 담당자팩스번호, data_type: string}
+          - {id: rgnCd, name: 지역코드, data_type: string}
+          - {id: rgnNm, name: 지역명, data_type: string}
+          - {id: zip, name: 우편번호, data_type: string}
+          - {id: adrs, name: 주소, data_type: string}
+          - {id: dtlAdrs, name: 상세주소, data_type: string}
+          - {id: telNo, name: 전화번호, data_type: string}
+          - {id: faxNo, name: 팩스번호, data_type: string}
+          - {id: hmpgAdrs, name: 홈페이지주소, data_type: string}
+          - {id: dltYn, name: 삭제여부, data_type: string}
+          - {id: toplvlInsttCd, name: 최상위기관코드, data_type: string}
+          - {id: toplvlInsttNm, name: 최상위기관명, data_type: string}
+          - {id: rgstDt, name: 등록일시, data_type: string}
+          - {id: chgDt, name: 변경일시, data_type: string}
+      - id: procurement_company
+        name: 조달업체 기본정보
+        fields:
+          - {id: bizno, name: 사업자등록번호, data_type: string}
+          - {id: corpNm, name: 업체명, data_type: string}
+          - {id: engCorpNm, name: 영문업체명, data_type: string}
+          - {id: opbizDt, name: 개업일시, data_type: string}
+          - {id: rgnCd, name: 지역코드, data_type: string}
+          - {id: rgnNm, name: 지역명, data_type: string}
+          - {id: zip, name: 우편번호, data_type: string}
+          - {id: adrs, name: 주소, data_type: string}
+          - {id: dtlAdrs, name: 상세주소, data_type: string}
+          - {id: telNo, name: 전화번호, data_type: string}
+          - {id: faxNo, name: 팩스번호, data_type: string}
+          - {id: cntryNm, name: 국가명, data_type: string}
+          - {id: hmpgAdrs, name: 홈페이지주소, data_type: string}
+          - {id: mnfctDivCd, name: 제조구분코드, data_type: string}
+          - {id: mnfctDivNm, name: 제조구분명, data_type: string}
+          - {id: emplyeNum, name: 종업원수, data_type: string}
+          - {id: corpBsnsDivCd, name: 업체업무구분코드, data_type: string}
+          - {id: corpBsnsDivNm, name: 업체업무구분명, data_type: string}
+          - {id: hdoffceDivNm, name: 본사구분명, data_type: string}
+          - {id: rgstDt, name: 등록일시, data_type: string}
+          - {id: chgDt, name: 변경일시, data_type: string}
+          - {id: esntlNoCertRgstYn, name: 고유번호증명등록여부, data_type: string}
+          - {id: ceoNm, name: 대표자명, data_type: string}
+      - id: procurement_company_industry
+        name: 조달업체 업종정보
+        fields:
+          - {id: bizno, name: 사업자등록번호, data_type: string}
+          - {id: indstrytyNm, name: 업종명, data_type: string}
+          - {id: indstrytyCd, name: 업종코드, data_type: string}
+          - {id: rgstDt, name: 등록일시, data_type: string}
+          - {id: vldPrdExprtDt, name: 유효기간만료일시, data_type: string}
+          - {id: systmRgstDt, name: 시스템등록일시, data_type: string}
+          - {id: chgDt, name: 변경일시, data_type: string}
+          - {id: indstrytyStatsNm, name: 업종상태명, data_type: string}
+          - {id: rprsntIndstrytyYn, name: 대표업종여부, data_type: string}
+          - {id: systmChgDt, name: 시스템변경일시, data_type: string}
+      - id: procurement_company_supply_product
+        name: 조달업체 공급물품정보
+        fields:
+          - {id: bizno, name: 사업자등록번호, data_type: string}
+          - {id: dtilPrdctClsfcNoNm, name: 세부품명, data_type: string}
+          - {id: dtilPrdctClsfcNo, name: 세부품명번호, data_type: string}
+          - {id: rgstDt, name: 등록일시, data_type: string}
+          - {id: chgDt, name: 변경일시, data_type: string}
+          - {id: rprsntPrdctClsfcNoNmYn, name: 대표품명여부, data_type: string}
+          - {id: mnfctYn, name: 제조여부, data_type: string}
+      - id: restricted_company
+        name: 부정당제재업체정보
+        fields:
+          - {id: bizno, name: 사업자등록번호, data_type: string}
+          - {id: corpNm, name: 업체명, data_type: string}
+          - {id: unptRsttDocNm, name: 제재문서명, data_type: string}
+          - {id: rsttBgnDate, name: 제재시작일자, data_type: string}
+          - {id: rsttEndDate, name: 제재종료일자, data_type: string}
+          - {id: insttCd, name: 수요기관코드, data_type: string}
+          - {id: insttNm, name: 수요기관명, data_type: string}
+          - {id: lawordNm, name: 근거법령명, data_type: string}
+          - {id: lawordArtclClause, name: 조항호, data_type: string}
+          - {id: lawordArtclClauseCd, name: 조항호코드, data_type: string}
+          - {id: lawordArtclClauseCdNm, name: 조항호코드명, data_type: string}
+          - {id: enfcAtcsCd, name: 시행규칙코드, data_type: string}
+          - {id: enfcPrvNm, name: 시행규칙코드명, data_type: string}
+          - {id: ntfcnDt, name: 게재일시, data_type: string}
+          - {id: rsttPrdMonthNum, name: 제재기간개월수, data_type: string}
+          - {id: rsttPrdDayNum, name: 제재기간일수, data_type: string}
+          - {id: rsttProgrsNm, name: 제재상태명, data_type: string}
+  operations:
+    - id: list_demand_organizations
+      name: 수요기관정보조회
+      method: GET
+      idempotent: true
+      path: /getDminsttInfo02
+      description: 수요기관코드, 사업자등록번호 또는 수요기관명과 조회 기준 기간으로 수요기관정보 목록을 조회한다.
+      pagination: &pagination
+        type: page_number
+        page: {request: query.pageNo}
+        page_size: {request: query.numOfRows}
+        total_count: response.body.totalCount
+      request:
+        query:
+          fields:
+            - {id: numOfRows, name: 한 페이지 결과 수, data_type: integer, default: 100}
+            - {id: pageNo, name: 페이지 번호, data_type: integer, default: 1}
+            - &type_field
+              id: type
+              name: 타입
+              data_type: string
+              default: json
+              values: [{value: json}, {value: xml}]
+            - {id: inqryDiv, name: 조회구분, data_type: string, default: "3", values: [{value: "1"}, {value: "2"}, {value: "3"}]}
+            - {id: inqryBgnDt, name: 조회기준시작일시, data_type: string}
+            - {id: inqryEndDt, name: 조회기준종료일시, data_type: string}
+            - {id: dminsttCd, name: 수요기관코드, data_type: string}
+            - {id: dminsttNm, name: 수요기관명, data_type: string}
+            - {id: bizno, name: 사업자등록번호, data_type: string}
+          required: [numOfRows, pageNo, inqryDiv]
+      response: &demand_response
+        content_type: application/json
+        http_status: 200
+        control: &control
+          record_path: response.header
+          success: {field: resultCode, equals: "00"}
+          fields:
+            - {id: resultCode, name: 결과코드, data_type: string, values: [{value: "00", label: 정상}]}
+            - {id: resultMsg, name: 결과메세지, data_type: string}
+        data:
+          record_path: response.body.items[]
+          ref: demand_organization
+    - id: list_procurement_companies
+      name: 조달업체 기본정보
+      method: GET
+      idempotent: true
+      path: /getPrcrmntCorpBasicInfo02
+      description: 사업자등록번호, 업체명 또는 조회 기준 기간으로 조달업체 기본정보 목록을 조회한다.
+      pagination: *pagination
+      request:
+        query:
+          fields:
+            - {id: numOfRows, name: 한 페이지 결과 수, data_type: integer, default: 100}
+            - {id: pageNo, name: 페이지 번호, data_type: integer, default: 1}
+            - *type_field
+            - {id: inqryDiv, name: 조회구분, data_type: string, default: "3", values: [{value: "1"}, {value: "2"}, {value: "3"}]}
+            - {id: inqryBgnDt, name: 조회기준시작일시, data_type: string}
+            - {id: inqryEndDt, name: 조회기준종료일시, data_type: string}
+            - {id: corpNm, name: 업체명, data_type: string}
+            - {id: bizno, name: 사업자등록번호, data_type: string}
+          required: [numOfRows, pageNo, inqryDiv]
+      response:
+        content_type: application/json
+        http_status: 200
+        control: *control
+        data: {record_path: "response.body.items[]", ref: procurement_company}
+    - id: list_procurement_company_industries
+      name: 조달업체업종정보조회
+      method: GET
+      idempotent: true
+      path: /getPrcrmntCorpIndstrytyInfo02
+      description: 사업자등록번호 또는 시스템 등록·변경 기간으로 조달업체 업종정보 목록을 조회한다.
+      pagination: *pagination
+      request:
+        query:
+          fields:
+            - {id: numOfRows, name: 한 페이지 결과 수, data_type: integer, default: 100}
+            - {id: pageNo, name: 페이지 번호, data_type: integer, default: 1}
+            - *type_field
+            - {id: inqryDiv, name: 조회구분, data_type: string, default: "1", values: [{value: "1"}, {value: "2"}, {value: "3"}]}
+            - {id: bizno, name: 사업자등록번호, data_type: string}
+            - {id: inqryBgnDt, name: 조회기준시작일시, data_type: string}
+            - {id: inqryEndDt, name: 조회기준종료일시, data_type: string}
+          required: [numOfRows, pageNo, inqryDiv]
+      response:
+        content_type: application/json
+        http_status: 200
+        control: *control
+        data: {record_path: "response.body.items[]", ref: procurement_company_industry}
+    - id: list_procurement_company_supply_products
+      name: 조달업체공급물품정보조회
+      method: GET
+      idempotent: true
+      path: /getPrcrmntCorpSplyPrdctInfo02
+      description: 사업자등록번호 또는 등록·변경 기간으로 조달업체 공급물품정보 목록을 조회한다.
+      pagination: *pagination
+      request:
+        query:
+          fields:
+            - {id: numOfRows, name: 한 페이지 결과 수, data_type: integer, default: 100}
+            - {id: pageNo, name: 페이지 번호, data_type: integer, default: 1}
+            - *type_field
+            - {id: inqryDiv, name: 조회구분, data_type: string, default: "1", values: [{value: "1"}, {value: "2"}, {value: "3"}]}
+            - {id: bizno, name: 사업자등록번호, data_type: string}
+            - {id: inqryBgnDt, name: 조회기준시작일시, data_type: string}
+            - {id: inqryEndDt, name: 조회기준종료일시, data_type: string}
+          required: [numOfRows, pageNo, inqryDiv]
+      response:
+        content_type: application/json
+        http_status: 200
+        control: *control
+        data: {record_path: "response.body.items[]", ref: procurement_company_supply_product}
+    - id: list_restricted_companies
+      name: 부정당제재업체정보조회
+      method: GET
+      idempotent: true
+      path: /getUnptRsttCorpInfo02
+      description: 사업자등록번호 또는 제재 시작 기간으로 현재 제공 대상인 부정당제재업체 정보 목록을 조회한다.
+      pagination: *pagination
+      request:
+        query:
+          fields:
+            - {id: numOfRows, name: 한 페이지 결과 수, data_type: integer, default: 100}
+            - {id: pageNo, name: 페이지 번호, data_type: integer, default: 1}
+            - *type_field
+            - {id: inqryDiv, name: 조회구분, data_type: string, default: "1", values: [{value: "1"}, {value: "2"}]}
+            - {id: bizno, name: 사업자등록번호, data_type: string}
+            - {id: inqryBgnDt, name: 조회기준시작일시, data_type: string}
+            - {id: inqryEndDt, name: 조회기준종료일시, data_type: string}
+          required: [numOfRows, pageNo, inqryDiv]
+      response:
+        content_type: application/json
+        http_status: 200
+        control: *control
+        data: {record_path: "response.body.items[]", ref: restricted_company}

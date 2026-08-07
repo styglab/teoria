@@ -1,0 +1,2254 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-08-07'
+connector:
+  id: pps_bid_notice_api
+  name: 조달청 나라장터 입찰공고정보서비스
+  provider:
+    organization: 조달청
+    distribution: 공공데이터포털
+  type: api
+  specification:
+    format: manual
+    version: '1.2'
+    api_version: '1.2'
+    source_document: 조달청_OpenAPI참고자료_나라장터_입찰공고정보서비스_1.2_extracted.docx
+  access:
+    base_url: https://apis.data.go.kr/1230000/ad/BidPublicInfoService
+    authentication:
+      type: api_key
+      in: query
+      name: ServiceKey
+      credential_env: TEORIA_CONNECTOR_PPS_BID_NOTICE_API_KEY
+  components:
+    objects:
+    - id: construction_bid_notice
+      name: 나라장터검색조건에 의한 입찰공고공사조회 결과
+      fields:
+      - id: bidNtceNo
+        name: 입찰공고번호
+        data_type: string
+      - id: bidNtceOrd
+        name: 입찰공고차수
+        data_type: string
+      - id: reNtceYn
+        name: 재공고여부
+        data_type: string
+      - id: rgstTyNm
+        name: 등록유형명
+        data_type: string
+      - id: ntceKindNm
+        name: 공고종류명
+        data_type: string
+      - id: intrbidYn
+        name: 국제입찰여부
+        data_type: string
+      - id: bidNtceDt
+        name: 입찰공고일시
+        data_type: string
+      - id: refNo
+        name: 참조번호
+        data_type: string
+      - id: bidNtceNm
+        name: 입찰공고명
+        data_type: string
+      - id: ntceInsttCd
+        name: 공고기관코드
+        data_type: string
+      - id: ntceInsttNm
+        name: 공고기관명
+        data_type: string
+      - id: dminsttCd
+        name: 수요기관코드
+        data_type: string
+      - id: dminsttNm
+        name: 수요기관명
+        data_type: string
+      - id: bidMethdNm
+        name: 입찰방식명
+        data_type: string
+      - id: cntrctCnclsMthdNm
+        name: 계약체결방법명
+        data_type: string
+      - id: ntceInsttOfclNm
+        name: 공고기관담당자명
+        data_type: string
+      - id: ntceInsttOfclTelNo
+        name: 공고기관담당자전화번호
+        data_type: string
+      - id: ntceInsttOfclEmailAdrs
+        name: 공고기관담당자이메일주소
+        data_type: string
+      - id: exctvNm
+        name: 집행관명
+        data_type: string
+      - id: bidQlfctRgstDt
+        name: 입찰참가자격등록마감일시
+        data_type: string
+      - id: cmmnSpldmdAgrmntRcptdocMethd
+        name: 공동수급협정서접수방식
+        data_type: string
+      - id: cmmnSpldmdAgrmntClseDt
+        name: 공동수급협정마감일시
+        data_type: string
+      - id: cmmnSpldmdCorpRgnLmtYn
+        name: 공동수급업체지역제한여부
+        data_type: string
+      - id: bidBeginDt
+        name: 입찰개시일시
+        data_type: string
+      - id: bidClseDt
+        name: 입찰마감일시
+        data_type: string
+      - id: opengDt
+        name: 개찰일시
+        data_type: string
+      - id: ntceSpecDocUrl1
+        name: 공고규격서URL1
+        data_type: string
+      - id: ntceSpecDocUrl2
+        name: 공고규격서URL2
+        data_type: string
+      - id: ntceSpecDocUrl3
+        name: 공고규격서URL3
+        data_type: string
+      - id: ntceSpecDocUrl4
+        name: 공고규격서URL4
+        data_type: string
+      - id: ntceSpecDocUrl5
+        name: 공고규격서URL5
+        data_type: string
+      - id: ntceSpecDocUrl6
+        name: 공고규격서URL6
+        data_type: string
+      - id: ntceSpecDocUrl7
+        name: 공고규격서URL7
+        data_type: string
+      - id: ntceSpecDocUrl8
+        name: 공고규격서URL8
+        data_type: string
+      - id: ntceSpecDocUrl9
+        name: 공고규격서URL9
+        data_type: string
+      - id: ntceSpecDocUrl10
+        name: 공고규격서URL10
+        data_type: string
+      - id: ntceSpecFileNm1
+        name: 공고규격파일명1
+        data_type: string
+      - id: ntceSpecFileNm2
+        name: 공고규격파일명2
+        data_type: string
+      - id: ntceSpecFileNm3
+        name: 공고규격파일명3
+        data_type: string
+      - id: ntceSpecFileNm4
+        name: 공고규격파일명4
+        data_type: string
+      - id: ntceSpecFileNm5
+        name: 공고규격파일명5
+        data_type: string
+      - id: ntceSpecFileNm6
+        name: 공고규격파일명6
+        data_type: string
+      - id: ntceSpecFileNm7
+        name: 공고규격파일명7
+        data_type: string
+      - id: ntceSpecFileNm8
+        name: 공고규격파일명8
+        data_type: string
+      - id: ntceSpecFileNm9
+        name: 공고규격파일명9
+        data_type: string
+      - id: ntceSpecFileNm10
+        name: 공고규격파일명10
+        data_type: string
+      - id: rbidPermsnYn
+        name: 재입찰허용여부
+        data_type: string
+      - id: pqApplDocRcptMthdNm
+        name: PQ신청서접수방법명
+        data_type: string
+      - id: pqApplDocRcptDt
+        name: PQ신청서접수일시
+        data_type: string
+      - id: arsltApplDocRcptMthdNm
+        name: 실적신청서접수방법명
+        data_type: string
+      - id: arsltApplDocRcptDt
+        name: 실적신청서접수일시
+        data_type: string
+      - id: jntcontrctDutyRgnNm1
+        name: 공동도급의무지역명1
+        data_type: string
+      - id: jntcontrctDutyRgnNm2
+        name: 공동도급의무지역명2
+        data_type: string
+      - id: jntcontrctDutyRgnNm3
+        name: 공동도급의무지역명3
+        data_type: string
+      - id: rgnDutyJntcontrctRt
+        name: 지역의무공동도급비율
+        data_type: string
+      - id: dtlsBidYn
+        name: 내역입찰여부
+        data_type: string
+      - id: bidPrtcptLmtYn
+        name: 입찰참가제한여부
+        data_type: string
+      - id: prearngPrceDcsnMthdNm
+        name: 예정가격결정방법명
+        data_type: string
+      - id: totPrdprcNum
+        name: 총예가건수
+        data_type: string
+      - id: drwtPrdprcNum
+        name: 추첨예가건수
+        data_type: string
+      - id: bdgtAmt
+        name: 예산금액
+        data_type: string
+      - id: presmptPrce
+        name: 추정가격
+        data_type: string
+      - id: govsplyAmt
+        name: 관급금액
+        data_type: string
+      - id: aplBssCntnts
+        name: 적용기준내용
+        data_type: string
+      - id: indstrytyEvlRt
+        name: 업종평가비율
+        data_type: string
+      - id: mainCnsttyNm
+        name: 주공종명
+        data_type: string
+      - id: mainCnsttyCnstwkPrearngAmt
+        name: 주공종공사예정금액
+        data_type: string
+      - id: incntvRgnNm1
+        name: 가산지역명1
+        data_type: string
+      - id: incntvRgnNm2
+        name: 가산지역명2
+        data_type: string
+      - id: incntvRgnNm3
+        name: 가산지역명3
+        data_type: string
+      - id: incntvRgnNm4
+        name: 가산지역명4
+        data_type: string
+      - id: opengPlce
+        name: 개찰장소
+        data_type: string
+      - id: dcmtgOprtnDt
+        name: 설명회실시일시
+        data_type: string
+      - id: dcmtgOprtnPlce
+        name: 설명회실시장소
+        data_type: string
+      - id: contrctrcnstrtnGovsplyMtrlAmt
+        name: 도급자설치관급자재금액
+        data_type: string
+      - id: govcnstrtnGovsplyMtrlAmt
+        name: 관급자설치관급자재금액
+        data_type: string
+      - id: bidNtceDtlUrl
+        name: 입찰공고상세URL
+        data_type: string
+      - id: bidNtceUrl
+        name: 입찰공고URL
+        data_type: string
+      - id: bidPrtcptFeePaymntYn
+        name: 입찰참가수수료납부여부
+        data_type: string
+      - id: bidPrtcptFee
+        name: 입찰참가수수료
+        data_type: string
+      - id: bidGrntymnyPaymntYn
+        name: 입찰보증금납부여부
+        data_type: string
+      - id: crdtrNm
+        name: 채권자명
+        data_type: string
+      - id: cmmnSpldmdCnum
+        name: 공동수급업체수
+        data_type: string
+      - id: untyNtceNo
+        name: 통합공고번호
+        data_type: string
+      - id: sptDscrptDocUrl1
+        name: 현장설명서URL1
+        data_type: string
+      - id: sptDscrptDocUrl2
+        name: 현장설명서URL2
+        data_type: string
+      - id: sptDscrptDocUrl3
+        name: 현장설명서URL3
+        data_type: string
+      - id: sptDscrptDocUrl4
+        name: 현장설명서URL4
+        data_type: string
+      - id: sptDscrptDocUrl5
+        name: 현장설명서URL5
+        data_type: string
+      - id: subsiCnsttyNm1
+        name: 부대공종명1
+        data_type: string
+      - id: subsiCnsttyNm2
+        name: 부대공종명2
+        data_type: string
+      - id: subsiCnsttyNm3
+        name: 부대공종명3
+        data_type: string
+      - id: subsiCnsttyNm4
+        name: 부대공종명4
+        data_type: string
+      - id: subsiCnsttyNm5
+        name: 부대공종명5
+        data_type: string
+      - id: subsiCnsttyNm6
+        name: 부대공종명6
+        data_type: string
+      - id: subsiCnsttyNm7
+        name: 부대공종명7
+        data_type: string
+      - id: subsiCnsttyNm8
+        name: 부대공종명8
+        data_type: string
+      - id: subsiCnsttyNm9
+        name: 부대공종명9
+        data_type: string
+      - id: subsiCnsttyIndstrytyEvlRt1
+        name: 부공종업종평가비율1
+        data_type: string
+      - id: subsiCnsttyIndstrytyEvlRt2
+        name: 부공종업종평가비율2
+        data_type: string
+      - id: subsiCnsttyIndstrytyEvlRt3
+        name: 부공종업종평가비율3
+        data_type: string
+      - id: subsiCnsttyIndstrytyEvlRt4
+        name: 부공종업종평가비율4
+        data_type: string
+      - id: subsiCnsttyIndstrytyEvlRt5
+        name: 부공종업종평가비율5
+        data_type: string
+      - id: subsiCnsttyIndstrytyEvlRt6
+        name: 부공종업종평가비율6
+        data_type: string
+      - id: subsiCnsttyIndstrytyEvlRt7
+        name: 부공종업종평가비율7
+        data_type: string
+      - id: subsiCnsttyIndstrytyEvlRt8
+        name: 부공종업종평가비율8
+        data_type: string
+      - id: subsiCnsttyIndstrytyEvlRt9
+        name: 부공종업종평가비율9
+        data_type: string
+      - id: cmmnSpldmdMethdCd
+        name: 공동수급방식코드
+        data_type: string
+      - id: cmmnSpldmdMethdNm
+        name: 공동수급방식명
+        data_type: string
+      - id: stdNtceDocUrl
+        name: 표준공고서URL
+        data_type: string
+      - id: brffcBidprcPermsnYn
+        name: 지사투찰허용여부
+        data_type: string
+      - id: cnsttyAccotShreRateList
+        name: 공종별지분율목록
+        data_type: string
+      - id: cnstrtnAbltyEvlAmtList
+        name: 시공능력평가금액목록
+        data_type: string
+      - id: dsgntCmptYn
+        name: 지명경쟁여부
+        data_type: string
+      - id: arsltCmptYn
+        name: 실적경쟁여부
+        data_type: string
+      - id: pqEvalYn
+        name: PQ심사여부
+        data_type: string
+      - id: ntceDscrptYn
+        name: 공고설명여부
+        data_type: string
+      - id: rsrvtnPrceReMkngMthdNm
+        name: 예비가격재작성방법명
+        data_type: string
+      - id: mainCnsttyPresmptPrce
+        name: 주공종추정가격
+        data_type: string
+      - id: orderPlanUntyNo
+        name: 발주계획통합번호
+        data_type: string
+      - id: sucsfbidLwltRate
+        name: 낙찰하한율
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: bfSpecRgstNo
+        name: 사전규격등록번호
+        data_type: string
+      - id: sucsfbidMthdCd
+        name: 낙찰방법코드
+        data_type: string
+      - id: sucsfbidMthdNm
+        name: 낙찰방법명
+        data_type: string
+      - id: chgDt
+        name: 변경일시
+        data_type: string
+      - id: dminsttOfclEmailAdrs
+        name: 수요기관담당자이메일주소
+        data_type: string
+      - id: indstrytyLmtYn
+        name: 업종제한여부
+        data_type: string
+      - id: cnstrtsiteRgnNm
+        name: 공사현장지역명
+        data_type: string
+      - id: rgnDutyJntcontrctYn
+        name: 지역의무공동도급여부
+        data_type: string
+      - id: chgNtceRsn
+        name: 변경공고사유
+        data_type: string
+      - id: rbidOpengDt
+        name: 재입찰개찰일시
+        data_type: string
+      - id: ciblAplYn
+        name: 건설산업법적용대상여부
+        data_type: string
+      - id: mtltyAdvcPsblYn
+        name: 상호시장진출허용여부
+        data_type: string
+      - id: mtltyAdvcPsblYnCnstwkNm
+        name: 건설산업법적용대상공사명
+        data_type: string
+      - id: VAT
+        name: 부가가치세
+        data_type: string
+      - id: indutyVAT
+        name: 주공종부가가치세
+        data_type: string
+      - id: indstrytyMfrcFldEvlYn
+        name: 주력분야평가여부
+        data_type: string
+      - id: bidWgrnteeRcptClseDt
+        name: 입찰보증서접수마감일시
+        data_type: string
+      - id: rgnLmtBidLocplcJdgmBssCd
+        name: 지역제한입찰소재지판단기준코드
+        data_type: string
+      - id: rgnLmtBidLocplcJdgmBssNm
+        name: 지역제한입찰소재지판단기준명
+        data_type: string
+      - id: sucsfbidMthdAppStd
+        name: 낙찰방법적용기준
+        data_type: string
+    - id: service_bid_notice
+      name: 나라장터검색조건에 의한 입찰공고용역조회 결과
+      fields:
+      - id: bidNtceNo
+        name: 입찰공고번호
+        data_type: string
+      - id: bidNtceOrd
+        name: 입찰공고차수
+        data_type: string
+      - id: reNtceYn
+        name: 재공고여부
+        data_type: string
+      - id: rgstTyNm
+        name: 등록유형명
+        data_type: string
+      - id: ntceKindNm
+        name: 공고종류명
+        data_type: string
+      - id: intrbidYn
+        name: 국제입찰여부
+        data_type: string
+      - id: bidNtceDt
+        name: 입찰공고일시
+        data_type: string
+      - id: refNo
+        name: 참조번호
+        data_type: string
+      - id: bidNtceNm
+        name: 입찰공고명
+        data_type: string
+      - id: ntceInsttCd
+        name: 공고기관코드
+        data_type: string
+      - id: ntceInsttNm
+        name: 공고기관명
+        data_type: string
+      - id: dminsttCd
+        name: 수요기관코드
+        data_type: string
+      - id: dminsttNm
+        name: 수요기관명
+        data_type: string
+      - id: bidMethdNm
+        name: 입찰방식명
+        data_type: string
+      - id: cntrctCnclsMthdNm
+        name: 계약체결방법명
+        data_type: string
+      - id: ntceInsttOfclNm
+        name: 공고기관담당자명
+        data_type: string
+      - id: ntceInsttOfclTelNo
+        name: 공고기관담당자전화번호
+        data_type: string
+      - id: ntceInsttOfclEmailAdrs
+        name: 공고기관담당자이메일주소
+        data_type: string
+      - id: exctvNm
+        name: 집행관명
+        data_type: string
+      - id: bidQlfctRgstDt
+        name: 입찰참가자격등록마감일시
+        data_type: string
+      - id: cmmnSpldmdAgrmntRcptdocMethd
+        name: 공동수급협정서접수방식
+        data_type: string
+      - id: cmmnSpldmdAgrmntClseDt
+        name: 공동수급협정마감일시
+        data_type: string
+      - id: cmmnSpldmdCorpRgnLmtYn
+        name: 공동수급업체지역제한여부
+        data_type: string
+      - id: bidBeginDt
+        name: 입찰개시일시
+        data_type: string
+      - id: bidClseDt
+        name: 입찰마감일시
+        data_type: string
+      - id: opengDt
+        name: 개찰일시
+        data_type: string
+      - id: ntceSpecDocUrl1
+        name: 공고규격서URL1
+        data_type: string
+      - id: ntceSpecDocUrl2
+        name: 공고규격서URL2
+        data_type: string
+      - id: ntceSpecDocUrl3
+        name: 공고규격서URL3
+        data_type: string
+      - id: ntceSpecDocUrl4
+        name: 공고규격서URL4
+        data_type: string
+      - id: ntceSpecDocUrl5
+        name: 공고규격서URL5
+        data_type: string
+      - id: ntceSpecDocUrl6
+        name: 공고규격서URL6
+        data_type: string
+      - id: ntceSpecDocUrl7
+        name: 공고규격서URL7
+        data_type: string
+      - id: ntceSpecDocUrl8
+        name: 공고규격서URL8
+        data_type: string
+      - id: ntceSpecDocUrl9
+        name: 공고규격서URL9
+        data_type: string
+      - id: ntceSpecDocUrl10
+        name: 공고규격서URL10
+        data_type: string
+      - id: ntceSpecFileNm1
+        name: 공고규격파일명1
+        data_type: string
+      - id: ntceSpecFileNm2
+        name: 공고규격파일명2
+        data_type: string
+      - id: ntceSpecFileNm3
+        name: 공고규격파일명3
+        data_type: string
+      - id: ntceSpecFileNm4
+        name: 공고규격파일명4
+        data_type: string
+      - id: ntceSpecFileNm5
+        name: 공고규격파일명5
+        data_type: string
+      - id: ntceSpecFileNm6
+        name: 공고규격파일명6
+        data_type: string
+      - id: ntceSpecFileNm7
+        name: 공고규격파일명7
+        data_type: string
+      - id: ntceSpecFileNm8
+        name: 공고규격파일명8
+        data_type: string
+      - id: ntceSpecFileNm9
+        name: 공고규격파일명9
+        data_type: string
+      - id: ntceSpecFileNm10
+        name: 공고규격파일명10
+        data_type: string
+      - id: rbidPermsnYn
+        name: 재입찰허용여부
+        data_type: string
+      - id: pqApplDocRcptMthdNm
+        name: PQ신청서접수방법명
+        data_type: string
+      - id: pqApplDocRcptDt
+        name: PQ신청서접수일시
+        data_type: string
+      - id: tpEvalApplMthdNm
+        name: TP심사신청방법명
+        data_type: string
+      - id: tpEvalApplClseDt
+        name: TP심사신청마감일시
+        data_type: string
+      - id: jntcontrctDutyRgnNm1
+        name: 공동도급의무지역명1
+        data_type: string
+      - id: jntcontrctDutyRgnNm2
+        name: 공동도급의무지역명2
+        data_type: string
+      - id: jntcontrctDutyRgnNm3
+        name: 공동도급의무지역명3
+        data_type: string
+      - id: rgnDutyJntcontrctRt
+        name: 지역의무공동도급비율
+        data_type: string
+      - id: dtlsBidYn
+        name: 내역입찰여부
+        data_type: string
+      - id: bidPrtcptLmtYn
+        name: 입찰참가제한여부
+        data_type: string
+      - id: prearngPrceDcsnMthdNm
+        name: 예정가격결정방법명
+        data_type: string
+      - id: totPrdprcNum
+        name: 총예가건수
+        data_type: string
+      - id: drwtPrdprcNum
+        name: 추첨예가건수
+        data_type: string
+      - id: asignBdgtAmt
+        name: 배정예산금액
+        data_type: string
+      - id: presmptPrce
+        name: 추정가격
+        data_type: string
+      - id: opengPlce
+        name: 개찰장소
+        data_type: string
+      - id: dcmtgOprtnDt
+        name: 설명회실시일시
+        data_type: string
+      - id: dcmtgOprtnPlce
+        name: 설명회실시장소
+        data_type: string
+      - id: bidNtceDtlUrl
+        name: 입찰공고상세URL
+        data_type: string
+      - id: bidNtceUrl
+        name: 입찰공고URL
+        data_type: string
+      - id: bidPrtcptFeePaymntYn
+        name: 입찰참가수수료납부여부
+        data_type: string
+      - id: bidPrtcptFee
+        name: 입찰참가수수료
+        data_type: string
+      - id: bidGrntymnyPaymntYn
+        name: 입찰보증금납부여부
+        data_type: string
+      - id: crdtrNm
+        name: 채권자명
+        data_type: string
+      - id: ppswGnrlSrvceYn
+        name: 조달청일반용역여부
+        data_type: string
+      - id: srvceDivNm
+        name: 용역구분명
+        data_type: string
+      - id: prdctClsfcLmtYn
+        name: 물품분류제한여부
+        data_type: string
+      - id: mnfctYn
+        name: 제조여부
+        data_type: string
+      - id: purchsObjPrdctList
+        name: 구매대상물품목록
+        data_type: string
+      - id: untyNtceNo
+        name: 통합공고번호
+        data_type: string
+      - id: cmmnSpldmdMethdCd
+        name: 공동수급방식코드
+        data_type: string
+      - id: cmmnSpldmdMethdNm
+        name: 공동수급방식명
+        data_type: string
+      - id: stdNtceDocUrl
+        name: 표준공고서URL
+        data_type: string
+      - id: brffcBidprcPermsnYn
+        name: 지사투찰허용여부
+        data_type: string
+      - id: dsgntCmptYn
+        name: 지명경쟁여부
+        data_type: string
+      - id: arsltCmptYn
+        name: 실적경쟁여부
+        data_type: string
+      - id: pqEvalYn
+        name: PQ심사여부
+        data_type: string
+      - id: tpEvalYn
+        name: TP심사여부
+        data_type: string
+      - id: ntceDscrptYn
+        name: 공고설명여부
+        data_type: string
+      - id: rsrvtnPrceReMkngMthdNm
+        name: 예비가격재작성방법명
+        data_type: string
+      - id: arsltApplDocRcptMthdNm
+        name: 실적신청서접수방법명
+        data_type: string
+      - id: arsltReqstdocRcptDt
+        name: 실적신청서접수일시
+        data_type: string
+      - id: orderPlanUntyNo
+        name: 발주계획통합번호
+        data_type: string
+      - id: sucsfbidLwltRate
+        name: 낙찰하한율
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: bfSpecRgstNo
+        name: 사전규격등록번호
+        data_type: string
+      - id: infoBizYn
+        name: 정보화사업여부
+        data_type: string
+      - id: sucsfbidMthdCd
+        name: 낙찰방법코드
+        data_type: string
+      - id: sucsfbidMthdNm
+        name: 낙찰방법명
+        data_type: string
+      - id: chgDt
+        name: 변경일시
+        data_type: string
+      - id: dminsttOfclEmailAdrs
+        name: 수요기관담당자이메일주소
+        data_type: string
+      - id: indstrytyLmtYn
+        name: 업종제한여부
+        data_type: string
+      - id: chgNtceRsn
+        name: 변경공고사유
+        data_type: string
+      - id: rbidOpengDt
+        name: 재입찰개찰일시
+        data_type: string
+      - id: VAT
+        name: 부가가치세
+        data_type: string
+      - id: indutyVAT
+        name: 주공종부가가치세
+        data_type: string
+      - id: rgnLmtBidLocplcJdgmBssCd
+        name: 지역제한입찰소재지판단기준코드
+        data_type: string
+      - id: rgnLmtBidLocplcJdgmBssNm
+        name: 지역제한입찰소재지판단기준명
+        data_type: string
+      - id: pubPrcrmntLrgclsfcNm
+        name: 공공조달대분류명
+        data_type: string
+      - id: pubPrcrmntMidclsfcNm
+        name: 공공조달중분류명
+        data_type: string
+      - id: pubPrcrmntClsfcNo
+        name: 공공조달분류번호
+        data_type: string
+      - id: techAbltEvlRt
+        name: 기술능력평가비율
+        data_type: string
+      - id: bidPrceEvlRt
+        name: 입찰가격평가비율
+        data_type: string
+      - id: sucsfbidMthdAppStd
+        name: 낙찰방법적용기준
+        data_type: string
+    - id: foreign_bid_notice
+      name: 나라장터검색조건에 의한 입찰공고외자조회 결과
+      fields:
+      - id: bidNtceNo
+        name: 입찰공고번호
+        data_type: string
+      - id: bidNtceOrd
+        name: 입찰공고차수
+        data_type: string
+      - id: reNtceYn
+        name: 재공고여부
+        data_type: string
+      - id: rgstTyNm
+        name: 등록유형명
+        data_type: string
+      - id: ntceKindNm
+        name: 공고종류명
+        data_type: string
+      - id: intrbidYn
+        name: 국제입찰여부
+        data_type: string
+      - id: bidNtceDt
+        name: 입찰공고일시
+        data_type: string
+      - id: refNo
+        name: 참조번호
+        data_type: string
+      - id: bidNtceNm
+        name: 입찰공고명
+        data_type: string
+      - id: ntceInsttCd
+        name: 공고기관코드
+        data_type: string
+      - id: ntceInsttNm
+        name: 공고기관명
+        data_type: string
+      - id: dminsttCd
+        name: 수요기관코드
+        data_type: string
+      - id: dminsttNm
+        name: 수요기관명
+        data_type: string
+      - id: bidMethdNm
+        name: 입찰방식명
+        data_type: string
+      - id: cntrctCnclsMthdNm
+        name: 계약체결방법명
+        data_type: string
+      - id: ntceInsttOfclNm
+        name: 공고기관담당자명
+        data_type: string
+      - id: ntceInsttOfclTelNo
+        name: 공고기관담당자전화번호
+        data_type: string
+      - id: ntceInsttOfclEmailAdrs
+        name: 공고기관담당자이메일주소
+        data_type: string
+      - id: exctvNm
+        name: 집행관명
+        data_type: string
+      - id: bidQlfctRgstDt
+        name: 입찰참가자격등록마감일시
+        data_type: string
+      - id: cmmnSpldmdAgrmntRcptdocMethd
+        name: 공동수급협정서접수방식
+        data_type: string
+      - id: cmmnSpldmdAgrmntClseDt
+        name: 공동수급협정마감일시
+        data_type: string
+      - id: cmmnSpldmdCorpRgnLmtYn
+        name: 공동수급업체지역제한여부
+        data_type: string
+      - id: bidBeginDt
+        name: 입찰개시일시
+        data_type: string
+      - id: bidClseDt
+        name: 입찰마감일시
+        data_type: string
+      - id: opengDt
+        name: 개찰일시
+        data_type: string
+      - id: ntceSpecDocUrl1
+        name: 공고규격서URL1
+        data_type: string
+      - id: ntceSpecDocUrl2
+        name: 공고규격서URL2
+        data_type: string
+      - id: ntceSpecDocUrl3
+        name: 공고규격서URL3
+        data_type: string
+      - id: ntceSpecDocUrl4
+        name: 공고규격서URL4
+        data_type: string
+      - id: ntceSpecDocUrl5
+        name: 공고규격서URL5
+        data_type: string
+      - id: ntceSpecDocUrl6
+        name: 공고규격서URL6
+        data_type: string
+      - id: ntceSpecDocUrl7
+        name: 공고규격서URL7
+        data_type: string
+      - id: ntceSpecDocUrl8
+        name: 공고규격서URL8
+        data_type: string
+      - id: ntceSpecDocUrl9
+        name: 공고규격서URL9
+        data_type: string
+      - id: ntceSpecDocUrl10
+        name: 공고규격서URL10
+        data_type: string
+      - id: ntceSpecFileNm1
+        name: 공고규격파일명1
+        data_type: string
+      - id: ntceSpecFileNm2
+        name: 공고규격파일명2
+        data_type: string
+      - id: ntceSpecFileNm3
+        name: 공고규격파일명3
+        data_type: string
+      - id: ntceSpecFileNm4
+        name: 공고규격파일명4
+        data_type: string
+      - id: ntceSpecFileNm5
+        name: 공고규격파일명5
+        data_type: string
+      - id: ntceSpecFileNm6
+        name: 공고규격파일명6
+        data_type: string
+      - id: ntceSpecFileNm7
+        name: 공고규격파일명7
+        data_type: string
+      - id: ntceSpecFileNm8
+        name: 공고규격파일명8
+        data_type: string
+      - id: ntceSpecFileNm9
+        name: 공고규격파일명9
+        data_type: string
+      - id: ntceSpecFileNm10
+        name: 공고규격파일명10
+        data_type: string
+      - id: rbidPermsnYn
+        name: 재입찰허용여부
+        data_type: string
+      - id: prdctClsfcLmtYn
+        name: 물품분류제한여부
+        data_type: string
+      - id: mnfctYn
+        name: 제조여부
+        data_type: string
+      - id: prearngPrceDcsnMthdNm
+        name: 예정가격결정방법명
+        data_type: string
+      - id: totPrdprcNum
+        name: 총예가건수
+        data_type: string
+      - id: drwtPrdprcNum
+        name: 추첨예가건수
+        data_type: string
+      - id: asignBdgtAmt
+        name: 배정예산금액
+        data_type: string
+      - id: presmptPrce
+        name: 추정가격
+        data_type: string
+      - id: opengPlce
+        name: 개찰장소
+        data_type: string
+      - id: bidNtceDtlUrl
+        name: 입찰공고상세URL
+        data_type: string
+      - id: bidNtceUrl
+        name: 입찰공고URL
+        data_type: string
+      - id: bidPrtcptFeePaymntYn
+        name: 입찰참가수수료납부여부
+        data_type: string
+      - id: bidPrtcptFee
+        name: 입찰참가수수료
+        data_type: string
+      - id: bidGrntymnyPaymntYn
+        name: 입찰보증금납부여부
+        data_type: string
+      - id: crdtrNm
+        name: 채권자명
+        data_type: string
+      - id: prdctSno
+        name: 물품순번
+        data_type: string
+      - id: dtilPrdctClsfcNo
+        name: 세부품명번호
+        data_type: string
+      - id: dtilPrdctClsfcNoNm
+        name: 세부품명
+        data_type: string
+      - id: prdctSpecNm
+        name: 물품규격명
+        data_type: string
+      - id: prdctQty
+        name: 물품수량
+        data_type: string
+      - id: prdctUnit
+        name: 물품단위
+        data_type: string
+      - id: prdctUprc
+        name: 물품단가
+        data_type: string
+      - id: dlvrTmlmtDt
+        name: 납품기한일시
+        data_type: string
+      - id: dlvrDaynum
+        name: 납품일수
+        data_type: string
+      - id: dlvryCndtnNm
+        name: 인도조건명
+        data_type: string
+      - id: purchsObjPrdctList
+        name: 구매대상물품목록
+        data_type: string
+      - id: untyNtceNo
+        name: 통합공고번호
+        data_type: string
+      - id: cmmnSpldmdMethdCd
+        name: 공동수급방식코드
+        data_type: string
+      - id: cmmnSpldmdMethdNm
+        name: 공동수급방식명
+        data_type: string
+      - id: stdNtceDocUrl
+        name: 표준공고서URL
+        data_type: string
+      - id: brffcBidprcPermsnYn
+        name: 지사투찰허용여부
+        data_type: string
+      - id: dsgntCmptYn
+        name: 지명경쟁여부
+        data_type: string
+      - id: rsrvtnPrceReMkngMthdNm
+        name: 예비가격재작성방법명
+        data_type: string
+      - id: arsltApplDocRcptMthdNm
+        name: 실적신청서접수방법명
+        data_type: string
+      - id: arsltApplDocRcptDt
+        name: 실적신청서접수일시
+        data_type: string
+      - id: orderPlanUntyNo
+        name: 발주계획통합번호
+        data_type: string
+      - id: sucsfbidLwltRate
+        name: 낙찰하한율
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: bfSpecRgstNo
+        name: 사전규격등록번호
+        data_type: string
+      - id: sucsfbidMthdCd
+        name: 낙찰방법코드
+        data_type: string
+      - id: sucsfbidMthdNm
+        name: 낙찰방법명
+        data_type: string
+      - id: chgDt
+        name: 변경일시
+        data_type: string
+      - id: dminsttOfclEmailAdrs
+        name: 수요기관담당자이메일주소
+        data_type: string
+      - id: indstrytyLmtYn
+        name: 업종제한여부
+        data_type: string
+      - id: chgNtceRsn
+        name: 변경공고사유
+        data_type: string
+      - id: rbidOpengDt
+        name: 재입찰개찰일시
+        data_type: string
+      - id: bidWgrnteeRcptClseDt
+        name: 입찰보증서접수마감일시
+        data_type: string
+      - id: techAbltEvlRt
+        name: 기술능력평가비율
+        data_type: string
+      - id: bidPrceEvlRt
+        name: 입찰가격평가비율
+        data_type: string
+      - id: sucsfbidMthdAppStd
+        name: 낙찰방법적용기준
+        data_type: string
+    - id: goods_bid_notice
+      name: 나라장터검색조건에 의한 입찰공고물품조회 결과
+      fields:
+      - id: bidNtceNo
+        name: 입찰공고번호
+        data_type: string
+      - id: bidNtceOrd
+        name: 입찰공고차수
+        data_type: string
+      - id: reNtceYn
+        name: 재공고여부
+        data_type: string
+      - id: rgstTyNm
+        name: 등록유형명
+        data_type: string
+      - id: ntceKindNm
+        name: 공고종류명
+        data_type: string
+      - id: intrbidYn
+        name: 국제입찰여부
+        data_type: string
+      - id: bidNtceDt
+        name: 입찰공고일시
+        data_type: string
+      - id: refNo
+        name: 참조번호
+        data_type: string
+      - id: bidNtceNm
+        name: 입찰공고명
+        data_type: string
+      - id: ntceInsttCd
+        name: 공고기관코드
+        data_type: string
+      - id: ntceInsttNm
+        name: 공고기관명
+        data_type: string
+      - id: dminsttCd
+        name: 수요기관코드
+        data_type: string
+      - id: dminsttNm
+        name: 수요기관명
+        data_type: string
+      - id: bidMethdNm
+        name: 입찰방식명
+        data_type: string
+      - id: cntrctCnclsMthdNm
+        name: 계약체결방법명
+        data_type: string
+      - id: ntceInsttOfclNm
+        name: 공고기관담당자명
+        data_type: string
+      - id: ntceInsttOfclTelNo
+        name: 공고기관담당자전화번호
+        data_type: string
+      - id: ntceInsttOfclEmailAdrs
+        name: 공고기관담당자이메일주소
+        data_type: string
+      - id: exctvNm
+        name: 집행관명
+        data_type: string
+      - id: bidQlfctRgstDt
+        name: 입찰참가자격등록마감일시
+        data_type: string
+      - id: cmmnSpldmdAgrmntRcptdocMethd
+        name: 공동수급협정서접수방식
+        data_type: string
+      - id: cmmnSpldmdAgrmntClseDt
+        name: 공동수급협정마감일시
+        data_type: string
+      - id: cmmnSpldmdCorpRgnLmtYn
+        name: 공동수급업체지역제한여부
+        data_type: string
+      - id: bidBeginDt
+        name: 입찰개시일시
+        data_type: string
+      - id: bidClseDt
+        name: 입찰마감일시
+        data_type: string
+      - id: opengDt
+        name: 개찰일시
+        data_type: string
+      - id: ntceSpecDocUrl1
+        name: 공고규격서URL1
+        data_type: string
+      - id: ntceSpecDocUrl2
+        name: 공고규격서URL2
+        data_type: string
+      - id: ntceSpecDocUrl3
+        name: 공고규격서URL3
+        data_type: string
+      - id: ntceSpecDocUrl4
+        name: 공고규격서URL4
+        data_type: string
+      - id: ntceSpecDocUrl5
+        name: 공고규격서URL5
+        data_type: string
+      - id: ntceSpecDocUrl6
+        name: 공고규격서URL6
+        data_type: string
+      - id: ntceSpecDocUrl7
+        name: 공고규격서URL7
+        data_type: string
+      - id: ntceSpecDocUrl8
+        name: 공고규격서URL8
+        data_type: string
+      - id: ntceSpecDocUrl9
+        name: 공고규격서URL9
+        data_type: string
+      - id: ntceSpecDocUrl10
+        name: 공고규격서URL10
+        data_type: string
+      - id: ntceSpecFileNm1
+        name: 공고규격파일명1
+        data_type: string
+      - id: ntceSpecFileNm2
+        name: 공고규격파일명2
+        data_type: string
+      - id: ntceSpecFileNm3
+        name: 공고규격파일명3
+        data_type: string
+      - id: ntceSpecFileNm4
+        name: 공고규격파일명4
+        data_type: string
+      - id: ntceSpecFileNm5
+        name: 공고규격파일명5
+        data_type: string
+      - id: ntceSpecFileNm6
+        name: 공고규격파일명6
+        data_type: string
+      - id: ntceSpecFileNm7
+        name: 공고규격파일명7
+        data_type: string
+      - id: ntceSpecFileNm8
+        name: 공고규격파일명8
+        data_type: string
+      - id: ntceSpecFileNm9
+        name: 공고규격파일명9
+        data_type: string
+      - id: ntceSpecFileNm10
+        name: 공고규격파일명10
+        data_type: string
+      - id: rbidPermsnYn
+        name: 재입찰허용여부
+        data_type: string
+      - id: prdctClsfcLmtYn
+        name: 물품분류제한여부
+        data_type: string
+      - id: mnfctYn
+        name: 제조여부
+        data_type: string
+      - id: prearngPrceDcsnMthdNm
+        name: 예정가격결정방법명
+        data_type: string
+      - id: totPrdprcNum
+        name: 총예가건수
+        data_type: string
+      - id: drwtPrdprcNum
+        name: 추첨예가건수
+        data_type: string
+      - id: asignBdgtAmt
+        name: 배정예산금액
+        data_type: string
+      - id: presmptPrce
+        name: 추정가격
+        data_type: string
+      - id: opengPlce
+        name: 개찰장소
+        data_type: string
+      - id: bidNtceDtlUrl
+        name: 입찰공고상세URL
+        data_type: string
+      - id: bidNtceUrl
+        name: 입찰공고URL
+        data_type: string
+      - id: bidPrtcptFeePaymntYn
+        name: 입찰참가수수료납부여부
+        data_type: string
+      - id: bidPrtcptFee
+        name: 입찰참가수수료
+        data_type: string
+      - id: bidGrntymnyPaymntYn
+        name: 입찰보증금납부여부
+        data_type: string
+      - id: crdtrNm
+        name: 채권자명
+        data_type: string
+      - id: dtilPrdctClsfcNo
+        name: 세부품명번호
+        data_type: string
+      - id: dtilPrdctClsfcNoNm
+        name: 세부품명
+        data_type: string
+      - id: prdctSpecNm
+        name: 물품규격명
+        data_type: string
+      - id: prdctQty
+        name: 물품수량
+        data_type: string
+      - id: prdctUnit
+        name: 물품단위
+        data_type: string
+      - id: prdctUprc
+        name: 물품단가
+        data_type: string
+      - id: dlvrTmlmtDt
+        name: 납품기한일시
+        data_type: string
+      - id: dlvrDaynum
+        name: 납품일수
+        data_type: string
+      - id: dlvryCndtnNm
+        name: 인도조건명
+        data_type: string
+      - id: purchsObjPrdctList
+        name: 구매대상물품목록
+        data_type: string
+      - id: untyNtceNo
+        name: 통합공고번호
+        data_type: string
+      - id: cmmnSpldmdMethdCd
+        name: 공동수급방식코드
+        data_type: string
+      - id: cmmnSpldmdMethdNm
+        name: 공동수급방식명
+        data_type: string
+      - id: stdNtceDocUrl
+        name: 표준공고서URL
+        data_type: string
+      - id: brffcBidprcPermsnYn
+        name: 지사투찰허용여부
+        data_type: string
+      - id: dsgntCmptYn
+        name: 지명경쟁여부
+        data_type: string
+      - id: rsrvtnPrceReMkngMthdNm
+        name: 예비가격재작성방법명
+        data_type: string
+      - id: arsltApplDocRcptMthdNm
+        name: 실적신청서접수방법명
+        data_type: string
+      - id: arsltApplDocRcptDt
+        name: 실적신청서접수일시
+        data_type: string
+      - id: orderPlanUntyNo
+        name: 발주계획통합번호
+        data_type: string
+      - id: sucsfbidLwltRate
+        name: 낙찰하한율
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: bfSpecRgstNo
+        name: 사전규격등록번호
+        data_type: string
+      - id: infoBizYn
+        name: 정보화사업여부
+        data_type: string
+      - id: sucsfbidMthdCd
+        name: 낙찰방법코드
+        data_type: string
+      - id: sucsfbidMthdNm
+        name: 낙찰방법명
+        data_type: string
+      - id: chgDt
+        name: 변경일시
+        data_type: string
+      - id: dminsttOfclEmailAdrs
+        name: 수요기관담당자이메일주소
+        data_type: string
+      - id: indstrytyLmtYn
+        name: 업종제한여부
+        data_type: string
+      - id: chgNtceRsn
+        name: 변경공고사유
+        data_type: string
+      - id: rbidOpengDt
+        name: 재입찰개찰일시
+        data_type: string
+      - id: VAT
+        name: 부가가치세
+        data_type: string
+      - id: indutyVAT
+        name: 주공종부가가치세
+        data_type: string
+      - id: bidWgrnteeRcptClseDt
+        name: 입찰보증서접수마감일시
+        data_type: string
+      - id: rgnLmtBidLocplcJdgmBssCd
+        name: 지역제한입찰소재지판단기준코드
+        data_type: string
+      - id: rgnLmtBidLocplcJdgmBssNm
+        name: 지역제한입찰소재지판단기준명
+        data_type: string
+      - id: techAbltEvlRt
+        name: 기술능력평가비율
+        data_type: string
+      - id: bidPrceEvlRt
+        name: 입찰가격평가비율
+        data_type: string
+      - id: sucsfbidMthdAppStd
+        name: 낙찰방법적용기준
+        data_type: string
+    - id: license_restriction
+      name: 입찰공고목록 정보에 대한 면허제한정보조회 결과
+      fields:
+      - id: bidNtceNo
+        name: 입찰공고번호
+        data_type: string
+      - id: bidNtceOrd
+        name: 입찰공고차수
+        data_type: string
+      - id: lmtGrpNo
+        name: 제한그룹번호
+        data_type: string
+      - id: lmtSno
+        name: 제한순번
+        data_type: string
+      - id: lcnsLmtNm
+        name: 면허제한명
+        data_type: string
+      - id: permsnIndstrytyList
+        name: 허용업종목록
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: bsnsDivNm
+        name: 업무구분명
+        data_type: string
+      - id: indstrytyMfrcFldList
+        name: 주력업종분야목록
+        data_type: string
+    - id: participation_region
+      name: 입찰공고목록 정보에 대한 참가가능지역정보조회 결과
+      fields:
+      - id: bidNtceNo
+        name: 입찰공고번호
+        data_type: string
+      - id: bidNtceOrd
+        name: 입찰공고차수
+        data_type: string
+      - id: lmtSno
+        name: 제한순번
+        data_type: string
+      - id: prtcptPsblRgnNm
+        name: 참가가능지역명
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: bsnsDivNm
+        name: 업무구분명
+        data_type: string
+    - id: other_bid_notice
+      name: 나라장터검색조건에 의한 입찰공고 기타조회 결과
+      fields:
+      - id: bidNtceNo
+        name: 입찰공고번호
+        data_type: string
+      - id: bidNtceOrd
+        name: 입찰공고차수
+        data_type: string
+      - id: rgstTyNm
+        name: 등록유형명
+        data_type: string
+      - id: ntceKindNm
+        name: 공고종류명
+        data_type: string
+      - id: bidNtceDt
+        name: 입찰공고일시
+        data_type: string
+      - id: refNo
+        name: 참조번호
+        data_type: string
+      - id: bidNtceNm
+        name: 입찰공고명
+        data_type: string
+      - id: ntceInsttCd
+        name: 공고기관코드
+        data_type: string
+      - id: ntceInsttNm
+        name: 공고기관명
+        data_type: string
+      - id: dminsttNm
+        name: 수요기관명
+        data_type: string
+      - id: bidMethdNm
+        name: 입찰방식명
+        data_type: string
+      - id: cntrctCnclsMthdNm
+        name: 계약체결방법명
+        data_type: string
+      - id: bidBeginDt
+        name: 입찰개시일시
+        data_type: string
+      - id: bidClseDt
+        name: 입찰마감일시
+        data_type: string
+      - id: opengDt
+        name: 개찰일시
+        data_type: string
+      - id: ntceSpecDocUrl1
+        name: 공고규격서URL1
+        data_type: string
+      - id: ntceSpecDocUrl2
+        name: 공고규격서URL2
+        data_type: string
+      - id: ntceSpecDocUrl3
+        name: 공고규격서URL3
+        data_type: string
+      - id: ntceSpecDocUrl4
+        name: 공고규격서URL4
+        data_type: string
+      - id: ntceSpecDocUrl5
+        name: 공고규격서URL5
+        data_type: string
+      - id: ntceSpecFileNm1
+        name: 공고규격파일명1
+        data_type: string
+      - id: ntceSpecFileNm2
+        name: 공고규격파일명2
+        data_type: string
+      - id: ntceSpecFileNm3
+        name: 공고규격파일명3
+        data_type: string
+      - id: ntceSpecFileNm4
+        name: 공고규격파일명4
+        data_type: string
+      - id: ntceSpecFileNm5
+        name: 공고규격파일명5
+        data_type: string
+      - id: rbidPermsnYn
+        name: 재입찰허용여부
+        data_type: string
+      - id: presmptPrce
+        name: 추정가격
+        data_type: string
+      - id: opengPlce
+        name: 개찰장소
+        data_type: string
+      - id: bidNtceDtlUrl
+        name: 입찰공고상세URL
+        data_type: string
+      - id: bidNtceUrl
+        name: 입찰공고URL
+        data_type: string
+      - id: bidPrtcptFee
+        name: 입찰참가수수료
+        data_type: string
+      - id: bidGrntymnyPaymntObjYn
+        name: 입찰보증금납부대상여부
+        data_type: string
+      - id: untyNtceNo
+        name: 통합공고번호
+        data_type: string
+      - id: cmmnSpldmdYn
+        name: 공동수급여부
+        data_type: string
+      - id: bidQlfctRgstCntnts
+        name: 입찰참가자격내용
+        data_type: string
+      - id: rgstDt
+        name: 등록일시
+        data_type: string
+      - id: sucsfbidMthdNm
+        name: 낙찰방법명
+        data_type: string
+      - id: rmrkCntnts
+        name: 비고내용
+        data_type: string
+  operations:
+  - id: list_construction_bid_notices
+    name: 나라장터검색조건에 의한 입찰공고공사조회
+    method: GET
+    idempotent: true
+    path: /getBidPblancListInfoCnstwkPPSSrch
+    description: 검색조건에 공고게시일시, 개찰일시 범위, 공고기관, 수요기관, 참조번호 등을 입력하여 나라장터의 입찰공고번호, 공고명, 발주기관, 수요기관, 계약체결방법명 등 공사부분의 입찰공고정보를 조회함
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+          - value: '2'
+        - id: inqryBgnDt
+          name: 조회시작일시
+          data_type: string
+        - id: inqryEndDt
+          name: 조회종료일시
+          data_type: string
+        - id: bidNtceNm
+          name: 입찰공고명
+          data_type: string
+        - id: ntceInsttCd
+          name: 공고기관코드
+          data_type: string
+        - id: ntceInsttNm
+          name: 공고기관명
+          data_type: string
+        - id: dminsttCd
+          name: 수요기관코드
+          data_type: string
+        - id: dminsttNm
+          name: 수요기관명
+          data_type: string
+        - id: refNo
+          name: 참조번호
+          data_type: string
+        - id: prtcptLmtRgnCd
+          name: 참가제한지역코드
+          data_type: string
+        - id: prtcptLmtRgnNm
+          name: 참가제한지역명
+          data_type: string
+        - id: indstrytyCd
+          name: 업종코드
+          data_type: string
+        - id: indstrytyNm
+          name: 업종명
+          data_type: string
+        - id: presmptPrceBgn
+          name: 추정가격시작
+          data_type: string
+        - id: presmptPrceEnd
+          name: 추정가격종료
+          data_type: string
+        - id: dtilPrdctClsfcNo
+          name: 세부품명번호
+          data_type: string
+        - id: masYn
+          name: 다수공급경쟁자여부
+          data_type: string
+        - id: prcrmntReqNo
+          name: 조달요청번호
+          data_type: string
+        - id: bidClseExcpYn
+          name: 입찰마감제외여부
+          data_type: string
+        - id: intrntnlDivCd
+          name: 국제입찰구분코드
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: construction_bid_notice
+  - id: list_service_bid_notices
+    name: 나라장터검색조건에 의한 입찰공고용역조회
+    method: GET
+    idempotent: true
+    path: /getBidPblancListInfoServcPPSSrch
+    description: 검색조건에 공고게시일시, 개찰일시 범위, 공고기관, 수요기관, 참조번호 등을 입력하여 나라장터의 입찰공고번호, 공고명, 발주기관, 수요기관, 계약체결방법명 등 용역부분의 입찰공고정보를 조회함
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+          - value: '2'
+        - id: inqryBgnDt
+          name: 조회시작일시
+          data_type: string
+        - id: inqryEndDt
+          name: 조회종료일시
+          data_type: string
+        - id: bidNtceNm
+          name: 입찰공고명
+          data_type: string
+        - id: ntceInsttCd
+          name: 공고기관코드
+          data_type: string
+        - id: ntceInsttNm
+          name: 공고기관명
+          data_type: string
+        - id: dminsttCd
+          name: 수요기관코드
+          data_type: string
+        - id: dminsttNm
+          name: 수요기관명
+          data_type: string
+        - id: refNo
+          name: 참조번호
+          data_type: string
+        - id: prtcptLmtRgnCd
+          name: 참가제한지역코드
+          data_type: string
+        - id: prtcptLmtRgnNm
+          name: 참가제한지역명
+          data_type: string
+        - id: indstrytyCd
+          name: 업종코드
+          data_type: string
+        - id: indstrytyNm
+          name: 업종명
+          data_type: string
+        - id: presmptPrceBgn
+          name: 추정가격시작
+          data_type: string
+        - id: presmptPrceEnd
+          name: 추정가격종료
+          data_type: string
+        - id: dtilPrdctClsfcNo
+          name: 세부품명번호
+          data_type: string
+        - id: masYn
+          name: 다수공급경쟁자여부
+          data_type: string
+        - id: prcrmntReqNo
+          name: 조달요청번호
+          data_type: string
+        - id: bidClseExcpYn
+          name: 입찰마감제외여부
+          data_type: string
+        - id: intrntnlDivCd
+          name: 국제구분코드
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: service_bid_notice
+  - id: list_foreign_bid_notices
+    name: 나라장터검색조건에 의한 입찰공고외자조회
+    method: GET
+    idempotent: true
+    path: /getBidPblancListInfoFrgcptPPSSrch
+    description: 검색조건에 공고게시일시, 개찰일시 범위, 공고기관, 수요기관, 참조번호 등을 입력하여 나라장터의 입찰공고번호, 공고명, 발주기관, 수요기관, 계약체결방법명 등 외자부분의 입찰공고정보를 조회함
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+          - value: '2'
+        - id: inqryBgnDt
+          name: 조회시작일시
+          data_type: string
+        - id: inqryEndDt
+          name: 조회종료일시
+          data_type: string
+        - id: bidNtceNm
+          name: 입찰공고명
+          data_type: string
+        - id: ntceInsttCd
+          name: 공고기관코드
+          data_type: string
+        - id: ntceInsttNm
+          name: 공고기관명
+          data_type: string
+        - id: dminsttCd
+          name: 수요기관코드
+          data_type: string
+        - id: dminsttNm
+          name: 수요기관명
+          data_type: string
+        - id: refNo
+          name: 참조번호
+          data_type: string
+        - id: prtcptLmtRgnCd
+          name: 참가제한지역코드
+          data_type: string
+        - id: prtcptLmtRgnNm
+          name: 참가제한지역명
+          data_type: string
+        - id: indstrytyCd
+          name: 업종코드
+          data_type: string
+        - id: indstrytyNm
+          name: 업종명
+          data_type: string
+        - id: presmptPrceBgn
+          name: 추정가격시작
+          data_type: string
+        - id: presmptPrceEnd
+          name: 추정가격종료
+          data_type: string
+        - id: dtilPrdctClsfcNo
+          name: 세부품명번호
+          data_type: string
+        - id: masYn
+          name: 다수공급경쟁자여부
+          data_type: string
+        - id: prcrmntReqNo
+          name: 조달요청번호
+          data_type: string
+        - id: bidClseExcpYn
+          name: 입찰마감제외여부
+          data_type: string
+        - id: intrntnlDivCd
+          name: 국제구분코드
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: foreign_bid_notice
+  - id: list_goods_bid_notices
+    name: 나라장터검색조건에 의한 입찰공고물품조회
+    method: GET
+    idempotent: true
+    path: /getBidPblancListInfoThngPPSSrch
+    description: 검색조건에 공고게시일시, 개찰일시 범위, 공고기관, 수요기관, 참조번호 등을 입력하여 나라장터의 입찰공고번호, 공고명, 발주기관, 수요기관, 계약체결방법명 등 물품부분의 입찰공고정보를 조회함
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+          - value: '2'
+        - id: inqryBgnDt
+          name: 조회시작일시
+          data_type: string
+        - id: inqryEndDt
+          name: 조회종료일시
+          data_type: string
+        - id: bidNtceNm
+          name: 입찰공고명
+          data_type: string
+        - id: ntceInsttCd
+          name: 공고기관코드
+          data_type: string
+        - id: ntceInsttNm
+          name: 공고기관명
+          data_type: string
+        - id: dminsttCd
+          name: 수요기관코드
+          data_type: string
+        - id: dminsttNm
+          name: 수요기관명
+          data_type: string
+        - id: refNo
+          name: 참조번호
+          data_type: string
+        - id: prtcptLmtRgnCd
+          name: 참가제한지역코드
+          data_type: string
+        - id: prtcptLmtRgnNm
+          name: 참가제한지역명
+          data_type: string
+        - id: indstrytyCd
+          name: 업종코드
+          data_type: string
+        - id: indstrytyNm
+          name: 업종명
+          data_type: string
+        - id: presmptPrceBgn
+          name: 추정가격시작
+          data_type: string
+        - id: presmptPrceEnd
+          name: 추정가격종료
+          data_type: string
+        - id: dtilPrdctClsfcNo
+          name: 세부품명번호
+          data_type: string
+        - id: masYn
+          name: 다수공급경쟁자여부
+          data_type: string
+        - id: prcrmntReqNo
+          name: 조달요청번호
+          data_type: string
+        - id: bidClseExcpYn
+          name: 입찰마감제외여부
+          data_type: string
+        - id: intrntnlDivCd
+          name: 국제구분코드
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: goods_bid_notice
+  - id: list_license_restrictions
+    name: 입찰공고목록 정보에 대한 면허제한정보조회
+    method: GET
+    idempotent: true
+    path: /getBidPblancListInfoLicenseLimit
+    description: 검색조건에 등록일시범위(통합입찰공고)와 입찰공고번호를 입력하여 입찰공고번호, 입찰공고차수, 제한그룹번호, 제한순번, 면허제한명, 허용업종목록, 등록일시를 포함한 면허제한정보 조회
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+          - value: '2'
+        - id: inqryBgnDt
+          name: 조회시작일시
+          data_type: string
+        - id: inqryEndDt
+          name: 조회종료일시
+          data_type: string
+        - id: bidNtceNo
+          name: 입찰공고번호
+          data_type: string
+        - id: bidNtceOrd
+          name: 입찰공고차수
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: license_restriction
+  - id: list_participation_regions
+    name: 입찰공고목록 정보에 대한 참가가능지역정보조회
+    method: GET
+    idempotent: true
+    path: /getBidPblancListInfoPrtcptPsblRgn
+    description: 검색조건에 등록일시범위(통합입찰공고)와 입찰공고번호를 입력하여 입찰공고번호, 입찰공고차수, 제한그룹번호, 참가가능지역명, 등록일시 등 참가가능지역정보조회
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+          - value: '2'
+        - id: inqryBgnDt
+          name: 조회시작일시
+          data_type: string
+        - id: inqryEndDt
+          name: 조회종료일시
+          data_type: string
+        - id: bidNtceNo
+          name: 입찰공고번호
+          data_type: string
+        - id: bidNtceOrd
+          name: 입찰공고차수
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: participation_region
+  - id: list_other_bid_notices
+    name: 나라장터검색조건에 의한 입찰공고 기타조회
+    method: GET
+    idempotent: true
+    path: /getBidPblancListInfoEtcPPSSrch
+    description: 검색조건에 공고게시일시, 개찰일시 범위, 공고기관, 수요기관, 참조번호 등을 입력하여 나라장터의 입찰공고번호, 공고명, 발주기관, 수요기관, 계약체결방법명 등 공사부분의 입찰공고정보를 조회함
+    pagination:
+      type: page_number
+      page:
+        request: query.pageNo
+      page_size:
+        request: query.numOfRows
+      total_count: response.body.totalCount
+    request:
+      query:
+        fields:
+        - id: numOfRows
+          name: 한 페이지 결과 수
+          data_type: integer
+        - id: pageNo
+          name: 페이지 번호
+          data_type: integer
+        - id: type
+          name: 타입
+          data_type: string
+          default: json
+          values:
+          - value: json
+          - value: xml
+        - id: inqryDiv
+          name: 조회구분
+          data_type: string
+          values:
+          - value: '1'
+          - value: '2'
+        - id: inqryBgnDt
+          name: 조회시작일시
+          data_type: string
+        - id: inqryEndDt
+          name: 조회종료일시
+          data_type: string
+        - id: bidNtceNm
+          name: 입찰공고명
+          data_type: string
+        - id: ntceInsttCd
+          name: 공고기관코드
+          data_type: string
+        - id: ntceInsttNm
+          name: 공고기관명
+          data_type: string
+        - id: dminsttNm
+          name: 수요기관명
+          data_type: string
+        - id: refNo
+          name: 참조번호
+          data_type: string
+        - id: presmptPrceBgn
+          name: 추정가격시작
+          data_type: string
+        - id: presmptPrceEnd
+          name: 추정가격종료
+          data_type: string
+        - id: bidClseExcpYn
+          name: 입찰마감제외여부
+          data_type: string
+        required:
+        - numOfRows
+        - pageNo
+        - inqryDiv
+    response:
+      content_type: application/json
+      http_status: 200
+      control:
+        record_path: response.header
+        success:
+          field: resultCode
+          equals: '00'
+        fields:
+        - id: resultCode
+          name: 결과코드
+          data_type: string
+          values:
+          - value: '00'
+            label: 정상
+        - id: resultMsg
+          name: 결과메세지
+          data_type: string
+      data:
+        record_path: response.body.items[]
+        ref: other_bid_notice

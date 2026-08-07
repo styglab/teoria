@@ -1,0 +1,20 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+capability:
+  id: get_procurement_supplier_sanctions
+  name: 나라장터 조달업체 제재 조회
+  description: 사업자등록번호로 부정당제재와 제재 통보기관을 조회한다.
+  inputs:
+    business_registration_number:
+      property: public_procurement.procurement_supplier.business_registration_number
+      required: true
+  steps:
+    - call: pps_user.list_restricted_companies
+  returns:
+    - public_procurement.procurement_supplier
+    - public_procurement.procurement_sanction
+    - public_procurement.public_organization
+    - public_procurement.procurement_supplier_has_procurement_sanction
+    - public_procurement.public_organization_imposes_procurement_sanction

@@ -32,6 +32,21 @@ USER teoria
 ENV TEORIA_PIPELINE_PATH=/app/pipelines
 CMD ["prefect", "worker", "start", "--pool", "teoria-ingestion"]
 
+FROM worker AS ai-worker
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nodejs npm libreoffice-writer \
+    && npm install --global @openai/codex@0.147.0 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --chown=teoria:teoria .agents/skills/extract-bid-eligibility /app/.agents/skills/extract-bid-eligibility
+RUN mkdir -p /work /home/teoria/.codex \
+    && chown -R teoria:teoria /work /home/teoria/.codex
+
+USER teoria
+ENV CODEX_HOME=/home/teoria/.codex
+CMD ["prefect", "worker", "start", "--pool", "teoria-ai-extraction"]
+
 FROM base AS check
 
 COPY platform/src ./platform/src

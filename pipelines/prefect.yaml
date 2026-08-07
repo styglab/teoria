@@ -6,6 +6,42 @@ push: null
 pull: null
 
 deployments:
+  - name: pps-bid-notice-ingestion
+    version: 1.0.0
+    description: 신규·변경 나라장터 입찰공고를 수집하고 공고번호별 면허제한과 참가가능지역을 보강한다.
+    entrypoint: teoria_pipelines.flows.pps_bid_notices.sync_pps_bid_notices
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      lookback_days: 1
+    schedules:
+      - cron: "0 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-document-processing
+    version: 1.0.0
+    description: 입찰공고에서 발견한 첨부파일을 다운로드하고 checksum과 함께 Object Storage에 저장한다.
+    entrypoint: teoria_pipelines.flows.pps_bid_notices.sync_pps_bid_documents
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      batch_size: 500
+      concurrency: 8
+    schedules:
+      - cron: "15 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
   - name: pps-contract-incremental
     version: 1.0.0
     description: 최근 나라장터 계약정보를 4시간마다 다시 조회하여 신규·변경 데이터를 반영한다.
@@ -22,6 +58,59 @@ deployments:
         active: true
     work_pool:
       name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-document-parsing
+    version: 1.0.0
+    description: 저장된 입찰공고 첨부파일을 페이지·문단·표 단위 JSON으로 파싱한다.
+    entrypoint: teoria_pipelines.flows.bid_eligibility.parse_pps_bid_documents
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      batch_size: 100
+      concurrency: 4
+    schedules:
+      - cron: "25 * * * *"
+        timezone: Asia/Seoul
+        active: false
+    work_pool:
+      name: teoria-ai-extraction
+      work_queue_name: default
+
+  - name: pps-bid-document-retention
+    version: 1.0.0
+    description: 입찰 마감 후 90일이 지난 원본·파싱·AI 출력 객체를 삭제하고 메타데이터와 정규 요건은 보존한다.
+    entrypoint: teoria_pipelines.flows.pps_bid_notices.purge_expired_pps_bid_documents
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      retention_days: 90
+      batch_size: 500
+    schedules:
+      - cron: "45 3 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-eligibility-extraction
+    version: 1.0.0
+    description: Codex Skill로 공고 문서와 DB 정형 제한에서 업체 참가자격 조건과 근거를 추출한다.
+    entrypoint: teoria_pipelines.flows.bid_eligibility.extract_pps_bid_eligibility
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      batch_size: 10
+    schedules:
+      - cron: "35 * * * *"
+        timezone: Asia/Seoul
+        active: false
+    work_pool:
+      name: teoria-ai-extraction
       work_queue_name: default
 
   - name: pps-contract-backfill

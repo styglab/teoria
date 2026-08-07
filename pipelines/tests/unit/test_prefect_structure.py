@@ -1,5 +1,7 @@
 from inspect import Parameter, signature
 from pathlib import Path
+from subprocess import CompletedProcess
+from unittest.mock import patch
 
 import yaml
 
@@ -10,6 +12,12 @@ from teoria_pipelines.flows.pps_contracts import (
     sync_pps_contracts,
 )
 from teoria_pipelines.tasks.pps_contracts import extract_contract_operation
+from teoria_pipelines.flows.pps_bid_notices import (
+    purge_expired_pps_bid_documents,
+    sync_pps_bid_documents,
+    sync_pps_bid_notices,
+)
+from teoria_pipelines.tasks.bid_eligibility import _ensure_codex_authenticated
 
 
 PIPELINES = Path(__file__).parents[2]
@@ -106,6 +114,57 @@ def test_incremental_deployment_prevents_overlapping_runs() -> None:
 def test_operation_task_retries_once_after_five_minutes() -> None:
     assert extract_contract_operation.retries == 1
     assert extract_contract_operation.retry_delay_seconds == 300
+
+
+def test_codex_authentication_uses_cached_chatgpt_login() -> None:
+    with patch(
+        "teoria_pipelines.tasks.bid_eligibility.subprocess.run",
+        return_value=CompletedProcess(["codex", "login", "status"], 0),
+    ) as run:
+        _ensure_codex_authenticated()
+
+    assert run.call_args.args[0] == ["codex", "login", "status"]
+
+
+def test_codex_authentication_failure_has_login_instruction() -> None:
+    with patch(
+        "teoria_pipelines.tasks.bid_eligibility.subprocess.run",
+        return_value=CompletedProcess(["codex", "login", "status"], 1),
+    ):
+        try:
+            _ensure_codex_authenticated()
+        except RuntimeError as exc:
+            assert "codex login --device-auth" in str(exc)
+        else:
+            raise AssertionError("missing Codex login must fail")
+
+
+def test_bid_notice_deployments_are_hourly_and_staggered() -> None:
+    prefect = yaml.safe_load((PIPELINES / "prefect.yaml").read_text(encoding="utf-8"))
+    notices = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-notice-ingestion")
+    documents = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-document-processing")
+    parsing = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-document-parsing")
+    extraction = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-eligibility-extraction")
+    retention = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-document-retention")
+
+    assert notices["schedules"][0]["cron"] == "0 * * * *"
+    assert documents["schedules"][0]["cron"] == "15 * * * *"
+    assert parsing["schedules"][0]["cron"] == "25 * * * *"
+    assert extraction["schedules"][0]["cron"] == "35 * * * *"
+    assert retention["schedules"][0] == {
+        "cron": "45 3 * * *",
+        "timezone": "Asia/Seoul",
+        "active": True,
+    }
+    assert retention["parameters"] == {"retention_days": 90, "batch_size": 500}
+    assert documents["parameters"] == {"batch_size": 500, "concurrency": 8}
+    assert notices["concurrency_limit"]["limit"] == 1
+    assert documents["concurrency_limit"]["limit"] == 1
+    assert parsing["work_pool"]["name"] == "teoria-ai-extraction"
+    assert extraction["work_pool"]["name"] == "teoria-ai-extraction"
+    assert sync_pps_bid_notices.name == "나라장터 입찰공고·참가제한 수집"
+    assert sync_pps_bid_documents.name == "나라장터 입찰공고 첨부파일 수집"
+    assert purge_expired_pps_bid_documents.name == "나라장터 입찰공고 첨부파일 보존기간 삭제"
 from datetime import date
 
 from teoria_pipelines.models import CollectionWindow

@@ -8,12 +8,24 @@ def parse_date(value: str | None) -> date | None:
     if not value or not value.strip():
         return None
     value = value.strip()
-    for pattern in ("%Y%m%d", "%Y/%m/%d", "%y/%m/%d"):
+    for pattern in ("%Y%m%d", "%Y-%m-%d", "%Y/%m/%d", "%y/%m/%d"):
         try:
             return datetime.strptime(value, pattern).date()
         except ValueError:
             continue
     raise ValueError(f"unsupported date value: {value!r}")
+
+
+def parse_datetime(value: str | None) -> datetime | None:
+    if not value or not value.strip():
+        return None
+    value = value.strip()
+    for pattern in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(value, pattern)
+        except ValueError:
+            continue
+    raise ValueError(f"unsupported datetime value: {value!r}")
 
 
 def format_date_yyyymmdd(value: date | datetime | None) -> str | None:

@@ -1,0 +1,77 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+mapping:
+  id: bid_notices
+  name: 입찰공고 매핑
+  description: Runtime 입찰공고 View를 입찰공고와 공고기관 객체로 변환한다.
+  ontology: public_procurement
+  bindings:
+    bid_notice.bid_notice_id:
+      - {field: teoria_public_procurement.bid_notices.bid_notice_id}
+    bid_notice.notice_number:
+      - {field: teoria_public_procurement.bid_notices.notice_number}
+    bid_notice.notice_order:
+      - {field: teoria_public_procurement.bid_notices.notice_order}
+    bid_notice.notice_name:
+      - {field: teoria_public_procurement.bid_notices.notice_name}
+    bid_notice.work_type:
+      - {field: teoria_public_procurement.bid_notices.work_type}
+    bid_notice.notice_kind_name:
+      - {field: teoria_public_procurement.bid_notices.notice_kind_name}
+    bid_notice.is_re_notice:
+      - {field: teoria_public_procurement.bid_notices.is_re_notice}
+    bid_notice.notice_published_at:
+      - {field: teoria_public_procurement.bid_notices.notice_published_at}
+    bid_notice.bid_begin_at:
+      - {field: teoria_public_procurement.bid_notices.bid_begin_at}
+    bid_notice.bid_deadline_at:
+      - {field: teoria_public_procurement.bid_notices.bid_deadline_at}
+    bid_notice.opening_at:
+      - {field: teoria_public_procurement.bid_notices.opening_at}
+    bid_notice.bid_status:
+      - {field: teoria_public_procurement.bid_notices.bid_status}
+    bid_notice.notice_organization_code:
+      - {field: teoria_public_procurement.bid_notices.notice_organization_code}
+    bid_notice.notice_organization_name:
+      - {field: teoria_public_procurement.bid_notices.notice_organization_name}
+    bid_notice.demand_organization_code:
+      - {field: teoria_public_procurement.bid_notices.demand_organization_code}
+    bid_notice.demand_organization_name:
+      - {field: teoria_public_procurement.bid_notices.demand_organization_name}
+    bid_notice.bid_method_name:
+      - {field: teoria_public_procurement.bid_notices.bid_method_name}
+    bid_notice.contract_method_name:
+      - {field: teoria_public_procurement.bid_notices.contract_method_name}
+    bid_notice.estimated_price:
+      - {field: teoria_public_procurement.bid_notices.estimated_price}
+    bid_notice.allocated_budget:
+      - {field: teoria_public_procurement.bid_notices.allocated_budget}
+    bid_notice.detail_url:
+      - {field: teoria_public_procurement.bid_notices.detail_url}
+    bid_notice.notice_url:
+      - {field: teoria_public_procurement.bid_notices.notice_url}
+    bid_notice.source_changed_at:
+      - {field: teoria_public_procurement.bid_notices.source_changed_at}
+    bid_notice.requirement_expression:
+      - {field: teoria_public_procurement.bid_notices.requirement_expression}
+    bid_notice.extraction_completeness:
+      - {field: teoria_public_procurement.bid_notices.extraction_completeness}
+    bid_notice.requires_review:
+      - {field: teoria_public_procurement.bid_notices.requires_review}
+    public_organization.organization_code:
+      - {field: teoria_public_procurement.bid_notices.notice_organization_code, role: publishing_organization}
+    public_organization.name:
+      - {field: teoria_public_procurement.bid_notices.notice_organization_name, role: publishing_organization}
+  materializations:
+    teoria_public_procurement.bid_notices:
+      objects:
+        bid_notice:
+          type: bid_notice
+          identity: [bid_notice_id]
+        publishing_organization:
+          type: public_organization
+          identity: [organization_code]
+      links:
+        - {type: public_organization_publishes_bid_notice, source: publishing_organization, target: bid_notice}

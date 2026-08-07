@@ -20,6 +20,7 @@ def test_loads_current_registries() -> None:
         "mss_innobiz_company_lookup",
         "mss_mainbiz_company_lookup",
         "nts_business_registration",
+        "pps_user",
         "teoria_public_procurement",
     }
     assert "business_registration_number" in catalog.data_types
@@ -36,6 +37,7 @@ def test_loads_current_registries() -> None:
             "mss_innobiz_company_lookup",
             "mss_mainbiz_company_lookup",
             "nts_business_registration",
+            "pps_user",
     }
     assert set(catalog.capabilities) == {
         "get_business_registration_status",
@@ -50,6 +52,15 @@ def test_loads_current_registries() -> None:
         "search_public_procurement_contracts",
         "get_company_public_procurement_contracts",
         "search_companies_by_name",
+        "search_bid_notices",
+        "get_bid_notice",
+            "get_bid_requirements",
+            "get_demand_organization",
+            "get_procurement_supplier",
+            "get_procurement_supplier_industries",
+            "get_procurement_supplier_products",
+            "get_procurement_supplier_sanctions",
+            "get_company_procurement_profile",
         }
 
 

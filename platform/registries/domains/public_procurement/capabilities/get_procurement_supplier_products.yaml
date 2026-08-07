@@ -1,0 +1,18 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+capability:
+  id: get_procurement_supplier_products
+  name: 나라장터 조달업체 공급물품 조회
+  description: 사업자등록번호로 조달업체가 나라장터에 등록한 공급·제조 세부품명을 조회한다.
+  inputs:
+    business_registration_number:
+      property: public_procurement.procurement_supplier.business_registration_number
+      required: true
+  steps:
+    - call: pps_user.list_procurement_company_supply_products
+  returns:
+    - public_procurement.procurement_supplier
+    - public_procurement.registered_supply_product
+    - public_procurement.procurement_supplier_has_registered_supply_product

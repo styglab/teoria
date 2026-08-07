@@ -1,0 +1,21 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+capability:
+  id: get_bid_notice
+  name: 입찰공고 조회
+  description: 나라장터 공고번호와 차수로 입찰공고, 공고기관과 최신 참가요건 조건식을 조회한다.
+  inputs:
+    notice_number:
+      property: public_procurement.bid_notice.notice_number
+      required: true
+    notice_order:
+      property: public_procurement.bid_notice.notice_order
+      required: true
+  steps:
+    - call: teoria_public_procurement.bid_notices
+  returns:
+    - public_procurement.bid_notice
+    - public_procurement.public_organization
+    - public_procurement.public_organization_publishes_bid_notice

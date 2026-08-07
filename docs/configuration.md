@@ -24,8 +24,8 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | checksum이 일치하는 Published Registry만 Runtime에서 허용 |
 | `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
 | `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `3` | Connector 요청 횟수 |
-| `TEORIA_RUNTIME_DATA_DATABASE_URL` | 없음 | Runtime 읽기 DB URL |
-| `TEORIA_PIPELINE_DATA_DATABASE_URL` | 없음 | Pipeline 쓰기 DB URL |
+| `TEORIA_RUNTIME_DATA_DATABASE_URL` | Compose 내부 DB | Runtime 읽기 DB URL; 외부 DB 사용 시 read-only role URL |
+| `TEORIA_PIPELINE_DATA_DATABASE_URL` | Compose 내부 DB | Pipeline migration·적재용 writer DB URL |
 | `TEORIA_MCP_RUNTIME_MODE` | `remote` | MCP 실행 모드 |
 | `TEORIA_MCP_RUNTIME_API_URL` | 없음 | Remote Runtime URL |
 | `TEORIA_MCP_RUNTIME_API_TOKEN` | 없음 | MCP가 사용하는 Runtime API token |

@@ -100,6 +100,8 @@ mapping:
       - field: mss_venture_company_disclosure.search_venture_companies.response.bizrno
       - field: mss_innobiz_company_lookup.search_innobiz_companies.request.query.Co_Name
       - field: mss_mainbiz_company_lookup.search_mainbiz_companies.request.query.certiCheck
+      - field: pps_user.list_procurement_companies.request.query.bizno
+      - field: pps_user.list_procurement_companies.response.bizno
     venture_company_disclosure.business_registration_number:
       - field: mss_venture_company_disclosure.search_venture_companies.response.bizrno
     venture_company_disclosure.company_name:
@@ -144,6 +146,7 @@ mapping:
       - field: mss_mainbiz_company_lookup.search_mainbiz_companies.response.renewal_period
     business_registration.business_name:
       - field: nts_business_registration.verify_business_registration.request.body.businesses[].b_nm
+      - field: pps_user.list_procurement_companies.response.corpNm
     business_registration.opened_date:
       - field: nts_business_registration.verify_business_registration.request.body.businesses[].start_dt
         encode: common.format_date_yyyymmdd

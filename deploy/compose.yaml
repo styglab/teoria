@@ -40,7 +40,7 @@ services:
     ports:
       - "${TEORIA_HTTP_PORT:-8081}:80"
 
-  data-db:
+  postgres:
     image: postgres:17
     restart: unless-stopped
     environment:
@@ -55,18 +55,18 @@ services:
     expose:
       - "5432"
     volumes:
-      - data-db:/var/lib/postgresql/data
+      - postgres:/var/lib/postgresql/data
 
-  data-db-migrate:
+  postgres-migrate:
     <<: *pipeline-runner
     command: ["teoria-pipelines", "migrate", "--migrations", "/app/pipelines/database/migrations"]
     environment:
-      TEORIA_PIPELINE_DATA_DATABASE_URL: postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@data-db:5432/teoria_data
+      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
     depends_on:
-      data-db-runtime-role:
+      postgres-init:
         condition: service_completed_successfully
 
-  data-db-runtime-role:
+  postgres-init:
     image: postgres:17
     command:
       - sh
@@ -80,14 +80,14 @@ services:
         ALTER ROLE teoria_runtime SET statement_timeout = '30s';
         SQL
     environment:
-      PGHOST: data-db
+      PGHOST: postgres
       PGPORT: 5432
       PGDATABASE: teoria_data
       PGUSER: teoria_pipeline
       PGPASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
       TEORIA_LOCAL_RUNTIME_DB_PASSWORD: ${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}
     depends_on:
-      data-db:
+      postgres:
         condition: service_healthy
 
   prefect-db:
@@ -164,6 +164,16 @@ services:
       prefect-server:
         condition: service_healthy
 
+  prefect-ai-init:
+    <<: *pipeline-runner
+    command: ["prefect", "work-pool", "create", "--type", "process", "--overwrite", "teoria-ai-extraction"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+
   prefect-deploy:
     <<: *pipeline-runner
     command: ["prefect", "deploy", "--all", "--prefect-file", "/app/pipelines/prefect.yaml"]
@@ -172,6 +182,8 @@ services:
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
     depends_on:
       prefect-init:
+        condition: service_completed_successfully
+      prefect-ai-init:
         condition: service_completed_successfully
 
   prefect-worker:
@@ -182,13 +194,50 @@ services:
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
       TEORIA_PIPELINE_PATH: /app/pipelines
-      TEORIA_PIPELINE_DATA_DATABASE_URL: postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@data-db:5432/teoria_data
+      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
       TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY: ${TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY:-}
+      TEORIA_CONNECTOR_PPS_BID_NOTICE_API_KEY: ${TEORIA_CONNECTOR_PPS_BID_NOTICE_API_KEY:-}
+      TEORIA_OBJECT_STORAGE_ENDPOINT: ${TEORIA_OBJECT_STORAGE_ENDPOINT:?set external TEORIA_OBJECT_STORAGE_ENDPOINT}
+      TEORIA_OBJECT_STORAGE_ACCESS_KEY: ${TEORIA_OBJECT_STORAGE_ACCESS_KEY:?set TEORIA_OBJECT_STORAGE_ACCESS_KEY}
+      TEORIA_OBJECT_STORAGE_SECRET_KEY: ${TEORIA_OBJECT_STORAGE_SECRET_KEY:?set TEORIA_OBJECT_STORAGE_SECRET_KEY}
+      TEORIA_OBJECT_STORAGE_BUCKET: ${TEORIA_OBJECT_STORAGE_BUCKET:-teoria}
       TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS: ${TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS:-30}
       TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS: ${TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS:-2}
       TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS: ${TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS:-60}
+      TEORIA_PIPELINE_BID_DOCUMENT_RETENTION_DAYS: ${TEORIA_PIPELINE_BID_DOCUMENT_RETENTION_DAYS:-90}
+      TEORIA_PIPELINE_BID_DOCUMENT_PURGE_BATCH_SIZE: ${TEORIA_PIPELINE_BID_DOCUMENT_PURGE_BATCH_SIZE:-500}
     depends_on:
-      data-db-migrate:
+      postgres-migrate:
+        condition: service_completed_successfully
+      prefect-deploy:
+        condition: service_completed_successfully
+
+  prefect-ai-worker:
+    image: teoria-pipelines-ai:latest
+    build:
+      context: ..
+      dockerfile: pipelines/Dockerfile
+      target: ai-worker
+    restart: unless-stopped
+    command: ["prefect", "worker", "start", "--pool", "teoria-ai-extraction"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+      TEORIA_ENVIRONMENT: production
+      TEORIA_PIPELINE_PATH: /app/pipelines
+      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
+      TEORIA_OBJECT_STORAGE_ENDPOINT: ${TEORIA_OBJECT_STORAGE_ENDPOINT:?set external TEORIA_OBJECT_STORAGE_ENDPOINT}
+      TEORIA_OBJECT_STORAGE_ACCESS_KEY: ${TEORIA_OBJECT_STORAGE_ACCESS_KEY:?set TEORIA_OBJECT_STORAGE_ACCESS_KEY}
+      TEORIA_OBJECT_STORAGE_SECRET_KEY: ${TEORIA_OBJECT_STORAGE_SECRET_KEY:?set TEORIA_OBJECT_STORAGE_SECRET_KEY}
+      TEORIA_OBJECT_STORAGE_BUCKET: ${TEORIA_OBJECT_STORAGE_BUCKET:-teoria}
+      TEORIA_PIPELINE_BID_DOCUMENT_MAX_ATTEMPTS: ${TEORIA_PIPELINE_BID_DOCUMENT_MAX_ATTEMPTS:-3}
+      TEORIA_PIPELINE_BID_DOCUMENT_PARSE_MAX_ATTEMPTS: ${TEORIA_PIPELINE_BID_DOCUMENT_PARSE_MAX_ATTEMPTS:-3}
+      CODEX_HOME: /home/teoria/.codex
+      TEORIA_CODEX_MODEL: ${TEORIA_CODEX_MODEL:-}
+    volumes:
+      - codex-auth:/home/teoria/.codex
+    depends_on:
+      postgres-migrate:
         condition: service_completed_successfully
       prefect-deploy:
         condition: service_completed_successfully
@@ -217,12 +266,13 @@ services:
       TEORIA_REGISTRY_REQUIRE_PUBLISHED: "true"
       TEORIA_RUNTIME_API_ROOT_PATH: /runtime-api
       TEORIA_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
-      TEORIA_RUNTIME_DATA_DATABASE_URL: postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@data-db:5432/teoria_data
+      TEORIA_RUNTIME_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
       TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY: ${TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY:-}
       TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY:-}
       TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY:-}
+      TEORIA_SOURCE_PPS_USER_API_KEY: ${TEORIA_SOURCE_PPS_USER_API_KEY:-}
     depends_on:
-      data-db-migrate:
+      postgres-migrate:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -295,6 +345,8 @@ services:
         condition: service_healthy
 
 volumes:
-  data-db:
+  postgres:
+    name: teoria_data-db
   prefect-db:
   prefect-redis:
+  codex-auth:

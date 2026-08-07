@@ -1,0 +1,29 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+capability:
+  id: get_company_procurement_profile
+  name: 기업 조달자격 프로필 조회
+  description: 사업자등록번호 한 번으로 나라장터 조달업체 기본정보, 등록업종, 공급물품과 부정당제재를 통합 조회한다.
+  inputs:
+    business_registration_number:
+      property: public_procurement.procurement_supplier.business_registration_number
+      required: true
+  steps:
+    - call: pps_user.list_procurement_companies
+    - call: pps_user.list_procurement_company_industries
+    - call: pps_user.list_procurement_company_supply_products
+    - call: pps_user.list_restricted_companies
+  returns:
+    - company.business_registration
+    - public_procurement.procurement_supplier
+    - public_procurement.registered_industry
+    - public_procurement.registered_supply_product
+    - public_procurement.procurement_sanction
+    - public_procurement.public_organization
+    - public_procurement.business_registration_identifies_procurement_supplier
+    - public_procurement.procurement_supplier_has_registered_industry
+    - public_procurement.procurement_supplier_has_registered_supply_product
+    - public_procurement.procurement_supplier_has_procurement_sanction
+    - public_procurement.public_organization_imposes_procurement_sanction

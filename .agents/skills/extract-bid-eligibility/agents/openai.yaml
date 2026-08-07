@@ -1,0 +1,4 @@
+interface:
+  display_name: "입찰 참가자격 추출"
+  short_description: "공고 문서에서 업체 참가자격 조건과 근거를 구조화"
+  default_prompt: "Use $extract-bid-eligibility to extract every company eligibility requirement from the provided bid notice artifacts."

@@ -1,0 +1,21 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+capability:
+  id: get_bid_requirements
+  name: 입찰 참가요건 조회
+  description: 나라장터 공고번호와 차수로 최신 완료 추출본의 참가요건과 근거를 조회한다.
+  inputs:
+    notice_number:
+      property: public_procurement.bid_requirement.notice_number
+      required: true
+    notice_order:
+      property: public_procurement.bid_requirement.notice_order
+      required: true
+  steps:
+    - call: teoria_public_procurement.bid_requirements
+  returns:
+    - public_procurement.bid_notice
+    - public_procurement.bid_requirement
+    - public_procurement.bid_notice_requires_bid_requirement

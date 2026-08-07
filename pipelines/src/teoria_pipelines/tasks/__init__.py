@@ -11,6 +11,18 @@ from teoria_pipelines.tasks.pps_contracts import (
     update_checkpoint,
     upsert_contracts,
 )
+from teoria_pipelines.tasks.pps_bid_notices import (
+    claim_bid_documents,
+    combine_bid_notice_summary,
+    determine_bid_notice_window,
+    extract_bid_notice_enrichment,
+    extract_bid_notice_operation,
+    normalize_bid_notice_enrichment,
+    normalize_bid_notices,
+    process_bid_documents,
+    upsert_bid_notice_enrichment,
+    upsert_bid_notices,
+)
 
 __all__ = [
     "complete_pipeline_run",
@@ -23,4 +35,14 @@ __all__ = [
     "start_pipeline_run",
     "update_checkpoint",
     "upsert_contracts",
+    "claim_bid_documents",
+    "combine_bid_notice_summary",
+    "determine_bid_notice_window",
+    "extract_bid_notice_enrichment",
+    "extract_bid_notice_operation",
+    "normalize_bid_notice_enrichment",
+    "normalize_bid_notices",
+    "process_bid_documents",
+    "upsert_bid_notice_enrichment",
+    "upsert_bid_notices",
 ]

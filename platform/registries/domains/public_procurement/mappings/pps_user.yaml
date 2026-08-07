@@ -1,0 +1,227 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+mapping:
+  id: pps_user
+  name: 나라장터 사용자정보 매핑
+  description: 나라장터 수요기관과 조달업체의 기본정보·등록업종·공급물품·부정당제재를 공공조달 온톨로지에 연결한다.
+  ontology: public_procurement
+  bindings:
+    public_organization.organization_code:
+      - field: pps_user.list_demand_organizations.request.query.dminsttCd
+      - field: pps_user.list_demand_organizations.response.dminsttCd
+      - field: pps_user.list_restricted_companies.response.insttCd
+        role: imposing_organization
+    public_organization.name:
+      - field: pps_user.list_demand_organizations.response.dminsttNm
+      - field: pps_user.list_restricted_companies.response.insttNm
+        role: imposing_organization
+    public_organization.jurisdiction_type:
+      - field: pps_user.list_demand_organizations.response.jrsdctnDivNm
+
+    company.business_registration.business_registration_number:
+      - field: pps_user.list_procurement_companies.response.bizno
+        role: business_registration
+    company.business_registration.business_name:
+      - field: pps_user.list_procurement_companies.response.corpNm
+        role: business_registration
+
+    procurement_supplier.business_registration_number:
+      - field: pps_user.list_procurement_companies.request.query.bizno
+      - field: pps_user.list_procurement_companies.response.bizno
+      - field: pps_user.list_procurement_company_industries.request.query.bizno
+      - field: pps_user.list_procurement_company_industries.response.bizno
+        role: industry_supplier
+      - field: pps_user.list_procurement_company_supply_products.request.query.bizno
+      - field: pps_user.list_procurement_company_supply_products.response.bizno
+        role: product_supplier
+      - field: pps_user.list_restricted_companies.request.query.bizno
+      - field: pps_user.list_restricted_companies.response.bizno
+        role: sanctioned_supplier
+    procurement_supplier.company_name:
+      - field: pps_user.list_procurement_companies.response.corpNm
+      - field: pps_user.list_restricted_companies.response.corpNm
+        role: sanctioned_supplier
+    procurement_supplier.english_company_name:
+      - field: pps_user.list_procurement_companies.response.engCorpNm
+    procurement_supplier.opened_at:
+      - field: pps_user.list_procurement_companies.response.opbizDt
+        decode: common.parse_datetime
+    procurement_supplier.region_code:
+      - field: pps_user.list_procurement_companies.response.rgnCd
+    procurement_supplier.region_name:
+      - field: pps_user.list_procurement_companies.response.rgnNm
+    procurement_supplier.postal_code:
+      - field: pps_user.list_procurement_companies.response.zip
+    procurement_supplier.base_address:
+      - field: pps_user.list_procurement_companies.response.adrs
+    procurement_supplier.detail_address:
+      - field: pps_user.list_procurement_companies.response.dtlAdrs
+    procurement_supplier.country_name:
+      - field: pps_user.list_procurement_companies.response.cntryNm
+    procurement_supplier.manufacturer_type_code:
+      - field: pps_user.list_procurement_companies.response.mnfctDivCd
+    procurement_supplier.manufacturer_type_name:
+      - field: pps_user.list_procurement_companies.response.mnfctDivNm
+    procurement_supplier.employee_count:
+      - field: pps_user.list_procurement_companies.response.emplyeNum
+        decode: common.to_integer
+    procurement_supplier.business_category_codes:
+      - field: pps_user.list_procurement_companies.response.corpBsnsDivCd
+    procurement_supplier.business_category_names:
+      - field: pps_user.list_procurement_companies.response.corpBsnsDivNm
+    procurement_supplier.head_office_type_name:
+      - field: pps_user.list_procurement_companies.response.hdoffceDivNm
+    procurement_supplier.registered_at:
+      - field: pps_user.list_procurement_companies.response.rgstDt
+        decode: common.parse_datetime
+    procurement_supplier.changed_at:
+      - field: pps_user.list_procurement_companies.response.chgDt
+        decode: common.parse_datetime
+    procurement_supplier.essential_number_certificate_registered:
+      - field: pps_user.list_procurement_companies.response.esntlNoCertRgstYn
+        decode: common.yes_no_to_boolean
+    procurement_supplier.representative_name:
+      - field: pps_user.list_procurement_companies.response.ceoNm
+
+    registered_industry.business_registration_number:
+      - field: pps_user.list_procurement_company_industries.response.bizno
+    registered_industry.industry_code:
+      - field: pps_user.list_procurement_company_industries.response.indstrytyCd
+    registered_industry.industry_name:
+      - field: pps_user.list_procurement_company_industries.response.indstrytyNm
+    registered_industry.registered_at:
+      - field: pps_user.list_procurement_company_industries.response.rgstDt
+        decode: common.parse_datetime
+    registered_industry.valid_until:
+      - field: pps_user.list_procurement_company_industries.response.vldPrdExprtDt
+        decode: common.parse_datetime
+    registered_industry.changed_at:
+      - field: pps_user.list_procurement_company_industries.response.chgDt
+        decode: common.parse_datetime
+    registered_industry.status_name:
+      - field: pps_user.list_procurement_company_industries.response.indstrytyStatsNm
+    registered_industry.is_representative:
+      - field: pps_user.list_procurement_company_industries.response.rprsntIndstrytyYn
+        decode: common.yes_no_to_boolean
+
+    registered_supply_product.business_registration_number:
+      - field: pps_user.list_procurement_company_supply_products.response.bizno
+    registered_supply_product.detailed_product_code:
+      - field: pps_user.list_procurement_company_supply_products.response.dtilPrdctClsfcNo
+    registered_supply_product.detailed_product_name:
+      - field: pps_user.list_procurement_company_supply_products.response.dtilPrdctClsfcNoNm
+    registered_supply_product.registered_at:
+      - field: pps_user.list_procurement_company_supply_products.response.rgstDt
+        decode: common.parse_datetime
+    registered_supply_product.changed_at:
+      - field: pps_user.list_procurement_company_supply_products.response.chgDt
+        decode: common.parse_datetime
+    registered_supply_product.is_representative:
+      - field: pps_user.list_procurement_company_supply_products.response.rprsntPrdctClsfcNoNmYn
+        decode: common.yes_no_to_boolean
+    registered_supply_product.is_manufactured:
+      - field: pps_user.list_procurement_company_supply_products.response.mnfctYn
+        decode: common.yes_no_to_boolean
+
+    procurement_sanction.business_registration_number:
+      - field: pps_user.list_restricted_companies.response.bizno
+    procurement_sanction.company_name:
+      - field: pps_user.list_restricted_companies.response.corpNm
+    procurement_sanction.document_name:
+      - field: pps_user.list_restricted_companies.response.unptRsttDocNm
+    procurement_sanction.valid_from:
+      - field: pps_user.list_restricted_companies.response.rsttBgnDate
+        decode: common.parse_date
+    procurement_sanction.valid_until:
+      - field: pps_user.list_restricted_companies.response.rsttEndDate
+        decode: common.parse_date
+    procurement_sanction.imposing_organization_code:
+      - field: pps_user.list_restricted_companies.response.insttCd
+    procurement_sanction.imposing_organization_name:
+      - field: pps_user.list_restricted_companies.response.insttNm
+    procurement_sanction.legal_basis_name:
+      - field: pps_user.list_restricted_companies.response.lawordNm
+    procurement_sanction.legal_article:
+      - field: pps_user.list_restricted_companies.response.lawordArtclClause
+    procurement_sanction.legal_article_code:
+      - field: pps_user.list_restricted_companies.response.lawordArtclClauseCd
+    procurement_sanction.legal_article_name:
+      - field: pps_user.list_restricted_companies.response.lawordArtclClauseCdNm
+    procurement_sanction.enforcement_rule_code:
+      - field: pps_user.list_restricted_companies.response.enfcAtcsCd
+    procurement_sanction.enforcement_rule_name:
+      - field: pps_user.list_restricted_companies.response.enfcPrvNm
+    procurement_sanction.published_at:
+      - field: pps_user.list_restricted_companies.response.ntfcnDt
+        decode: common.parse_datetime
+    procurement_sanction.period_months:
+      - field: pps_user.list_restricted_companies.response.rsttPrdMonthNum
+        decode: common.to_integer
+    procurement_sanction.period_days:
+      - field: pps_user.list_restricted_companies.response.rsttPrdDayNum
+        decode: common.to_integer
+    procurement_sanction.status_name:
+      - field: pps_user.list_restricted_companies.response.rsttProgrsNm
+
+  materializations:
+    pps_user.list_demand_organizations:
+      objects:
+        public_organization:
+          type: public_organization
+          identity: [organization_code]
+
+    pps_user.list_procurement_companies:
+      objects:
+        business_registration:
+          type: company.business_registration
+          identity: [business_registration_number]
+        procurement_supplier:
+          type: procurement_supplier
+          identity: [business_registration_number]
+      links:
+        - {type: business_registration_identifies_procurement_supplier, source: business_registration, target: procurement_supplier}
+
+    pps_user.list_procurement_company_industries:
+      objects:
+        industry_supplier:
+          type: procurement_supplier
+          identity: [business_registration_number]
+        registered_industry:
+          type: registered_industry
+          identity: [industry_code, registered_at]
+          parents: [industry_supplier]
+          id_property: industry_registration_id
+      links:
+        - {type: procurement_supplier_has_registered_industry, source: industry_supplier, target: registered_industry}
+
+    pps_user.list_procurement_company_supply_products:
+      objects:
+        product_supplier:
+          type: procurement_supplier
+          identity: [business_registration_number]
+        registered_supply_product:
+          type: registered_supply_product
+          identity: [detailed_product_code, registered_at]
+          parents: [product_supplier]
+          id_property: supply_product_registration_id
+      links:
+        - {type: procurement_supplier_has_registered_supply_product, source: product_supplier, target: registered_supply_product}
+
+    pps_user.list_restricted_companies:
+      objects:
+        sanctioned_supplier:
+          type: procurement_supplier
+          identity: [business_registration_number]
+        procurement_sanction:
+          type: procurement_sanction
+          identity: [document_name, valid_from, valid_until]
+          parents: [sanctioned_supplier]
+          id_property: sanction_id
+        imposing_organization:
+          type: public_organization
+          identity: [organization_code]
+      links:
+        - {type: procurement_supplier_has_procurement_sanction, source: sanctioned_supplier, target: procurement_sanction}
+        - {type: public_organization_imposes_procurement_sanction, source: imposing_organization, target: procurement_sanction}

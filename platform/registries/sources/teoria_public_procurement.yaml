@@ -1,11 +1,11 @@
 registry:
-  version: 1.0.0
-  registered_at: "2026-07-31"
+  version: 1.1.0
+  registered_at: "2026-08-07"
 
 source:
   id: teoria_public_procurement
   name: Teoria 공공조달 데이터
-  description: 등록된 수집 Connector에서 정규화한 공공조달 계약, 업체와 기관 데이터를 Semantic Runtime에 제공하는 PostgreSQL Source
+  description: 등록된 수집 Connector에서 정규화한 입찰공고, 참가요건, 공공조달 계약, 업체와 기관 데이터를 Semantic Runtime에 제공하는 PostgreSQL Source
   type: database
   access:
     engine: postgresql
@@ -90,3 +90,58 @@ source:
         - {id: telephone_number, name: 담당자전화번호, data_type: string}
         - {id: created_at, name: DB 생성일시, data_type: datetime}
         - {id: updated_at, name: DB 수정일시, data_type: datetime}
+
+    - id: bid_notices
+      name: 입찰공고
+      relation: public_procurement.runtime_bid_notices
+      primary_key: [bid_notice_id]
+      fields:
+        - {id: bid_notice_id, name: 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, data_type: string}
+        - {id: notice_name, name: 공고명, data_type: string}
+        - {id: work_type, name: 업무유형, data_type: string}
+        - {id: notice_kind_name, name: 공고종류명, data_type: string}
+        - {id: is_re_notice, name: 재공고 여부, data_type: boolean}
+        - {id: notice_published_at, name: 공고게시시각, data_type: datetime}
+        - {id: bid_begin_at, name: 입찰시작시각, data_type: datetime}
+        - {id: bid_deadline_at, name: 입찰마감시각, data_type: datetime}
+        - {id: opening_at, name: 개찰시각, data_type: datetime}
+        - {id: bid_status, name: 입찰상태, data_type: string}
+        - {id: notice_organization_code, name: 공고기관코드, data_type: string}
+        - {id: notice_organization_name, name: 공고기관명, data_type: string}
+        - {id: demand_organization_code, name: 수요기관코드, data_type: string}
+        - {id: demand_organization_name, name: 수요기관명, data_type: string}
+        - {id: bid_method_name, name: 입찰방식명, data_type: string}
+        - {id: contract_method_name, name: 계약방법명, data_type: string}
+        - {id: estimated_price, name: 추정가격, data_type: number}
+        - {id: allocated_budget, name: 배정예산, data_type: number}
+        - {id: detail_url, name: 상세 URL, data_type: string}
+        - {id: notice_url, name: 공고문 URL, data_type: string}
+        - {id: source_changed_at, name: 원천 변경시각, data_type: datetime}
+        - {id: requirement_expression, name: 참가요건 조건식, data_type: string}
+        - {id: extraction_completeness, name: 요건추출 완전성, data_type: string}
+        - {id: requires_review, name: 검토필요 여부, data_type: boolean}
+
+    - id: bid_requirements
+      name: 입찰 참가요건
+      relation: public_procurement.runtime_bid_requirements
+      primary_key: [requirement_id]
+      fields:
+        - {id: requirement_id, name: 참가요건 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, data_type: string}
+        - {id: notice_name, name: 공고명, data_type: string}
+        - {id: bid_deadline_at, name: 입찰마감시각, data_type: datetime}
+        - {id: local_id, name: 추출내 요건 ID, data_type: string}
+        - {id: requirement_type, name: 요건유형, data_type: string}
+        - {id: operator, name: 비교연산자, data_type: string}
+        - {id: value_text, name: 요건값, data_type: string}
+        - {id: original_text, name: 요건 원문, data_type: string}
+        - {id: holder_scope, name: 보유주체 범위, data_type: string}
+        - {id: reference_date_type, name: 기준일 유형, data_type: string}
+        - {id: mandatory, name: 필수 여부, data_type: boolean}
+        - {id: review_status, name: 검토상태, data_type: string}
+        - {id: confidence, name: 추출신뢰도, data_type: number}
+        - {id: evidence_summary, name: 근거 요약, data_type: string}

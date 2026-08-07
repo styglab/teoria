@@ -188,10 +188,13 @@ class MappingDecoder:
         if not path:
             return current
         for raw_segment in path.split("."):
-            segment = raw_segment[:-2] if raw_segment.endswith("[]") else raw_segment
+            is_collection = raw_segment.endswith("[]")
+            segment = raw_segment[:-2] if is_collection else raw_segment
             if not isinstance(current, dict) or segment not in current:
                 if missing is not ...:
                     return missing
+                if is_collection:
+                    return []
                 raise KeyError(segment)
             current = current[segment]
         return current

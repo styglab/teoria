@@ -1,12 +1,144 @@
 registry:
-  version: 1.0.0
-  registered_at: "2026-07-31"
+  version: 1.2.0
+  registered_at: "2026-08-07"
 
 ontology:
   id: public_procurement
   name: 대한민국 공공조달
-  description: 대한민국 공공기관의 조달계약, 계약기관, 수요기관과 계약업체의 참여 관계를 표현한다.
+  description: 대한민국 공공기관의 입찰공고, 참가요건, 조달계약, 기관과 계약업체의 참여 관계를 표현한다.
   object_types:
+    - id: bid_notice
+      name: 입찰공고
+      description: 나라장터 공고번호와 차수로 식별되는 공공조달 입찰공고
+      primary_key: bid_notice_id
+      properties:
+        - {id: bid_notice_id, name: 입찰공고 식별자, description: 공고번호와 공고차수를 결합한 Teoria 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, description: 나라장터가 입찰공고에 부여한 번호, data_type: string}
+        - {id: notice_order, name: 공고차수, description: 동일 공고번호의 공고 차수, data_type: string}
+        - {id: notice_name, name: 공고명, description: 입찰 대상 사업 또는 물품을 설명하는 공고 명칭, data_type: string}
+        - {id: work_type, name: 업무유형, description: 물품·용역·공사·외자 등 입찰 업무 유형, data_type: string}
+        - {id: notice_kind_name, name: 공고종류명, description: 원천에서 제공한 공고 종류 명칭, data_type: string}
+        - {id: is_re_notice, name: 재공고 여부, description: 해당 입찰공고가 재공고인지 여부, data_type: boolean}
+        - {id: notice_published_at, name: 공고게시시각, description: 나라장터에 공고가 게시된 시각, data_type: datetime}
+        - {id: bid_begin_at, name: 입찰시작시각, description: 입찰서 접수가 시작되는 시각, data_type: datetime}
+        - {id: bid_deadline_at, name: 입찰마감시각, description: 입찰서 접수가 마감되는 시각, data_type: datetime}
+        - {id: opening_at, name: 개찰시각, description: 입찰 개찰 예정 시각, data_type: datetime}
+        - {id: bid_status, name: 입찰상태, description: 시작 및 마감시각을 기준으로 정규화한 scheduled·open·closed·unknown 상태, data_type: string}
+        - {id: notice_organization_code, name: 공고기관코드, description: 입찰공고를 게시한 기관의 코드, data_type: string}
+        - {id: notice_organization_name, name: 공고기관명, description: 입찰공고를 게시한 기관의 명칭, data_type: string}
+        - {id: demand_organization_code, name: 수요기관코드, description: 입찰 대상 사업의 수요기관 코드, data_type: string}
+        - {id: demand_organization_name, name: 수요기관명, description: 입찰 대상 사업의 수요기관 명칭, data_type: string}
+        - {id: bid_method_name, name: 입찰방식명, description: 원천에서 제공한 입찰 방식 명칭, data_type: string}
+        - {id: contract_method_name, name: 계약방법명, description: 원천에서 제공한 계약 방법 명칭, data_type: string}
+        - {id: estimated_price, name: 추정가격, description: 입찰공고의 추정 가격, data_type: monetary_amount}
+        - {id: allocated_budget, name: 배정예산, description: 입찰공고에 배정된 예산 금액, data_type: monetary_amount}
+        - {id: detail_url, name: 상세 URL, description: 입찰공고 상세정보 URL, data_type: string}
+        - {id: notice_url, name: 공고문 URL, description: 입찰공고 원문을 확인하는 URL, data_type: string}
+        - {id: source_changed_at, name: 원천 변경시각, description: 나라장터에서 공고가 마지막으로 변경된 시각, data_type: datetime}
+        - {id: requirement_expression, name: 참가요건 조건식, description: 최신 참가요건 추출 결과의 AND·OR 조건 트리 JSON 문자열, data_type: string}
+        - {id: extraction_completeness, name: 요건추출 완전성, description: 첨부문서와 정형 API를 기준으로 한 complete·partial·api_only 추출 범위, data_type: string}
+        - {id: requires_review, name: 검토필요 여부, description: 누락 문서 등으로 사람의 추가 검토가 필요한지 여부, data_type: boolean}
+
+    - id: bid_requirement
+      name: 입찰 참가요건
+      description: 특정 입찰공고에 참가하려는 업체가 충족해야 하는 개별 조건과 그 근거
+      primary_key: requirement_id
+      properties:
+        - {id: requirement_id, name: 참가요건 식별자, description: 추출 실행과 로컬 요건 ID로 생성한 고유 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, description: 요건이 속한 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, description: 요건이 속한 나라장터 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, description: 요건이 속한 공고 차수, data_type: string}
+        - {id: local_id, name: 추출내 요건 ID, description: 한 추출 결과 안에서 요건을 식별하는 로컬 ID, data_type: string}
+        - {id: requirement_type, name: 요건유형, description: 면허·지역·기업상태·인증·실적 등 정규화된 참가요건 유형, data_type: string}
+        - {id: operator, name: 비교연산자, description: equals·contains·gte 등 요건 판정에 사용하는 연산자, data_type: string}
+        - {id: value_text, name: 요건값, description: 요건의 정규화된 값을 보존한 JSON 문자열, data_type: string}
+        - {id: original_text, name: 요건 원문, description: 공고 또는 첨부문서에서 확인한 참가요건 원문, data_type: string}
+        - {id: holder_scope, name: 보유주체 범위, description: 대표사·공동수급 구성원 등 요건을 충족해야 하는 주체 범위, data_type: string}
+        - {id: reference_date_type, name: 기준일 유형, description: 공고일·마감일 등 요건 유효성을 판단하는 기준일 유형, data_type: string}
+        - {id: mandatory, name: 필수 여부, description: 참가를 위해 반드시 충족해야 하는 요건인지 여부, data_type: boolean}
+        - {id: review_status, name: 검토상태, description: 자동 추출 완료 또는 사람의 검토 필요 상태, data_type: string}
+        - {id: confidence, name: 추출신뢰도, description: 자동 추출 결과의 0 이상 1 이하 신뢰도, data_type: number}
+        - {id: evidence_summary, name: 근거 요약, description: 출처 문서·페이지·절·원문을 결합한 근거 문자열, data_type: string}
+
+    - id: procurement_supplier
+      name: 나라장터 조달업체
+      description: 사업자등록번호로 식별되며 나라장터 입찰참가자격을 등록한 조달업체
+      primary_key: business_registration_number
+      properties:
+        - {id: business_registration_number, name: 사업자등록번호, description: 나라장터 조달업체를 식별하는 사업자등록번호, data_type: business_registration_number}
+        - {id: company_name, name: 업체명, description: 나라장터 입찰참가자격에 등록된 업체명, data_type: string}
+        - {id: english_company_name, name: 영문업체명, description: 나라장터에 등록된 업체의 영문 명칭, data_type: string}
+        - {id: opened_at, name: 개업일시, description: 원천에서 제공한 업체 개업 일시, data_type: datetime}
+        - {id: region_code, name: 지역코드, description: 조달업체 소재 지역 코드, data_type: string}
+        - {id: region_name, name: 지역명, description: 조달업체 소재 지역 명칭, data_type: string}
+        - {id: postal_code, name: 우편번호, description: 조달업체 소재지 우편번호, data_type: string}
+        - {id: base_address, name: 주소, description: 조달업체 소재지 기본주소, data_type: string}
+        - {id: detail_address, name: 상세주소, description: 조달업체 소재지 상세주소, data_type: string}
+        - {id: country_name, name: 국가명, description: 조달업체의 국가 명칭, data_type: string}
+        - {id: manufacturer_type_code, name: 제조구분코드, description: 제조 또는 공급 여부를 구분하는 원천 코드, data_type: string}
+        - {id: manufacturer_type_name, name: 제조구분명, description: 제조 또는 공급 여부를 나타내는 명칭, data_type: string}
+        - {id: employee_count, name: 종업원수, description: 원천에서 제공한 조달업체 종업원 수, data_type: integer}
+        - {id: business_category_codes, name: 업체업무구분코드, description: 조달업체가 등록한 물품·공사·용역 등 업무구분 코드 원문, data_type: string}
+        - {id: business_category_names, name: 업체업무구분명, description: 조달업체가 등록한 업무구분 명칭 원문, data_type: string}
+        - {id: head_office_type_name, name: 본사구분명, description: 본사 또는 지사 등 원천 구분명, data_type: string}
+        - {id: registered_at, name: 등록일시, description: 조달업체가 나라장터에 등록된 시각, data_type: datetime}
+        - {id: changed_at, name: 변경일시, description: 조달업체 정보가 나라장터에서 마지막으로 변경된 시각, data_type: datetime}
+        - {id: essential_number_certificate_registered, name: 고유번호증명등록여부, description: 고유번호증명에 근거한 등록 여부, data_type: boolean}
+        - {id: representative_name, name: 대표자명, description: 나라장터에 등록된 조달업체 대표자명, data_type: string}
+
+    - id: registered_industry
+      name: 나라장터 등록업종
+      description: 조달업체가 나라장터에 등록한 업종과 유효기간 및 현재 상태
+      primary_key: industry_registration_id
+      properties:
+        - {id: industry_registration_id, name: 등록업종 식별자, description: 조달업체와 업종코드 및 등록일시로 생성한 Teoria 식별자, data_type: string}
+        - {id: business_registration_number, name: 사업자등록번호, description: 업종을 등록한 조달업체 사업자등록번호, data_type: business_registration_number}
+        - {id: industry_code, name: 업종코드, description: 나라장터에 등록된 업종 코드, data_type: string}
+        - {id: industry_name, name: 업종명, description: 나라장터에 등록된 업종 명칭, data_type: string}
+        - {id: registered_at, name: 등록일시, description: 조달업체 업종 등록 시각, data_type: datetime}
+        - {id: valid_until, name: 유효기간종료일시, description: 등록업종의 유효기간 만료 시각, data_type: datetime}
+        - {id: changed_at, name: 변경일시, description: 등록업종 정보의 마지막 변경 시각, data_type: datetime}
+        - {id: status_name, name: 업종상태명, description: 유효기간 경과 등 원천에서 제공한 업종 상태, data_type: string}
+        - {id: is_representative, name: 대표업종여부, description: 조달업체의 대표업종인지 여부, data_type: boolean}
+
+    - id: registered_supply_product
+      name: 나라장터 등록 공급물품
+      description: 조달업체가 나라장터에 공급 또는 제조 가능 물품으로 등록한 세부품명
+      primary_key: supply_product_registration_id
+      properties:
+        - {id: supply_product_registration_id, name: 공급물품등록 식별자, description: 조달업체와 세부품명번호 및 등록일시로 생성한 Teoria 식별자, data_type: string}
+        - {id: business_registration_number, name: 사업자등록번호, description: 공급물품을 등록한 조달업체 사업자등록번호, data_type: business_registration_number}
+        - {id: detailed_product_code, name: 세부품명번호, description: 나라장터 세부품명 분류번호, data_type: string}
+        - {id: detailed_product_name, name: 세부품명, description: 세부품명번호에 대응하는 한글 명칭, data_type: string}
+        - {id: registered_at, name: 등록일시, description: 세부품명이 조달업체 공급물품으로 등록된 시각, data_type: datetime}
+        - {id: changed_at, name: 변경일시, description: 공급물품 정보의 마지막 변경 시각, data_type: datetime}
+        - {id: is_representative, name: 대표품명여부, description: 조달업체의 대표품명인지 여부, data_type: boolean}
+        - {id: is_manufactured, name: 제조여부, description: 조달업체의 제조물품으로 등록됐는지 여부, data_type: boolean}
+
+    - id: procurement_sanction
+      name: 부정당업체 제재
+      description: 나라장터 사용자정보서비스가 조회 시점에 제공하는 조달업체의 부정당 제재 정보
+      primary_key: sanction_id
+      properties:
+        - {id: sanction_id, name: 제재 식별자, description: 조달업체와 제재문서 및 제재기간으로 생성한 Teoria 식별자, data_type: string}
+        - {id: business_registration_number, name: 사업자등록번호, description: 제재 대상 조달업체 사업자등록번호, data_type: business_registration_number}
+        - {id: company_name, name: 업체명, description: 제재 대상 업체명, data_type: string}
+        - {id: document_name, name: 제재문서명, description: 부정당제재 처리 문서명, data_type: string}
+        - {id: valid_from, name: 제재시작일, description: 부정당 제재가 시작되는 날짜, data_type: date}
+        - {id: valid_until, name: 제재종료일, description: 부정당 제재가 종료되는 날짜, data_type: date}
+        - {id: imposing_organization_code, name: 제재기관코드, description: 제재를 통보한 수요기관 코드, data_type: string}
+        - {id: imposing_organization_name, name: 제재기관명, description: 제재를 통보한 수요기관 명칭, data_type: string}
+        - {id: legal_basis_name, name: 근거법령명, description: 제재 근거 계약법 구분과 법률 명칭, data_type: string}
+        - {id: legal_article, name: 조항호, description: 제재 근거 법령의 조항호, data_type: string}
+        - {id: legal_article_code, name: 조항호코드, description: 제재 근거 조항호 코드, data_type: string}
+        - {id: legal_article_name, name: 조항호코드명, description: 제재 근거 조항의 상세 명칭, data_type: string}
+        - {id: enforcement_rule_code, name: 시행규칙코드, description: 제재 근거 시행령 또는 시행규칙 코드, data_type: string}
+        - {id: enforcement_rule_name, name: 시행규칙코드명, description: 제재 근거 시행령 또는 시행규칙 명칭, data_type: string}
+        - {id: published_at, name: 게재일시, description: 부정당 제재 정보가 게재된 시각, data_type: datetime}
+        - {id: period_months, name: 제재기간개월수, description: 제재기간의 개월 수, data_type: integer}
+        - {id: period_days, name: 제재기간일수, description: 제재기간의 추가 일수, data_type: integer}
+        - {id: status_name, name: 제재상태명, description: 조회 시점에 원천이 제공한 제재 최종 상태명, data_type: string}
+
     - id: contract
       name: 공공조달계약
       description: 공공기관과 하나 이상의 업체 사이에 체결되어 나라장터 통합계약번호로 식별되는 조달계약
@@ -63,6 +195,34 @@ ontology:
         - {id: participation_share_rate, name: 참여 지분율, description: 공동계약에서 해당 업체가 차지하는 참여 지분율, data_type: number}
 
   link_types:
+    - id: bid_notice_requires_bid_requirement
+      description: 입찰공고가 업체에 특정 참가요건의 충족을 요구함을 나타낸다.
+      source: bid_notice
+      target: bid_requirement
+    - id: public_organization_publishes_bid_notice
+      description: 공공기관이 특정 입찰공고를 게시했음을 나타낸다.
+      source: public_organization
+      target: bid_notice
+    - id: business_registration_identifies_procurement_supplier
+      description: 사업자등록이 나라장터에 등록된 동일 조달업체를 식별함을 나타낸다.
+      source: company.business_registration
+      target: procurement_supplier
+    - id: procurement_supplier_has_registered_industry
+      description: 나라장터 조달업체가 특정 업종을 등록했음을 나타낸다.
+      source: procurement_supplier
+      target: registered_industry
+    - id: procurement_supplier_has_registered_supply_product
+      description: 나라장터 조달업체가 특정 세부품명을 공급 또는 제조 물품으로 등록했음을 나타낸다.
+      source: procurement_supplier
+      target: registered_supply_product
+    - id: procurement_supplier_has_procurement_sanction
+      description: 나라장터 조달업체가 특정 부정당 제재의 대상임을 나타낸다.
+      source: procurement_supplier
+      target: procurement_sanction
+    - id: public_organization_imposes_procurement_sanction
+      description: 공공기관이 조달업체에 특정 부정당 제재를 통보했음을 나타낸다.
+      source: public_organization
+      target: procurement_sanction
     - id: business_registration_is_supplier_of_contract
       description: 사업자등록으로 식별되는 업체가 공공조달계약의 공급자 또는 계약업체로 참여함을 나타낸다.
       source: company.business_registration

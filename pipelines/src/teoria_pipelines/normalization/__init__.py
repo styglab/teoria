@@ -4,5 +4,15 @@ from teoria_pipelines.normalization.pps_contracts import (
     normalize_contract_batch,
     normalize_contract_record,
 )
+from teoria_pipelines.normalization.pps_bid_notices import (
+    BidNoticeNormalizationError,
+    normalize_bid_notice_batch,
+)
 
-__all__ = ["ContractNormalizationError", "normalize_contract_batch", "normalize_contract_record"]
+__all__ = [
+    "BidNoticeNormalizationError",
+    "ContractNormalizationError",
+    "normalize_bid_notice_batch",
+    "normalize_contract_batch",
+    "normalize_contract_record",
+]

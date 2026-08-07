@@ -74,6 +74,24 @@ def html_records(records: list[dict]) -> ExecutionResponse:
     )
 
 
+def test_missing_collection_response_path_is_an_empty_result() -> None:
+    catalog = RegistryLoader(ROOT / "registries").load()
+    executor = FakeExecutor(
+        [response({"response": {"header": {"resultCode": "00"}, "body": {"totalCount": 0}}})]
+    )
+
+    result = asyncio.run(
+        CapabilityRunner(executor).run(
+            catalog,
+            "get_procurement_supplier_sanctions",
+            {"business_registration_number": "0000000000"},
+        )
+    )
+
+    assert result.objects == []
+    assert result.links == []
+
+
 def test_binds_composite_verification_input_to_source_request() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
     capability = catalog.capabilities["verify_business_registration"]

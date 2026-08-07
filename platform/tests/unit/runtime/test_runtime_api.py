@@ -37,7 +37,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     capabilities = client.get("/v1/capabilities", headers=headers)
     assert capabilities.status_code == 200
     assert any(item["id"] == "search_public_procurement_contracts" for item in capabilities.json()["capabilities"])
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.08.06.1"
+    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.08.07.7"
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -46,7 +46,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.08.06.1"
+    assert response.json()["registry"]["version"] == "2026.08.07.7"
     assert runner.call[0] == "search_public_procurement_contracts"
     assert runner.call[1]["concluded_date_from"].isoformat() == "2026-01-01"
 

@@ -8,8 +8,24 @@ Prefect는 Pipeline의 schedule, retry, 상태와 실행 그래프를 관리한�
 
 ```env
 TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY=...
+TEORIA_CONNECTOR_PPS_BID_NOTICE_API_KEY=...
 TEORIA_PREFECT_USERNAME=admin
 TEORIA_PREFECT_PASSWORD=충분히-긴-비밀번호
+TEORIA_OBJECT_STORAGE_ENDPOINT=https://minio.example.com
+TEORIA_OBJECT_STORAGE_ACCESS_KEY=외부-MinIO-access-key
+TEORIA_OBJECT_STORAGE_SECRET_KEY=외부-MinIO-secret-key
+TEORIA_OBJECT_STORAGE_BUCKET=teoria
+```
+
+입찰 첨부파일은 기본적으로 입찰 마감 후 90일 동안 보존한다. 매일 03:45(Asia/Seoul)에
+`pps-bid-document-retention`이 원본 첨부파일, 파싱 산출물과 AI 원본 출력만 삭제한다.
+공고·문서 메타데이터, checksum, 면허·지역 제한과 정규화된 참가요건은 유지되며 삭제 결과는
+`public_procurement.bid_document_purge_runs`에 기록된다. 보존기간과 회당 처리량은 다음 값으로
+조정할 수 있다.
+
+```env
+TEORIA_PIPELINE_BID_DOCUMENT_RETENTION_DAYS=90
+TEORIA_PIPELINE_BID_DOCUMENT_PURGE_BATCH_SIZE=500
 ```
 
 `TEORIA_PREFECT_USERNAME`과 `TEORIA_PREFECT_PASSWORD`는 필수다. Prefect Server는 Basic Auth를
@@ -25,11 +41,45 @@ docker compose --env-file .env \
 
 | 서비스 | 역할 |
 |---|---|
-| `data-db`, `data-db-migrate` | 수집 DB와 migration |
+| `postgres`, `postgres-migrate` | Teoria 공유 PostgreSQL과 migration |
 | `prefect-db`, `prefect-redis` | Prefect 영속 상태, 메시징과 서비스 조정 |
 | `prefect-server`, `prefect-services` | Prefect API/UI와 Scheduler 등 백그라운드 서비스 |
 | `prefect-init`, `prefect-deploy` | Work pool과 Deployment 등록 |
 | `prefect-worker` | Prefect Flow 실행 |
+
+Object Storage는 Compose 외부의 S3 호환 MinIO를 사용한다. bucket은 배포 전에 생성하고 Pipeline
+access key에는 해당 bucket의 객체 읽기·쓰기·삭제 권한만 부여한다. 공용 `teoria` bucket을
+사용하고 업무별 객체를 경로로 분리한다. 입찰공고 첨부파일은
+`public-procurement/bid-notices/{공고번호}/{차수}/original/` 아래에 저장한다.
+기존 내장 MinIO 데이터가 있으면 동일한 bucket과 object key로 외부 저장소에 먼저 복사하고 객체
+수 및 checksum을 확인한 후 worker endpoint를 전환한다.
+
+첨부문서 파싱은 매시 25분 `teoria-ai-extraction` pool에서 실행한다. Codex Skill 기반
+참가자격 추출은 ChatGPT 로그인과 대표 공고 검증을 마쳤으며 매시 35분 실행된다. API key는 worker에 전달하지 않는다. 인증 세션은
+`codex-auth` Docker volume의 `/home/teoria/.codex`에 저장되며 이미지나 저장소에 포함되지 않는다.
+추출 결과는 공고 요구조건만 포함하며
+업체별 충족 판정은 Platform Runtime API와 MCP의 책임이다.
+
+첨부파일 처리가 아직 `pending` 또는 `processing`이면 참가자격 추출을 기다린다. 재시도 한도를
+소진했거나 미지원 형식인 파일이 있으면 성공적으로 파싱된 문서와 API 제한정보로 추출을 계속하고
+결과를 `partial`, `requires_review=true`로 저장한다. 결과에는 전체·성공·누락 문서 수와 누락
+파일명 및 오류 사유가 포함된다. 첨부파일이 없고 API 제한정보만 있으면 `api_only`, 모든 문서가
+파싱됐으면 `complete`다. 이후 파서 개선으로 누락 문서가 파싱되면 입력 fingerprint가 변경되어
+같은 공고도 다시 추출된다.
+
+최초 한 번 다음 명령으로 device code 로그인을 완료하고 상태를 확인한다.
+
+```bash
+docker compose --env-file .env -f deploy/compose.yaml exec \
+  prefect-ai-worker codex login --device-auth
+docker compose --env-file .env -f deploy/compose.yaml exec \
+  prefect-ai-worker codex login status
+```
+
+`auth.json`에는 갱신 가능한 인증 토큰이 있으므로 비밀번호처럼 취급한다. `codex-auth` volume을
+백업본, 이미지, Git 또는 다른 서비스에 복사하지 않는다. 로그아웃하려면 worker에서
+`codex logout`을 실행한다. 로그아웃하거나 인증이 만료되면 추출 Task는 재시도 후 실패하며,
+재로그인 전에는 Prefect UI에서 `pps-bid-eligibility-extraction` schedule을 일시 중지한다.
 
 Compose 배포 시 UI는 nginx의 `http://localhost:8081/prefect/`로 접근한다. Prefect Server의 4200 포트는 Compose 내부에서만 사용한다. Worker에는 `.env` 전체가 아니라 Compose에 선언한 Pipeline 변수만 전달한다.
 

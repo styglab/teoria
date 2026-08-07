@@ -13,7 +13,7 @@ uv run --locked --package teoria-pipelines \
   --migrations pipelines/database/migrations
 ```
 
-실행에는 `TEORIA_PIPELINE_DATA_DATABASE_URL`이 필요하다. 로컬 Compose에서는 `data-db-migrate` 일회성 서비스가 같은 명령을 실행한다.
+실행에는 `TEORIA_PIPELINE_DATA_DATABASE_URL`이 필요하다. 로컬 Compose에서는 `postgres-migrate` 일회성 서비스가 같은 명령을 실행한다.
 
 ## Timestamp convention
 
@@ -25,3 +25,7 @@ uv run --locked --package teoria-pipelines \
 - 외부 제공기관이 기록한 시각은 `source_*_at`으로 DB 레코드의 감사 시각과
   구분한다.
 - 모든 시각 컬럼은 PostgreSQL `timestamptz`를 사용한다.
+
+입찰 참가자격 추출은 첨부문서 처리 커버리지를 함께 저장한다. 일부 문서가 반복 실패하거나
+미지원 형식이어도 사용 가능한 문서와 정형 제한정보로 `partial` 결과를 생성하며, 누락 문서와
+오류 사유를 `unavailable_documents`에 기록한다.

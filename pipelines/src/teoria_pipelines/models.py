@@ -51,3 +51,21 @@ class LoadSummary:
     suppliers: int = 0
     organizations: int = 0
     demand_organizations: int = 0
+    notices: int = 0
+    license_restrictions: int = 0
+    participation_regions: int = 0
+    documents: int = 0
+
+
+@dataclass(slots=True)
+class NormalizedBidNoticeBatch:
+    notices: list[dict[str, Any]] = field(default_factory=list)
+    license_restrictions: list[dict[str, Any]] = field(default_factory=list)
+    participation_regions: list[dict[str, Any]] = field(default_factory=list)
+    documents: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class BidNoticeKey:
+    notice_number: str
+    notice_order: str
