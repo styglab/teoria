@@ -1,8 +1,94 @@
 registry:
-  version: 2.0.0
-  registered_at: "2026-07-29"
+  version: 2.2.0
+  registered_at: "2026-08-08"
 
 value_sets:
+  - id: assessment_outcome
+    name: 평가 결과
+    description: 개별 요건 또는 전체 자격 평가에서 확인된 충족 상태
+    values:
+      - {id: satisfied, name: 충족, description: 평가 기준일에 요구조건을 충족한다는 근거가 확인된 상태}
+      - {id: unsatisfied, name: 미충족, description: 평가 기준일에 요구조건과 실제 상태가 명확히 불일치한 상태}
+      - {id: needs_review, name: 확인 필요, description: 이용 가능한 근거만으로 충족 여부를 확정할 수 없는 상태}
+
+  - id: assessment_lifecycle_status
+    name: 평가 실행 상태
+    description: 평가 업무의 실행 및 검토 진행 상태
+    values:
+      - {id: completed, name: 완료, description: 자동 평가가 정상적으로 완료된 상태}
+      - {id: review_required, name: 검토 필요, description: 하나 이상의 요건에 사람의 검토가 필요한 상태}
+      - {id: failed, name: 실패, description: 평가 실행을 완료하지 못한 상태}
+
+  - id: assessment_evidence_kind
+    name: 평가 근거 유형
+    description: 평가 결과를 뒷받침하는 근거의 출처 또는 매체 유형
+    values:
+      - {id: notice_document, name: 공고문서, description: 공고문 또는 공고 첨부문서에서 인용한 근거}
+      - {id: structured_api, name: 정형 API, description: 공식 제공기관 API 조회에서 관찰한 근거}
+      - {id: database_record, name: 데이터베이스 레코드, description: 정규화된 데이터베이스 레코드에서 조회한 근거}
+      - {id: company_document, name: 기업 제출문서, description: 평가 대상 기업이 등록한 증빙문서에서 확인한 근거}
+      - {id: manual_verification, name: 수동 확인, description: 담당자가 별도 절차로 확인하여 기록한 근거}
+
+  - id: assessment_reason_code
+    name: 평가 사유 코드
+    description: 요건 평가 결과를 일관되게 설명하는 기계 판독 가능한 사유
+    values:
+      - {id: business_active, name: 계속사업 확인, description: 평가 기준일에 계속사업 상태가 확인됨}
+      - {id: business_closed, name: 폐업 확인, description: 평가 기준일에 폐업 상태가 확인됨}
+      - {id: procurement_supplier_registered, name: 조달업체 등록 확인, description: 나라장터 조달업체 등록이 확인됨}
+      - {id: procurement_supplier_not_registered, name: 조달업체 미등록, description: 나라장터 조달업체 등록이 확인되지 않음}
+      - {id: industry_code_matched, name: 업종코드 일치, description: 요구 업종코드와 등록 업종코드가 일치함}
+      - {id: industry_code_mismatched, name: 업종코드 불일치, description: 요구 업종코드와 등록 업종코드가 일치하지 않음}
+      - {id: region_matched, name: 참가지역 일치, description: 기업의 기준 지역이 참가 가능 지역에 포함됨}
+      - {id: region_mismatched, name: 참가지역 불일치, description: 기업의 기준 지역이 참가 가능 지역에 포함되지 않음}
+      - {id: qualification_valid, name: 기업 자격 유효, description: 요구된 기업 자격이 평가 기준일에 유효함}
+      - {id: qualification_expired, name: 기업 자격 만료, description: 요구된 기업 자격이 평가 기준일 전에 만료됨}
+      - {id: qualification_missing, name: 기업 자격 없음, description: 요구된 기업 자격의 보유 근거가 확인되지 않음}
+      - {id: direct_production_matched, name: 직접생산확인 일치, description: 요구 세부품명에 대한 유효한 직접생산확인이 있음}
+      - {id: direct_production_mismatched, name: 직접생산확인 불일치, description: 요구 세부품명에 대한 유효한 직접생산확인이 확인되지 않음}
+      - {id: product_registration_matched, name: 공급물품 등록 일치, description: 요구 세부품명이 업체의 나라장터 공급물품에 등록되어 있음}
+      - {id: product_registration_mismatched, name: 공급물품 등록 불일치, description: 요구 세부품명이 업체의 나라장터 공급물품에서 확인되지 않음}
+      - {id: active_sanction_found, name: 유효 제재 확인, description: 평가 기준일에 유효한 부정당업자 제재가 확인됨}
+      - {id: active_sanction_not_found, name: 유효 제재 없음, description: 평가 기준일에 유효한 부정당업자 제재가 확인되지 않음}
+      - {id: evidence_missing, name: 근거 부족, description: 평가에 필요한 근거가 충분하지 않음}
+      - {id: source_unavailable, name: 원천 조회 불가, description: 평가 시점에 필요한 공식 원천을 조회할 수 없음}
+      - {id: unsupported_requirement, name: 미지원 요건, description: 현재 규칙 엔진이 자동 평가하지 않는 요건 유형임}
+      - {id: ambiguous_requirement, name: 모호한 요건, description: 요건의 의미 또는 적용 범위를 하나로 확정할 수 없음}
+      - {id: manual_judgment_required, name: 담당자 판단 필요, description: 자동화할 수 없는 업무 판단 또는 발주기관 확인이 필요함}
+
+  - id: qualification_type
+    name: 기업 자격 유형
+    description: 법률 또는 공식 기준에 따라 기업에 부여·확인·인증되는 자격의 유형
+    values:
+      - {id: women_owned_business, name: 여성기업, description: 여성기업지원에 관한 법률에 따른 여성기업 확인}
+      - {id: disabled_owned_business, name: 장애인기업, description: 장애인기업활동 촉진법에 따른 장애인기업 확인}
+      - {id: social_enterprise, name: 사회적기업, description: 사회적기업 육성법에 따른 사회적기업 인증}
+      - {id: venture_business, name: 벤처기업, description: 벤처기업육성에 관한 특별법에 따른 벤처기업 확인}
+      - {id: innobiz, name: 이노비즈, description: 기술혁신형 중소기업 인증}
+      - {id: mainbiz, name: 메인비즈, description: 경영혁신형 중소기업 인증}
+
+  - id: qualification_grant_form
+    name: 기업 자격 부여 형식
+    description: 자격 제도에서 사용하는 확인·인증·지정·등록 등의 공식 부여 형식
+    values:
+      - {id: confirmation, name: 확인, description: 법률상 요건 충족 여부를 공식적으로 확인하는 형식}
+      - {id: certification, name: 인증, description: 정해진 심사 또는 평가기준 충족을 인증하는 형식}
+      - {id: designation, name: 지정, description: 권한 있는 기관이 대상 기업을 지정하는 형식}
+      - {id: registration, name: 등록, description: 공식 등록부 또는 제도에 등록하는 형식}
+      - {id: approval, name: 승인, description: 신청 또는 요건 충족을 승인하는 형식}
+      - {id: recognition, name: 인정, description: 요건 또는 능력을 공식적으로 인정하는 형식}
+
+  - id: qualification_status
+    name: 기업 자격 상태
+    description: 기준일에 확인된 기업 자격의 유효 상태
+    values:
+      - {id: active, name: 유효, description: 기준일에 자격이 유효한 상태}
+      - {id: expired, name: 만료, description: 자격의 유효기간이 종료된 상태}
+      - {id: revoked, name: 취소, description: 부여기관이 자격을 취소한 상태}
+      - {id: suspended, name: 정지, description: 자격의 효력이 일시 정지된 상태}
+      - {id: pending, name: 처리 중, description: 자격 신청 또는 갱신이 처리 중인 상태}
+      - {id: unknown, name: 알 수 없음, description: 원천 정보만으로 자격 상태를 확정할 수 없는 상태}
+
   - id: innovation_certification_kind
     name: 혁신형 중소기업 인증 종류
     description: 중소벤처기업부의 혁신형 중소기업 확인 제도 구분

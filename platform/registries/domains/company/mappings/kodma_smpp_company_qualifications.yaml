@@ -1,0 +1,82 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-08"
+
+mapping:
+  id: kodma_smpp_company_qualifications
+  name: 공공구매종합정보망 기업 자격 매핑
+  description: 여성기업·장애인기업 확인 결과를 사업자등록과 기업 자격 객체로 연결한다.
+  ontology: company
+  bindings:
+    business_registration.business_registration_number:
+      - field: kodma_smpp_certificate.list_women_owned_business_certificates.request.query.bsnmNo
+      - field: kodma_smpp_certificate.list_disabled_owned_business_certificates.request.query.bsnmNo
+      - field: kodma_smpp_certificate.list_direct_production_certificates.request.query.bsnmNo
+
+    qualification.business_registration_number:
+      - field: kodma_smpp_certificate.list_women_owned_business_certificates.request.query.bsnmNo
+      - field: kodma_smpp_certificate.list_disabled_owned_business_certificates.request.query.bsnmNo
+    qualification.source_code:
+      - field: kodma_smpp_certificate.list_women_owned_business_certificates.response.certSeCode
+        role: qualification
+        qualifiers: {qualification_type: women_owned_business, grant_form: confirmation, status: active}
+      - field: kodma_smpp_certificate.list_disabled_owned_business_certificates.response.certSeCode
+        role: qualification
+        qualifiers: {qualification_type: disabled_owned_business, grant_form: confirmation, status: active}
+    qualification.issuing_organization_name:
+      - field: kodma_smpp_certificate.list_women_owned_business_certificates.response.issuInstt
+      - field: kodma_smpp_certificate.list_disabled_owned_business_certificates.response.issuInstt
+    qualification.granted_date:
+      - field: kodma_smpp_certificate.list_women_owned_business_certificates.response.certfcDe
+        decode: common.parse_date
+      - field: kodma_smpp_certificate.list_disabled_owned_business_certificates.response.certfcDe
+        decode: common.parse_date
+    qualification.valid_from:
+      - field: kodma_smpp_certificate.list_women_owned_business_certificates.response.validPdBeginDe
+        decode: common.parse_date
+      - field: kodma_smpp_certificate.list_disabled_owned_business_certificates.response.validPdBeginDe
+        decode: common.parse_date
+    qualification.valid_until:
+      - field: kodma_smpp_certificate.list_women_owned_business_certificates.response.validPdEndDe
+        decode: common.parse_date
+      - field: kodma_smpp_certificate.list_disabled_owned_business_certificates.response.validPdEndDe
+        decode: common.parse_date
+    qualification.reference_date:
+      - field: kodma_smpp_certificate.list_women_owned_business_certificates.request.query.stdrDate
+        encode: common.format_date_yyyymmdd
+        decode: common.parse_date
+      - field: kodma_smpp_certificate.list_disabled_owned_business_certificates.request.query.stdrDate
+        encode: common.format_date_yyyymmdd
+        decode: common.parse_date
+      - field: kodma_smpp_certificate.list_direct_production_certificates.request.query.stdrDate
+        encode: common.format_date_yyyymmdd
+        decode: common.parse_date
+
+  materializations:
+    kodma_smpp_certificate.list_women_owned_business_certificates:
+      objects:
+        business_registration:
+          type: business_registration
+          identity: [business_registration_number]
+        qualification:
+          type: qualification
+          identity: [qualification_type, valid_from, valid_until]
+          parents: [business_registration]
+          id_property: qualification_id
+          timestamp_properties: [observed_at]
+      links:
+        - {type: business_registration_has_qualification, source: business_registration, target: qualification}
+
+    kodma_smpp_certificate.list_disabled_owned_business_certificates:
+      objects:
+        business_registration:
+          type: business_registration
+          identity: [business_registration_number]
+        qualification:
+          type: qualification
+          identity: [qualification_type, valid_from, valid_until]
+          parents: [business_registration]
+          id_property: qualification_id
+          timestamp_properties: [observed_at]
+      links:
+        - {type: business_registration_has_qualification, source: business_registration, target: qualification}

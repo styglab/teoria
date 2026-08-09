@@ -1,6 +1,6 @@
 # Ontology Registry
 
-Ontology Registry는 AI와 애플리케이션이 공유할 도메인 의미를 Object Type, Property, Link Type으로 표현한다. 현재 `company`와 `public_procurement` 도메인을 제공한다.
+Ontology Registry는 AI와 애플리케이션이 공유할 도메인 및 업무 의미를 Object Type, Property, Link Type으로 표현한다. 현재 `company`, `public_procurement`, `assessment` 도메인을 제공한다.
 
 ## Domain 경계
 
@@ -8,6 +8,7 @@ Domain은 제공기관이나 API별로 나누지 않는다. 같은 식별자로 
 
 - `company`: 금융위원회와 국세청 등에서 얻은 법인, 사업자등록, 재무와 기업관계를 통합한다.
 - `public_procurement`: 조달청 및 향후 다른 Source에서 얻을 입찰공고, 투찰, 낙찰, 계약과 이행정보를 통합한다.
+- `assessment`: 회사와 공고 사이에서 수행된 평가, 개별 요건 판단과 그 판단을 뒷받침한 근거를 표현한다.
 - 두 Domain은 사업자등록을 통해 계약업체 관계로 연결하되 서로의 객체를 복제하지 않는다.
 
 Source와 Connector는 데이터를 어디서 어떻게 얻는지를, Domain은 그 데이터가 무엇을 의미하는지를 정의한다. 수집 방식이 실시간 API에서 Database Source로 바뀌어도 Domain 경계는 바뀌지 않는다.
@@ -35,6 +36,8 @@ Object Type은 독립적으로 식별하고 조회할 도메인 개체다.
 - `examples`는 의미 경계를 이해하는 데 실질적으로 도움이 될 때만 둔다.
 
 원천 식별자가 없는 관측·확인 객체는 시스템 생성 식별자를 primary key로 사용할 수 있다. 이 경우 설명에 어떤 값으로 생성하는지와 원천기관 식별자가 아님을 명시한다.
+
+Object Type은 외부에서 수집한 Entity에 한정되지 않는다. 업무적으로 식별되고 관계와 수명주기를 추적할 가치가 있는 평가·승인·결정 같은 Operational Object도 Ontology로 표현한다. 반면 `CompanyEvidenceSnapshot`이나 Expression 실행 노드처럼 한 번의 Runtime 실행을 위한 메모리상 DTO는 Ontology에 넣지 않는다.
 
 ## Link Type
 

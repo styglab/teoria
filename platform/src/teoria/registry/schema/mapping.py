@@ -35,8 +35,6 @@ class MappingBinding(RegistryModel):
             raise ValueError("one binding cannot mix request and response fields")
         if "response" in sections and self.encode:
             raise ValueError("response binding cannot declare encode")
-        if "request" in sections and self.decode:
-            raise ValueError("request binding cannot declare decode")
         if "request" in sections and self.qualifiers:
             raise ValueError("request binding cannot declare qualifiers")
         return self

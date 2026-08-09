@@ -91,7 +91,14 @@ class MappingDecoder:
     ) -> list[MappedFragment]:
         source = catalog.sources[source_id]
         operation = next(item for item in source.source.operations if item.id == operation_id)
-        records = self._resolve_path(response.body, operation.response.data.record_path)
+        try:
+            records = self._resolve_path(response.body, operation.response.data.record_path)
+        except (KeyError, TypeError):
+            if not operation.pagination or int(self._resolve_path(
+                response.body, operation.pagination.total_count, missing=-1
+            )) != 0:
+                raise
+            records = []
         if not isinstance(records, list):
             records = [records]
         call = f"{source_id}.{operation_id}"
@@ -197,4 +204,6 @@ class MappingDecoder:
                     return []
                 raise KeyError(segment)
             current = current[segment]
+            if is_collection and not isinstance(current, list):
+                current = [current]
         return current

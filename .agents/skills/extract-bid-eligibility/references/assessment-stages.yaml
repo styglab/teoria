@@ -1,0 +1,20 @@
+version: 1.0.0
+assessment_stages:
+  bid_entry: A condition that controls bid submission, participation registration, or bid validity.
+  qualification_review: A condition whose failure explicitly rejects the bidder during qualification or award review.
+  contracting: A bidder condition that must be satisfied before contract execution.
+failure_effects:
+  cannot_bid: The bidder may not participate or submit a bid.
+  invalid_bid: A submitted bid is expressly invalid.
+  qualification_rejection: The bidder fails a qualification or award review.
+  cannot_contract: The selected bidder cannot execute the contract.
+  needs_review: The document does not establish a more precise consequence.
+comparison_modes:
+  structured: Compare with a normalized company or procurement API fact.
+  document_evidence: Verify a bidder-held document or submitted proof.
+  manual: Human interpretation or evidence review is required.
+proof_policy:
+  - Keep a bidder condition and its requested proof separate.
+  - Attach proof only when the document identifies the underlying bidder condition.
+  - A submission request alone is not a bidder condition; preserve it in unresolved_candidates.
+  - Never infer bid_entry from wording that only identifies qualification_review or contracting.

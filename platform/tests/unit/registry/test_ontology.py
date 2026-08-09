@@ -67,6 +67,27 @@ def test_current_ontology_references_are_valid() -> None:
         item.id for item in procurement.link_types
     }
 
+    assessment = catalog.ontologies["assessment"]
+    assert {item.id for item in assessment.object_types} == {
+        "bid_eligibility_assessment",
+        "requirement_assessment",
+        "evidence",
+    }
+    requirement_assessment = next(
+        item for item in assessment.object_types if item.id == "requirement_assessment"
+    )
+    properties = {item.id: item for item in requirement_assessment.properties}
+    assert properties["outcome"].value_set == "assessment_outcome"
+    assert properties["reason_code"].value_set == "assessment_reason_code"
+    links = {item.id: item for item in assessment.link_types}
+    assert links["requirement_assessment_evaluates_bid_requirement"].target == (
+        "public_procurement.bid_requirement"
+    )
+    assert links["requirement_assessment_evaluated_for_business_registration"].target == (
+        "company.business_registration"
+    )
+    assert links["requirement_assessment_supported_by_evidence"].target == "evidence"
+
 
 def test_reports_ontology_reference_errors() -> None:
     catalog = deepcopy(RegistryLoader(REGISTRIES).load())

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from teoria.admin.ontology_graph import build_ontology_graph
 from teoria.admin.overview import build_registry_overview
+from teoria.admin.bid_check import BidCheckReader
 from teoria.config import Settings, bootstrap_settings
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.registry.validator import RegistryValidator
@@ -16,9 +17,14 @@ def create_admin_app(
     *,
     settings: Settings | None = None,
     catalog: RegistryCatalog | None = None,
+    bid_check_reader: BidCheckReader | None = None,
 ) -> FastAPI:
     resolved_settings = settings or bootstrap_settings()
     resolved_catalog = catalog or RegistryLoader(resolved_settings.registry_path).load()
+    resolved_bid_reader = bid_check_reader or (
+        BidCheckReader(resolved_settings.admin_data_database_url)
+        if resolved_settings.admin_data_database_url else None
+    )
     app = FastAPI(
         title="Teoria Admin API",
         version="1.0.0",
@@ -69,6 +75,9 @@ def create_admin_app(
                     "id": capability.id,
                     "name": capability.name or capability.id,
                     "description": capability.description,
+                    "kind": capability.kind,
+                    "processor": capability.processor,
+                    "effects": capability.effects.model_dump(),
                     "inputs": list(capability.inputs),
                     "steps": [step.call for step in capability.steps],
                     "returns": capability.returns,
@@ -143,6 +152,25 @@ def create_admin_app(
             "diagnostic_count": len(diagnostics),
             "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics],
         }
+
+    @app.get("/v1/admin/bid-check/notices")
+    def bid_check_notices(page: int = 1, page_size: int = 50,
+                          query: str | None = None, bid_status: str | None = None,
+                          work_type: str | None = None, extraction_status: str | None = None,
+                          review_status: str | None = None) -> dict[str, Any]:
+        if resolved_bid_reader is None:
+            raise HTTPException(status_code=503, detail={"code": "bid_check_database_unavailable"})
+        return resolved_bid_reader.list_notices(
+            page=max(1, page), page_size=max(1, min(page_size, 100)), query=query,
+            bid_status=bid_status, work_type=work_type, extraction_status=extraction_status,
+            review_status=review_status,
+        )
+
+    @app.get("/v1/admin/bid-check/notices/{bid_notice_id}/requirements")
+    def bid_check_requirements(bid_notice_id: str) -> dict[str, Any]:
+        if resolved_bid_reader is None:
+            raise HTTPException(status_code=503, detail={"code": "bid_check_database_unavailable"})
+        return {"requirements": resolved_bid_reader.get_requirements(bid_notice_id)}
 
     @app.get("/v1/admin/ontologies/{ontology_id}/graph")
     async def ontology_graph(ontology_id: str) -> dict[str, Any]:

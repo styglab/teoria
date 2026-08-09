@@ -91,10 +91,30 @@ class CapabilityOutcome(RegistryModel):
         return self
 
 
+class CapabilityEffects(RegistryModel):
+    reads: list[str] = Field(default_factory=list)
+    produces: list[str] = Field(default_factory=list)
+    creates: list[str] = Field(default_factory=list)
+    updates: list[str] = Field(default_factory=list)
+
+    @field_validator("reads", "produces", "creates", "updates")
+    @classmethod
+    def references_must_be_unique_and_qualified(cls, values: list[str]) -> list[str]:
+        if len(values) != len(set(values)):
+            raise ValueError("effect references must be unique")
+        for value in values:
+            if not REFERENCE_PATTERN.fullmatch(value) or len(value.split(".")) not in {2, 3}:
+                raise ValueError("effect reference must use '<ontology>.<object>' or '<ontology>.<object>.<property>'")
+        return values
+
+
 class CapabilityDefinition(IdentifiedModel):
     description: str
+    kind: Literal["query", "compute", "action"] = "query"
+    processor: str | None = None
+    effects: CapabilityEffects = Field(default_factory=CapabilityEffects)
     inputs: dict[str, CapabilityInput] = Field(default_factory=dict)
-    steps: list[CapabilityStep] = Field(min_length=1)
+    steps: list[CapabilityStep] = Field(default_factory=list)
     returns: list[str] = Field(min_length=1)
     outcome: CapabilityOutcome | None = None
 
@@ -113,6 +133,18 @@ class CapabilityDefinition(IdentifiedModel):
             raise ValueError("returns must be unique")
         if self.outcome and self.outcome.input not in self.inputs:
             raise ValueError(f"outcome input '{self.outcome.input}' is not declared")
+        if self.kind != "action" and (self.effects.creates or self.effects.updates):
+            raise ValueError("only an action capability may declare creates or updates effects")
+        if self.kind == "query":
+            if self.processor is not None:
+                raise ValueError("query capability cannot declare a processor")
+            if not self.steps:
+                raise ValueError("query capability must declare at least one step")
+        else:
+            if self.processor is None:
+                raise ValueError("compute and action capabilities must declare a processor")
+            if not REFERENCE_PATTERN.fullmatch(self.processor) or len(self.processor.split(".")) != 2:
+                raise ValueError("processor must use '<namespace>.<processor>'")
         return self
 
 

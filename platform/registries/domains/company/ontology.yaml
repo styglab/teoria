@@ -1,6 +1,6 @@
 registry:
-  version: 2.0.0
-  registered_at: "2026-07-29"
+  version: 2.1.0
+  registered_at: "2026-08-08"
 
 ontology:
   id: company
@@ -207,6 +207,26 @@ ontology:
           name: 관측시점
           description: 납세자 상태를 조회하거나 확인한 시점
           data_type: datetime
+
+    - id: qualification
+      name: 기업 자격
+      description: 법률 또는 공식 기준을 충족하여 권한 있는 기관이 사업자에게 부여·확인·인증한 자격
+      primary_key: qualification_id
+      properties:
+        - {id: qualification_id, name: 기업 자격 식별자, description: 사업자등록과 자격 유형 및 자연 식별값을 조합하여 생성한 결정적 식별자, data_type: string}
+        - {id: business_registration_number, name: 사업자등록번호, description: 자격을 보유한 사업자의 사업자등록번호, data_type: business_registration_number}
+        - {id: qualification_type, name: 자격 유형, description: 여성기업·장애인기업 등 기업에 부여된 자격의 유형, value_set: qualification_type}
+        - {id: grant_form, name: 부여 형식, description: 확인·인증·지정 등 해당 자격의 공식 부여 형식, value_set: qualification_grant_form}
+        - {id: source_code, name: 원천 자격 코드, description: 원천기관이 자격 또는 확인서 유형에 부여한 코드, data_type: string}
+        - {id: qualification_number, name: 자격 번호, description: 부여기관이 발급한 확인·인증·지정 번호, data_type: string}
+        - {id: issuing_organization_name, name: 부여기관명, description: 자격을 부여·확인·인증한 기관의 명칭, data_type: string}
+        - {id: legal_basis, name: 법적 근거, description: 자격 부여 또는 확인의 근거가 되는 법률이나 규정, data_type: string}
+        - {id: granted_date, name: 부여일, description: 자격이 확인·인증·지정된 날짜, data_type: date}
+        - {id: valid_from, name: 유효기간 시작일, description: 자격의 효력이 시작되는 날짜, data_type: date}
+        - {id: valid_until, name: 유효기간 종료일, description: 자격의 효력이 종료되는 날짜, data_type: date}
+        - {id: status, name: 자격 상태, description: 조회 기준일에 확인된 자격의 유효 상태, value_set: qualification_status}
+        - {id: reference_date, name: 판정 기준일, description: 원천 서비스가 자격의 유효성을 확인한 기준 날짜, data_type: date}
+        - {id: observed_at, name: 조회시점, description: Teoria가 공식 원천에서 자격을 조회한 시점, data_type: datetime}
 
     - id: registration_verification
       name: 사업자등록정보 확인
@@ -454,6 +474,11 @@ ontology:
       description: 사업자등록을 서로 다른 시점에 확인된 납세자 상태 관측과 연결한다.
       source: business_registration
       target: taxpayer_status_observation
+
+    - id: business_registration_has_qualification
+      description: 사업자등록으로 식별되는 기업을 공식적으로 부여된 기업 자격과 연결한다.
+      source: business_registration
+      target: qualification
 
     - id: business_registration_has_verification
       description: 사업자등록을 해당 등록정보에 대해 수행한 하나 이상의 확인 결과와 연결한다.

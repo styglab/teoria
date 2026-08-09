@@ -99,6 +99,20 @@ class RegistryValidator:
             if path.stem != capability.id:
                 diagnostics.append(Diagnostic("capability_filename_mismatch", f"filename must match capability id '{capability.id}.yaml'", path, location="capability.id"))
 
+            for effect_name in ("reads", "produces", "creates", "updates"):
+                for index, reference in enumerate(getattr(capability.effects, effect_name)):
+                    location = f"capability.effects.{effect_name}.{index}"
+                    parts = reference.split(".")
+                    ontology = catalog.ontologies.get(parts[0])
+                    obj = next(
+                        (item for item in ontology.object_types if item.id == parts[1]),
+                        None,
+                    ) if ontology and len(parts) in {2, 3} else None
+                    if obj is None:
+                        diagnostics.append(Diagnostic("unknown_capability_effect", f"unknown ontology object '{reference}'", path, location=location))
+                    elif len(parts) == 3 and parts[2] not in {item.id for item in obj.properties}:
+                        diagnostics.append(Diagnostic("unknown_capability_effect", f"unknown ontology property '{reference}'", path, location=location))
+
             input_leaves = list(self._capability_input_leaves(capability.inputs))
             for input_id, input_definition in input_leaves:
                 location = f"capability.inputs.{input_id}"
@@ -197,7 +211,7 @@ class RegistryValidator:
                     for mapping in catalog.mappings.values()
                     for target, bindings in mapping.bindings.items()
                 )
-                if not has_response_binding:
+                if capability.kind == "query" and not has_response_binding:
                     diagnostics.append(Diagnostic("unavailable_capability_return", f"no called operation provides response bindings for '{reference}'", path, location=f"capability.returns.{index}"))
 
     @staticmethod

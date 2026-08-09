@@ -66,7 +66,7 @@ class ProviderResponseValidator:
                 raise KeyError(f"record path segment '{key}' was not found")
             current = current[key]
             if is_array and not isinstance(current, list):
-                raise TypeError(f"record path segment '{key}' must be an array")
+                current = [current]
         return current
 
     def _validate_object(self, value: Any, fields: list[FieldDefinition], definition: ProviderDefinition,

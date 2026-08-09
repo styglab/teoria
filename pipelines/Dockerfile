@@ -36,7 +36,7 @@ FROM worker AS ai-worker
 
 USER root
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends nodejs npm libreoffice-writer \
+    && apt-get install -y --no-install-recommends nodejs npm libreoffice-writer libreoffice-calc \
     && npm install --global @openai/codex@0.147.0 \
     && rm -rf /var/lib/apt/lists/*
 COPY --chown=teoria:teoria .agents/skills/extract-bid-eligibility /app/.agents/skills/extract-bid-eligibility

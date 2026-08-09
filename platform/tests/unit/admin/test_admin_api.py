@@ -16,12 +16,12 @@ def test_admin_api_exposes_overview_and_ontology_graph() -> None:
 
     overview = client.get("/v1/admin/overview")
     assert overview.status_code == 200
-    assert overview.json()["counts"]["ontologies"] == 2
+    assert overview.json()["counts"]["ontologies"] == 3
     assert overview.json()["validation"]["status"] == "valid"
 
     release = client.get("/v1/admin/registry-release")
     assert release.status_code == 200
-    assert release.json()["version"] == "2026.08.07.7"
+    assert release.json()["version"] == "2026.08.09.1"
     assert release.json()["status"] == "published"
 
     validation = client.get("/v1/admin/validation")
@@ -32,7 +32,11 @@ def test_admin_api_exposes_overview_and_ontology_graph() -> None:
         "diagnostics": [],
     }
 
-    assert client.get("/v1/admin/capabilities").json()["capabilities"][0]["steps"]
+    capabilities = client.get("/v1/admin/capabilities").json()["capabilities"]
+    assert any(item["kind"] == "query" and item["steps"] for item in capabilities)
+    assessment = next(item for item in capabilities if item["id"] == "assess_company_bid_eligibility")
+    assert assessment["kind"] == "compute"
+    assert assessment["steps"] == []
     assert any(source["type"] == "database" for source in client.get("/v1/admin/sources").json()["sources"])
     assert client.get("/v1/admin/mappings").json()["mappings"][0]["binding_count"] > 0
     assert any(link["kind"] == "mapping" for link in client.get("/v1/admin/lineage").json()["links"])
@@ -57,3 +61,35 @@ def test_admin_api_returns_not_found_for_unknown_ontology() -> None:
     app = create_admin_app(settings=Settings(), catalog=RegistryLoader(REGISTRIES).load())
     response = TestClient(app).get("/v1/admin/ontologies/unknown/graph")
     assert response.status_code == 404
+
+
+def test_admin_api_exposes_pipeline_bid_check_results() -> None:
+    class Reader:
+        def list_notices(self, *, page: int, page_size: int, query: str | None,
+                         bid_status: str | None, work_type: str | None,
+                         extraction_status: str | None, review_status: str | None):
+            assert (page, page_size, query) == (2, 20, "테스트")
+            assert (bid_status, work_type, extraction_status, review_status) == (
+                "open", "service", "extracted", "required"
+            )
+            return {"items": [{"bid_notice_id": "R26TEST:000", "requirement_count": 2}], "page": 2, "page_size": 20, "total": 21, "total_pages": 2}
+
+        def get_requirements(self, bid_notice_id: str):
+            assert bid_notice_id == "R26TEST:000"
+            return [{"requirement_id": "requirement-1", "original_text": "중소기업이어야 한다"}]
+
+    app = create_admin_app(
+        settings=Settings(), catalog=RegistryLoader(REGISTRIES).load(), bid_check_reader=Reader()
+    )
+    client = TestClient(app)
+
+    page = client.get(
+        "/v1/admin/bid-check/notices?page=2&page_size=20&query=테스트"
+        "&bid_status=open&work_type=service&extraction_status=extracted&review_status=required"
+    ).json()
+    assert page["items"][0]["requirement_count"] == 2
+    assert page["total_pages"] == 2
+    requirements = client.get(
+        "/v1/admin/bid-check/notices/R26TEST%3A000/requirements"
+    ).json()["requirements"]
+    assert requirements[0]["requirement_id"] == "requirement-1"

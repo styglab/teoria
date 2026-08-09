@@ -1,0 +1,37 @@
+version: 1.0.0
+types:
+  - business_status
+  - procurement_registration
+  - industry_license
+  - participation_region
+  - company_scale
+  - certificate
+  - product_registration
+  - sanction
+  - past_performance
+  - credit_rating
+  - technical_personnel
+  - consortium
+  - legal_qualification
+  - facility_requirement
+  - equipment_ownership
+  - manufacturer_status
+  - custom
+operators: [equals, not_equals, contains, in, not_in, greater_than_or_equal, less_than_or_equal, exists, not_exists, valid_on, custom]
+holder_scopes: [bidder, representative, consortium_representative, consortium_all_members, consortium_any_member, consortium_member, subcontractor, unspecified]
+reference_date_types: [bid_deadline, qualification_registration_deadline, notice_date, contract_date, explicit_date, none]
+selection_guidance:
+  procurement_registration: 나라장터 이용자·입찰참가자격·전자 인증서·대표자 개인인증·지문정보 등 전자조달 참여 등록
+  consortium: 공동수급·공동도급·하도급의 허용, 금지, 구성 및 구성원 범위. 공동수급과 하도급은 각각 독립 요건으로 분리
+  industry_license: 법령상 업종·면허·사업 등록
+  participation_region: 본점 또는 사업장 소재지 제한
+  company_scale: 중기업·소기업·소상공인 등 기업 규모
+  certificate: 전자조달 참여 등록이 아닌 일반 확인서·인증서의 보유 및 유효성. 직접생산확인증명서 포함
+  product_registration: 업체가 전자조달시스템에 제조·공급 물품 또는 세부품명을 등록한 상태. 제품별 인증서는 제외
+  sanction: 부정당업자·입찰참가 제한 등 제재 상태
+  past_performance: 참가 배제 기준이 명시된 과거 실적
+  custom: 위 타입으로 의미 손실 없이 표현할 수 없는 참가자격에만 사용
+normalization_rules:
+  - 조세포탈 등 유죄판결, 부정당업자 제재, 입찰참가 제한과 경영개선명령은 sanction으로 분류
+  - 적격심사 때 확인하는 시설·장비·인증 조건은 qualification_review로 분류하고 bid_deadline을 추정하지 않음
+  - 증명서나 현황서 제출 행위는 underlying requirement의 proof_requirements로 분리

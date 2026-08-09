@@ -1,0 +1,26 @@
+cases:
+  - id: single_only
+    placements:
+      r1: [{scope: common, alternative_group: null, alternative_branch: null}]
+      r2: [{scope: common, alternative_group: null, alternative_branch: null}]
+    expected: all(r1,r2)
+  - id: single_or_consortium
+    placements:
+      r1: [{scope: common, alternative_group: null, alternative_branch: null}]
+      r2: [{scope: single, alternative_group: null, alternative_branch: null}]
+      r3: [{scope: consortium, alternative_group: null, alternative_branch: null}]
+      r4: [{scope: consortium, alternative_group: null, alternative_branch: null}]
+    expected: all(r1,any(r2,all(r3,r4)))
+  - id: independent_alternatives
+    placements:
+      r1: [{scope: common, alternative_group: license, alternative_branch: a}]
+      r2: [{scope: common, alternative_group: license, alternative_branch: b}]
+      r3: [{scope: common, alternative_group: region, alternative_branch: seoul}]
+      r4: [{scope: common, alternative_group: region, alternative_branch: gyeonggi}]
+    expected: all(any(r1,r2),any(r3,r4))
+  - id: conjunctive_alternative_branch
+    placements:
+      r1: [{scope: common, alternative_group: company_form, alternative_branch: small}]
+      r2: [{scope: common, alternative_group: company_form, alternative_branch: small}]
+      r3: [{scope: common, alternative_group: company_form, alternative_branch: nonprofit}]
+    expected: any(all(r1,r2),r3)

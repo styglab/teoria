@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
+from xml.etree import ElementTree
 
 import httpx
 
@@ -80,10 +81,17 @@ class ProviderExecutor:
     @staticmethod
     def _execution_response(response: httpx.Response, extraction: dict[str, Any] | None = None) -> ExecutionResponse:
         content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
-        try:
-            body = response.json()
-        except ValueError:
-            body = response.text
+        if content_type in {"application/xml", "text/xml"}:
+            try:
+                root = ElementTree.fromstring(response.text)
+                body = {_xml_local_name(root.tag): _xml_element_value(root)}
+            except ElementTree.ParseError:
+                body = response.text
+        else:
+            try:
+                body = response.json()
+            except ValueError:
+                body = response.text
         if extraction and extraction.get("type") == "html_table" and isinstance(body, str):
             body = {"records": extract_html_table(
                 body,
@@ -108,3 +116,20 @@ class ProviderExecutor:
             if retry_at.tzinfo is None:
                 retry_at = retry_at.replace(tzinfo=timezone.utc)
             return max(0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+
+
+def _xml_local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _xml_element_value(element: ElementTree.Element) -> Any:
+    children = list(element)
+    if not children:
+        return (element.text or "").strip()
+    grouped: dict[str, list[Any]] = {}
+    for child in children:
+        grouped.setdefault(_xml_local_name(child.tag), []).append(_xml_element_value(child))
+    return {
+        name: values if len(values) > 1 else values[0]
+        for name, values in grouped.items()
+    }

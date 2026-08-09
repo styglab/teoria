@@ -1,0 +1,122 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-07"
+
+source:
+  id: kodma_smpp_certificate
+  name: 공공구매종합정보망 인증서 정보 제공 서비스
+  provider:
+    organization: 한국중소벤처기업유통원
+    distribution: 공공데이터포털
+  type: api
+  specification:
+    format: manual
+    version: "1.0"
+    api_version: "1.0"
+    source_document: 한국중소벤처기업유통원_공공구매종합정보망 인증서 API 제공 기술문서.docx
+  access:
+    base_url: http://apis.data.go.kr/B550598/smppCertInfo
+    authentication:
+      type: api_key
+      in: query
+      name: ServiceKey
+      credential_env: TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY
+  components:
+    objects:
+      - id: direct_production_certificate
+        name: 직접생산확인증명 상세정보
+        fields:
+          - {id: certSeCode, name: 확인서구분코드, data_type: string, values: [{value: "01", label: 직접생산확인증명서}]}
+          - {id: validPdBeginDe, name: 유효기간시작일, data_type: string}
+          - {id: validPdEndDe, name: 유효기간만료일, data_type: string}
+          - {id: certfcDe, name: 인증일, data_type: string}
+          - {id: detailPrdnmNo, name: 세부품명번호, data_type: string}
+          - {id: essntlPartclrMatter, name: 필수특이사항, data_type: string}
+      - id: women_owned_business_certificate
+        name: 여성기업확인 상세정보
+        fields:
+          - {id: certSeCode, name: 확인서구분코드, data_type: string, values: [{value: "03", label: 여성기업확인서}]}
+          - {id: issuInstt, name: 인증기관, data_type: string}
+          - {id: validPdBeginDe, name: 유효기간시작일, data_type: string}
+          - {id: validPdEndDe, name: 유효기간만료일, data_type: string}
+          - {id: certfcDe, name: 인증일, data_type: string}
+      - id: disabled_owned_business_certificate
+        name: 장애인기업확인 상세정보
+        fields:
+          - {id: certSeCode, name: 확인서구분코드, data_type: string, values: [{value: "04", label: 장애인기업확인서}]}
+          - {id: issuInstt, name: 인증기관, data_type: string}
+          - {id: validPdBeginDe, name: 유효기간시작일, data_type: string}
+          - {id: validPdEndDe, name: 유효기간만료일, data_type: string}
+          - {id: certfcDe, name: 인증일, data_type: string}
+  operations:
+    - id: list_direct_production_certificates
+      name: 직접생산확인증명 상세조회
+      method: GET
+      idempotent: true
+      path: /getDPrductList
+      description: 사업자번호와 기준일자로 유효한 직접생산확인증명서의 유효일자와 세부품명 정보를 조회한다.
+      pagination: &pagination
+        type: page_number
+        page: {request: query.pageNo}
+        page_size: {request: query.numOfRows}
+        total_count: response.totalCount
+      request:
+        query:
+          fields:
+            - {id: stdrDate, name: 기준일자, data_type: string}
+            - {id: bsnmNo, name: 사업자번호, data_type: string}
+            - {id: detailPrdnmNo, name: 세부품명번호, data_type: string}
+            - {id: numOfRows, name: 한페이지결과수, data_type: integer, default: 10}
+            - {id: pageNo, name: 페이지 번호, data_type: integer, default: 1}
+          required: [stdrDate, bsnmNo, numOfRows, pageNo]
+      response:
+        content_type: application/xml
+        http_status: 200
+        control: &control
+          record_path: response.HeaderValueList
+          success: {field: resultCode, equals: "00"}
+          fields:
+            - {id: resultCode, name: 결과코드, data_type: string}
+            - {id: resultMsg, name: 결과메세지, data_type: string}
+        data:
+          record_path: response.body.items.item[]
+          ref: direct_production_certificate
+
+    - id: list_women_owned_business_certificates
+      name: 여성기업확인 상세조회
+      method: GET
+      idempotent: true
+      path: /getFnrssList
+      description: 사업자번호와 기준일자로 유효한 여성기업확인서와 인증기관 및 유효일자를 조회한다.
+      pagination: *pagination
+      request: &business_request
+        query:
+          fields:
+            - {id: stdrDate, name: 기준일자, data_type: string}
+            - {id: bsnmNo, name: 사업자번호, data_type: string}
+            - {id: numOfRows, name: 한페이지결과수, data_type: integer, default: 10}
+            - {id: pageNo, name: 페이지 번호, data_type: integer, default: 1}
+          required: [stdrDate, bsnmNo, numOfRows, pageNo]
+      response:
+        content_type: application/xml
+        http_status: 200
+        control: *control
+        data:
+          record_path: response.body.items.item[]
+          ref: women_owned_business_certificate
+
+    - id: list_disabled_owned_business_certificates
+      name: 장애인기업확인 상세조회
+      method: GET
+      idempotent: true
+      path: /getDspsnList
+      description: 사업자번호와 기준일자로 유효한 장애인기업확인서와 인증기관 및 유효일자를 조회한다.
+      pagination: *pagination
+      request: *business_request
+      response:
+        content_type: application/xml
+        http_status: 200
+        control: *control
+        data:
+          record_path: response.body.items.item[]
+          ref: disabled_owned_business_certificate

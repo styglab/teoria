@@ -1,0 +1,55 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-08"
+
+mapping:
+  id: kodma_smpp_direct_production
+  name: 공공구매종합정보망 직접생산확인 매핑
+  description: 직접생산확인증명 조회 결과를 사업자등록과 세부품명별 직접생산확인 객체로 연결한다.
+  ontology: public_procurement
+  bindings:
+    company.business_registration.business_registration_number:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.request.query.bsnmNo
+        role: business_registration
+    company.qualification.reference_date:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.request.query.stdrDate
+        encode: common.format_date_yyyymmdd
+        decode: common.parse_date
+    direct_production_confirmation.business_registration_number:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.request.query.bsnmNo
+    direct_production_confirmation.source_confirmation_code:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.response.certSeCode
+        qualifiers: {status: active}
+    direct_production_confirmation.detailed_product_code:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.request.query.detailPrdnmNo
+      - field: kodma_smpp_certificate.list_direct_production_certificates.response.detailPrdnmNo
+    direct_production_confirmation.confirmed_date:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.response.certfcDe
+        decode: common.parse_date
+    direct_production_confirmation.valid_from:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.response.validPdBeginDe
+        decode: common.parse_date
+    direct_production_confirmation.valid_until:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.response.validPdEndDe
+        decode: common.parse_date
+    direct_production_confirmation.essential_notes:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.response.essntlPartclrMatter
+    direct_production_confirmation.reference_date:
+      - field: kodma_smpp_certificate.list_direct_production_certificates.request.query.stdrDate
+        encode: common.format_date_yyyymmdd
+        decode: common.parse_date
+
+  materializations:
+    kodma_smpp_certificate.list_direct_production_certificates:
+      objects:
+        business_registration:
+          type: company.business_registration
+          identity: [business_registration_number]
+        direct_production_confirmation:
+          type: direct_production_confirmation
+          identity: [detailed_product_code, valid_from, valid_until]
+          parents: [business_registration]
+          id_property: direct_production_confirmation_id
+          timestamp_properties: [observed_at]
+      links:
+        - {type: business_registration_has_direct_production_confirmation, source: business_registration, target: direct_production_confirmation}

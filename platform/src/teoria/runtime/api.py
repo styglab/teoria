@@ -79,6 +79,9 @@ def create_runtime_app(
                     "id": capability.id,
                     "name": capability.name,
                     "description": capability.description,
+                    "kind": capability.kind,
+                    "processor": capability.processor,
+                    "effects": capability.effects.model_dump(),
                     "returns": capability.returns,
                     "input_schema": capability_input_schema(resolved_catalog, capability),
                 }
@@ -108,7 +111,12 @@ def create_runtime_app(
         try:
             result = await resolved_runner.run(resolved_catalog, capability_id, inputs)
         except CapabilityExecutionError as exc:
-            status_code = 504 if exc.code == "capability_timeout" else 502
+            status_code = {
+                "capability_timeout": 504,
+                "bid_notice_not_found": 404,
+                "bid_requirements_not_found": 409,
+                "invalid_bid_notice_id": 422,
+            }.get(exc.code, 502)
             raise HTTPException(status_code=status_code, detail=exc.to_dict()) from exc
         response = serialize_capability_result(
             result,

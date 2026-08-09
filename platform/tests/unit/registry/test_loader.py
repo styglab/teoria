@@ -16,6 +16,7 @@ def test_loads_current_registries() -> None:
     assert set(catalog.sources) == {
         "fsc_company_basic",
         "fsc_company_financial",
+        "kodma_smpp_certificate",
         "mss_venture_company_disclosure",
         "mss_innobiz_company_lookup",
         "mss_mainbiz_company_lookup",
@@ -24,7 +25,7 @@ def test_loads_current_registries() -> None:
         "teoria_public_procurement",
     }
     assert "business_registration_number" in catalog.data_types
-    assert set(catalog.ontologies) == {"company", "public_procurement"}
+    assert set(catalog.ontologies) == {"assessment", "company", "public_procurement"}
     assert "business_operating_status_kr" in catalog.value_sets
     assert {
         source_id
@@ -33,6 +34,7 @@ def test_loads_current_registries() -> None:
     } == {
         "fsc_company_basic",
         "fsc_company_financial",
+            "kodma_smpp_certificate",
             "mss_venture_company_disclosure",
             "mss_innobiz_company_lookup",
             "mss_mainbiz_company_lookup",
@@ -40,6 +42,7 @@ def test_loads_current_registries() -> None:
             "pps_user",
     }
     assert set(catalog.capabilities) == {
+        "assess_company_bid_eligibility",
         "get_business_registration_status",
         "get_company_financials",
         "get_company_profile",
@@ -61,6 +64,11 @@ def test_loads_current_registries() -> None:
             "get_procurement_supplier_products",
             "get_procurement_supplier_sanctions",
             "get_company_procurement_profile",
+            "get_women_owned_business_qualification",
+            "get_disabled_owned_business_qualification",
+            "get_company_qualifications",
+            "get_direct_production_confirmations",
+            "get_company_bid_qualification_profile",
         }
 
 

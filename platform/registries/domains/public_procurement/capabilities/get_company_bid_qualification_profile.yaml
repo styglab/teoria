@@ -1,0 +1,25 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-08"
+
+capability:
+  id: get_company_bid_qualification_profile
+  name: 기업 입찰 자격 프로필 조회
+  description: 기준일에 유효한 기업 자격과 세부품명별 직접생산확인을 함께 조회한다.
+  inputs:
+    business_registration_number:
+      property: company.business_registration.business_registration_number
+      required: true
+    reference_date:
+      property: company.qualification.reference_date
+      required: true
+  steps:
+    - call: kodma_smpp_certificate.list_women_owned_business_certificates
+    - call: kodma_smpp_certificate.list_disabled_owned_business_certificates
+    - call: kodma_smpp_certificate.list_direct_production_certificates
+  returns:
+    - company.business_registration
+    - company.qualification
+    - company.business_registration_has_qualification
+    - public_procurement.direct_production_confirmation
+    - public_procurement.business_registration_has_direct_production_confirmation

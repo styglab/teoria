@@ -145,3 +145,7 @@ source:
         - {id: review_status, name: 검토상태, data_type: string}
         - {id: confidence, name: 추출신뢰도, data_type: number}
         - {id: evidence_summary, name: 근거 요약, data_type: string}
+        - {id: assessment_stage, name: 판정 단계, data_type: string}
+        - {id: failure_effect, name: 불충족 효과, data_type: string}
+        - {id: comparison_mode, name: 비교 방식, data_type: string}
+        - {id: proof_summary, name: 증빙 요구 요약, data_type: string}

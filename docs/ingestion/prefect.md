@@ -54,11 +54,37 @@ access key에는 해당 bucket의 객체 읽기·쓰기·삭제 권한만 부여
 기존 내장 MinIO 데이터가 있으면 동일한 bucket과 object key로 외부 저장소에 먼저 복사하고 객체
 수 및 checksum을 확인한 후 worker endpoint를 전환한다.
 
-첨부문서 파싱은 매시 25분 `teoria-ai-extraction` pool에서 실행한다. Codex Skill 기반
-참가자격 추출은 ChatGPT 로그인과 대표 공고 검증을 마쳤으며 매시 35분 실행된다. API key는 worker에 전달하지 않는다. 인증 세션은
+첨부문서 파싱은 매시 0분부터 10분 간격으로 `teoria-ai-extraction` pool에서 실행한다. Codex Skill 기반
+참가자격 추출은 파싱과 5분 엇갈려 매시 5분부터 10분 간격으로 실행된다. API key는 worker에 전달하지 않는다. 인증 세션은
 `codex-auth` Docker volume의 `/home/teoria/.codex`에 저장되며 이미지나 저장소에 포함되지 않는다.
 추출 결과는 공고 요구조건만 포함하며
 업체별 충족 판정은 Platform Runtime API와 MCP의 책임이다.
+
+Codex는 인용 근거가 있는 원자 요건 Fact와 각 Fact의 `common`, `single`, `consortium`
+배치만 생성한다. 최종 `all`/`any` 조건식은 Pipeline의 결정론적 Expression Builder가 조립한다.
+Builder는 요건 참조 완전성, 잘못된 대안 그룹, AND 경로의 중복 요건을 검사하며 전역 배치가
+동일 Fact의 하위 참가방식 배치를 포함하는 경우 이를 안전하게 흡수한다. 대표 단독·공동수급 및
+대안 조합은 골든 데이터 회귀 테스트로 관리한다.
+
+추출 배치는 문서가 준비된 공고에 80%, 첨부문서가 없는 API 전용 공고에 20%를 우선 배정한다.
+문서 공고만 Codex Skill로 추출하며 API 전용 공고의 면허제한과 참가가능지역은 Codex를 호출하지
+않고 구조화된 출처를 그대로 결정론적으로 정규화한다. 면허 제한그룹 내부와 복수 참가가능지역은
+대안(`any`), 서로 다른 면허 제한그룹과 지역 조건 사이는 동시조건(`all`)으로 보존한다.
+
+AI 입력은 공고별 checksum으로 중복 문서를 제거한다. 모델 원본은 검증 전에 attempt별 Object로
+저장하며 스키마·인용 검증 실패도 Data DB에 `failed`로 기록한다. 실패 fingerprint는 1시간 동안
+재선택하지 않는다. 하위 공고 Task가 하나라도 최종 실패하면 성공한 공고 결과는 보존하되 Flow는
+`Failed`로 표시한다. 긴 PDF/HWP 블록은 원본 block ID와 문자 offset을 보존한 900자 이하 하위
+블록으로 세분화한다. checksum이 달라도 정규화 텍스트가 88% 이상 유사한 PDF/HWP는 AI 입력에서
+한 건으로 묶고 PDF를 대표 문서로 사용한다. 모델 인용은 원문 블록과 다시 대조하며 법령 괄호나
+접속어가 생략된 경우 토큰·문자 유사도와 후보 유일성을 확인한 뒤 실제 원문 블록으로 교정한다.
+후처리에서는 동일 type·operator·holder scope와 자연 식별 코드를 가진 문서·구조화 API 요건을
+하나로 병합하고 모든 출처를 Evidence로 보존한다. 동일 Evidence는 자연키로 중복 제거한다.
+상위 `requires_review`는 문서 보류뿐 아니라 `needs_review` 요건 또는 미해결 후보가 있어도 활성화한다.
+
+구형 XLS는 LibreOffice Calc로 XLSX 변환 후 파싱하고 ZIP은 안전한 크기·개수 한도 안에서 지원
+문서를 전개한다. 텍스트가 없는 PDF에는 아직 OCR을 적용하지 않으며 `pdf_text_unavailable` 또는
+`text_unavailable_deferred`로 보류하여 `requires_review` 대상에 포함한다.
 
 첨부파일 처리가 아직 `pending` 또는 `processing`이면 참가자격 추출을 기다린다. 재시도 한도를
 소진했거나 미지원 형식인 파일이 있으면 성공적으로 파싱된 문서와 API 제한정보로 추출을 계속하고
@@ -66,6 +92,11 @@ access key에는 해당 bucket의 객체 읽기·쓰기·삭제 권한만 부여
 파일명 및 오류 사유가 포함된다. 첨부파일이 없고 API 제한정보만 있으면 `api_only`, 모든 문서가
 파싱됐으면 `complete`다. 이후 파서 개선으로 누락 문서가 파싱되면 입력 fingerprint가 변경되어
 같은 공고도 다시 추출된다.
+
+운영 스케줄은 첨부문서 파싱을 10분마다 최대 100건, 참가자격 추출을 파싱과 5분 엇갈려
+10분마다 최대 10개 공고 처리한다. 두 Deployment 모두 동시 실행 한도 1과 `CANCEL_NEW` 정책을 사용한다.
+추출은 파싱 완료 또는 미지원 확정 문서만 사용하며, 미지원 문서가 있으면 결과를 `partial`로
+표시해 Runtime Assessment가 전체 충족을 확정하지 않도록 한다.
 
 최초 한 번 다음 명령으로 device code 로그인을 완료하고 상태를 확인한다.
 

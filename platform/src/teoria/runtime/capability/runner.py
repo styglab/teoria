@@ -116,6 +116,16 @@ class CapabilityRunner:
         include_raw_responses: bool,
     ) -> CapabilityResult:
         capability = catalog.capabilities[capability_id]
+        if capability.kind != "query":
+            if capability.processor == "assessment.evaluate_bid_eligibility":
+                from teoria.runtime.assessment.processor import execute_bid_eligibility_assessment
+
+                return await execute_bid_eligibility_assessment(self, catalog, capability_id, inputs)
+            raise CapabilityExecutionError(
+                "unknown_capability_processor",
+                f"unknown capability processor '{capability.processor}'",
+                capability_id=capability_id,
+            )
         allowed_objects = {item.split(".", 1)[1] for item in capability.returns if self._is_object(catalog, item)}
         allowed_links = {item.split(".", 1)[1] for item in capability.returns if not self._is_object(catalog, item)}
         fragments: list[MappedFragment] = []
@@ -258,6 +268,8 @@ class CapabilityRunner:
     def _has_next_page(self, operation: Any, request: Any, response: ExecutionResponse, page: int) -> bool:
         pagination = operation.pagination
         total = int(self.decoder._resolve_path(response.body, pagination.total_count))
+        if total == 0:
+            return False
         section, field = pagination.page_size.request.split(".", 1)
         page_size = int(getattr(request, section).get(field, 0))
         records = self.decoder._resolve_path(response.body, operation.response.data.record_path)

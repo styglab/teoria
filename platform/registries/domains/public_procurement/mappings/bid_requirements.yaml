@@ -48,6 +48,14 @@ mapping:
       - {field: teoria_public_procurement.bid_requirements.confidence}
     bid_requirement.evidence_summary:
       - {field: teoria_public_procurement.bid_requirements.evidence_summary}
+    bid_requirement.assessment_stage:
+      - {field: teoria_public_procurement.bid_requirements.assessment_stage}
+    bid_requirement.failure_effect:
+      - {field: teoria_public_procurement.bid_requirements.failure_effect}
+    bid_requirement.comparison_mode:
+      - {field: teoria_public_procurement.bid_requirements.comparison_mode}
+    bid_requirement.proof_summary:
+      - {field: teoria_public_procurement.bid_requirements.proof_summary}
   materializations:
     teoria_public_procurement.bid_requirements:
       objects:

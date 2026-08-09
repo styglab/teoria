@@ -1,0 +1,57 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-08"
+
+capability:
+  id: assess_company_bid_eligibility
+  name: 기업 입찰 참가자격 평가
+  description: 입찰공고의 최신 참가요건과 기준일의 기업·조달·자격 근거를 비교하여 요건별 평가와 종합 결과를 생성한다.
+  kind: compute
+  processor: assessment.evaluate_bid_eligibility
+  effects:
+    reads:
+      - company.business_registration
+      - company.taxpayer_status_observation
+      - company.qualification
+      - public_procurement.bid_notice
+      - public_procurement.bid_requirement
+      - public_procurement.procurement_supplier
+      - public_procurement.registered_industry
+      - public_procurement.registered_supply_product
+      - public_procurement.procurement_sanction
+      - public_procurement.direct_production_confirmation
+    produces:
+      - assessment.bid_eligibility_assessment
+      - assessment.requirement_assessment
+      - assessment.evidence
+  inputs:
+    business_registration_number:
+      property: company.business_registration.business_registration_number
+      required: true
+    bid_notice_id:
+      property: public_procurement.bid_notice.bid_notice_id
+      required: true
+    reference_date:
+      property: assessment.bid_eligibility_assessment.reference_date
+  returns:
+    - assessment.bid_eligibility_assessment
+    - assessment.requirement_assessment
+    - assessment.evidence
+    - assessment.business_registration_has_bid_eligibility_assessment
+    - assessment.bid_eligibility_assessment_evaluates_bid_notice
+    - assessment.requirement_assessment_belongs_to_bid_eligibility_assessment
+    - assessment.requirement_assessment_evaluates_bid_requirement
+    - assessment.requirement_assessment_evaluated_for_business_registration
+    - assessment.requirement_assessment_supported_by_evidence
+    - assessment.evidence_derived_from_qualification
+    - assessment.evidence_derived_from_direct_production_confirmation
+    - company.business_registration
+    - company.taxpayer_status_observation
+    - company.qualification
+    - public_procurement.bid_notice
+    - public_procurement.bid_requirement
+    - public_procurement.procurement_supplier
+    - public_procurement.registered_industry
+    - public_procurement.registered_supply_product
+    - public_procurement.procurement_sanction
+    - public_procurement.direct_production_confirmation

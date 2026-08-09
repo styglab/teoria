@@ -1,6 +1,8 @@
 # Custom 
 archive/
 references/
+!.agents/skills/extract-bid-eligibility/references/
+!.agents/skills/extract-bid-eligibility/references/**
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

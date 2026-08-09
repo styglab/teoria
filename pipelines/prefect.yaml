@@ -61,7 +61,7 @@ deployments:
       work_queue_name: default
 
   - name: pps-bid-document-parsing
-    version: 1.0.0
+    version: 1.2.0
     description: 저장된 입찰공고 첨부파일을 페이지·문단·표 단위 JSON으로 파싱한다.
     entrypoint: teoria_pipelines.flows.bid_eligibility.parse_pps_bid_documents
     concurrency_limit:
@@ -71,9 +71,9 @@ deployments:
       batch_size: 100
       concurrency: 4
     schedules:
-      - cron: "25 * * * *"
+      - cron: "*/10 * * * *"
         timezone: Asia/Seoul
-        active: false
+        active: true
     work_pool:
       name: teoria-ai-extraction
       work_queue_name: default
@@ -97,8 +97,8 @@ deployments:
       work_queue_name: default
 
   - name: pps-bid-eligibility-extraction
-    version: 1.0.0
-    description: Codex Skill로 공고 문서와 DB 정형 제한에서 업체 참가자격 조건과 근거를 추출한다.
+    version: 1.10.0
+    description: 문서 공고를 우선해 최대 2개 병렬 추출하고 API 전용 공고는 결정론적으로 정규화한다.
     entrypoint: teoria_pipelines.flows.bid_eligibility.extract_pps_bid_eligibility
     concurrency_limit:
       limit: 1
@@ -106,9 +106,9 @@ deployments:
     parameters:
       batch_size: 10
     schedules:
-      - cron: "35 * * * *"
+      - cron: "5-55/10 * * * *"
         timezone: Asia/Seoul
-        active: false
+        active: true
     work_pool:
       name: teoria-ai-extraction
       work_queue_name: default

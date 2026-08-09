@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "requirements", "unresolved_candidates"],
+  "properties": {
+    "schema_version": {"type": "string", "enum": ["1.3.0"]},
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "operator", "value", "original_text", "holder_scope", "reference_date_type", "assessment_stage", "failure_effect", "comparison_mode", "mandatory", "review_status", "confidence", "evidence", "proof_requirements", "logic"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^r[0-9]+$"},
+          "type": {"enum": ["business_status", "procurement_registration", "industry_license", "participation_region", "company_scale", "certificate", "product_registration", "sanction", "past_performance", "credit_rating", "technical_personnel", "consortium", "legal_qualification", "facility_requirement", "equipment_ownership", "manufacturer_status", "custom"]},
+          "operator": {"enum": ["equals", "not_equals", "contains", "in", "not_in", "greater_than_or_equal", "less_than_or_equal", "exists", "not_exists", "valid_on", "custom"]},
+          "value": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text", "number", "boolean", "items", "attributes"],
+            "properties": {
+              "text": {"type": ["string", "null"]},
+              "number": {"type": ["number", "null"]},
+              "boolean": {"type": ["boolean", "null"]},
+              "items": {"type": "array", "items": {"type": "string"}},
+              "attributes": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["name", "value"], "properties": {"name": {"type": "string"}, "value": {"type": "string"}}}}
+            }
+          },
+          "original_text": {"type": "string", "minLength": 1},
+          "holder_scope": {"enum": ["bidder", "representative", "consortium_representative", "consortium_all_members", "consortium_any_member", "consortium_member", "subcontractor", "unspecified"]},
+          "reference_date_type": {"enum": ["bid_deadline", "qualification_registration_deadline", "notice_date", "contract_date", "explicit_date", "none"]},
+          "assessment_stage": {"enum": ["bid_entry", "qualification_review", "contracting"]},
+          "failure_effect": {"enum": ["cannot_bid", "invalid_bid", "qualification_rejection", "cannot_contract", "needs_review"]},
+          "comparison_mode": {"enum": ["structured", "document_evidence", "manual"]},
+          "mandatory": {"type": "boolean"},
+          "review_status": {"enum": ["extracted", "needs_review"]},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "evidence": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["source_type", "source_id", "document_id", "block_id", "page", "section", "excerpt"], "properties": {"source_type": {"enum": ["document", "structured_api"]}, "source_id": {"type": "string"}, "document_id": {"type": ["string", "null"]}, "block_id": {"type": ["string", "null"]}, "page": {"type": ["integer", "null"], "minimum": 1}, "section": {"type": ["string", "null"]}, "excerpt": {"type": "string", "minLength": 1}}}},
+          "proof_requirements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "document_type", "submission_stage", "deadline_text", "mandatory", "review_status", "evidence"],
+              "properties": {
+                "id": {"type": "string", "pattern": "^p[0-9]+$"},
+                "document_type": {"type": "string", "minLength": 1},
+                "submission_stage": {"enum": ["bid_entry", "qualification_review", "contracting"]},
+                "deadline_text": {"type": ["string", "null"]},
+                "mandatory": {"type": "boolean"},
+                "review_status": {"enum": ["extracted", "needs_review"]},
+                "evidence": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["source_type", "source_id", "document_id", "block_id", "page", "section", "excerpt"], "properties": {"source_type": {"enum": ["document", "structured_api"]}, "source_id": {"type": "string"}, "document_id": {"type": ["string", "null"]}, "block_id": {"type": ["string", "null"]}, "page": {"type": ["integer", "null"], "minimum": 1}, "section": {"type": ["string", "null"]}, "excerpt": {"type": "string", "minLength": 1}}}}
+              }
+            }
+          },
+          "logic": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["placements"],
+            "properties": {
+              "placements": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["scope", "alternative_group", "alternative_branch"],
+                  "properties": {
+                    "scope": {"enum": ["common", "single", "consortium"]},
+                    "alternative_group": {"type": ["string", "null"]},
+                    "alternative_branch": {"type": ["string", "null"]}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "unresolved_candidates": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["text", "review_reason", "blocks_qualification"], "properties": {"text": {"type": "string", "minLength": 1}, "review_reason": {"enum": ["referenced_document_missing", "ambiguous_stage", "ambiguous_failure_effect", "manual_evidence_interpretation", "informational_exclusion"]}, "blocks_qualification": {"type": "boolean"}}}}
+  }
+}

@@ -124,6 +124,32 @@ async def test_provider_executor_honors_retry_after(monkeypatch) -> None:
     assert delays == [2.0]
 
 
+def test_provider_executor_parses_xml_response() -> None:
+    request = httpx.Request("GET", "https://example.test/records")
+    response = httpx.Response(
+        200,
+        headers={"content-type": "application/xml;charset=UTF-8"},
+        text=(
+            "<response><HeaderValueList><resultCode>00</resultCode></HeaderValueList>"
+            "<body><items><item><certSeCode>03</certSeCode></item></items></body>"
+            "<totalCount>1</totalCount></response>"
+        ),
+        request=request,
+    )
+    response.elapsed = timedelta(milliseconds=1)
+
+    execution = ProviderExecutor._execution_response(response)
+
+    assert execution.content_type == "application/xml"
+    assert execution.body == {
+        "response": {
+            "HeaderValueList": {"resultCode": "00"},
+            "body": {"items": {"item": {"certSeCode": "03"}}},
+            "totalCount": "1",
+        }
+    }
+
+
 def test_response_validator_accepts_omitted_records_only_when_total_is_zero() -> None:
     definition = ProviderDefinition.model_validate({
         "id": "provider",

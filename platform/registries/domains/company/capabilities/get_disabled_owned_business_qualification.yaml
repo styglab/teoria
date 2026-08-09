@@ -1,0 +1,21 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-08"
+
+capability:
+  id: get_disabled_owned_business_qualification
+  name: 장애인기업 자격 조회
+  description: 사업자등록번호와 기준일자로 유효한 장애인기업 확인 자격을 조회한다.
+  inputs:
+    business_registration_number:
+      property: company.business_registration.business_registration_number
+      required: true
+    reference_date:
+      property: company.qualification.reference_date
+      required: true
+  steps:
+    - call: kodma_smpp_certificate.list_disabled_owned_business_certificates
+  returns:
+    - company.business_registration
+    - company.qualification
+    - company.business_registration_has_qualification

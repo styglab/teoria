@@ -74,6 +74,73 @@ def html_records(records: list[dict]) -> ExecutionResponse:
     )
 
 
+def xml_response(items: list[dict]) -> ExecutionResponse:
+    body = {
+        "response": {
+            "HeaderValueList": {"resultCode": "00", "resultMsg": "성공"},
+            "body": {"items": {"item": items if len(items) != 1 else items[0]}},
+            "numOfRows": "10",
+            "pageNo": "1",
+            "totalCount": str(len(items)),
+        }
+    }
+    if not items:
+        body["response"]["body"] = {}
+    return ExecutionResponse(
+        status_code=200,
+        content_type="application/xml",
+        headers={},
+        body=body,
+        elapsed_ms=1.0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_gets_company_and_direct_production_qualifications() -> None:
+    catalog = RegistryLoader(ROOT / "registries").load()
+    executor = FakeExecutor([
+        xml_response([{
+            "certSeCode": "03",
+            "issuInstt": "서울지방중소벤처기업청",
+            "validPdBeginDe": "20260101",
+            "validPdEndDe": "20261231",
+            "certfcDe": "20260101",
+        }]),
+        xml_response([]),
+        xml_response([{
+            "certSeCode": "01",
+            "validPdBeginDe": "20260101",
+            "validPdEndDe": "20261231",
+            "certfcDe": "20260101",
+            "detailPrdnmNo": "8111189901",
+            "essntlPartclrMatter": "테스트 범위",
+        }]),
+    ])
+
+    result = await CapabilityRunner(executor).run(
+        catalog,
+        "get_company_bid_qualification_profile",
+        {
+            "business_registration_number": "3808100318",
+            "reference_date": date(2026, 8, 8),
+        },
+    )
+
+    assert [request.query["stdrDate"] for request in executor.requests] == ["20260808"] * 3
+    assert [request.query["bsnmNo"] for request in executor.requests] == ["3808100318"] * 3
+    objects = {item.object_type: item.properties for item in result.objects}
+    assert objects["qualification"]["qualification_type"] == "women_owned_business"
+    assert objects["qualification"]["grant_form"] == "confirmation"
+    assert objects["qualification"]["status"] == "active"
+    assert objects["qualification"]["reference_date"] == date(2026, 8, 8)
+    assert objects["direct_production_confirmation"]["detailed_product_code"] == "8111189901"
+    assert objects["direct_production_confirmation"]["status"] == "active"
+    assert {item.link_type for item in result.links} == {
+        "business_registration_has_qualification",
+        "business_registration_has_direct_production_confirmation",
+    }
+
+
 def test_missing_collection_response_path_is_an_empty_result() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
     executor = FakeExecutor(

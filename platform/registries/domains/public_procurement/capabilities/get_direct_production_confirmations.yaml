@@ -1,0 +1,22 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-08-08"
+
+capability:
+  id: get_direct_production_confirmations
+  name: 직접생산확인 조회
+  description: 사업자등록번호와 기준일자로 유효한 세부품명별 직접생산확인을 조회한다.
+  inputs:
+    business_registration_number:
+      property: company.business_registration.business_registration_number
+      required: true
+    reference_date:
+      property: public_procurement.direct_production_confirmation.reference_date
+      required: true
+    detailed_product_code:
+      property: public_procurement.direct_production_confirmation.detailed_product_code
+  steps:
+    - call: kodma_smpp_certificate.list_direct_production_certificates
+  returns:
+    - public_procurement.direct_production_confirmation
+    - public_procurement.business_registration_has_direct_production_confirmation

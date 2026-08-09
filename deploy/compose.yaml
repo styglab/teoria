@@ -271,6 +271,7 @@ services:
       TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY:-}
       TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY:-}
       TEORIA_SOURCE_PPS_USER_API_KEY: ${TEORIA_SOURCE_PPS_USER_API_KEY:-}
+      TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY: ${TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY:-}
     depends_on:
       postgres-migrate:
         condition: service_completed_successfully
@@ -293,6 +294,7 @@ services:
       TEORIA_ENVIRONMENT: production
       TEORIA_REGISTRY_PATH: /app/platform/registries
       TEORIA_ADMIN_API_ROOT_PATH: /admin-api
+      TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 5s

@@ -19,6 +19,34 @@ from teoria_pipelines.models import (
 )
 
 
+def eligibility_requires_review(notice: dict[str, Any], result: dict[str, Any]) -> bool:
+    return (
+        notice["coverage"]["requires_review"]
+        or any(item.get("blocks_qualification", True)
+               for item in result["unresolved_candidates"])
+        or any(item["review_status"] == "needs_review" for item in result["requirements"])
+        or any(item.get("failure_effect") == "needs_review" for item in result["requirements"])
+        or any(
+            proof["review_status"] == "needs_review"
+            for item in result["requirements"]
+            for proof in item.get("proof_requirements", [])
+        )
+    )
+
+
+def _sanitize_postgres_value(value: Any) -> Any:
+    """Recursively remove NUL characters unsupported by PostgreSQL text/jsonb."""
+    if isinstance(value, str):
+        return value.replace("\x00", " ")
+    if isinstance(value, dict):
+        return {key: _sanitize_postgres_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_postgres_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_postgres_value(item) for item in value)
+    return value
+
+
 class PostgresStore:
     """Data DB writer. A new short-lived connection is used per task boundary."""
 
@@ -355,7 +383,10 @@ class PostgresStore:
                 "OR (d.status='failed' AND d.attempts < %s) "
                 "OR (d.status='stored' AND (d.parse_status IN ('pending','processing') "
                 "OR (d.parse_status='failed' AND d.parse_attempts < %s))))) "
-                "ORDER BY n.notice_published_at DESC LIMIT %s", (download_max_attempts, parse_max_attempts, limit)
+                "ORDER BY EXISTS (SELECT 1 FROM public_procurement.bid_notice_documents priority_d "
+                "WHERE priority_d.notice_number=n.notice_number AND priority_d.notice_order=n.notice_order "
+                "AND priority_d.parse_status='parsed' AND priority_d.parsed_object_key IS NOT NULL) DESC, "
+                "n.notice_published_at DESC LIMIT %s", (download_max_attempts, parse_max_attempts, limit)
             ).fetchall()
             result = []
             for number, order, notice_hash, deadline in notices:
@@ -365,6 +396,13 @@ class PostgresStore:
                     "AND parse_status='parsed' AND storage_status='active' "
                     "AND parsed_object_key IS NOT NULL ORDER BY document_slot", (number, order)
                 ).fetchall()
+                # 나라장터의 `표준공고서` URL은 원본 첨부파일과 같은 객체를 중복 제공한다.
+                # AI 입력에는 checksum별 한 건만 전달하되 구체적인 파일명을 우선한다.
+                documents = sorted(
+                    documents,
+                    key=lambda row: (str(row[1] or "").strip() == "표준공고서", str(row[1] or "")),
+                )
+                documents = list({row[2] or row[0]: row for row in reversed(documents)}.values())
                 unavailable_documents = connection.execute(
                     "SELECT document_id, file_name, status, attempts, last_error_code, "
                     "parse_status, parse_attempts, parse_error_code FROM "
@@ -411,13 +449,38 @@ class PostgresStore:
         with psycopg.connect(self.database_url) as connection:
             rows = connection.execute(
                 "SELECT input_fingerprint FROM public_procurement.bid_eligibility_extractions "
-                "WHERE status='completed'"
+                "WHERE status='completed' OR (status='failed' AND finished_at>now()-interval '1 hour')"
             ).fetchall()
         return {row[0] for row in rows}
 
+    def save_eligibility_failure(self, notice: dict[str, Any], fingerprint: str,
+                                 error_code: str, raw_output_object_key: str | None,
+                                 model_name: str | None, skill_version: str) -> None:
+        coverage = notice["coverage"]
+        with psycopg.connect(self.database_url) as connection:
+            connection.execute(
+                "INSERT INTO public_procurement.bid_eligibility_extractions "
+                "(extraction_id,notice_number,notice_order,input_fingerprint,schema_version,"
+                "skill_version,model_name,status,raw_output_object_key,error_code,finished_at,"
+                "completeness,requires_review,total_document_count,parsed_document_count,"
+                "unavailable_document_count,unavailable_documents,structured_requirement_count) "
+                "VALUES (%s,%s,%s,%s,'1.1.0',%s,%s,'failed',%s,%s,now(),%s,true,%s,%s,%s,%s,%s) "
+                "ON CONFLICT (notice_number,notice_order,input_fingerprint) DO UPDATE SET "
+                "status='failed',model_name=EXCLUDED.model_name,raw_output_object_key=EXCLUDED.raw_output_object_key,"
+                "error_code=EXCLUDED.error_code,finished_at=now(),requires_review=true",
+                (uuid4(), notice["notice_number"], notice["notice_order"], fingerprint,
+                 skill_version, model_name, raw_output_object_key, error_code[:500], coverage["completeness"],
+                 coverage["total_document_count"], coverage["parsed_document_count"],
+                 coverage["unavailable_document_count"], Jsonb([
+                     {**item, "document_id": str(item["document_id"])}
+                     for item in notice["unavailable_documents"]
+                 ]), coverage["structured_requirement_count"]),
+            )
+
     def save_eligibility_extraction(self, notice: dict[str, Any], fingerprint: str,
                                     result: dict[str, Any], raw_output_object_key: str,
-                                    model_name: str | None) -> bool:
+                                    model_name: str | None, skill_version: str) -> bool:
+        result = _sanitize_postgres_value(result)
         extraction_id = uuid4()
         with psycopg.connect(self.database_url) as connection:
             existing = connection.execute(
@@ -430,7 +493,7 @@ class PostgresStore:
             connection.execute(
                 "INSERT INTO public_procurement.bid_eligibility_extractions "
                 "(extraction_id,notice_number,notice_order,input_fingerprint,schema_version,skill_version,model_name,status,raw_output_object_key,finished_at,completeness,requires_review,total_document_count,parsed_document_count,unavailable_document_count,unavailable_documents,structured_requirement_count) "
-                "VALUES (%s,%s,%s,%s,%s,'1.0.0',%s,'completed',%s,now(),%s,%s,%s,%s,%s,%s,%s) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,'completed',%s,now(),%s,%s,%s,%s,%s,%s,%s) "
                 "ON CONFLICT (notice_number,notice_order,input_fingerprint) DO UPDATE SET "
                 "extraction_id=EXCLUDED.extraction_id,status='completed',model_name=EXCLUDED.model_name,"
                 "raw_output_object_key=EXCLUDED.raw_output_object_key,error_code=NULL,finished_at=now(),"
@@ -439,8 +502,8 @@ class PostgresStore:
                 "unavailable_document_count=EXCLUDED.unavailable_document_count,unavailable_documents=EXCLUDED.unavailable_documents,"
                 "structured_requirement_count=EXCLUDED.structured_requirement_count",
                 (extraction_id, notice["notice_number"], notice["notice_order"], fingerprint,
-                 result["schema_version"], model_name, raw_output_object_key,
-                 notice["coverage"]["completeness"], notice["coverage"]["requires_review"],
+                 result["schema_version"], skill_version, model_name, raw_output_object_key,
+                 notice["coverage"]["completeness"], eligibility_requires_review(notice, result),
                  notice["coverage"]["total_document_count"], notice["coverage"]["parsed_document_count"],
                  notice["coverage"]["unavailable_document_count"], Jsonb([
                      {**item, "document_id": str(item["document_id"])}
@@ -457,11 +520,12 @@ class PostgresStore:
                 requirement_id = uuid5(NAMESPACE_URL, f"teoria:{extraction_id}:{item['id']}")
                 connection.execute(
                     "INSERT INTO public_procurement.bid_eligibility_requirements "
-                    "(requirement_id,extraction_id,local_id,notice_number,notice_order,requirement_type,operator,value,original_text,holder_scope,reference_date_type,mandatory,review_status,confidence) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    "(requirement_id,extraction_id,local_id,notice_number,notice_order,requirement_type,operator,value,original_text,holder_scope,reference_date_type,assessment_stage,failure_effect,comparison_mode,mandatory,review_status,confidence) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     (requirement_id, extraction_id, item["id"], notice["notice_number"],
                      notice["notice_order"], item["type"], item["operator"], Jsonb(item["value"]),
                      item["original_text"], item["holder_scope"], item["reference_date_type"],
+                     item["assessment_stage"], item["failure_effect"], item["comparison_mode"],
                      item["mandatory"], item["review_status"], item["confidence"]),
                 )
                 for evidence in item["evidence"]:
@@ -473,6 +537,28 @@ class PostgresStore:
                          evidence["document_id"], evidence["block_id"], evidence["page"],
                          evidence["section"], evidence["excerpt"]),
                     )
+                for proof in item["proof_requirements"]:
+                    proof_id = uuid5(
+                        NAMESPACE_URL,
+                        f"teoria:{extraction_id}:{item['id']}:{proof['id']}",
+                    )
+                    connection.execute(
+                        "INSERT INTO public_procurement.bid_eligibility_requirement_proofs "
+                        "(proof_id,requirement_id,local_id,document_type,submission_stage,deadline_text,mandatory,review_status) "
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                        (proof_id, requirement_id, proof["id"], proof["document_type"],
+                         proof["submission_stage"], proof["deadline_text"], proof["mandatory"],
+                         proof["review_status"]),
+                    )
+                    for evidence in proof["evidence"]:
+                        connection.execute(
+                            "INSERT INTO public_procurement.bid_eligibility_requirement_proof_evidence "
+                            "(evidence_id,proof_id,source_type,source_id,document_id,block_id,page_number,section,excerpt) "
+                            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                            (uuid4(), proof_id, evidence["source_type"], evidence["source_id"],
+                             evidence["document_id"], evidence["block_id"], evidence["page"],
+                             evidence["section"], evidence["excerpt"]),
+                        )
         return True
 
     @staticmethod
