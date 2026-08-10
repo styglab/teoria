@@ -35,12 +35,20 @@ def compile_eligibility_facts(facts: dict[str, Any]) -> dict[str, Any]:
     if root is None:
         root = expression("all")
 
-    compiled_requirements = [
-        {key: value for key, value in item.items() if key != "logic"}
-        for item in requirements
-    ]
+    compiled_requirements = []
+    for item in requirements:
+        compiled = {key: value for key, value in item.items() if key != "logic"}
+        proposition = str(compiled.get("proposition_text") or compiled["original_text"])
+        start = compiled["original_text"].find(proposition)
+        if start < 0:
+            proposition = compiled["original_text"]
+            start = 0
+        compiled["proposition_text"] = proposition
+        compiled["proposition_start"] = start
+        compiled["proposition_end"] = start + len(proposition)
+        compiled_requirements.append(compiled)
     result = {
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "requirements": compiled_requirements,
         "expression": root,
         "unresolved_candidates": facts["unresolved_candidates"],
@@ -76,12 +84,6 @@ def _validate_alternative_placements(placements: dict[str, list[dict]]) -> None:
             if group and branch:
                 groups[(item["scope"], group)][branch].add(requirement_id)
     for branches in groups.values():
-        membership: dict[str, int] = defaultdict(int)
-        for requirement_ids in branches.values():
-            for requirement_id in requirement_ids:
-                membership[requirement_id] += 1
-        if any(count > 1 for count in membership.values()):
-            raise ValueError("requirement_reused_across_alternative_branches")
         branch_sets = list(branches.values())
         for index, left in enumerate(branch_sets):
             for right in branch_sets[index + 1:]:

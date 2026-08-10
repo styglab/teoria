@@ -71,6 +71,7 @@ class BidCheckReader:
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
             rows = connection.execute(
                 "SELECT requirement_id,local_id,requirement_type,operator,value_text,original_text,"
+                "proposition_text,proposition_start,proposition_end,"
                 "holder_scope,reference_date_type,assessment_stage,failure_effect,comparison_mode,"
                 "mandatory,review_status,confidence,evidence_summary,proof_summary "
                 "FROM public_procurement.runtime_bid_requirements WHERE bid_notice_id=%s "

@@ -139,6 +139,9 @@ source:
         - {id: operator, name: 비교연산자, data_type: string}
         - {id: value_text, name: 요건값, data_type: string}
         - {id: original_text, name: 요건 원문, data_type: string}
+        - {id: proposition_text, name: 원자 요건 원문, data_type: string}
+        - {id: proposition_start, name: 원자 요건 시작 위치, data_type: integer}
+        - {id: proposition_end, name: 원자 요건 끝 위치, data_type: integer}
         - {id: holder_scope, name: 보유주체 범위, data_type: string}
         - {id: reference_date_type, name: 기준일 유형, data_type: string}
         - {id: mandatory, name: 필수 여부, data_type: boolean}

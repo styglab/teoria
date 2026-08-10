@@ -42,7 +42,7 @@ def _compact(node: dict) -> str:
                          ids=lambda case: case["id"])
 def test_golden_expression_cases(case: dict) -> None:
     facts = {
-        "schema_version": "1.3.0",
+        "schema_version": "1.4.0",
         "requirements": [_requirement(key, value) for key, value in case["placements"].items()],
         "unresolved_candidates": [],
     }
@@ -71,18 +71,22 @@ def test_unconditional_common_placement_subsumes_mode_duplicate() -> None:
     assert _compact(result["expression"]) == "r1"
 
 
-def test_rejects_requirement_reused_across_alternative_branches() -> None:
-    first = _requirement("r1", [
+def test_allows_shared_requirement_across_distinct_alternative_branches() -> None:
+    shared = _requirement("r1", [
         {"scope": "common", "alternative_group": "g1", "alternative_branch": "a"},
         {"scope": "common", "alternative_group": "g1", "alternative_branch": "b"},
     ])
-    second = _requirement("r2", [
+    first = _requirement("r2", [
+        {"scope": "common", "alternative_group": "g1", "alternative_branch": "a"},
+    ])
+    second = _requirement("r3", [
         {"scope": "common", "alternative_group": "g1", "alternative_branch": "b"},
     ])
 
-    with pytest.raises(ValueError, match="requirement_reused_across_alternative_branches"):
-        compile_eligibility_facts({"requirements": [first, second],
-                                   "unresolved_candidates": []})
+    result = compile_eligibility_facts({"requirements": [shared, first, second],
+                                        "unresolved_candidates": []})
+
+    assert _compact(result["expression"]) == "any(all(r1,r2),all(r1,r3))"
 
 
 def test_rejects_unconditional_requirement_also_used_as_alternative() -> None:
@@ -113,7 +117,7 @@ def test_compiler_preserves_stage_and_separate_proof_requirements() -> None:
 
     result = compile_eligibility_facts({"requirements": [item], "unresolved_candidates": []})
 
-    assert result["schema_version"] == "1.2.0"
+    assert result["schema_version"] == "1.3.0"
     assert result["requirements"][0]["assessment_stage"] == "qualification_review"
     assert result["requirements"][0]["proof_requirements"][0]["document_type"] == "장비보유현황증명서"
 
@@ -131,7 +135,7 @@ def test_fact_schema_rejects_unknown_requirement_vocabulary() -> None:
         {"scope": "common", "alternative_group": None, "alternative_branch": None},
     ])
     item["type"] = "invented_type"
-    facts = {"schema_version": "1.3.0", "requirements": [item],
+    facts = {"schema_version": "1.4.0", "requirements": [item],
              "unresolved_candidates": []}
 
     errors = list(Draft202012Validator(json.loads(FACT_SCHEMA.read_text())).iter_errors(facts))

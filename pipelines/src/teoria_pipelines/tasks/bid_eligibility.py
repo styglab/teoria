@@ -35,7 +35,7 @@ from teoria_pipelines.settings import bootstrap_pipeline_settings
 
 
 SKILL_ROOT = Path("/app/.agents/skills/extract-bid-eligibility")
-EXTRACTION_VERSION = "2.1.0"
+EXTRACTION_VERSION = "2.2.0"
 
 
 def _resources() -> tuple[PostgresStore, ObjectStorage]:
@@ -175,7 +175,7 @@ def _input_fingerprint(notice: dict) -> str:
         "structured_hashes": [
             item["source_hash"] for item in notice["licenses"] + notice["regions"]
         ],
-        "schema_version": "1.3.0",
+        "schema_version": "1.4.0",
         "skill_version": EXTRACTION_VERSION,
         "selection_version": SELECTION_VERSION,
     }
@@ -231,6 +231,45 @@ def _reconcile_original_text(result: dict) -> None:
         requirement["original_text"] = min(
             (evidence["excerpt"] for evidence in requirement["evidence"]), key=len
         )
+
+
+def _reconcile_proposition_spans(result: dict) -> None:
+    """Anchor each atomic proposition inside its verbatim requirement citation."""
+    for requirement in result["requirements"]:
+        original = requirement["original_text"]
+        proposition = str(requirement.get("proposition_text") or "").strip()
+        if not proposition or proposition not in original:
+            normalized = str((requirement.get("value") or {}).get("text") or "").strip()
+            proposition = normalized if normalized and normalized in original else original
+        start = original.index(proposition)
+        requirement["proposition_text"] = proposition
+        requirement["proposition_start"] = start
+        requirement["proposition_end"] = start + len(proposition)
+
+
+def _repair_requirement_fields(result: dict) -> None:
+    """Repair local stage/date contradictions without regenerating the whole notice."""
+    stage_by_effect = {
+        "cannot_bid": "bid_entry",
+        "invalid_bid": "bid_entry",
+        "qualification_rejection": "qualification_review",
+        "cannot_contract": "contracting",
+    }
+    deadline = re.compile(
+        r"(?:입찰(?:서)?|견적서)\s*(?:제출)?\s*마감|입찰\s*마감"
+    )
+    for requirement in result["requirements"]:
+        expected_stage = stage_by_effect.get(requirement["failure_effect"])
+        if expected_stage and requirement["assessment_stage"] != expected_stage:
+            requirement["assessment_stage"] = expected_stage
+            requirement["review_status"] = "needs_review"
+            requirement["confidence"] = min(requirement["confidence"], 0.7)
+        if (
+            requirement["assessment_stage"] == "qualification_review"
+            and requirement["reference_date_type"] == "bid_deadline"
+            and not deadline.search(requirement["original_text"])
+        ):
+            requirement["reference_date_type"] = "none"
 
 
 def _reconcile_document_citations(result: dict, inputs: dict) -> None:
@@ -459,9 +498,18 @@ def _validate_semantic_normalization(result: dict) -> None:
             ))
             if joint and "하도급" in normalized_value:
                 raise ValueError("non_atomic_consortium_requirement")
-        if "조세포탈" in requirement["original_text"] and requirement["type"] != "sanction":
+        proposition = _requirement_proposition(requirement)
+        start = requirement.get("proposition_start")
+        end = requirement.get("proposition_end")
+        if (
+            not isinstance(start, int) or not isinstance(end, int)
+            or start < 0 or end <= start
+            or requirement["original_text"][start:end] != proposition
+        ):
+            raise ValueError("invalid_proposition_span")
+        if "조세포탈" in proposition and requirement["type"] != "sanction":
             raise ValueError("tax_evasion_must_be_sanction")
-        if re.search(r"적격심사\s*(?:시|때|과정)", requirement["original_text"]):
+        if re.search(r"적격심사\s*(?:시|때|과정)", proposition):
             if requirement["assessment_stage"] != "qualification_review":
                 raise ValueError("qualification_review_stage_mismatch")
             if requirement["failure_effect"] not in {"qualification_rejection", "needs_review"}:
@@ -469,15 +517,22 @@ def _validate_semantic_normalization(result: dict) -> None:
         if (
             stage == "qualification_review"
             and requirement["reference_date_type"] == "bid_deadline"
-            and not re.search(r"입찰(?:서)?\s*(?:제출)?\s*마감|입찰\s*마감", requirement["original_text"])
+            and not re.search(
+                r"(?:입찰(?:서)?|견적서)\s*(?:제출)?\s*마감|입찰\s*마감",
+                requirement["original_text"],
+            )
         ):
             raise ValueError("qualification_review_bid_deadline_not_explicit")
-        if re.search(r"(?:예정가격|견적가격|투찰률|낙찰하한율|최저가격)", requirement["original_text"]):
+        if re.search(
+            r"(?:예정(?:가격|금액)|견적(?:가격|금액)|투찰률|낙찰(?:하한율|가격)|"
+            r"(?:제한적\s*)?최저(?:가격|가))",
+            proposition,
+        ):
             raise ValueError("bid_price_must_not_be_eligibility")
         if (
             stage == "contracting"
-            and re.search(r"입찰참가\s*(?:등록|자격)", requirement["original_text"])
-            and not re.search(r"계약(?:체결)?일까지|계약\s*(?:체결|상대자)|유지", requirement["original_text"])
+            and re.search(r"입찰참가\s*등록|입찰참가자격.{0,8}(?:등록|보유|갖춘)", proposition)
+            and not re.search(r"계약(?:체결)?일까지|계약\s*(?:체결|상대자)|유지", proposition)
         ):
             raise ValueError("bid_entry_registration_must_not_be_contracting")
         (custom if requirement["type"] == "custom" else known).add(semantic_key)
@@ -566,13 +621,28 @@ def _requirement_merge_key(requirement: dict) -> tuple | None:
         character for character in _citation_text(str(value.get("text") or "")).casefold()
         if character.isalnum()
     )
-    if requirement["type"] in {"participation_region", "industry_license", "product_registration"} and text:
+    if requirement["type"] != "custom" and text:
         return (*base, "text", text)
     original = "".join(
         character for character in _citation_text(requirement["original_text"]).casefold()
         if character.isalnum()
     )
     return (*base, "exact", original) if original else None
+
+
+def _requirement_proposition(requirement: dict) -> str:
+    """Return the atomic proposition, excluding incidental text in a shared citation."""
+    explicit = str(requirement.get("proposition_text") or "").strip()
+    if not explicit:
+        value = requirement.get("value") or {}
+        normalized = str(value.get("text") or "").strip()
+        explicit = normalized if normalized and normalized in requirement["original_text"] else requirement["original_text"]
+    if explicit in requirement["original_text"]:
+        start = requirement["original_text"].index(explicit)
+        requirement.setdefault("proposition_text", explicit)
+        requirement.setdefault("proposition_start", start)
+        requirement.setdefault("proposition_end", start + len(explicit))
+    return explicit
 
 
 def _deduplicate_evidence(items: list[dict]) -> list[dict]:
@@ -633,6 +703,8 @@ def _structured_api_result(notice: dict) -> dict:
             "value": {"text": text, "number": None, "boolean": None, "items": [],
                       "attributes": attributes},
             "original_text": text, "holder_scope": "bidder",
+            "proposition_text": text, "proposition_start": 0,
+            "proposition_end": len(text),
             "reference_date_type": "qualification_registration_deadline",
             "assessment_stage": "bid_entry", "failure_effect": "cannot_bid",
             "comparison_mode": "structured", "proof_requirements": [],
@@ -677,7 +749,7 @@ def _structured_api_result(notice: dict) -> dict:
         root_conditions[0] if len(root_conditions) == 1
         else _expression("all", root_conditions)
     )
-    return {"schema_version": "1.2.0", "requirements": requirements,
+    return {"schema_version": "1.3.0", "requirements": requirements,
             "expression": expression, "unresolved_candidates": []}
 
 
@@ -797,6 +869,9 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
         "직접생산확인증명서는 certificate이고 나라장터 제조·공급 물품 등록만 product_registration이다. "
         "조세포탈 유죄판결, 부정당업자, 입찰참가 제한과 경영개선명령은 sanction으로 분류하라. "
         "original_text는 반드시 하나의 Evidence excerpt에서 글자 그대로 복사하고 요약 의미는 value에만 넣어라. "
+        "복합 원문에서는 각 요건을 나타내는 최소한의 완결된 절을 proposition_text로 복사하고 "
+        "original_text 안의 정확한 proposition_start와 proposition_end를 기록하라. 부정어, 기준일, "
+        "평가단계와 탈락효과 표현은 proposition_text에서 빼지 말라. "
         "하나의 복합 원문에서 분리한 요건은 original_text와 Evidence가 같아도 value나 holder_scope가 "
         "다르면 병합하지 말라. "
         "초안이나 설명은 출력하지 말라. "
@@ -848,6 +923,8 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
         _reconcile_document_citations(facts, inputs)
         _reconcile_original_text(facts)
         _consolidate_requirements(facts)
+        _reconcile_proposition_spans(facts)
+        _repair_requirement_fields(facts)
         _validate_semantic_normalization(facts)
         if list(Draft202012Validator(facts_schema).iter_errors(facts)):
             raise ValueError("invalid_consolidated_eligibility_facts_schema")

@@ -28,6 +28,7 @@ from teoria_pipelines.tasks.bid_eligibility import (
     _ellipsis_fragments_match,
     _reconcile_document_citations,
     _reconcile_original_text,
+    _repair_requirement_fields,
     _skill_instructions,
     _prioritize_notices,
     _structured_api_result,
@@ -477,6 +478,7 @@ def test_semantic_normalization_rejects_qualification_review_as_bid_entry() -> N
         "value": {"text": "수집·운반 장비", "number": None, "boolean": True,
                   "items": [], "attributes": []},
         "original_text": "적격심사 시 장비보유현황증명서를 제출하여야 합니다.",
+        "proposition_text": "적격심사 시 장비보유현황증명서를 제출하여야 합니다.",
         "holder_scope": "bidder", "reference_date_type": "bid_deadline",
         "assessment_stage": "bid_entry", "failure_effect": "cannot_bid",
         "comparison_mode": "document_evidence", "proof_requirements": [],
@@ -543,6 +545,17 @@ def test_semantic_normalization_rejects_bid_price_formula() -> None:
         _validate_semantic_normalization({"requirements": [item]})
 
 
+def test_semantic_normalization_ignores_incidental_price_in_shared_evidence() -> None:
+    item = _validated_requirement(
+        "전자수의, 총액입찰, 단독이행, 제한적 최저가(낙찰하한율 89.745%)",
+        type="consortium",
+        value={"text": "단독이행", "number": None, "boolean": True,
+               "items": [], "attributes": []},
+    )
+
+    _validate_semantic_normalization({"requirements": [item]})
+
+
 def test_semantic_normalization_rejects_bid_registration_as_contracting() -> None:
     item = _validated_requirement(
         "정보통신공사업으로 입찰참가 등록한 자",
@@ -551,6 +564,16 @@ def test_semantic_normalization_rejects_bid_registration_as_contracting() -> Non
 
     with pytest.raises(ValueError, match="bid_entry_registration_must_not_be_contracting"):
         _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_contracting_sanction_may_reference_bid_participation_restriction() -> None:
+    item = _validated_requirement(
+        "계약 위반 시 입찰참가자격 제한 처분을 받습니다.",
+        type="sanction", operator="not_exists", assessment_stage="contracting",
+        failure_effect="cannot_contract",
+    )
+
+    _validate_semantic_normalization({"requirements": [item]})
 
 
 def test_semantic_normalization_rejects_implicit_bid_deadline_for_review() -> None:
@@ -563,6 +586,57 @@ def test_semantic_normalization_rejects_implicit_bid_deadline_for_review() -> No
 
     with pytest.raises(ValueError, match="qualification_review_bid_deadline_not_explicit"):
         _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_semantic_normalization_accepts_explicit_quotation_deadline_for_review() -> None:
+    item = _validated_requirement(
+        "견적서 제출 마감일 현재 부도·파산·해산·영업정지가 확정된 경우",
+        type="business_status",
+        assessment_stage="qualification_review",
+        failure_effect="qualification_rejection",
+        reference_date_type="bid_deadline",
+    )
+
+    _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_local_repair_aligns_stage_with_failure_effect() -> None:
+    item = _validated_requirement(
+        "낙찰자 결정을 취소합니다.", assessment_stage="bid_entry",
+        failure_effect="qualification_rejection",
+    )
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["assessment_stage"] == "qualification_review"
+    assert item["review_status"] == "needs_review"
+    assert item["confidence"] == 0.7
+
+
+def test_local_repair_removes_unstated_review_deadline() -> None:
+    item = _validated_requirement(
+        "입찰참가자격 제한기간 중에 있는 자",
+        assessment_stage="qualification_review",
+        failure_effect="qualification_rejection",
+        reference_date_type="bid_deadline",
+    )
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["reference_date_type"] == "none"
+
+
+def test_consolidation_keeps_distinct_company_scale_alternatives_from_same_sentence() -> None:
+    original = "소기업 또는 소상공인으로서 확인서를 소지한 업체"
+    base = _validated_requirement(original, type="company_scale", operator="equals")
+    result = {"requirements": [
+        {**base, "id": "r1", "value": {**base["value"], "text": "소기업"}},
+        {**base, "id": "r2", "value": {**base["value"], "text": "소상공인"}},
+    ]}
+
+    _consolidate_requirements(result)
+
+    assert [item["id"] for item in result["requirements"]] == ["r1", "r2"]
 
 
 def test_semantic_normalization_rejects_unreviewed_source_conflict() -> None:

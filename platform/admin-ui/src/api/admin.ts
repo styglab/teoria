@@ -73,7 +73,8 @@ export type BidNoticeSummary = {
 };
 export type BidRequirement = {
   requirement_id: string; local_id: string; requirement_type: string; operator: string;
-  value_text: string | null; original_text: string; holder_scope: string;
+  value_text: string | null; original_text: string; proposition_text: string | null;
+  proposition_start: number | null; proposition_end: number | null; holder_scope: string;
   reference_date_type: string; assessment_stage: "bid_entry" | "qualification_review" | "contracting";
   failure_effect: string; comparison_mode: "structured" | "document_evidence" | "manual";
   mandatory: boolean; review_status: string; confidence: number;

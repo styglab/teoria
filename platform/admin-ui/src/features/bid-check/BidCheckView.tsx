@@ -96,7 +96,9 @@ export function BidCheckView() {
         {!requirements.length && <div className="bid-empty"><Clock3 size={20} /><span>참가자격 추출 대기 중입니다.</span></div>}
         {requirements.map((item) => <article key={item.requirement_id}>
           <header><CheckCircle2 size={14} /><strong>{item.requirement_type}</strong><code>{item.operator}</code><span>{Math.round(item.confidence * 100)}%</span></header>
-          <p>{item.original_text}</p>
+          {item.proposition_text && item.proposition_text !== item.original_text &&
+            <p><strong>원자 조건</strong><br />{item.proposition_text}</p>}
+          <p><strong>인용 원문</strong><br />{item.original_text}</p>
           <dl><div><dt>적용 대상</dt><dd>{item.holder_scope}</dd></div><div><dt>판정 단계</dt><dd>{item.assessment_stage}</dd></div><div><dt>불충족 효과</dt><dd>{item.failure_effect}</dd></div><div><dt>비교 방식</dt><dd>{item.comparison_mode}</dd></div><div><dt>기준일</dt><dd>{item.reference_date_type}</dd></div></dl>
           {item.proof_summary && <p><strong>제출 증빙</strong><br />{item.proof_summary}</p>}
           {item.evidence_summary && <blockquote>{item.evidence_summary}</blockquote>}

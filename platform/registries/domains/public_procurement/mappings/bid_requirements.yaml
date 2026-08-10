@@ -36,6 +36,12 @@ mapping:
       - {field: teoria_public_procurement.bid_requirements.value_text}
     bid_requirement.original_text:
       - {field: teoria_public_procurement.bid_requirements.original_text}
+    bid_requirement.proposition_text:
+      - {field: teoria_public_procurement.bid_requirements.proposition_text}
+    bid_requirement.proposition_start:
+      - {field: teoria_public_procurement.bid_requirements.proposition_start}
+    bid_requirement.proposition_end:
+      - {field: teoria_public_procurement.bid_requirements.proposition_end}
     bid_requirement.holder_scope:
       - {field: teoria_public_procurement.bid_requirements.holder_scope}
     bid_requirement.reference_date_type:

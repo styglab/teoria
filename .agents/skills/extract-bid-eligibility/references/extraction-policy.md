@@ -28,6 +28,7 @@ Qualification-review wording does not imply a bid-deadline condition. Use `quali
 
 - Retain both normalized values and `original_text`.
 - Copy `original_text` verbatim from one Evidence excerpt. Never use it as a canonical summary; normalized meaning belongs in `value`.
+- Anchor the shortest self-contained atomic clause in `proposition_text` with exact offsets inside `original_text`; retain negation, condition date, assessment stage, and failure wording needed to interpret that atom.
 - Represent conjunction, alternatives, exceptions, and participation scope with `logic.placements`; do not emit an expression tree or flatten logic into an unordered list.
 - Split joined clauses into independently assessable facts. In particular, joint bidding or joint contracting and subcontracting are separate facts and must not be stored as one requirement merely because the source joins them with `및`, `또는`, or punctuation.
 - Distinguish a natural-person company representative (`representative`) from the lead company of a consortium (`consortium_representative`).
@@ -50,7 +51,7 @@ Electronic-procurement access facts belong to `procurement_registration`: 나라
 
 A 직접생산확인증명서 is a bidder-held `certificate`, including when it is limited to a detailed product code. `product_registration` means the bidder has registered a manufactured or supplied product or detailed item in an electronic procurement system; it does not mean a product-specific certificate.
 
-`original_text` and Evidence identify the source and may legitimately be shared by multiple atomic requirements split from one compound clause. Deduplicate by the normalized bidder fact together with operator and holder scope, never by source text alone.
+`original_text` and Evidence identify the source and may legitimately be shared by multiple atomic requirements split from one compound clause. Their `proposition_text` values identify the distinct atoms. Deduplicate by the normalized bidder fact together with operator and holder scope, never by source text alone.
 
 ## Source priority
 

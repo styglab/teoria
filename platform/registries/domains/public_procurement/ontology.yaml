@@ -53,6 +53,9 @@ ontology:
         - {id: operator, name: 비교연산자, description: equals·contains·gte 등 요건 판정에 사용하는 연산자, data_type: string}
         - {id: value_text, name: 요건값, description: 요건의 정규화된 값을 보존한 JSON 문자열, data_type: string}
         - {id: original_text, name: 요건 원문, description: 공고 또는 첨부문서에서 확인한 참가요건 원문, data_type: string}
+        - {id: proposition_text, name: 원자 요건 원문, description: 복합 인용문 안에서 해당 요건만 나타내는 최소 완결 절, data_type: string}
+        - {id: proposition_start, name: 원자 요건 시작 위치, description: 요건 원문 기준 원자 요건의 시작 문자 위치, data_type: integer}
+        - {id: proposition_end, name: 원자 요건 끝 위치, description: 요건 원문 기준 원자 요건의 끝 문자 위치, data_type: integer}
         - {id: holder_scope, name: 보유주체 범위, description: 대표사·공동수급 구성원 등 요건을 충족해야 하는 주체 범위, data_type: string}
         - {id: reference_date_type, name: 기준일 유형, description: 공고일·마감일 등 요건 유효성을 판단하는 기준일 유형, data_type: string}
         - {id: mandatory, name: 필수 여부, description: 참가를 위해 반드시 충족해야 하는 요건인지 여부, data_type: boolean}

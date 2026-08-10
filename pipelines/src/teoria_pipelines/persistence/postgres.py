@@ -520,11 +520,12 @@ class PostgresStore:
                 requirement_id = uuid5(NAMESPACE_URL, f"teoria:{extraction_id}:{item['id']}")
                 connection.execute(
                     "INSERT INTO public_procurement.bid_eligibility_requirements "
-                    "(requirement_id,extraction_id,local_id,notice_number,notice_order,requirement_type,operator,value,original_text,holder_scope,reference_date_type,assessment_stage,failure_effect,comparison_mode,mandatory,review_status,confidence) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    "(requirement_id,extraction_id,local_id,notice_number,notice_order,requirement_type,operator,value,original_text,proposition_text,proposition_start,proposition_end,holder_scope,reference_date_type,assessment_stage,failure_effect,comparison_mode,mandatory,review_status,confidence) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     (requirement_id, extraction_id, item["id"], notice["notice_number"],
                      notice["notice_order"], item["type"], item["operator"], Jsonb(item["value"]),
-                     item["original_text"], item["holder_scope"], item["reference_date_type"],
+                     item["original_text"], item["proposition_text"], item["proposition_start"],
+                     item["proposition_end"], item["holder_scope"], item["reference_date_type"],
                      item["assessment_stage"], item["failure_effect"], item["comparison_mode"],
                      item["mandatory"], item["review_status"], item["confidence"]),
                 )

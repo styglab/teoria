@@ -4,13 +4,13 @@
   "additionalProperties": false,
   "required": ["schema_version", "requirements", "expression", "unresolved_candidates"],
   "properties": {
-    "schema_version": {"type": "string", "enum": ["1.2.0"]},
+    "schema_version": {"type": "string", "enum": ["1.3.0"]},
     "requirements": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "type", "operator", "value", "original_text", "holder_scope", "reference_date_type", "assessment_stage", "failure_effect", "comparison_mode", "mandatory", "review_status", "confidence", "evidence", "proof_requirements"],
+        "required": ["id", "type", "operator", "value", "original_text", "proposition_text", "proposition_start", "proposition_end", "holder_scope", "reference_date_type", "assessment_stage", "failure_effect", "comparison_mode", "mandatory", "review_status", "confidence", "evidence", "proof_requirements"],
         "properties": {
           "id": {"type": "string", "pattern": "^r[0-9]+$"},
           "type": {"enum": ["business_status", "procurement_registration", "industry_license", "participation_region", "company_scale", "certificate", "product_registration", "sanction", "past_performance", "credit_rating", "technical_personnel", "consortium", "legal_qualification", "facility_requirement", "equipment_ownership", "manufacturer_status", "custom"]},
@@ -39,6 +39,9 @@
             }
           },
           "original_text": {"type": "string", "minLength": 1},
+          "proposition_text": {"type": "string", "minLength": 1},
+          "proposition_start": {"type": "integer", "minimum": 0},
+          "proposition_end": {"type": "integer", "minimum": 1},
           "holder_scope": {"enum": ["bidder", "representative", "consortium_representative", "consortium_all_members", "consortium_any_member", "consortium_member", "subcontractor", "unspecified"]},
           "reference_date_type": {"enum": ["bid_deadline", "qualification_registration_deadline", "notice_date", "contract_date", "explicit_date", "none"]},
           "assessment_stage": {"enum": ["bid_entry", "qualification_review", "contracting"]},

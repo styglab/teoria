@@ -72,6 +72,18 @@ def test_large_cost_breakdown_uses_focused_selection() -> None:
     assert selected["selection"]["strategy"] == "focused_with_omission_guard"
 
 
+def test_large_supplement_unions_semantic_retrieval_with_exact_terms() -> None:
+    texts = [f"일반적인 계약 설명 {index}" for index in range(220)]
+    texts[180] = "선정 전 갖춰야 할 특별한 조직 상태를 설명합니다."
+
+    selected = select_eligibility_blocks(
+        _document("과업지시서.hwpx", texts), semantic_block_ids={"b180"},
+    )
+
+    assert any(block["block_id"] == "b180" for block in selected["content"]["blocks"])
+    assert "semantic_retrieval" in selected["selection"]["passes"]
+
+
 def test_large_source_block_is_split_with_stable_parent_offsets() -> None:
     text = "\n".join(f"{index}. 참가자격 세부 조건을 확인하여야 합니다." for index in range(80))
 

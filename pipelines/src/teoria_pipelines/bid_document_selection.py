@@ -38,7 +38,9 @@ _REQUIREMENT_HEADING = re.compile(
 _NEXT_HEADING = re.compile(r"^\s*(?:제?\s*\d+\s*[장조절]|\d+(?:\.\d+)*[.)])\s*\S+")
 
 
-def select_eligibility_blocks(document: dict[str, Any]) -> dict[str, Any]:
+def select_eligibility_blocks(
+    document: dict[str, Any], semantic_block_ids: set[str] | None = None,
+) -> dict[str, Any]:
     """Reduce only large supplemental documents while preserving source block IDs."""
     blocks = _refine_blocks(document.get("content", {}).get("blocks", []))
     file_name = str(document.get("file_name") or "")
@@ -81,6 +83,16 @@ def select_eligibility_blocks(document: dict[str, Any]) -> dict[str, Any]:
     if guard_hits:
         _add_context(selected, guard_hits, len(blocks), radius=3)
         passes.append("omission_guard")
+
+    # Optional dense-retrieval results are unioned with exact-term retrieval. The
+    # selector remains deterministic when no embedding service is configured.
+    semantic_hits = {
+        index for index, block in enumerate(blocks)
+        if str(block.get("block_id")) in (semantic_block_ids or set())
+    }
+    if semantic_hits:
+        _add_context(selected, semantic_hits, len(blocks), radius=3)
+        passes.append("semantic_retrieval")
 
     chosen = [block for index, block in enumerate(blocks) if index in selected]
     return _with_selection(document, chosen, "focused_with_omission_guard", len(blocks), passes)
