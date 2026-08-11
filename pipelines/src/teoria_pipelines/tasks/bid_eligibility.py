@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import re
 import subprocess
@@ -13,6 +14,8 @@ from uuid import UUID, uuid4
 
 from jsonschema import Draft202012Validator
 from prefect import task
+from prefect.exceptions import MissingContextError
+from prefect.logging import get_run_logger
 
 from teoria_pipelines.bid_document_selection import (
     SELECTION_VERSION,
@@ -35,7 +38,8 @@ from teoria_pipelines.settings import bootstrap_pipeline_settings
 
 
 SKILL_ROOT = Path("/app/.agents/skills/extract-bid-eligibility")
-EXTRACTION_VERSION = "2.2.0"
+EXTRACTION_VERSION = "2.2.10"
+FINGERPRINT_COMPATIBILITY_VERSION = "2.2.9"
 
 
 def _resources() -> tuple[PostgresStore, ObjectStorage]:
@@ -173,10 +177,13 @@ def _input_fingerprint(notice: dict) -> str:
             for item in notice["unavailable_documents"]
         ],
         "structured_hashes": [
-            item["source_hash"] for item in notice["licenses"] + notice["regions"]
+            item["source_hash"]
+            for item in notice["licenses"] + notice["regions"] + notice.get("consortiums", [])
         ],
         "schema_version": "1.4.0",
-        "skill_version": EXTRACTION_VERSION,
+        # Keep already-completed, unchanged notices from being reprocessed solely because
+        # the execution strategy became cheaper. Failed and new notices use 2.2.1.
+        "skill_version": FINGERPRINT_COMPATIBILITY_VERSION,
         "selection_version": SELECTION_VERSION,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
@@ -224,9 +231,12 @@ def _iter_result_evidence(result: dict):
 
 
 def _reconcile_original_text(result: dict) -> None:
+    """Make original_text an exact substring of one retained Evidence excerpt."""
     for requirement in result["requirements"]:
-        if any(requirement["original_text"] in evidence["excerpt"]
-               for evidence in requirement["evidence"]):
+        if any(
+            requirement["original_text"] in evidence["excerpt"]
+            for evidence in requirement["evidence"]
+        ):
             continue
         requirement["original_text"] = min(
             (evidence["excerpt"] for evidence in requirement["evidence"]), key=len
@@ -245,6 +255,94 @@ def _reconcile_proposition_spans(result: dict) -> None:
         requirement["proposition_text"] = proposition
         requirement["proposition_start"] = start
         requirement["proposition_end"] = start + len(proposition)
+
+
+_TYPE_PROPOSITION_MARKERS = {
+    "sanction": re.compile(
+        r"부정당|입찰참가.{0,12}제한|참가자격.{0,12}제한|조세포탈|유죄|제재|처분"
+    ),
+    "consortium": re.compile(r"공동수급|공동계약|공동도급|컨소시엄|단독이행|단독\s*참가"),
+}
+
+
+def _atomic_clause_candidates(text: str) -> list[tuple[int, int, str]]:
+    """Return verbatim line/sentence-sized clauses with offsets in source text."""
+    candidates: dict[tuple[int, int], str] = {}
+    boundaries = re.compile(
+        r"[^\n]+?(?:[.!?](?=\s|$)|(?=\s+(?:\d+|[가-힣])[.)]\s)|$)"
+    )
+    for match in boundaries.finditer(text):
+        start, end = match.span()
+        while start < end and text[start].isspace():
+            start += 1
+        while end > start and text[end - 1].isspace():
+            end -= 1
+        if end > start:
+            candidates[(start, end)] = text[start:end]
+    return [(start, end, clause) for (start, end), clause in candidates.items()]
+
+
+def _infer_atomic_proposition(requirement: dict) -> tuple[int, int, str] | None:
+    """Find one unambiguous exact clause for a model-expanded proposition."""
+    original = requirement["original_text"]
+    marker = _TYPE_PROPOSITION_MARKERS.get(requirement["type"])
+    if marker is None:
+        return None
+    value = requirement.get("value") or {}
+    value_tokens = {
+        token.casefold() for token in re.findall(
+            r"[0-9A-Za-z가-힣]+", " ".join([
+                str(value.get("text") or ""),
+                *(str(item) for item in value.get("items", [])),
+                *(str(item.get("value") or "") for item in value.get("attributes", [])),
+            ])
+        ) if len(token) >= 2
+    }
+    ranked: list[tuple[float, int, int, str]] = []
+    for start, end, clause in _atomic_clause_candidates(original):
+        if not marker.search(clause):
+            continue
+        clause_tokens = {
+            token.casefold() for token in re.findall(r"[0-9A-Za-z가-힣]+", clause)
+        }
+        overlap = len(value_tokens & clause_tokens) / max(len(value_tokens), 1)
+        ranked.append((overlap, start, end, clause))
+    if not ranked:
+        return None
+    ranked.sort(key=lambda item: (-item[0], len(item[3])))
+    best = ranked[0]
+    # With no normalized-value overlap, multiple matching clauses cannot safely be
+    # assigned to distinct requirements. Preserve them for review instead.
+    if best[0] == 0 and len(ranked) > 1:
+        return None
+    if len(ranked) > 1 and best[0] == ranked[1][0] and best[3] != ranked[1][3]:
+        return None
+    return best[1], best[2], best[3]
+
+
+def _repair_non_atomic_propositions(result: dict) -> None:
+    """Shrink expanded citations or demote requirements that cannot be anchored."""
+    retained: list[dict] = []
+    for requirement in result["requirements"]:
+        original = requirement["original_text"]
+        proposition = str(requirement.get("proposition_text") or "").strip()
+        expanded = (
+            (not proposition or proposition == original.strip() or proposition not in original)
+            and (len(original) >= 240 or original.count("\n") >= 3)
+        )
+        if not expanded:
+            retained.append(requirement)
+            continue
+        inferred = _infer_atomic_proposition(requirement)
+        if inferred is None:
+            _add_unresolved(result, original, "manual_evidence_interpretation", True)
+            continue
+        start, end, proposition = inferred
+        requirement["proposition_text"] = proposition
+        requirement["proposition_start"] = start
+        requirement["proposition_end"] = end
+        retained.append(requirement)
+    result["requirements"] = retained
 
 
 def _repair_requirement_fields(result: dict) -> None:
@@ -270,6 +368,274 @@ def _repair_requirement_fields(result: dict) -> None:
             and not deadline.search(requirement["original_text"])
         ):
             requirement["reference_date_type"] = "none"
+
+
+def _add_unresolved(result: dict, text: str, reason: str, blocks: bool) -> None:
+    candidate = {"text": text, "review_reason": reason, "blocks_qualification": blocks}
+    if candidate not in result["unresolved_candidates"]:
+        result["unresolved_candidates"].append(candidate)
+
+
+def _repair_requirement_semantics(result: dict) -> None:
+    """Demote unsafe model inferences and prevent compound facts from auto-comparison."""
+    retained: list[dict] = []
+    for requirement in result["requirements"]:
+        original = requirement["original_text"]
+        value = requirement.get("value") or {}
+        value_text = str(value.get("text") or "")
+        if (
+            requirement["holder_scope"] == "representative"
+            and re.search(r"입찰\s*대리인(?:의|인)?\s*경우", original)
+        ):
+            _add_unresolved(result, original, "manual_evidence_interpretation", True)
+            continue
+        if (
+            requirement["type"] == "legal_qualification"
+            and re.search(r"입찰기간\s*중.{0,40}지위\s*승계", original)
+            and re.search(r"(?:서류|증빙).{0,30}참가자격.{0,12}유지", original)
+        ):
+            _add_unresolved(result, original, "manual_evidence_interpretation", True)
+            continue
+        if (
+            requirement["type"] == "technical_personnel"
+            and requirement["holder_scope"] == "bidder"
+            and re.search(r"업무정지.{0,20}기술자|기술자.{0,20}업무정지", original)
+            and re.search(r"기술자.{0,20}평가대상.{0,8}제외", original)
+        ):
+            _add_unresolved(result, original, "informational_exclusion", False)
+            continue
+        if (
+            requirement["type"] == "credit_rating"
+            and requirement["operator"] == "exists"
+            and re.search(r"신용평가등급.{0,20}(?:기준|평가)", original)
+            and re.search(r"(?:자료|등급).{0,20}제출|미준수.{0,12}(?:탈락|평가\s*불가)", original)
+            and not re.search(r"(?:등급|평점).{0,8}(?:이상|이하|[A-D][+-]?)", original)
+        ):
+            _add_unresolved(result, original, "manual_evidence_interpretation", True)
+            continue
+        if (
+            requirement["type"] == "sanction"
+            and re.search(r"입찰참가자격.{0,20}유지", original)
+            and not re.search(r"부정당|조세포탈|유죄|제재|처분|업무정지|참가자격\s*제한", original)
+        ):
+            requirement["type"] = "legal_qualification"
+            requirement["operator"] = "valid_on"
+            requirement["value"] = {
+                **value,
+                "text": value_text.replace(" 상실", " 유지") or "입찰참가자격 유지",
+                "boolean": True,
+            }
+        if requirement["type"] == "sanction" and re.search(r"업체와.{0,40}기술자", original):
+            bidder_clause = re.search(
+                r"(?:본\s+용역사업.{0,80})?(?:부정당업자|부실업자).{0,100}?업체",
+                original,
+            )
+            if bidder_clause:
+                proposition = bidder_clause.group(0)
+                requirement["proposition_text"] = proposition
+                requirement["proposition_start"] = bidder_clause.start()
+                requirement["proposition_end"] = bidder_clause.end()
+        if (
+            requirement["type"] == "procurement_registration"
+            and len(value.get("items") or []) > 1
+        ):
+            requirement["comparison_mode"] = "manual"
+            requirement["review_status"] = "needs_review"
+            requirement["confidence"] = min(requirement["confidence"], 0.7)
+            _add_unresolved(result, original, "manual_evidence_interpretation", True)
+        if (
+            requirement["type"] == "past_performance"
+            and re.search(r"경험(?:과|\s*및)?\s*능력|실적", original)
+            and value.get("number") is None
+            and not re.search(r"\d+\s*(?:건|회|년|개월|원|천원|만원|억원|%)", original)
+        ):
+            requirement["comparison_mode"] = "manual"
+            requirement["review_status"] = "needs_review"
+            requirement["confidence"] = min(requirement["confidence"], 0.7)
+            _add_unresolved(result, original, "manual_evidence_interpretation", True)
+        if requirement["type"] == "business_status" and len(value.get("items") or []) > 1:
+            requirement["comparison_mode"] = "manual"
+            requirement["review_status"] = "needs_review"
+            requirement["confidence"] = min(requirement["confidence"], 0.7)
+            _add_unresolved(result, original, "manual_evidence_interpretation", True)
+        if (
+            requirement["type"] == "custom"
+            and re.search(r"(?:제작|납품|이행).{0,40}(?:능력|할\s*수)|품질보장|무상\s*(?:A/S|AS)", original, re.I)
+        ):
+            requirement["comparison_mode"] = "manual"
+            requirement["review_status"] = "needs_review"
+            requirement["confidence"] = min(requirement["confidence"], 0.7)
+            _add_unresolved(result, original, "manual_evidence_interpretation", True)
+        if (
+            requirement["type"] == "sanction"
+            and re.search(r"(?:응찰|입찰).{0,30}(?:방해|담합)|입찰가격.{0,12}담합", original)
+            and not re.search(r"제재|제한기간|처분|유죄|확정", original)
+        ):
+            requirement["type"] = "custom"
+            requirement["operator"] = "custom"
+            requirement["comparison_mode"] = "manual"
+            requirement["review_status"] = "needs_review"
+            requirement["confidence"] = min(requirement["confidence"], 0.7)
+            _add_unresolved(result, original, "manual_evidence_interpretation", True)
+        retained.append(requirement)
+    result["requirements"] = retained
+
+
+def _repair_absorbed_alternative_branches(result: dict) -> None:
+    """Conservatively simplify A OR (A AND B), preserving B for review."""
+    requirements = result["requirements"]
+    while True:
+        groups: dict[tuple[str, str], dict[str, set[str]]] = {}
+        for requirement in requirements:
+            for placement in requirement["logic"]["placements"]:
+                group = placement.get("alternative_group")
+                branch = placement.get("alternative_branch")
+                if group and branch:
+                    groups.setdefault((placement["scope"], group), {}).setdefault(
+                        branch, set()
+                    ).add(requirement["id"])
+        removal: tuple[str, str, str] | None = None
+        for (scope, group), branches in groups.items():
+            entries = list(branches.items())
+            for index, (left_name, left) in enumerate(entries):
+                for right_name, right in entries[index + 1:]:
+                    if left <= right:
+                        removal = (scope, group, right_name)
+                        break
+                    if right <= left:
+                        removal = (scope, group, left_name)
+                        break
+                if removal:
+                    break
+            if removal:
+                break
+        if not removal:
+            break
+        scope, group, branch = removal
+        for requirement in requirements:
+            requirement["logic"]["placements"] = [
+                placement
+                for placement in requirement["logic"]["placements"]
+                if not (
+                    placement["scope"] == scope
+                    and placement.get("alternative_group") == group
+                    and placement.get("alternative_branch") == branch
+                )
+            ]
+
+    retained: list[dict] = []
+    for requirement in requirements:
+        if requirement["logic"]["placements"]:
+            retained.append(requirement)
+        else:
+            _add_unresolved(
+                result,
+                requirement["original_text"],
+                "manual_evidence_interpretation",
+                True,
+            )
+    result["requirements"] = retained
+
+
+def _repair_unresolved_candidates(result: dict) -> None:
+    """Keep ordinary submission checklists from blocking company qualification."""
+    for candidate in result["unresolved_candidates"]:
+        text = candidate["text"]
+        if (
+            re.search(r"사업자등록증|법인등기부|인감증명서|사용인감계", text)
+            and not re.search(r"누락|미제출|자격.{0,8}(?:상실|없)|무효|제외", text)
+        ):
+            candidate["review_reason"] = "informational_exclusion"
+            candidate["blocks_qualification"] = False
+
+
+def _preserve_omitted_manual_eligibility(result: dict, inputs: dict) -> None:
+    """Recover explicit, time-bound ability gates omitted by the model."""
+    represented = "\n".join(
+        [item["original_text"] for item in result["requirements"]]
+        + [item["text"] for item in result["unresolved_candidates"]]
+    )
+    for document in inputs["documents"]:
+        for block in document["content"]["blocks"]:
+            text = str(block.get("text") or "")
+            section = str(block.get("section") or "")
+            if "참가자격" not in section.replace(" ", "") and "입찰 참가자격" not in text:
+                continue
+            for match in re.finditer(
+                r"[^\n.]{0,120}(?:연동|개발|제작|납품|이행)[^\n.]{0,120}"
+                r"(?:까지|내|內)[^\n.]{0,40}가능한\s*업체(?:\([^\n)]*\))?",
+                text,
+            ):
+                candidate = re.sub(
+                    r"^\s*(?:[-•·]|[가-하][.)])\s*", "", match.group(0)
+                ).strip()
+                if len(candidate) >= 12 and _citation_compact(candidate) not in _citation_compact(represented):
+                    _add_unresolved(result, candidate, "manual_evidence_interpretation", True)
+                    represented += "\n" + candidate
+
+
+def _preserve_certificate_borrowing_invalid_bid(result: dict, inputs: dict) -> None:
+    """Preserve the explicit invalid-bid effect of borrowed electronic certificates."""
+    represented = _citation_compact("\n".join(
+        [item["original_text"] for item in result["requirements"]]
+        + [item["text"] for item in result["unresolved_candidates"]]
+    ))
+    for document in inputs["documents"]:
+        for block in document["content"]["blocks"]:
+            text = str(block.get("text") or "")
+            match = re.search(
+                r"1인이\s*수인의\s*공인인증서를\s*차용하여\s*입찰서를\s*제출할\s*경우"
+                r"[\s\S]{0,220}?무효인\s*입찰에\s*해당되며?",
+                text,
+            )
+            if not match or _citation_compact(match.group(0)) in represented:
+                continue
+            original = match.group(0)
+            used_ids = {item["id"] for item in result["requirements"]}
+            next_id = len(used_ids) + 1
+            while f"r{next_id}" in used_ids:
+                next_id += 1
+            local_id = f"r{next_id}"
+            result["requirements"].append({
+                "id": local_id,
+                "type": "procurement_registration",
+                "operator": "custom",
+                "value": {
+                    "text": "타인의 공인인증서를 차용하여 입찰서를 제출하지 않아야 함",
+                    "number": None,
+                    "boolean": None,
+                    "items": [],
+                    "attributes": [],
+                },
+                "original_text": original,
+                "proposition_text": original,
+                "proposition_start": 0,
+                "proposition_end": len(original),
+                "holder_scope": "bidder",
+                "reference_date_type": "none",
+                "assessment_stage": "bid_entry",
+                "failure_effect": "invalid_bid",
+                "comparison_mode": "manual",
+                "mandatory": True,
+                "review_status": "extracted",
+                "confidence": 1.0,
+                "evidence": [{
+                    "source_type": "document",
+                    "source_id": document["document_id"],
+                    "document_id": document["document_id"],
+                    "block_id": block["block_id"],
+                    "page": block.get("page"),
+                    "section": block.get("section"),
+                    "excerpt": original,
+                }],
+                "proof_requirements": [],
+                "logic": {"placements": [{
+                    "scope": "common",
+                    "alternative_group": None,
+                    "alternative_branch": None,
+                }]},
+            })
+            represented += _citation_compact(original)
 
 
 def _reconcile_document_citations(result: dict, inputs: dict) -> None:
@@ -346,6 +712,10 @@ def _citation_text(value: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).split())
 
 
+def _citation_compact(value: str) -> str:
+    return "".join(character for character in _citation_text(value) if character.isalnum())
+
+
 def _ellipsis_fragments_match(excerpt: str, source: str) -> bool:
     if "..." not in excerpt and "…" not in excerpt:
         return False
@@ -397,6 +767,7 @@ def _consolidate_requirements(result: dict) -> None:
     aliases: dict[str, str] = {}
     consolidated: list[dict] = []
     for requirement in result["requirements"]:
+        _normalize_joint_participation_prohibition(requirement)
         requirement["evidence"] = _deduplicate_evidence(requirement["evidence"])
         for proof in requirement.get("proof_requirements", []):
             proof["evidence"] = _deduplicate_evidence(proof["evidence"])
@@ -419,7 +790,7 @@ def _consolidate_requirements(result: dict) -> None:
             canonical["logic"] = _merge_requirement_logic(
                 canonical.get("logic"), requirement.get("logic")
             )
-        if len(requirement["original_text"]) > len(canonical["original_text"]):
+        if len(requirement["original_text"]) < len(canonical["original_text"]):
             canonical["original_text"] = requirement["original_text"]
         if canonical["reference_date_type"] == "none":
             canonical["reference_date_type"] = requirement["reference_date_type"]
@@ -613,6 +984,12 @@ def _requirement_merge_key(requirement: dict) -> tuple | None:
         requirement.get("reference_date_type"), requirement.get("assessment_stage"),
         requirement.get("failure_effect"), requirement.get("comparison_mode"),
     )
+    if _is_joint_participation_prohibition(requirement):
+        return (
+            requirement["type"], "joint_participation_not_allowed",
+            requirement["holder_scope"], requirement.get("reference_date_type"),
+            requirement.get("assessment_stage"), requirement.get("failure_effect"),
+        )
     if codes and requirement["type"] in {
         "industry_license", "product_registration", "certificate", "procurement_registration"
     }:
@@ -628,6 +1005,42 @@ def _requirement_merge_key(requirement: dict) -> tuple | None:
         if character.isalnum()
     )
     return (*base, "exact", original) if original else None
+
+
+def _is_joint_participation_prohibition(requirement: dict) -> bool:
+    if requirement.get("type") != "consortium":
+        return False
+    value = requirement.get("value") or {}
+    proposition = str(requirement.get("proposition_text") or "").strip()
+    text = " ".join([
+        proposition or str(requirement.get("original_text") or ""),
+        str(value.get("text") or ""),
+    ])
+    joint_denial = re.search(
+        r"(?:공동수급|공동계약|공동도급|컨소시엄).{0,16}(?:불가|불허|금지|허용하지|인정하지)",
+        text,
+    )
+    single_only = re.search(
+        r"(?:단독이행이?\s*가능해야|단독(?:이행|\s*참가).{0,8}(?:하여야|해야|한함)|"
+        r"단독으로만)", text
+    )
+    return bool(joint_denial or single_only)
+
+
+def _normalize_joint_participation_prohibition(requirement: dict) -> None:
+    """Canonicalize equivalent single-only/joint-denial wording before merging."""
+    if not _is_joint_participation_prohibition(requirement):
+        return
+    value = requirement.get("value") or {}
+    requirement["operator"] = "not_exists"
+    requirement["value"] = {
+        **value,
+        "text": "공동수급 불가",
+        "boolean": False,
+    }
+    requirement["logic"] = {"placements": [{
+        "scope": "common", "alternative_group": None, "alternative_branch": None,
+    }]}
 
 
 def _requirement_proposition(requirement: dict) -> str:
@@ -695,6 +1108,7 @@ def _structured_api_result(notice: dict) -> dict:
     requirements: list[dict] = []
     license_groups: dict[str, list[dict]] = {}
     region_leaves: list[dict] = []
+    consortium_leaves: list[dict] = []
 
     def requirement(kind: str, source_id: str, text: str, attributes: list[dict]) -> dict:
         local_id = f"r{len(requirements) + 1}"
@@ -737,6 +1151,16 @@ def _structured_api_result(notice: dict) -> dict:
             "participation_region", source_id, item["name"], attributes
         ))
 
+    for item in notice.get("consortiums", []):
+        source_id = f"consortium:{item['sequence']}"
+        method = item["name"]
+        attributes = [{"name": "method", "value": method}]
+        leaf = requirement("consortium", source_id, method, attributes)
+        stored = requirements[-1]
+        stored["operator"] = "equals"
+        stored["value"]["boolean"] = not bool(re.search(r"불허|금지", method))
+        consortium_leaves.append(leaf)
+
     root_conditions = [
         leaves[0] if len(leaves) == 1 else _expression("any", leaves)
         for leaves in license_groups.values()
@@ -745,6 +1169,7 @@ def _structured_api_result(notice: dict) -> dict:
         root_conditions.append(
             region_leaves[0] if len(region_leaves) == 1 else _expression("any", region_leaves)
         )
+    root_conditions.extend(consortium_leaves)
     expression = (
         root_conditions[0] if len(root_conditions) == 1
         else _expression("all", root_conditions)
@@ -766,6 +1191,9 @@ def normalize_structured_bid_eligibility_notice(notice: dict) -> bool:
     for item in notice["regions"]:
         structured.append({"source_id": f"region:{item['sequence']}",
                            "kind": "participation_region", **item})
+    for item in notice.get("consortiums", []):
+        structured.append({"source_id": f"consortium:{item['sequence']}",
+                           "kind": "consortium", **item})
     _validate_citations(result, {"documents": [], "structured_requirements": structured})
     raw_key = (f"public-procurement/bid-notices/{notice['notice_number']}/"
                f"{notice['notice_order']}/extractions/eligibility/{EXTRACTION_VERSION}/"
@@ -776,10 +1204,12 @@ def normalize_structured_bid_eligibility_notice(notice: dict) -> bool:
     )
 
 
-@task(name="공고별 Codex 참가자격 추출", retries=2, retry_delay_seconds=120,
+@task(name="공고별 Codex 참가자격 추출",
       task_run_name="참가자격 추출 {notice[notice_number]}:{notice[notice_order]}")
 async def extract_bid_eligibility_notice(notice: dict) -> bool:
     store, storage = _resources()
+    settings = bootstrap_pipeline_settings()
+    notice_input_char_budget = settings.bid_eligibility_input_max_chars
     fingerprint = _input_fingerprint(notice)
     facts_schema_path = SKILL_ROOT / "references/eligibility-facts.schema.json"
     facts_schema = json.loads(facts_schema_path.read_text(encoding="utf-8"))
@@ -787,6 +1217,9 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
     result_schema = json.loads(result_schema_path.read_text(encoding="utf-8"))
     documents = []
     deferred_documents = []
+    per_document_budget = max(
+        900, min(40_000, notice_input_char_budget // max(1, len(notice["documents"])))
+    )
     for document in notice["documents"]:
         content = sanitize_document_content(
             json.loads(storage.get_bytes(document["parsed_object_key"]))
@@ -803,7 +1236,7 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
             **document,
             "document_id": str(document["document_id"]),
             "content": content,
-        }))
+        }, max_chars=per_document_budget))
     documents = deduplicate_semantic_documents(documents)
     if any(document.get("selection", {}).get("omitted_block_count", 0) > 0
            for document in documents):
@@ -824,7 +1257,8 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
                 "unavailable_document_count": len(unavailable),
             },
         }
-    if not documents and not notice["licenses"] and not notice["regions"]:
+    if (not documents and not notice["licenses"] and not notice["regions"]
+            and not notice.get("consortiums")):
         store.save_eligibility_failure(
             notice, fingerprint, "no_text_documents", None, "codex-default", EXTRACTION_VERSION
         )
@@ -836,6 +1270,9 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
     for item in notice["regions"]:
         source_id = f"region:{item['sequence']}"
         structured.append({"source_id": source_id, "kind": "participation_region", **item})
+    for item in notice.get("consortiums", []):
+        source_id = f"consortium:{item['sequence']}"
+        structured.append({"source_id": source_id, "kind": "consortium", **item})
     inputs = {
         "notice_number": notice["notice_number"], "notice_order": notice["notice_order"],
         "bid_deadline_at": notice["bid_deadline_at"], "documents": documents,
@@ -846,6 +1283,24 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
             for item in notice["unavailable_documents"]
         ],
     }
+    input_json = json.dumps(inputs, ensure_ascii=False)
+    selected_chars = sum(
+        document.get("selection", {}).get("selected_char_count", 0)
+        for document in documents
+    )
+    original_chars = sum(
+        document.get("selection", {}).get("original_char_count", 0)
+        for document in documents
+    )
+    try:
+        run_logger = get_run_logger()
+    except MissingContextError:
+        run_logger = logging.getLogger(__name__)
+    run_logger.info(
+        "eligibility input notice=%s:%s documents=%d chars=%d/%d json_chars=%d budget=%d",
+        notice["notice_number"], notice["notice_order"], len(documents), selected_chars,
+        original_chars, len(input_json), notice_input_char_budget,
+    )
     prompt = (
         "다음은 이 작업에 적용할 extract-bid-eligibility Skill 지침이다.\n\n"
         f"{_skill_instructions()}\n\n"
@@ -891,7 +1346,7 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
         process = await asyncio.to_thread(
             subprocess.run,
             command,
-            input=json.dumps(inputs, ensure_ascii=False), text=True, capture_output=True,
+            input=input_json, text=True, capture_output=True,
             cwd="/app", timeout=600, check=False,
         )
     except Exception as exc:
@@ -903,13 +1358,19 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
     attempt_key = (f"public-procurement/bid-notices/{notice['notice_number']}/"
                    f"{notice['notice_order']}/extractions/eligibility/{EXTRACTION_VERSION}/"
                    f"{fingerprint}/attempts/{uuid4()}.json")
-    raw_payload = process.stdout if process.stdout else json.dumps({
+    raw_payload = process.stdout if process.returncode == 0 else json.dumps({
         "returncode": process.returncode,
-        "stderr_tail": process.stderr.strip().splitlines()[-1:] if process.stderr else [],
+        "stdout_tail": process.stdout[-4000:],
+        "stderr_tail": process.stderr[-12000:],
+        "input_metrics": {
+            "json_chars": len(input_json), "selected_document_chars": selected_chars,
+            "original_document_chars": original_chars, "document_count": len(documents),
+        },
     }, ensure_ascii=False)
     storage.put_bytes(attempt_key, raw_payload.encode(), "application/json")
     if process.returncode:
-        detail = process.stderr.strip().splitlines()[-1] if process.stderr.strip() else "no_stderr"
+        stderr_lines = process.stderr.strip().splitlines()
+        detail = " | ".join(stderr_lines[-5:]) if stderr_lines else "no_stderr"
         store.save_eligibility_failure(
             notice, fingerprint, f"codex_exec_failed:{process.returncode}:{detail[:300]}",
             attempt_key, model_name, EXTRACTION_VERSION,
@@ -923,6 +1384,15 @@ async def extract_bid_eligibility_notice(notice: dict) -> bool:
         _reconcile_document_citations(facts, inputs)
         _reconcile_original_text(facts)
         _consolidate_requirements(facts)
+        _repair_requirement_semantics(facts)
+        _repair_absorbed_alternative_branches(facts)
+        _preserve_certificate_borrowing_invalid_bid(facts, inputs)
+        _preserve_omitted_manual_eligibility(facts, inputs)
+        _repair_unresolved_candidates(facts)
+        # Consolidation and deterministic recovery can replace or add citations.
+        # Re-establish the same exact-verbatim invariant used by final validation.
+        _reconcile_original_text(facts)
+        _repair_non_atomic_propositions(facts)
         _reconcile_proposition_spans(facts)
         _repair_requirement_fields(facts)
         _validate_semantic_normalization(facts)

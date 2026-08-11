@@ -31,6 +31,7 @@ class PipelineSettings(BaseSettings):
     bid_document_max_bytes: int = Field(default=104857600, gt=0)
     bid_document_max_attempts: int = Field(default=3, ge=1, le=20)
     bid_document_parse_max_attempts: int = Field(default=3, ge=1, le=20)
+    bid_eligibility_input_max_chars: int = Field(default=120000, ge=10000, le=500000)
     bid_document_retention_days: int = Field(default=90, ge=1)
     bid_document_purge_batch_size: int = Field(default=500, ge=1, le=5000)
 

@@ -27,6 +27,18 @@ def test_keeps_bid_notice_whole_even_when_large() -> None:
     assert selected["selection"]["strategy"] == "full_document"
 
 
+def test_large_bid_notice_is_bounded_by_character_budget() -> None:
+    texts = [(f"일반 공고 내용 {index} " * 80) for index in range(200)]
+    texts[190] = "입찰참가자격은 정보통신공사업 등록 업체로 제한합니다."
+
+    selected = select_eligibility_blocks(_document("입찰공고문.pdf", texts), max_chars=12_000)
+
+    assert selected["selection"]["selected_char_count"] <= 12_000
+    assert selected["selection"]["original_char_count"] > 12_000
+    assert any(block["block_id"].startswith("b190") for block in selected["content"]["blocks"])
+    assert selected["selection"]["strategy"] == "focused_with_omission_guard"
+
+
 def test_keeps_short_supplement_whole() -> None:
     document = _document("제안요청서.hwpx", [f"내용 {index}" for index in range(100)])
 
@@ -115,6 +127,18 @@ def test_semantic_duplicate_prefers_pdf_and_keeps_alias() -> None:
 def test_large_rfp_keeps_company_category_condition_in_late_blocks() -> None:
     texts = [f"일반 내용 {index}" for index in range(220)]
     texts[205] = "여성기업지원에 관한 법률에 따른 여성기업만 참여할 수 있습니다."
+
+    selected = select_eligibility_blocks(_document("제안요청서.hwp", texts))
+
+    assert any(block["block_id"] == "b205" for block in selected["content"]["blocks"])
+
+
+def test_large_supplement_keeps_borrowed_certificate_invalid_bid_clause() -> None:
+    texts = [f"일반 내용 {index}" for index in range(220)]
+    texts[205] = (
+        "1인이 수인의 공인인증서를 차용하여 입찰서를 제출할 경우 "
+        "당해 입찰은 무효인 입찰에 해당됩니다."
+    )
 
     selected = select_eligibility_blocks(_document("제안요청서.hwp", texts))
 

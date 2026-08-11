@@ -6,7 +6,8 @@ from difflib import SequenceMatcher
 from typing import Any
 
 
-SELECTION_VERSION = "1.4.0"
+SELECTION_VERSION = "1.4.1"
+DEFAULT_DOCUMENT_CHAR_BUDGET = 40_000
 
 _FULL_DOCUMENT_NAME = re.compile(r"입찰\s*공고|공고문|표준\s*공고", re.IGNORECASE)
 _LARGE_SUPPLEMENT_NAME = re.compile(
@@ -27,6 +28,7 @@ _OMISSION_GUARD = re.compile(
     r"기술.{0,8}인력|보유.{0,8}인력|전문\s*인력|재직|경력|자격증|"
     r"제조사?|공급사|총판|정품|납품|하도급|재하도급|인증|확인서|"
     r"등록.{0,8}(업체|사업자|하여야|필수)|법률.{0,8}(자격|요건)|"
+    r"공인\s*인증서.{0,20}(차용|대여)|인증서.{0,20}(차용|대여)|"
     r"(보유|구비|갖추|등록|발급).{0,16}(하여야|해야|필수|자에 한)",
     re.IGNORECASE,
 )
@@ -40,16 +42,20 @@ _NEXT_HEADING = re.compile(r"^\s*(?:제?\s*\d+\s*[장조절]|\d+(?:\.\d+)*[.)])\
 
 def select_eligibility_blocks(
     document: dict[str, Any], semantic_block_ids: set[str] | None = None,
+    max_chars: int = DEFAULT_DOCUMENT_CHAR_BUDGET,
 ) -> dict[str, Any]:
-    """Reduce only large supplemental documents while preserving source block IDs."""
+    """Select likely eligibility blocks under a hard per-document character budget."""
     blocks = _refine_blocks(document.get("content", {}).get("blocks", []))
     file_name = str(document.get("file_name") or "")
+    original_chars = _block_chars(blocks)
     if (
-        len(blocks) <= 120
-        or _FULL_DOCUMENT_NAME.search(file_name)
-        or not _LARGE_SUPPLEMENT_NAME.search(file_name)
+        original_chars <= max_chars
+        and (len(blocks) <= 120 or _FULL_DOCUMENT_NAME.search(file_name)
+             or not _LARGE_SUPPLEMENT_NAME.search(file_name))
     ):
-        return _with_selection(document, blocks, "full_document", len(blocks), [])
+        return _with_selection(
+            document, blocks, "full_document", len(blocks), [], original_chars, max_chars,
+        )
 
     selected = set(range(min(50, len(blocks))))
     passes: list[str] = ["leading_blocks"]
@@ -94,8 +100,12 @@ def select_eligibility_blocks(
         _add_context(selected, semantic_hits, len(blocks), radius=3)
         passes.append("semantic_retrieval")
 
+    selected = _fit_indexes_to_budget(blocks, selected, max_chars)
     chosen = [block for index, block in enumerate(blocks) if index in selected]
-    return _with_selection(document, chosen, "focused_with_omission_guard", len(blocks), passes)
+    return _with_selection(
+        document, chosen, "focused_with_omission_guard", len(blocks), passes,
+        original_chars, max_chars,
+    )
 
 
 def deduplicate_semantic_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -221,8 +231,48 @@ def _heading_section(blocks: list[dict[str, Any]], start: int) -> range:
     return range(start, stop)
 
 
+def _block_chars(blocks: list[dict[str, Any]]) -> int:
+    return sum(len(str(block.get("text") or "")) for block in blocks)
+
+
+def _fit_indexes_to_budget(
+    blocks: list[dict[str, Any]], selected: set[int], max_chars: int,
+) -> set[int]:
+    """Keep high-signal blocks first, then restore source order for citation stability."""
+    def priority(index: int) -> tuple[int, int]:
+        block = blocks[index]
+        text = str(block.get("text") or "")
+        score = 0
+        if _PRIMARY_REQUIREMENT.search(text):
+            score += 8
+        if _OMISSION_GUARD.search(text):
+            score += 5
+        if _REQUIREMENT_HEADING.search(text):
+            score += 4
+        if isinstance(block.get("page"), int) and block["page"] <= 10:
+            score += 2
+        if index < 20:
+            score += 1
+        return (-score, index)
+
+    kept: set[int] = set()
+    used = 0
+    for index in sorted(selected, key=priority):
+        size = len(str(blocks[index].get("text") or ""))
+        if kept and used + size > max_chars:
+            continue
+        kept.add(index)
+        used += size
+        if used >= max_chars:
+            break
+    if not kept and blocks:
+        kept.add(min(selected) if selected else 0)
+    return kept
+
+
 def _with_selection(document: dict[str, Any], blocks: list[dict[str, Any]],
-                    strategy: str, original_count: int, passes: list[str]) -> dict[str, Any]:
+                    strategy: str, original_count: int, passes: list[str],
+                    original_chars: int, max_chars: int) -> dict[str, Any]:
     return {
         **document,
         "content": {**document.get("content", {}), "blocks": blocks},
@@ -232,6 +282,9 @@ def _with_selection(document: dict[str, Any], blocks: list[dict[str, Any]],
             "original_block_count": original_count,
             "selected_block_count": len(blocks),
             "omitted_block_count": original_count - len(blocks),
+            "original_char_count": original_chars,
+            "selected_char_count": _block_chars(blocks),
+            "char_budget": max_chars,
             "passes": passes,
         },
     }

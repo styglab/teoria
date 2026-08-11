@@ -22,6 +22,12 @@ Do not turn a product requirement into a bidder requirement merely because the b
 
 When personnel, facility, equipment, insurance, manufacturing, or supply-capacity wording does not establish whether it is an eligibility gate or a performance condition, omit it from `requirements` and describe the clause and ambiguity in `unresolved_candidates`.
 
+When an eligibility section expressly requires a general ability to perform, warranty, after-service, or experience without a measurable threshold, retain the gate only as manual and qualification-blocking. Do not expose it as a structured company comparison. Likewise, distinguish an existing debarment or conviction from a promise not to obstruct, collude, or otherwise misbehave in the current procurement; the latter is not a current sanction fact.
+
+A clause triggered only when a bidder-specific event occurred is not an unconditional conjunct. If the extraction has no fact establishing the trigger, preserve the clause as qualification-blocking unresolved rather than requiring it of every bidder. Compound insolvency and restructuring lists remain manual until their individual states are represented atomically.
+
+Do not lose a time-bound capability statement merely because it cannot be checked through a company API. When it is expressly located in the participation-qualification section, retain it as manual and qualification-blocking. A bare checklist of business registration, corporate registry, seal, or authorization documents remains non-blocking unless the same clause states that omission changes eligibility.
+
 Qualification-review wording does not imply a bid-deadline condition. Use `qualification_review` and `qualification_rejection` when the document says the fact or proof is checked during qualification review. Use `contracting` only for a bidder condition expressly required before contract execution.
 
 ## Fidelity
@@ -56,3 +62,9 @@ A 직접생산확인증명서 is a bidder-held `certificate`, including when it 
 ## Source priority
 
 Structured API license and region rows are authoritative structured candidates. Documents can add detail or reveal conflict. Preserve conflicts with `review_status: needs_review`; never silently choose one source.
+
+## Input efficiency
+
+The caller supplies bounded candidate blocks, not an invitation to inspect the full artifact again.
+Extract all eligibility facts present in those blocks. Do not use tools to retrieve omitted content.
+Structured restrictions are already normalized inputs and must not be rediscovered from prose.

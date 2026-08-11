@@ -34,6 +34,36 @@ def eligibility_requires_review(notice: dict[str, Any], result: dict[str, Any]) 
     )
 
 
+def _document_stem(file_name: str | None) -> str:
+    return Path(str(file_name or "").strip()).stem.casefold()
+
+
+def _filter_covered_unavailable_documents(
+    documents: list[tuple], unavailable_documents: list[tuple]
+) -> list[tuple]:
+    """Drop failed source-format copies when an equivalent rendition parsed."""
+    covered_checksums = {row[2] for row in documents if row[2]}
+    covered_stems = {_document_stem(row[1]) for row in documents if _document_stem(row[1])}
+    remaining = list(unavailable_documents)
+    while True:
+        retained = []
+        changed = False
+        for row in remaining:
+            checksum = row[8]
+            stem = _document_stem(row[1])
+            if (checksum and checksum in covered_checksums) or (stem and stem in covered_stems):
+                if checksum:
+                    covered_checksums.add(checksum)
+                if stem:
+                    covered_stems.add(stem)
+                changed = True
+            else:
+                retained.append(row)
+        remaining = retained
+        if not changed:
+            return remaining
+
+
 def _sanitize_postgres_value(value: Any) -> Any:
     """Recursively remove NUL characters unsupported by PostgreSQL text/jsonb."""
     if isinstance(value, str):
@@ -369,7 +399,8 @@ class PostgresStore:
                                                 parse_max_attempts: int = 3) -> list[dict[str, Any]]:
         with psycopg.connect(self.database_url) as connection:
             notices = connection.execute(
-                "SELECT n.notice_number, n.notice_order, n.source_record_hash, n.bid_deadline_at "
+                "SELECT n.notice_number, n.notice_order, n.source_record_hash, n.bid_deadline_at, "
+                "n.source_payload->>'cmmnSpldmdMethdNm' "
                 "FROM public_procurement.bid_notices n WHERE (EXISTS (SELECT 1 FROM "
                 "public_procurement.bid_notice_documents d WHERE d.notice_number=n.notice_number "
                 "AND d.notice_order=n.notice_order AND d.parse_status='parsed' "
@@ -389,7 +420,7 @@ class PostgresStore:
                 "n.notice_published_at DESC LIMIT %s", (download_max_attempts, parse_max_attempts, limit)
             ).fetchall()
             result = []
-            for number, order, notice_hash, deadline in notices:
+            for number, order, notice_hash, deadline, consortium_method in notices:
                 documents = connection.execute(
                     "SELECT document_id, file_name, checksum, parsed_object_key FROM "
                     "public_procurement.bid_notice_documents WHERE notice_number=%s AND notice_order=%s "
@@ -405,11 +436,20 @@ class PostgresStore:
                 documents = list({row[2] or row[0]: row for row in reversed(documents)}.values())
                 unavailable_documents = connection.execute(
                     "SELECT document_id, file_name, status, attempts, last_error_code, "
-                    "parse_status, parse_attempts, parse_error_code FROM "
+                    "parse_status, parse_attempts, parse_error_code, checksum FROM "
                     "public_procurement.bid_notice_documents WHERE notice_number=%s "
                     "AND notice_order=%s AND NOT (status='stored' AND parse_status='parsed') "
+                    "AND NOT EXISTS (SELECT 1 FROM public_procurement.bid_notice_documents sibling "
+                    "WHERE sibling.notice_number=bid_notice_documents.notice_number "
+                    "AND sibling.notice_order=bid_notice_documents.notice_order "
+                    "AND sibling.checksum=bid_notice_documents.checksum "
+                    "AND sibling.status='stored' AND sibling.parse_status='parsed' "
+                    "AND sibling.storage_status='active' AND sibling.parsed_object_key IS NOT NULL) "
                     "ORDER BY document_slot", (number, order)
                 ).fetchall()
+                unavailable_documents = _filter_covered_unavailable_documents(
+                    documents, unavailable_documents
+                )
                 licenses = connection.execute(
                     "SELECT restriction_group_number, restriction_sequence, license_restriction_name, "
                     "permitted_industry_list, industry_main_field_list, business_type_name, source_record_hash "
@@ -421,6 +461,13 @@ class PostgresStore:
                     "FROM public_procurement.bid_notice_participation_regions "
                     "WHERE notice_number=%s AND notice_order=%s", (number, order)
                 ).fetchall()
+                consortiums = []
+                if consortium_method and consortium_method.strip() not in {"", "(없음)", "없음"}:
+                    consortiums.append({
+                        "sequence": "method",
+                        "name": consortium_method.strip(),
+                        "source_hash": notice_hash,
+                    })
                 total_documents = len(documents) + len(unavailable_documents)
                 unavailable_count = len(unavailable_documents)
                 completeness = (
@@ -431,16 +478,17 @@ class PostgresStore:
                     "notice_number": number, "notice_order": order,
                     "notice_hash": notice_hash, "bid_deadline_at": deadline.isoformat() if deadline else None,
                     "documents": [dict(zip(("document_id", "file_name", "checksum", "parsed_object_key"), row, strict=True)) for row in documents],
-                    "unavailable_documents": [dict(zip(("document_id", "file_name", "status", "attempts", "error_code", "parse_status", "parse_attempts", "parse_error_code"), row, strict=True)) for row in unavailable_documents],
+                    "unavailable_documents": [dict(zip(("document_id", "file_name", "status", "attempts", "error_code", "parse_status", "parse_attempts", "parse_error_code"), row[:8], strict=True)) for row in unavailable_documents],
                     "licenses": [dict(zip(("group", "sequence", "name", "permitted_industries", "main_fields", "business_type", "source_hash"), row, strict=True)) for row in licenses],
                     "regions": [dict(zip(("sequence", "name", "business_type", "source_hash"), row, strict=True)) for row in regions],
+                    "consortiums": consortiums,
                     "coverage": {
                         "completeness": completeness,
                         "requires_review": unavailable_count > 0,
                         "total_document_count": total_documents,
                         "parsed_document_count": len(documents),
                         "unavailable_document_count": unavailable_count,
-                        "structured_requirement_count": len(licenses) + len(regions),
+                        "structured_requirement_count": len(licenses) + len(regions) + len(consortiums),
                     },
                 })
         return result
@@ -466,7 +514,8 @@ class PostgresStore:
                 "unavailable_document_count,unavailable_documents,structured_requirement_count) "
                 "VALUES (%s,%s,%s,%s,'1.1.0',%s,%s,'failed',%s,%s,now(),%s,true,%s,%s,%s,%s,%s) "
                 "ON CONFLICT (notice_number,notice_order,input_fingerprint) DO UPDATE SET "
-                "status='failed',model_name=EXCLUDED.model_name,raw_output_object_key=EXCLUDED.raw_output_object_key,"
+                "status='failed',schema_version=EXCLUDED.schema_version,skill_version=EXCLUDED.skill_version,"
+                "model_name=EXCLUDED.model_name,raw_output_object_key=EXCLUDED.raw_output_object_key,"
                 "error_code=EXCLUDED.error_code,finished_at=now(),requires_review=true",
                 (uuid4(), notice["notice_number"], notice["notice_order"], fingerprint,
                  skill_version, model_name, raw_output_object_key, error_code[:500], coverage["completeness"],
@@ -495,7 +544,9 @@ class PostgresStore:
                 "(extraction_id,notice_number,notice_order,input_fingerprint,schema_version,skill_version,model_name,status,raw_output_object_key,finished_at,completeness,requires_review,total_document_count,parsed_document_count,unavailable_document_count,unavailable_documents,structured_requirement_count) "
                 "VALUES (%s,%s,%s,%s,%s,%s,%s,'completed',%s,now(),%s,%s,%s,%s,%s,%s,%s) "
                 "ON CONFLICT (notice_number,notice_order,input_fingerprint) DO UPDATE SET "
-                "extraction_id=EXCLUDED.extraction_id,status='completed',model_name=EXCLUDED.model_name,"
+                "extraction_id=EXCLUDED.extraction_id,status='completed',"
+                "schema_version=EXCLUDED.schema_version,skill_version=EXCLUDED.skill_version,"
+                "model_name=EXCLUDED.model_name,"
                 "raw_output_object_key=EXCLUDED.raw_output_object_key,error_code=NULL,finished_at=now(),"
                 "completeness=EXCLUDED.completeness,requires_review=EXCLUDED.requires_review,"
                 "total_document_count=EXCLUDED.total_document_count,parsed_document_count=EXCLUDED.parsed_document_count,"
