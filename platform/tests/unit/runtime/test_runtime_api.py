@@ -43,7 +43,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert assessment["kind"] == "compute"
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.08.12.9"
+    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.08.13.2"
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -52,7 +52,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.08.12.9"
+    assert response.json()["registry"]["version"] == "2026.08.13.2"
     assert runner.call[0] == "search_public_procurement_contracts"
     assert runner.call[1]["concluded_date_from"].isoformat() == "2026-01-01"
 
@@ -70,6 +70,61 @@ def test_runtime_api_rejects_invalid_capability_input() -> None:
     )
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "invalid_capability_input"
+
+
+def test_bid_notice_search_discovery_exposes_pagination_and_sort_contract() -> None:
+    app = create_runtime_app(
+        settings=Settings(runtime_api_token="test-token"),
+        catalog=RegistryLoader(REGISTRIES).load(),
+        runner=CapturingRunner(),
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer test-token"}
+
+    capabilities = client.get("/v1/capabilities", headers=headers).json()["capabilities"]
+    search = next(item for item in capabilities if item["id"] == "search_bid_notices")
+    properties = search["input_schema"]["properties"]
+
+    assert properties["sort"]["enum"] == ["published_desc", "deadline_asc"]
+    assert properties["sort"]["default"] == "published_desc"
+    assert properties["page"] == {"type": "integer", "default": 1, "minimum": 1}
+    assert properties["page_size"]["maximum"] == 100
+
+    invalid = client.post(
+        "/v1/capabilities/search_bid_notices:execute",
+        headers=headers,
+        json={"inputs": {
+            "notice_published_at_from": "2026-08-01T00:00:00Z",
+            "notice_published_at_to": "2026-08-31T00:00:00Z",
+            "page": 0,
+        }},
+    )
+    assert invalid.status_code == 422
+
+
+def test_contract_capabilities_expose_root_contract_pagination() -> None:
+    app = create_runtime_app(
+        settings=Settings(runtime_api_token="test-token"),
+        catalog=RegistryLoader(REGISTRIES).load(),
+        runner=CapturingRunner(),
+    )
+    capabilities = TestClient(app).get(
+        "/v1/capabilities",
+        headers={"Authorization": "Bearer test-token"},
+    ).json()["capabilities"]
+
+    contract_search = next(
+        item for item in capabilities if item["id"] == "search_public_procurement_contracts"
+    )["input_schema"]["properties"]
+    company_history = next(
+        item for item in capabilities
+        if item["id"] == "get_company_public_procurement_contracts"
+    )["input_schema"]["properties"]
+
+    assert contract_search["sort"]["enum"] == ["concluded_desc", "amount_desc"]
+    assert contract_search["page_size"]["maximum"] == 100
+    assert company_history["sort"]["enum"] == ["contract_desc"]
+    assert company_history["page"]["default"] == 1
 
 
 def test_runtime_api_can_require_a_published_registry() -> None:

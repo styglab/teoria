@@ -54,6 +54,12 @@ def _input_schema(catalog: RegistryCatalog, definition: CapabilityInput) -> dict
         schema = {"type": "array", "items": schema}
     if definition.default is not None:
         schema["default"] = definition.default
+    if definition.enum is not None:
+        schema["enum"] = definition.enum
+    if definition.minimum is not None:
+        schema["minimum"] = definition.minimum
+    if definition.maximum is not None:
+        schema["maximum"] = definition.maximum
     return schema
 
 

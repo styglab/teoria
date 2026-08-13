@@ -15,7 +15,11 @@ from teoria_provider.executor import ProviderExecutor
 from teoria_provider.models import ExecutionResponse
 from teoria.runtime.source.request_builder import SourceRequestBuilder
 from teoria.runtime.source.response_validator import SourceResponseValidator
-from teoria.runtime.source.database import DatabaseSourceExecutionError, DatabaseSourceExecutor
+from teoria.runtime.source.database import (
+    DatabaseQueryResult,
+    DatabaseSourceExecutionError,
+    DatabaseSourceExecutor,
+)
 from teoria.registry.loader import RegistryCatalog
 
 
@@ -60,6 +64,7 @@ class CapabilityResult(BaseModel):
     links: list[MaterializedLink] = Field(default_factory=list)
     responses: list[ExecutionResponse] | None = None
     outcome: dict[str, Any] | None = None
+    pagination: dict[str, int] | None = None
 
 
 class CapabilityRunner:
@@ -132,6 +137,7 @@ class CapabilityRunner:
         raw_responses: list[ExecutionResponse] = []
         observed_at = datetime.now(timezone.utc)
         outcome_matched = False
+        result_pagination = None
 
         for step in capability.steps:
             source_id, operation_id = step.call.split(".", 1)
@@ -139,7 +145,7 @@ class CapabilityRunner:
             if source.source.type == "database":
                 query = self.binder.bind(catalog, capability, step, inputs)
                 try:
-                    rows = await asyncio.to_thread(
+                    database_result = await asyncio.to_thread(
                         self.database_executor.execute,
                         catalog,
                         source_id,
@@ -154,9 +160,15 @@ class CapabilityRunner:
                         source_id=source_id,
                         operation_id=operation_id,
                     ) from exc
-                fragments.extend(
-                    self.decoder.decode_database_rows(catalog, source_id, operation_id, rows)
-                )
+                if isinstance(database_result, DatabaseQueryResult):
+                    rows = database_result.rows
+                    if database_result.pagination is not None:
+                        result_pagination = database_result.pagination
+                else:
+                    rows = database_result
+                fragments.extend(self.decoder.decode_database_rows(
+                    catalog, source_id, operation_id, rows
+                ))
                 continue
             operation = next(item for item in source.source.operations if item.id == operation_id)
             base_input = self.binder.bind(catalog, capability, step, inputs)
@@ -250,6 +262,7 @@ class CapabilityRunner:
             links=links,
             responses=raw_responses if include_raw_responses else None,
             outcome=outcome_result,
+            pagination=result_pagination,
         )
 
     @staticmethod

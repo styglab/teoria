@@ -1521,6 +1521,39 @@ def test_preserves_omitted_explicit_tax_evasion_disqualification() -> None:
     assert requirement["evidence"][0]["excerpt"] == clause
 
 
+def test_preserves_omitted_explicit_equipment_ownership_gate() -> None:
+    clause = (
+        "2. 입찰참가자격\n"
+        "◦ 「8도 이상 인쇄기」 2대 이상을 보유하고 금융결제원 등록 "
+        "지로장표 적격인쇄 승인을 받은 자"
+    )
+    result = {"requirements": [], "unresolved_candidates": []}
+    inputs = {"documents": [{"document_id": "doc", "content": {"blocks": [{
+        "block_id": "b1", "page": 1, "section": None, "text": clause,
+    }]}}]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    requirement = result["requirements"][0]
+    assert requirement["type"] == "equipment_ownership"
+    assert requirement["operator"] == "greater_than_or_equal"
+    assert requirement["value"]["number"] == 2
+    assert requirement["value"]["text"] == "8도 이상 인쇄기 2대 이상 보유"
+    assert requirement["evidence"][0]["excerpt"] == "「8도 이상 인쇄기」 2대 이상을 보유"
+
+
+def test_does_not_turn_equipment_specification_into_ownership_gate() -> None:
+    clause = "규격서: 냉난방기는 실외기 2대 이상을 포함하여 설치하여야 한다."
+    result = {"requirements": [], "unresolved_candidates": []}
+    inputs = {"documents": [{"document_id": "doc", "content": {"blocks": [{
+        "block_id": "b1", "page": 1, "section": "규격", "text": clause,
+    }]}}]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    assert result["requirements"] == []
+
+
 def test_preserves_omitted_bankruptcy_gates_at_bid_and_contract_stages() -> None:
     clause = (
         "부도 또는 파산 상태에 있는 업체는 본 입찰에 참가할 수 없으며, "
@@ -1605,6 +1638,17 @@ def test_repair_classifies_manufacturer_authorized_dealer() -> None:
     assert item["type"] == "manufacturer_status"
 
 
+def test_repair_classifies_dealer_with_manufacturer_distribution_agreement() -> None:
+    item = _validated_requirement(
+        "의료기기 업체 및 제조원과의 판권계약이 체결된 국내 대리점 또는 지사",
+        type="custom",
+    )
+
+    _repair_requirement_semantics({"requirements": [item], "unresolved_candidates": []})
+
+    assert item["type"] == "manufacturer_status"
+
+
 def test_repair_classifies_institution_retiree_conflict_gate() -> None:
     item = _validated_requirement(
         "기관 퇴직자가 설립했거나 등기임원으로 재취업 중인 업체의 입찰은 무효",
@@ -1631,6 +1675,101 @@ def test_repair_normalizes_active_tax_evasion_disqualification_operator() -> Non
     item = _validated_requirement(
         "조세포탈 등을 한 자로서 유죄판결 확정일부터 2년이 지나지 않은 자는 입찰에 참여할 수 없다",
         type="sanction", operator="not_equals",
+    )
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["operator"] == "not_exists"
+
+
+@pytest.mark.parametrize("clause", [
+    "입찰참가자격 제한기간 중에 있는 자",
+    "부정당업자 제재 종료 후 3개월이 지나지 아니한 자",
+])
+def test_repair_normalizes_any_negative_sanction_state(clause: str) -> None:
+    item = _validated_requirement(clause, type="sanction", operator="not_equals")
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["operator"] == "not_exists"
+
+
+def test_repair_consortrium_prohibition_sets_single_only_mode() -> None:
+    item = _validated_requirement(
+        "공동수급은 허용하지 않습니다", type="consortium", operator="not_exists",
+    )
+    item["value"]["attributes"] = [
+        {"name": "participation_mode", "value": "consortium"},
+    ]
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["value"]["attributes"] == [
+        {"name": "participation_mode", "value": "single_only"},
+    ]
+
+
+@pytest.mark.parametrize("clause", [
+    "공동수급체 중복결성은 금지합니다",
+    "발주자 동의 없는 하도급은 금지합니다",
+])
+def test_repair_does_not_mark_non_participation_prohibition_single_only(clause: str) -> None:
+    item = _validated_requirement(clause, type="consortium", operator="not_exists")
+    item["value"]["attributes"] = [
+        {"name": "participation_mode", "value": "single_only"},
+    ]
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["value"]["attributes"] == []
+
+
+def test_repair_drops_personal_certificate_fingerprint_exception_as_required_fact() -> None:
+    clause = (
+        "지문인식 신원확인이 곤란한 자는 예외적으로 개인인증서에 의한 "
+        "전자견적서 제출이 가능합니다."
+    )
+    item = _validated_requirement(clause, type="procurement_registration")
+    result = {"requirements": [item], "unresolved_candidates": []}
+
+    _repair_requirement_semantics(result)
+
+    assert result["requirements"] == []
+    assert result["unresolved_candidates"] == []
+
+
+def test_repair_drops_wrapped_personal_certificate_exception_by_semantic_attribute() -> None:
+    clause = (
+        "다만, 지문인식 신원확인 입찰이 곤란한 자는 규정된 절차에 따라 예\n"
+        "외적으로 개인인증서에 의한 전자입찰서 제출이 가능합니다."
+    )
+    item = _validated_requirement(
+        clause, type="procurement_registration", operator="custom",
+    )
+    item["value"]["attributes"] = [
+        {"name": "authentication_method", "value": "personal_certificate_exception"},
+    ]
+    result = {"requirements": [item], "unresolved_candidates": []}
+
+    _repair_requirement_semantics(result)
+
+    assert result["requirements"] == []
+
+
+def test_repair_normalizes_tax_evasion_list_exclusion_without_inline_effect() -> None:
+    item = _validated_requirement(
+        "‘조세포탈 등을 한 자’로서 유죄판결이 확정된 날부터 2년이 지나지 아니한 자",
+        type="sanction", operator="not_equals",
+    )
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["operator"] == "not_exists"
+
+
+def test_repair_normalizes_subcontracting_unavailable_operator() -> None:
+    item = _validated_requirement(
+        "하도급 불가", type="consortium", operator="equals",
     )
 
     _repair_requirement_fields({"requirements": [item]})

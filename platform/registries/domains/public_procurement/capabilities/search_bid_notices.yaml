@@ -1,12 +1,14 @@
 registry:
-  version: 1.0.0
+  version: 1.1.0
   registered_at: "2026-08-07"
 
 capability:
   id: search_bid_notices
   name: 입찰공고 검색
-  description: 게시기간과 선택적인 업무유형·입찰상태로 정규화된 입찰공고를 검색한다.
+  description: 자유어, 게시·마감기간, 업무유형, 입찰상태, 계약방법과 추정가격으로 정규화된 입찰공고를 페이지 단위 검색한다.
   inputs:
+    query:
+      data_type: string
     notice_published_at_from:
       data_type: datetime
       field: teoria_public_procurement.bid_notices.notice_published_at
@@ -19,10 +21,60 @@ capability:
       required: true
     work_type:
       property: public_procurement.bid_notice.work_type
+      enum: [goods, service, construction, foreign, other]
     bid_status:
       property: public_procurement.bid_notice.bid_status
+      enum: [scheduled, open, closed, unknown]
+    bid_deadline_at_from:
+      property: public_procurement.bid_notice.bid_deadline_at
+      operator: gte
+    bid_deadline_at_to:
+      property: public_procurement.bid_notice.bid_deadline_at
+      operator: lte
+    contract_method_name:
+      property: public_procurement.bid_notice.contract_method_name
+    estimated_price_min:
+      property: public_procurement.bid_notice.estimated_price
+      operator: gte
+    estimated_price_max:
+      property: public_procurement.bid_notice.estimated_price
+      operator: lte
+    sort:
+      data_type: string
+      enum: [published_desc, deadline_asc]
+      default: published_desc
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
   steps:
     - call: teoria_public_procurement.bid_notices
+      database_query:
+        search:
+          input: query
+          fields:
+            - notice_name
+            - notice_number
+            - notice_organization_name
+            - demand_organization_name
+        sort:
+          input: sort
+          choices:
+            published_desc:
+              - {field: notice_published_at, direction: desc, nulls: last}
+              - {field: bid_notice_id, direction: desc}
+            deadline_asc:
+              - {field: bid_deadline_at, direction: asc, nulls: last}
+              - {field: bid_notice_id, direction: asc}
+        pagination:
+          page_input: page
+          page_size_input: page_size
+          root_field: bid_notice_id
   returns:
     - public_procurement.bid_notice
     - public_procurement.public_organization

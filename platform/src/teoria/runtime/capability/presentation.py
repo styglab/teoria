@@ -15,7 +15,8 @@ def serialize_capability_result(
     include_property_provenance: bool = False,
 ) -> dict[str, Any]:
     objects = []
-    for item in result.objects[:max_objects]:
+    presented_objects = result.objects if result.pagination is not None else result.objects[:max_objects]
+    for item in presented_objects:
         output: dict[str, Any] = {
             "ontology": item.ontology,
             "type": item.object_type,
@@ -45,8 +46,10 @@ def serialize_capability_result(
         "links": links,
         "total_objects": len(result.objects),
         "total_links": len(result.links),
-        "truncated": len(result.objects) > max_objects,
+        "truncated": result.pagination is None and len(result.objects) > max_objects,
     }
+    if result.pagination is not None:
+        output["pagination"] = result.pagination
     if result.outcome is not None:
         output["outcome"] = result.outcome
     return output

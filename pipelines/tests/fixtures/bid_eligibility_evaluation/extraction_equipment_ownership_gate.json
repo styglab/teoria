@@ -1,0 +1,58 @@
+{
+  "case_id": "extraction_equipment_ownership_gate",
+  "partition": "regression",
+  "notice": {
+    "notice_number": "R26BK01677322",
+    "notice_order": "000",
+    "work_type": "goods"
+  },
+  "provenance": {
+    "sampled_at": "2026-08-13T05:55:08+00:00",
+    "input_fingerprint": "v10-holdout-source-review",
+    "versions": {
+      "extraction": "2.2.28",
+      "repair_before": "equipment-gate-omitted",
+      "repair_after": "equipment-gate-recovery"
+    },
+    "expectation_method": "independent_source_review",
+    "document_checksums": [
+      "sha256:source-retained-in-ephemeral-evaluation"
+    ]
+  },
+  "expected": {
+    "requirements": [
+      {
+        "type": "equipment_ownership",
+        "operator": "greater_than_or_equal",
+        "value": {
+          "text": "8도 이상 인쇄기 2대 이상 보유",
+          "number": 2
+        },
+        "holder_scope": "bidder",
+        "reference_date_type": "bid_deadline",
+        "assessment_stage": "bid_entry",
+        "failure_effect": "cannot_bid",
+        "mandatory": true,
+        "evidence": [
+          {
+            "source_type": "document",
+            "document_id": "643c43e6-ad4b-5308-b2b2-f3adc9533e71",
+            "block_id": "p1~1",
+            "page": 1,
+            "excerpt": "「8도이상인쇄기」2대이상을보유"
+          }
+        ]
+      }
+    ],
+    "unresolved_candidates": [],
+    "adjudication_required": false
+  },
+  "classification": {
+    "earliest_layer": "extraction",
+    "severity": "critical",
+    "error_codes": [
+      "mandatory_gate_missed"
+    ],
+    "adjudication_note": null
+  }
+}

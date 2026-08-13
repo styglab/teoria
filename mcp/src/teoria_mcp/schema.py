@@ -14,6 +14,17 @@ def capability_output_schema() -> dict[str, Any]:
             "total_objects": {"type": "integer"},
             "total_links": {"type": "integer"},
             "truncated": {"type": "boolean"},
+            "pagination": {
+                "type": "object",
+                "properties": {
+                    "page": {"type": "integer", "minimum": 1},
+                    "page_size": {"type": "integer", "minimum": 1},
+                    "total_items": {"type": "integer", "minimum": 0},
+                    "total_pages": {"type": "integer", "minimum": 0},
+                },
+                "required": ["page", "page_size", "total_items", "total_pages"],
+                "additionalProperties": False,
+            },
             "outcome": {
                 "type": "object",
                 "properties": {

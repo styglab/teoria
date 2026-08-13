@@ -1,12 +1,14 @@
 registry:
-  version: 1.0.0
+  version: 1.1.0
   registered_at: "2026-08-04"
 
 capability:
   id: search_public_procurement_contracts
   name: 공공조달 계약 검색
-  description: 계약체결 기간과 선택적인 계약유형·계약기관 조건으로 정규화된 공공조달 계약을 검색한다.
+  description: 계약체결 기간, 자유어와 선택적인 계약유형·계약기관·계약방법·금액 조건으로 공공조달 계약을 페이지 단위 검색한다.
   inputs:
+    query:
+      data_type: string
     concluded_date_from:
       data_type: date
       field: teoria_public_procurement.contracts.concluded_date
@@ -19,11 +21,55 @@ capability:
       required: true
     contract_type:
       property: public_procurement.contract.contract_type
+      enum: [goods, service, construction, foreign, other]
     contracting_organization_code:
       data_type: string
       field: teoria_public_procurement.contracts.contracting_organization_code
+    contract_method_name:
+      property: public_procurement.contract.contract_method_name
+    total_amount_min:
+      property: public_procurement.contract.total_amount
+      operator: gte
+    total_amount_max:
+      property: public_procurement.contract.total_amount
+      operator: lte
+    sort:
+      data_type: string
+      enum: [concluded_desc, amount_desc]
+      default: concluded_desc
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
   steps:
     - call: teoria_public_procurement.contracts
+      database_query:
+        search:
+          input: query
+          fields:
+            - contract_name
+            - unified_contract_number
+            - confirmed_contract_number
+            - contract_reference_number
+            - contracting_organization_code
+        sort:
+          input: sort
+          choices:
+            concluded_desc:
+              - {field: concluded_date, direction: desc, nulls: last}
+              - {field: unified_contract_number, direction: desc}
+            amount_desc:
+              - {field: total_amount, direction: desc, nulls: last}
+              - {field: unified_contract_number, direction: desc}
+        pagination:
+          page_input: page
+          page_size_input: page_size
+          root_field: unified_contract_number
   returns:
     - public_procurement.contract
     - public_procurement.public_organization

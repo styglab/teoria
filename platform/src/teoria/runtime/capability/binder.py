@@ -66,7 +66,34 @@ class CapabilityBinder:
                     "operator": definition.operator,
                     "value": encoded,
                 })
-        return {"filters": filters}
+        query: dict[str, Any] = {"filters": filters}
+        definition = step.database_query
+        if definition is None:
+            return query
+
+        def resolved(input_id: str) -> Any:
+            if input_id in inputs:
+                return inputs[input_id]
+            return capability.inputs[input_id].default
+
+        if definition.search:
+            value = resolved(definition.search.input)
+            if value not in (None, ""):
+                query["search"] = {
+                    "fields": definition.search.fields,
+                    "value": value,
+                }
+        if definition.sort:
+            choice = resolved(definition.sort.input)
+            if choice is not None:
+                query["order_by"] = [item.model_dump() for item in definition.sort.choices[choice]]
+        if definition.pagination:
+            query["pagination"] = {
+                "page": resolved(definition.pagination.page_input),
+                "page_size": resolved(definition.pagination.page_size_input),
+                "root_field": definition.pagination.root_field,
+            }
+        return query
 
     def _request_binding(self, catalog: RegistryCatalog, call: str, definition: CapabilityInput) -> tuple[str | None, str | None]:
         prefix = f"{call}.request."

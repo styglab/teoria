@@ -20,6 +20,9 @@ class CapabilityInput(RegistryModel):
     collection: Literal["scalar", "list"] = "scalar"
     required: bool = False
     default: Any = None
+    enum: list[Any] | None = None
+    minimum: int | float | None = None
+    maximum: int | float | None = None
 
     @model_validator(mode="after")
     def validate_input_shape(self) -> "CapabilityInput":
@@ -32,15 +35,50 @@ class CapabilityInput(RegistryModel):
             raise ValueError("non-equality operator requires a field or property binding")
         if self.required and self.default is not None:
             raise ValueError("required input cannot declare a default")
+        if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
+            raise ValueError("input minimum cannot exceed maximum")
+        if self.enum is not None and not self.enum:
+            raise ValueError("input enum cannot be empty")
+        if self.default is not None and self.enum is not None and self.default not in self.enum:
+            raise ValueError("input default must be one of enum")
         for field_id in self.fields:
             if not SNAKE_CASE_PATTERN.fullmatch(field_id):
                 raise ValueError(f"input field id '{field_id}' must be snake_case")
         return self
 
 
+class DatabaseSearchDefinition(RegistryModel):
+    input: str
+    fields: list[str] = Field(min_length=1)
+
+
+class DatabaseSortField(RegistryModel):
+    field: str
+    direction: Literal["asc", "desc"]
+    nulls: Literal["first", "last"] | None = None
+
+
+class DatabaseSortDefinition(RegistryModel):
+    input: str
+    choices: dict[str, list[DatabaseSortField]]
+
+
+class DatabasePaginationDefinition(RegistryModel):
+    page_input: str
+    page_size_input: str
+    root_field: str
+
+
+class DatabaseQueryDefinition(RegistryModel):
+    search: DatabaseSearchDefinition | None = None
+    sort: DatabaseSortDefinition | None = None
+    pagination: DatabasePaginationDefinition | None = None
+
+
 class CapabilityStep(RegistryModel):
     id: str | None = None
     call: str
+    database_query: DatabaseQueryDefinition | None = None
 
     @field_validator("id")
     @classmethod
@@ -133,6 +171,25 @@ class CapabilityDefinition(IdentifiedModel):
             raise ValueError("returns must be unique")
         if self.outcome and self.outcome.input not in self.inputs:
             raise ValueError(f"outcome input '{self.outcome.input}' is not declared")
+        for step in self.steps:
+            query = step.database_query
+            if query is None:
+                continue
+            referenced_inputs = []
+            if query.search:
+                referenced_inputs.append(query.search.input)
+            if query.sort:
+                referenced_inputs.append(query.sort.input)
+            if query.pagination:
+                referenced_inputs.extend([
+                    query.pagination.page_input,
+                    query.pagination.page_size_input,
+                ])
+            unknown_inputs = set(referenced_inputs) - set(self.inputs)
+            if unknown_inputs:
+                raise ValueError(
+                    f"database query references unknown inputs: {sorted(unknown_inputs)}"
+                )
         if self.kind != "action" and (self.effects.creates or self.effects.updates):
             raise ValueError("only an action capability may declare creates or updates effects")
         if self.kind == "query":

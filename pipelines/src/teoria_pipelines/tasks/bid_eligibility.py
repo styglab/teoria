@@ -653,22 +653,36 @@ def _repair_requirement_fields(result: dict) -> None:
             and not deadline.search(requirement["original_text"])
         ):
             requirement["reference_date_type"] = "none"
-        if (
-            requirement["type"] == "sanction"
-            and requirement["operator"] == "not_equals"
-            and (
-                re.search(r"(?:지정|제재|제한).{0,12}(?:되지\s*않|아니한)", proposition)
-                or (
-                    re.search(r"조세포탈|유죄판결", proposition)
-                    and re.search(r"(?:입찰|견적).{0,15}(?:참여|참가)할\s*수\s*없", proposition)
-                )
-            )
-        ):
+        if requirement["type"] == "sanction" and requirement["operator"] == "not_equals":
             requirement["operator"] = "not_exists"
+        if requirement["type"] == "consortium" and requirement["operator"] == "not_exists":
+            value = requirement.get("value") or {}
+            attributes = [
+                item for item in value.get("attributes", [])
+                if str(item.get("name") or "").casefold() != "participation_mode"
+            ]
+            consortium_text = " ".join((
+                proposition, str(value.get("text") or ""),
+                str(requirement.get("original_text") or ""),
+            ))
+            participation_itself_is_prohibited = (
+                not re.search(r"공동수급체.{0,20}(?:중복|복수).{0,12}(?:결성|구성)", consortium_text)
+                and not re.search(r"하도급", consortium_text)
+                and bool(re.search(
+                    r"(?:공동(?:수급|도급|계약)(?:은|는|이|가|을|를)?\s*"
+                    r"(?:불가|불허|금지|허용하지\s*않|허용되지)|공동수급불허|"
+                    r"단독(?:으로만|만)\s*(?:참가|계약|제출))",
+                    consortium_text,
+                ))
+            )
+            if participation_itself_is_prohibited:
+                attributes.append({"name": "participation_mode", "value": "single_only"})
+            value["attributes"] = attributes
+            requirement["value"] = value
         if (
             requirement["type"] == "consortium"
             and requirement["operator"] in {"equals", "not_equals"}
-            and re.search(r"하도급.{0,12}(?:불허|금지|할\s*수\s*없)", proposition)
+            and re.search(r"하도급.{0,12}(?:불가|불허|금지|할\s*수\s*없)", proposition)
         ):
             requirement["operator"] = "not_exists"
         if (
@@ -734,7 +748,11 @@ def _repair_requirement_semantics(result: dict) -> None:
             requirement["type"] = "legal_qualification"
         if (
             requirement["type"] == "custom"
-            and re.search(r"(?:제조사|제작사).{0,12}(?:대리점|공급사)|(?:대리점|공급사).{0,12}(?:제조사|제작사)", original)
+            and re.search(
+                r"(?:제조사|제작사|제조원).{0,24}(?:판권계약.{0,16})?(?:대리점|공급사|지사)"
+                r"|(?:대리점|공급사|지사).{0,24}(?:제조사|제작사|제조원)",
+                original,
+            )
         ):
             requirement["type"] = "manufacturer_status"
         if (
@@ -806,6 +824,24 @@ def _repair_requirement_semantics(result: dict) -> None:
             and re.search(r"입찰\s*대리인(?:의|인)?\s*경우", original)
         ):
             _add_unresolved(result, original, "manual_evidence_interpretation", True)
+            continue
+        attributes = {
+            str(item.get("name") or ""): str(item.get("value") or "")
+            for item in value.get("attributes", [])
+        }
+        compact_auth_text = re.sub(r"\s+", "", f"{original} {value_text}")
+        if (
+            requirement["type"] == "procurement_registration"
+            and (
+                attributes.get("authentication_method") == "personal_certificate_exception"
+                or (
+                    "지문인식신원확인" in compact_auth_text
+                    and "곤란" in compact_auth_text
+                    and "개인인증서" in compact_auth_text
+                    and ("예외" in compact_auth_text or "제출할수" in compact_auth_text)
+                )
+            )
+        ):
             continue
         if (
             requirement["type"] == "legal_qualification"
@@ -1075,6 +1111,56 @@ def _preserve_omitted_manual_eligibility(result: dict, inputs: dict) -> None:
         for block in document["content"]["blocks"]:
             text = str(block.get("text") or "")
             section = str(block.get("section") or "")
+            qualification_heading = re.search(
+                r"(?:입찰|견적(?:서)?\s*제출?)\s*참가\s*자격|입찰참가자격", text,
+            )
+            equipment = re.search(
+                r"(?:「([^」]{2,60})」|([가-힣A-Za-z0-9ㆍ·‧()\s]{2,60}?))\s*"
+                r"(\d+)\s*대\s*이상(?:을)?\s*보유",
+                text,
+            )
+            if (qualification_heading and equipment
+                    and equipment.start() >= qualification_heading.start()
+                    and equipment.start() - qualification_heading.end() <= 1500
+                    and not any(item.get("type") == "equipment_ownership"
+                                and _citation_compact(equipment.group(0))
+                                in _citation_compact(item.get("original_text", ""))
+                                for item in result["requirements"])):
+                original = equipment.group(0).strip()
+                equipment_name = (equipment.group(1) or equipment.group(2) or "").strip()
+                count = int(equipment.group(3))
+                used_ids = {item["id"] for item in result["requirements"]}
+                next_id = len(used_ids) + 1
+                while f"r{next_id}" in used_ids:
+                    next_id += 1
+                result["requirements"].append({
+                    "id": f"r{next_id}", "type": "equipment_ownership",
+                    "operator": "greater_than_or_equal",
+                    "value": {
+                        "text": f"{equipment_name} {count}대 이상 보유",
+                        "number": count, "boolean": None, "items": [],
+                        "attributes": [{"name": "equipment_name",
+                                        "value": equipment_name}],
+                    },
+                    "original_text": original, "proposition_text": original,
+                    "proposition_start": 0, "proposition_end": len(original),
+                    "holder_scope": "bidder", "reference_date_type": "bid_deadline",
+                    "assessment_stage": "bid_entry", "failure_effect": "cannot_bid",
+                    "comparison_mode": "structured", "mandatory": True,
+                    "review_status": "extracted", "confidence": 1.0,
+                    "evidence": [{
+                        "source_type": "document", "source_id": str(document["document_id"]),
+                        "document_id": str(document["document_id"]),
+                        "block_id": block.get("block_id"), "page": block.get("page"),
+                        "section": block.get("section"), "excerpt": original,
+                    }],
+                    "proof_requirements": [],
+                    "logic": {"placements": [{
+                        "scope": "common", "alternative_group": None,
+                        "alternative_branch": None,
+                    }]},
+                })
+                represented += "\n" + original
             registration = re.search(
                 r"(?:조달청|나라장터|국가종합전자조달시스템).{0,20}"
                 r"입찰참가(?:자격)?\s*(?:미\s*)?등록"
@@ -2215,6 +2301,9 @@ async def extract_bid_eligibility_notice(
     ]
     configured_model = os.environ.get("TEORIA_CODEX_MODEL")
     fallback_model = os.environ.get("TEORIA_CODEX_FALLBACK_MODEL")
+    execution_timeout_seconds = float(
+        os.environ.get("TEORIA_CODEX_EXECUTION_TIMEOUT_SECONDS", "600")
+    )
     model_name = configured_model or "codex-default"
     try:
         process = None
@@ -2228,7 +2317,7 @@ async def extract_bid_eligibility_notice(
                 subprocess.run,
                 attempt_command,
                 input=input_json, text=True, capture_output=True,
-                cwd="/app", timeout=240, check=False,
+                cwd="/app", timeout=execution_timeout_seconds, check=False,
             )
             if process.returncode == 0 or not _is_transient_codex_failure(process.stderr):
                 if attempt_model and attempt_model != configured_model:

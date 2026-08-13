@@ -503,9 +503,7 @@ class PostgresStore:
                 "OR (d.status='stored' AND (d.parse_status IN ('pending','processing') "
                 "OR (d.parse_status='failed' AND d.parse_attempts < %s))))) "
                 + key_filter +
-                "ORDER BY EXISTS (SELECT 1 FROM public_procurement.bid_notice_documents priority_d "
-                "WHERE priority_d.notice_number=n.notice_number AND priority_d.notice_order=n.notice_order "
-                "AND priority_d.parse_status='parsed' AND priority_d.parsed_object_key IS NOT NULL) DESC, "
+                "ORDER BY CASE WHEN n.work_type='service' THEN 0 ELSE 1 END, "
                 "n.notice_published_at DESC LIMIT %s", parameters
             ).fetchall()
             result = []

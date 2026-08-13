@@ -1,5 +1,6 @@
 import pytest
 
+from teoria_mcp.schema import capability_output_schema
 from teoria_mcp.tools import CapabilityMCPService
 
 
@@ -35,6 +36,13 @@ def test_generates_tools_from_runtime_api_metadata() -> None:
     assert tool.name == "find_contracts"
     assert tool.inputSchema["properties"]["date_from"]["format"] == "date"
     assert "_options" in tool.inputSchema["properties"]
+
+
+def test_output_schema_declares_optional_pagination_metadata() -> None:
+    pagination = capability_output_schema()["properties"]["pagination"]
+
+    assert pagination["properties"]["total_items"]["minimum"] == 0
+    assert pagination["required"] == ["page", "page_size", "total_items", "total_pages"]
 
 
 @pytest.mark.asyncio
