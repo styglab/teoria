@@ -16,6 +16,7 @@ def build_registry_overview(catalog: RegistryCatalog) -> dict[str, Any]:
             "sources": len(catalog.sources),
             "mappings": len(catalog.mappings),
             "capabilities": len(catalog.capabilities),
+            "eligibility_rules": len(catalog.eligibility_rules),
             "data_types": len(catalog.data_types),
             "value_sets": len(catalog.value_sets),
         },

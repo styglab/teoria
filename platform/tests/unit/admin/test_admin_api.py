@@ -17,11 +17,12 @@ def test_admin_api_exposes_overview_and_ontology_graph() -> None:
     overview = client.get("/v1/admin/overview")
     assert overview.status_code == 200
     assert overview.json()["counts"]["ontologies"] == 3
+    assert overview.json()["counts"]["eligibility_rules"] == 12
     assert overview.json()["validation"]["status"] == "valid"
 
     release = client.get("/v1/admin/registry-release")
     assert release.status_code == 200
-    assert release.json()["version"] == "2026.08.09.1"
+    assert release.json()["version"] == "2026.08.12.9"
     assert release.json()["status"] == "published"
 
     validation = client.get("/v1/admin/validation")
@@ -37,6 +38,10 @@ def test_admin_api_exposes_overview_and_ontology_graph() -> None:
     assessment = next(item for item in capabilities if item["id"] == "assess_company_bid_eligibility")
     assert assessment["kind"] == "compute"
     assert assessment["steps"] == []
+    rules = client.get("/v1/admin/eligibility-rules").json()["eligibility_rules"]
+    direct_production = next(item for item in rules if item["id"] == "holds_valid_direct_production_confirmation")
+    assert direct_production["evaluator"] == "product_certificate_valid"
+    assert "public_procurement.direct_production_confirmation.detailed_product_code" in direct_production["required_facts"]
     assert any(source["type"] == "database" for source in client.get("/v1/admin/sources").json()["sources"])
     assert client.get("/v1/admin/mappings").json()["mappings"][0]["binding_count"] > 0
     assert any(link["kind"] == "mapping" for link in client.get("/v1/admin/lineage").json()["links"])

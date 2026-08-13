@@ -6,7 +6,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 
-SELECTION_VERSION = "1.4.1"
+SELECTION_VERSION = "1.4.3"
 DEFAULT_DOCUMENT_CHAR_BUDGET = 40_000
 
 _FULL_DOCUMENT_NAME = re.compile(r"입찰\s*공고|공고문|표준\s*공고", re.IGNORECASE)
@@ -30,6 +30,11 @@ _OMISSION_GUARD = re.compile(
     r"등록.{0,8}(업체|사업자|하여야|필수)|법률.{0,8}(자격|요건)|"
     r"공인\s*인증서.{0,20}(차용|대여)|인증서.{0,20}(차용|대여)|"
     r"(보유|구비|갖추|등록|발급).{0,16}(하여야|해야|필수|자에 한)",
+    re.IGNORECASE,
+)
+_ELIGIBILITY_OUTCOME = re.compile(
+    r"(?:입찰|낙찰|계약업체\s*선정).{0,40}(?:무효|배제|취소)|"
+    r"(?:무효|배제|취소).{0,40}(?:입찰|낙찰|계약업체\s*선정)",
     re.IGNORECASE,
 )
 _REQUIREMENT_HEADING = re.compile(
@@ -89,6 +94,11 @@ def select_eligibility_blocks(
     if guard_hits:
         _add_context(selected, guard_hits, len(blocks), radius=3)
         passes.append("omission_guard")
+
+    outcome_hits = _matching_indexes(blocks, _ELIGIBILITY_OUTCOME)
+    if outcome_hits:
+        _add_context(selected, outcome_hits, len(blocks), radius=3)
+        passes.append("eligibility_outcome")
 
     # Optional dense-retrieval results are unioned with exact-term retrieval. The
     # selector remains deterministic when no embedding service is configured.
@@ -245,6 +255,8 @@ def _fit_indexes_to_budget(
         score = 0
         if _PRIMARY_REQUIREMENT.search(text):
             score += 8
+        if _ELIGIBILITY_OUTCOME.search(text):
+            score += 12
         if _OMISSION_GUARD.search(text):
             score += 5
         if _REQUIREMENT_HEADING.search(text):
@@ -253,6 +265,20 @@ def _fit_indexes_to_budget(
             score += 2
         if index < 20:
             score += 1
+        # A refined source block can end in the middle of an eligibility sentence.
+        # Keep its immediate sibling competitive with other high-signal hits so the
+        # character budget cannot retain the trigger while dropping its outcome.
+        if index > 0:
+            previous = blocks[index - 1]
+            previous_text = str(previous.get("text") or "").rstrip()
+            if (
+                block.get("parent_block_id") is not None
+                and block.get("parent_block_id") == previous.get("parent_block_id")
+                and (_PRIMARY_REQUIREMENT.search(previous_text)
+                     or _OMISSION_GUARD.search(previous_text))
+                and not re.search(r"[.!?。]|(?:다|함|됨|음)[.)]?\s*$", previous_text)
+            ):
+                score += 11
         return (-score, index)
 
     kept: set[int] = set()

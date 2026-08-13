@@ -39,11 +39,17 @@ value_sets:
       - {id: procurement_supplier_not_registered, name: 조달업체 미등록, description: 나라장터 조달업체 등록이 확인되지 않음}
       - {id: industry_code_matched, name: 업종코드 일치, description: 요구 업종코드와 등록 업종코드가 일치함}
       - {id: industry_code_mismatched, name: 업종코드 불일치, description: 요구 업종코드와 등록 업종코드가 일치하지 않음}
+      - {id: industry_registration_inactive, name: 업종등록 비활성, description: 요구 업종은 등록돼 있으나 기준일에 등록 전·만료·말소·취소·정지 상태임}
       - {id: region_matched, name: 참가지역 일치, description: 기업의 기준 지역이 참가 가능 지역에 포함됨}
       - {id: region_mismatched, name: 참가지역 불일치, description: 기업의 기준 지역이 참가 가능 지역에 포함되지 않음}
       - {id: qualification_valid, name: 기업 자격 유효, description: 요구된 기업 자격이 평가 기준일에 유효함}
       - {id: qualification_expired, name: 기업 자격 만료, description: 요구된 기업 자격이 평가 기준일 전에 만료됨}
       - {id: qualification_missing, name: 기업 자격 없음, description: 요구된 기업 자격의 보유 근거가 확인되지 않음}
+      - {id: company_scale_document_required, name: 기업규모 증빙 확인 필요, description: 공식 중소기업·소기업·소상공인 확인서의 유효성을 담당자가 확인해야 함}
+      - {id: single_participation_selected, name: 단독 참가 선택, description: 단독 참가방식으로 공동수급 제한에 저촉되지 않음}
+      - {id: consortium_participation_allowed, name: 공동수급 허용, description: 공고가 공동수급 참가방식을 허용함}
+      - {id: consortium_participation_prohibited, name: 공동수급 금지, description: 공고가 공동수급 참가방식을 허용하지 않음}
+      - {id: ambiguous_participation_mode, name: 참가방식 불명확, description: 평가에 적용할 단독 또는 공동수급 참가방식이 불명확함}
       - {id: direct_production_matched, name: 직접생산확인 일치, description: 요구 세부품명에 대한 유효한 직접생산확인이 있음}
       - {id: direct_production_mismatched, name: 직접생산확인 불일치, description: 요구 세부품명에 대한 유효한 직접생산확인이 확인되지 않음}
       - {id: product_registration_matched, name: 공급물품 등록 일치, description: 요구 세부품명이 업체의 나라장터 공급물품에 등록되어 있음}

@@ -27,6 +27,8 @@ def test_loads_current_registries() -> None:
     assert "business_registration_number" in catalog.data_types
     assert set(catalog.ontologies) == {"assessment", "company", "public_procurement"}
     assert "business_operating_status_kr" in catalog.value_sets
+    assert "holds_valid_direct_production_confirmation" in catalog.eligibility_rules
+    assert catalog.eligibility_rules["is_valid_women_owned_business"].evaluator == "qualification_valid"
     assert {
         source_id
         for source_id, reference in catalog.references.items()
@@ -34,12 +36,12 @@ def test_loads_current_registries() -> None:
     } == {
         "fsc_company_basic",
         "fsc_company_financial",
-            "kodma_smpp_certificate",
-            "mss_venture_company_disclosure",
-            "mss_innobiz_company_lookup",
-            "mss_mainbiz_company_lookup",
-            "nts_business_registration",
-            "pps_user",
+        "kodma_smpp_certificate",
+        "mss_venture_company_disclosure",
+        "mss_innobiz_company_lookup",
+        "mss_mainbiz_company_lookup",
+        "nts_business_registration",
+        "pps_user",
     }
     assert set(catalog.capabilities) == {
         "assess_company_bid_eligibility",

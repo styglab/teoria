@@ -86,6 +86,25 @@ def create_admin_app(
             ]
         }
 
+    @app.get("/v1/admin/eligibility-rules")
+    async def list_eligibility_rules() -> dict[str, list[dict[str, Any]]]:
+        return {
+            "eligibility_rules": [
+                {
+                    "id": rule.id,
+                    "name": rule.name or rule.id,
+                    "description": rule.description,
+                    "version": rule.version,
+                    "evaluator": rule.evaluator,
+                    "evaluability": rule.evaluability,
+                    "arguments": [item.model_dump() for item in rule.arguments],
+                    "required_facts": rule.required_facts,
+                    "missing_fact_result": rule.missing_fact_result,
+                }
+                for rule in resolved_catalog.eligibility_rules.values()
+            ]
+        }
+
     @app.get("/v1/admin/sources")
     async def list_sources() -> dict[str, list[dict[str, Any]]]:
         sources = []

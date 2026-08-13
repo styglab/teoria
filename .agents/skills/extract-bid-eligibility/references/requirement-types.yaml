@@ -1,4 +1,4 @@
-version: 1.0.0
+version: 1.1.0
 types:
   - business_status
   - procurement_registration
@@ -32,6 +32,18 @@ selection_guidance:
   past_performance: 참가 배제 기준이 명시된 과거 실적
   custom: 위 타입으로 의미 손실 없이 표현할 수 없는 참가자격에만 사용
 normalization_rules:
+  - when: 소프트웨어사업자 등록 또는 신고 자격을 요구함
+    type: industry_license
+    note: 별도 자격 객체를 만들지 않는다. 업종코드는 원문에 명시된 경우에만 기록하고 추측하지 않는다.
   - 조세포탈 등 유죄판결, 부정당업자 제재, 입찰참가 제한과 경영개선명령은 sanction으로 분류
+  - 사업자등록 상태 자체를 확인하는 조건만 value.attributes에 business_status_type=active_business_registration을 기록
+  - 나라장터 업체·입찰참가자격 등록 자체만 value.attributes에 procurement_registration_type=supplier_registration을 기록
+  - 개인인증·지문확인·인증서 차용 금지·대표자 정보 일치·순수 전자입찰 이용자등록은 supplier_registration subtype으로 표시하지 않음
+  - 직접생산확인 대상 코드가 여러 개이고 대안이면 코드별 원자 requirement와 alternative placement로 분리
+  - 제재 종료 후 추가 제한기간은 일반 active procurement restriction Rule로 자동 판정하지 않음
+  - 부정당업자 제재 또는 입찰참가자격 제한만 value.attributes에 sanction_type=procurement_participation_restriction을 기록
+  - 조세포탈 유죄판결, 경영개선명령, 청산·워크아웃·회생 조건에는 위 두 subtype을 사용하지 않음
   - 적격심사 때 확인하는 시설·장비·인증 조건은 qualification_review로 분류하고 bid_deadline을 추정하지 않음
   - 증명서나 현황서 제출 행위는 underlying requirement의 proof_requirements로 분리
+  - 과거의 유리한 신용평가자료 활용처럼 특정 행위 발생이 전제된 무효·배제 조항은 conditional_applicability_unknown unresolved candidate로 보존
+  - 벤처기업·이노비즈(기술혁신형 중소기업)·메인비즈(경영혁신형 중소기업)는 certificate로 분류하고 qualification_type을 venture_business·innobiz·mainbiz로 정규화

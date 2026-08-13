@@ -1,0 +1,4 @@
+interface:
+  display_name: "Improve Bid Eligibility"
+  short_description: "실제 공고 신규 추출과 봉인된 원문 대조로 품질 개선"
+  default_prompt: "Use $improve-bid-eligibility to freshly extract stratified real bid notices without production writes, seal independent source-derived expectations before revealing outputs, fix general errors, and validate regression and untouched holdout sets."

@@ -1,5 +1,5 @@
 registry:
-  version: 1.0.0
+  version: 1.1.0
   registered_at: "2026-08-08"
 
 capability:
@@ -13,6 +13,8 @@ capability:
       - company.business_registration
       - company.taxpayer_status_observation
       - company.qualification
+      - company.venture_company_disclosure
+      - company.innovation_certification_observation
       - public_procurement.bid_notice
       - public_procurement.bid_requirement
       - public_procurement.procurement_supplier
@@ -33,6 +35,8 @@ capability:
       required: true
     reference_date:
       property: assessment.bid_eligibility_assessment.reference_date
+    participation_mode:
+      property: assessment.bid_eligibility_assessment.participation_mode
   returns:
     - assessment.bid_eligibility_assessment
     - assessment.requirement_assessment
@@ -48,6 +52,8 @@ capability:
     - company.business_registration
     - company.taxpayer_status_observation
     - company.qualification
+    - company.venture_company_disclosure
+    - company.innovation_certification_observation
     - public_procurement.bid_notice
     - public_procurement.bid_requirement
     - public_procurement.procurement_supplier

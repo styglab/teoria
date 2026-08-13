@@ -55,6 +55,7 @@ class LoadSummary:
     license_restrictions: int = 0
     participation_regions: int = 0
     documents: int = 0
+    industries: int = 0
 
 
 @dataclass(slots=True)

@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from teoria_pipelines.bid_document_selection import (
@@ -168,3 +171,43 @@ def test_large_supplement_keeps_late_realistic_eligibility_clauses(clause: str) 
     selected = select_eligibility_blocks(_document("구매규격서.hwp", texts))
 
     assert any(block["block_id"] == "b160" for block in selected["content"]["blocks"])
+
+
+def test_large_supplement_prioritizes_late_explicit_bid_outcome() -> None:
+    case_path = (Path(__file__).parents[1] / "fixtures/bid_eligibility_evaluation" /
+                 "selection_explicit_bid_outcome_late_block.json")
+    case = json.loads(case_path.read_text())
+    clause = case["expected"]["requirements"][0]["reproduction_block_text"]
+    texts = [
+        (f"입찰참가자격과 중소기업 확인서 및 면허 등록 안내 {index} " * 35)
+        for index in range(80)
+    ]
+    texts[70] = clause
+
+    selected = select_eligibility_blocks(
+        _document("대형 제안요청서.pdf", texts), max_chars=12_000,
+    )
+
+    assert any(block["block_id"].startswith("b70")
+               for block in selected["content"]["blocks"])
+    assert "eligibility_outcome" in selected["selection"]["passes"]
+
+
+def test_budget_keeps_continuation_of_split_eligibility_clause() -> None:
+    prefix = "가" * 850
+    clause = (
+        prefix
+        + "전자입찰자는 개인인증수단을 이용하여 신원을 "
+        + "확인한 뒤 입찰서를 제출하여야 하며 미확인 입찰은 무효입니다."
+    )
+    texts = [(f"일반 과업 설명 {index} " * 70) for index in range(30)]
+    texts.append(clause)
+
+    selected = select_eligibility_blocks(
+        _document("대형 제안요청서.hwp", texts), max_chars=4_000,
+    )
+    chosen = selected["content"]["blocks"]
+
+    trigger = next(block for block in chosen if "신원을" in block["text"])
+    suffix = int(trigger["block_id"].rsplit("~", 1)[1]) + 1
+    assert any(block["block_id"] == f"b30~{suffix}" for block in chosen)

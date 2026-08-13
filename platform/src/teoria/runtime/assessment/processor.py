@@ -53,8 +53,9 @@ async def execute_bid_eligibility_assessment(
     reference_date = inputs.get("reference_date") or _notice_reference_date(notice)
     business_number = str(inputs["business_registration_number"])
     snapshot = await _load_company_evidence(runner, catalog, business_number, reference_date)
+    snapshot.assessment_context["participation_mode"] = str(inputs.get("participation_mode") or "single")
     evaluations = [
-        RequirementEvaluation(requirement=item, decision=evaluate_requirement(item, snapshot, reference_date))
+        RequirementEvaluation(requirement=item, decision=evaluate_requirement(item, snapshot, reference_date, catalog))
         for item in requirements
     ]
     return _materialize_result(
@@ -81,14 +82,13 @@ async def _load_company_evidence(
         "get_procurement_supplier_industries": {"business_registration_number": business_number},
         "get_procurement_supplier_products": {"business_registration_number": business_number},
         "get_procurement_supplier_sanctions": {"business_registration_number": business_number},
-        "get_women_owned_business_qualification": {
+        "get_company_qualifications": {
             "business_registration_number": business_number,
             "reference_date": reference_date,
         },
-        "get_disabled_owned_business_qualification": {
-            "business_registration_number": business_number,
-            "reference_date": reference_date,
-        },
+        "verify_venture_company": {"business_registration_number": business_number},
+        "verify_innobiz_company": {"business_registration_number": business_number},
+        "verify_mainbiz_company": {"business_registration_number": business_number},
         "get_direct_production_confirmations": {
             "business_registration_number": business_number,
             "reference_date": reference_date,
@@ -143,6 +143,7 @@ def _materialize_result(
         "business_registration_number": business_number,
         "bid_notice_id": notice.properties.get("bid_notice_id"),
         "reference_date": reference_date,
+        "participation_mode": snapshot.assessment_context.get("participation_mode"),
         "requirement_set_hash": requirement_set_hash,
         "evidence_fingerprint": evidence_fingerprint,
         "ruleset_version": RULESET_VERSION,
@@ -183,6 +184,7 @@ def _materialize_result(
             "business_registration_number": business_number,
             "bid_notice_id": notice.properties.get("bid_notice_id"),
             "reference_date": reference_date,
+            "participation_mode": snapshot.assessment_context.get("participation_mode"),
             "outcome": overall,
             "lifecycle_status": lifecycle,
             "requirement_set_hash": requirement_set_hash,
@@ -225,8 +227,8 @@ def _materialize_result(
                 "required_value_text": requirement.properties.get("value_text") or "",
                 "evaluated_value_text": decision.evaluated_value_text,
                 "reasoning_summary": _reasoning(requirement, decision),
-                "evaluator_id": str(requirement.properties.get("requirement_type") or "fallback"),
-                "evaluator_version": RULESET_VERSION,
+                "evaluator_id": str(requirement.properties.get("standard_rule_id") or requirement.properties.get("requirement_type") or "fallback"),
+                "evaluator_version": str(requirement.properties.get("standard_rule_version") or RULESET_VERSION),
                 "evaluated_at": now,
             },
             provenance,

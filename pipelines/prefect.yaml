@@ -6,6 +6,18 @@ push: null
 pull: null
 
 deployments:
+  - name: pps-industry-weekly
+    version: 1.1.0
+    description: 나라장터 표준업종과 근거법규 전체 사전을 매주 일요일 동기화한다.
+    entrypoint: teoria_pipelines.flows.pps_industries.sync_pps_industries
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters: {pipeline_root: /app/pipelines}
+    schedules:
+      - cron: "0 3 * * 0"
+        timezone: Asia/Seoul
+        active: true
+    work_pool: {name: teoria-ingestion, work_queue_name: default}
+
   - name: pps-bid-notice-ingestion
     version: 1.0.0
     description: 신규·변경 나라장터 입찰공고를 수집하고 공고번호별 면허제한과 참가가능지역을 보강한다.

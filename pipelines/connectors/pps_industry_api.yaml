@@ -1,0 +1,59 @@
+registry: {version: 1.0.0, registered_at: "2026-08-12"}
+connector:
+  id: pps_industry_api
+  name: 조달청 나라장터 업종 및 근거법규서비스
+  provider: {organization: 조달청, distribution: 공공데이터포털}
+  type: api
+  specification:
+    format: manual
+    version: "1.1"
+    api_version: "1.0"
+    source_document: 조달청_OpenAPI참고자료_나라장터_업종및근거법규서비스_1.1.docx
+  access:
+    base_url: http://apis.data.go.kr/1230000/ao/IndstrytyBaseLawrgltInfoService
+    authentication: {type: api_key, in: query, name: ServiceKey, credential_env: TEORIA_CONNECTOR_PPS_INDUSTRY_API_KEY}
+  components:
+    objects:
+      - id: procurement_industry
+        name: 업종 및 근거법규 정보
+        fields:
+          - {id: indstrytyClsfcCd, name: 업종분류코드, data_type: string}
+          - {id: indstrytyClsfcNm, name: 업종분류명, data_type: string}
+          - {id: indstrytyCd, name: 업종코드, data_type: string}
+          - {id: indstrytyNm, name: 업종명, data_type: string}
+          - {id: baseLawordNm, name: 근거법령명, data_type: string}
+          - {id: baseLawordArtclClauseNm, name: 근거법령조항명, data_type: string}
+          - {id: baseLawordUrl, name: 근거법령URL, data_type: string}
+          - {id: rltnRgltCntnts, name: 관련규정내용, data_type: string}
+          - {id: inclsnLcns, name: 포함면허, data_type: string}
+          - {id: indstrytyUseYn, name: 업종사용여부, data_type: string}
+          - {id: indstrytyRgstDt, name: 업종등록일시, data_type: string}
+          - {id: indstrytyChgDt, name: 업종변경일시, data_type: string}
+  operations:
+    - id: list_industry_base_laws
+      name: 업종 및 근거법규 정보 조회
+      method: GET
+      idempotent: true
+      path: /getIndstrytyBaseLawrgltInfoList
+      pagination: {type: page_number, page: {request: query.pageNo}, page_size: {request: query.numOfRows}, total_count: response.body.totalCount}
+      request:
+        query:
+          fields:
+            - {id: numOfRows, name: 한 페이지 결과 수, data_type: integer, default: 100}
+            - {id: pageNo, name: 페이지 번호, data_type: integer, default: 1}
+            - {id: type, name: 타입, data_type: string, default: json, values: [{value: json}]}
+            - {id: indstrytyClsfcCd, name: 업종분류코드, data_type: string}
+            - {id: indstrytyNm, name: 업종명, data_type: string}
+            - {id: indstrytyCd, name: 업종코드, data_type: string}
+            - {id: inqryBgnDt, name: 조회시작일시, data_type: string}
+            - {id: inqryEndDt, name: 조회종료일시, data_type: string}
+            - {id: indstrytyUseYn, name: 업종사용여부, data_type: string}
+          required: [numOfRows, pageNo]
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          record_path: response.header
+          success: {field: resultCode, equals: "00"}
+          fields: [{id: resultCode, name: 결과코드, data_type: string}, {id: resultMsg, name: 결과메세지, data_type: string}]
+        data: {record_path: "response.body.items[]", ref: procurement_industry}

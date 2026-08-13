@@ -1,0 +1,12 @@
+pipeline:
+  id: pps_industry_ingestion
+  description: 조달청 나라장터 표준업종과 근거법규 전체 사전을 매주 일요일 동기화한다.
+  connector: pps_industry_api
+  operations: [list_industry_base_laws]
+  cursor: {field: snapshot_date, window_days: 31, overlap_days: 0}
+  sink:
+    source: teoria_public_procurement
+    relations: [procurement_industries]
+  provenance:
+    retain_raw_records: true
+    fields: [connector, operation, fetched_at, source_record_hash]

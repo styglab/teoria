@@ -1,5 +1,5 @@
 registry:
-  version: 1.0.0
+  version: 1.1.0
   registered_at: "2026-08-08"
 
 ontology:
@@ -18,6 +18,7 @@ ontology:
         - {id: business_registration_number, name: 사업자등록번호, description: 참가자격 평가 대상 사업자의 사업자등록번호, data_type: business_registration_number}
         - {id: bid_notice_id, name: 입찰공고 식별자, description: 참가자격을 평가한 입찰공고의 Teoria 식별자, data_type: string}
         - {id: reference_date, name: 평가 기준일, description: 자격과 증빙의 유효성을 판단한 기준 날짜, data_type: date}
+        - {id: participation_mode, name: 참가방식, description: 평가에 적용한 단독 또는 공동수급 참가방식, data_type: string}
         - {id: outcome, name: 종합 평가 결과, description: 개별 요건 평가를 집계한 전체 참가자격 평가 결과, value_set: assessment_outcome}
         - {id: lifecycle_status, name: 평가 실행 상태, description: 평가 업무의 실행 완료·검토 필요·실패 상태, value_set: assessment_lifecycle_status}
         - {id: requirement_set_hash, name: 요건 집합 해시, description: 평가에 사용한 정규화된 참가요건 집합의 내용 해시, data_type: string}

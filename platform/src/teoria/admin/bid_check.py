@@ -73,7 +73,8 @@ class BidCheckReader:
                 "SELECT requirement_id,local_id,requirement_type,operator,value_text,original_text,"
                 "proposition_text,proposition_start,proposition_end,"
                 "holder_scope,reference_date_type,assessment_stage,failure_effect,comparison_mode,"
-                "mandatory,review_status,confidence,evidence_summary,proof_summary "
+                "mandatory,review_status,confidence,evidence_summary,proof_summary,"
+                "standard_rule_id,standard_rule_version,rule_arguments_text "
                 "FROM public_procurement.runtime_bid_requirements WHERE bid_notice_id=%s "
                 "ORDER BY local_id",
                 (bid_notice_id,),

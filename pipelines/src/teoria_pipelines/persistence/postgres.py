@@ -7,6 +7,7 @@ from uuid import UUID
 from uuid import uuid4, uuid5, NAMESPACE_URL
 
 import psycopg
+import re
 from psycopg.types.json import Jsonb
 
 from teoria_pipelines.models import (
@@ -32,6 +33,20 @@ def eligibility_requires_review(notice: dict[str, Any], result: dict[str, Any]) 
             for proof in item.get("proof_requirements", [])
         )
     )
+
+
+def _validate_industry_snapshot(rows: list[dict[str, Any]], previous_active_count: int) -> None:
+    if not rows:
+        raise ValueError("empty_industry_snapshot")
+    codes = [str(row.get("industry_code") or "") for row in rows]
+    if any(not code or not row.get("industry_name") or not row.get("classification_code")
+           or not row.get("classification_name") or not row.get("source_registered_at")
+           for code, row in zip(codes, rows, strict=True)):
+        raise ValueError("invalid_industry_snapshot_required_field")
+    if len(codes) != len(set(codes)):
+        raise ValueError("duplicate_industry_code_in_snapshot")
+    if previous_active_count and len(rows) < previous_active_count * 0.9:
+        raise ValueError("industry_snapshot_count_dropped_over_10_percent")
 
 
 def _document_stem(file_name: str | None) -> str:
@@ -176,6 +191,62 @@ class PostgresStore:
             organizations=len(batch.organizations),
             demand_organizations=len(batch.demand_organizations),
         )
+
+    def replace_procurement_industries(self, rows: list[dict[str, Any]]) -> int:
+        snapshot_at = datetime.now(timezone.utc)
+        codes = [row["industry_code"] for row in rows]
+        with psycopg.connect(self.database_url) as connection:
+            previous_active_count = connection.execute(
+                "SELECT count(*) FROM public_procurement.procurement_industries WHERE is_active"
+            ).fetchone()[0]
+            _validate_industry_snapshot(rows, previous_active_count)
+            for row in rows:
+                values = dict(row)
+                columns = tuple(values)
+                connection.execute(
+                    f"INSERT INTO public_procurement.procurement_industries ({', '.join(columns)}) "
+                    f"VALUES ({', '.join('%(' + column + ')s' for column in columns)}) "
+                    "ON CONFLICT (industry_code) DO UPDATE SET "
+                    + ", ".join(
+                        f"{column}=EXCLUDED.{column}" for column in columns
+                        if column not in {"industry_code", "first_seen_at"}
+                    ) + ", missing_snapshot_count=0,updated_at=now()",
+                    values,
+                )
+            connection.execute(
+                "UPDATE public_procurement.procurement_industries SET "
+                "missing_snapshot_count=missing_snapshot_count+1,"
+                "is_active=CASE WHEN missing_snapshot_count+1>=2 THEN false ELSE is_active END,"
+                "updated_at=%s WHERE NOT (industry_code = ANY(%s))",
+                (snapshot_at, codes),
+            )
+        return len(rows)
+
+    def resolve_requirement_industries(self, result: dict[str, Any]) -> None:
+        with psycopg.connect(self.database_url) as connection:
+            for requirement in result.get("requirements", []):
+                if requirement.get("type") != "industry_license":
+                    continue
+                value = requirement.get("value") or {}
+                attributes = value.get("attributes") or []
+                if any(str(item.get("name", "")).casefold() == "industry_code" for item in attributes):
+                    continue
+                name = str(value.get("text") or "").strip()
+                normalized = re.sub(r"[^0-9a-z가-힣]+", "", name.casefold())
+                if not normalized:
+                    continue
+                rows = connection.execute(
+                    "SELECT industry_code,industry_name FROM public_procurement.procurement_industries "
+                    "WHERE is_active AND regexp_replace(lower(industry_name),'[^0-9a-z가-힣]+','','g')=%s",
+                    (normalized,),
+                ).fetchall()
+                if len(rows) == 1:
+                    attributes.extend([
+                        {"name": "industry_code", "value": rows[0][0]},
+                        {"name": "industry_name", "value": rows[0][1]},
+                    ])
+                    value["attributes"] = attributes
+                    requirement["value"] = value
 
     def upsert_bid_notices(self, batch: NormalizedBidNoticeBatch) -> tuple[LoadSummary, list[BidNoticeKey]]:
         changed: list[BidNoticeKey] = []
@@ -358,7 +429,8 @@ class PostgresStore:
         with psycopg.connect(self.database_url) as connection:
             rows = connection.execute(
                 "WITH candidates AS (SELECT document_id FROM public_procurement.bid_notice_documents "
-                "WHERE status='stored' AND ((parse_status IN ('pending','failed') "
+                "WHERE status='stored' AND (((parse_status IN ('pending','failed') "
+                "OR (parse_status='processing' AND updated_at <= now()-interval '1 hour')) "
                 "AND parse_attempts < %s) "
                 "OR (parse_status='unsupported' AND parser_version IS DISTINCT FROM %s)) "
                 "AND parse_next_retry_at <= now() ORDER BY downloaded_at "
@@ -396,11 +468,26 @@ class PostgresStore:
 
     def list_notices_for_eligibility_extraction(self, limit: int,
                                                 download_max_attempts: int = 3,
-                                                parse_max_attempts: int = 3) -> list[dict[str, Any]]:
+                                                parse_max_attempts: int = 3,
+                                                notice_keys: list[tuple[str, str]] | None = None,
+                                                ) -> list[dict[str, Any]]:
+        key_filter = ""
+        parameters: list[Any] = [download_max_attempts, parse_max_attempts]
+        if notice_keys:
+            key_filter = (
+                "AND (n.notice_number,n.notice_order) IN "
+                "(SELECT * FROM unnest(%s::text[],%s::text[])) "
+            )
+            parameters.extend([
+                [item[0] for item in notice_keys], [item[1] for item in notice_keys],
+            ])
+        parameters.append(limit)
         with psycopg.connect(self.database_url) as connection:
             notices = connection.execute(
                 "SELECT n.notice_number, n.notice_order, n.source_record_hash, n.bid_deadline_at, "
-                "n.source_payload->>'cmmnSpldmdMethdNm' "
+                "n.source_payload->>'cmmnSpldmdMethdNm', "
+                "n.participation_restriction_region_code, "
+                "n.participation_restriction_region_name "
                 "FROM public_procurement.bid_notices n WHERE (EXISTS (SELECT 1 FROM "
                 "public_procurement.bid_notice_documents d WHERE d.notice_number=n.notice_number "
                 "AND d.notice_order=n.notice_order AND d.parse_status='parsed' "
@@ -408,19 +495,22 @@ class PostgresStore:
                 "public_procurement.bid_notice_license_restrictions l WHERE l.notice_number=n.notice_number "
                 "AND l.notice_order=n.notice_order) OR EXISTS (SELECT 1 FROM "
                 "public_procurement.bid_notice_participation_regions r WHERE r.notice_number=n.notice_number "
-                "AND r.notice_order=n.notice_order)) AND NOT EXISTS (SELECT 1 FROM "
+                "AND r.notice_order=n.notice_order) OR (n.participation_restriction_region_code IS NOT NULL "
+                "AND n.participation_restriction_region_code <> '00')) AND NOT EXISTS (SELECT 1 FROM "
                 "public_procurement.bid_notice_documents d WHERE d.notice_number=n.notice_number "
                 "AND d.notice_order=n.notice_order AND (d.status IN ('pending','processing') "
                 "OR (d.status='failed' AND d.attempts < %s) "
                 "OR (d.status='stored' AND (d.parse_status IN ('pending','processing') "
                 "OR (d.parse_status='failed' AND d.parse_attempts < %s))))) "
+                + key_filter +
                 "ORDER BY EXISTS (SELECT 1 FROM public_procurement.bid_notice_documents priority_d "
                 "WHERE priority_d.notice_number=n.notice_number AND priority_d.notice_order=n.notice_order "
                 "AND priority_d.parse_status='parsed' AND priority_d.parsed_object_key IS NOT NULL) DESC, "
-                "n.notice_published_at DESC LIMIT %s", (download_max_attempts, parse_max_attempts, limit)
+                "n.notice_published_at DESC LIMIT %s", parameters
             ).fetchall()
             result = []
-            for number, order, notice_hash, deadline, consortium_method in notices:
+            for (number, order, notice_hash, deadline, consortium_method,
+                 summary_region_code, summary_region_name) in notices:
                 documents = connection.execute(
                     "SELECT document_id, file_name, checksum, parsed_object_key FROM "
                     "public_procurement.bid_notice_documents WHERE notice_number=%s AND notice_order=%s "
@@ -457,10 +547,35 @@ class PostgresStore:
                     "WHERE notice_number=%s AND notice_order=%s", (number, order)
                 ).fetchall()
                 regions = connection.execute(
-                    "SELECT restriction_sequence, participation_region_name, business_type_name, source_record_hash "
+                    "SELECT restriction_sequence, participation_region_code, participation_region_name, "
+                    "business_type_name, source_record_hash "
                     "FROM public_procurement.bid_notice_participation_regions "
                     "WHERE notice_number=%s AND notice_order=%s", (number, order)
                 ).fetchall()
+                normalized_regions = [
+                    dict(zip(("sequence", "code", "name", "business_type", "source_hash"),
+                             row, strict=True))
+                    for row in regions
+                    if row[1] != "00" and str(row[2] or "").strip() != "전국"
+                ]
+                has_detailed_region_response = bool(regions)
+                summary_has_limit = summary_region_code not in (None, "", "00")
+                region_conflict = False
+                if has_detailed_region_response:
+                    if summary_region_code == "00" and normalized_regions:
+                        region_conflict = True
+                    elif summary_has_limit and not any(
+                        item["code"] == summary_region_code
+                        or (summary_region_name and item["name"] == summary_region_name)
+                        for item in normalized_regions
+                    ):
+                        region_conflict = True
+                if not normalized_regions and summary_region_code not in (None, "", "00"):
+                    normalized_regions.append({
+                        "sequence": "summary", "code": summary_region_code,
+                        "name": summary_region_name, "business_type": None,
+                        "source_hash": notice_hash,
+                    })
                 consortiums = []
                 if consortium_method and consortium_method.strip() not in {"", "(없음)", "없음"}:
                     consortiums.append({
@@ -480,15 +595,20 @@ class PostgresStore:
                     "documents": [dict(zip(("document_id", "file_name", "checksum", "parsed_object_key"), row, strict=True)) for row in documents],
                     "unavailable_documents": [dict(zip(("document_id", "file_name", "status", "attempts", "error_code", "parse_status", "parse_attempts", "parse_error_code"), row[:8], strict=True)) for row in unavailable_documents],
                     "licenses": [dict(zip(("group", "sequence", "name", "permitted_industries", "main_fields", "business_type", "source_hash"), row, strict=True)) for row in licenses],
-                    "regions": [dict(zip(("sequence", "name", "business_type", "source_hash"), row, strict=True)) for row in regions],
+                    "regions": normalized_regions,
                     "consortiums": consortiums,
                     "coverage": {
                         "completeness": completeness,
-                        "requires_review": unavailable_count > 0,
+                        "requires_review": unavailable_count > 0 or region_conflict,
                         "total_document_count": total_documents,
                         "parsed_document_count": len(documents),
                         "unavailable_document_count": unavailable_count,
-                        "structured_requirement_count": len(licenses) + len(regions) + len(consortiums),
+                        "structured_requirement_count": len(licenses) + len(normalized_regions) + len(consortiums),
+                        "participation_region_source": (
+                            "detailed_api" if has_detailed_region_response else
+                            "notice_summary" if summary_has_limit else "unrestricted_or_absent"
+                        ),
+                        "participation_region_conflict": region_conflict,
                     },
                 })
         return result
@@ -571,14 +691,16 @@ class PostgresStore:
                 requirement_id = uuid5(NAMESPACE_URL, f"teoria:{extraction_id}:{item['id']}")
                 connection.execute(
                     "INSERT INTO public_procurement.bid_eligibility_requirements "
-                    "(requirement_id,extraction_id,local_id,notice_number,notice_order,requirement_type,operator,value,original_text,proposition_text,proposition_start,proposition_end,holder_scope,reference_date_type,assessment_stage,failure_effect,comparison_mode,mandatory,review_status,confidence) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    "(requirement_id,extraction_id,local_id,notice_number,notice_order,requirement_type,operator,value,original_text,proposition_text,proposition_start,proposition_end,holder_scope,reference_date_type,assessment_stage,failure_effect,comparison_mode,mandatory,review_status,confidence,standard_rule_id,standard_rule_version,rule_arguments) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     (requirement_id, extraction_id, item["id"], notice["notice_number"],
                      notice["notice_order"], item["type"], item["operator"], Jsonb(item["value"]),
                      item["original_text"], item["proposition_text"], item["proposition_start"],
                      item["proposition_end"], item["holder_scope"], item["reference_date_type"],
                      item["assessment_stage"], item["failure_effect"], item["comparison_mode"],
-                     item["mandatory"], item["review_status"], item["confidence"]),
+                     item["mandatory"], item["review_status"], item["confidence"],
+                     item.get("standard_rule_id"), item.get("standard_rule_version"),
+                     Jsonb(item.get("rule_arguments") or {})),
                 )
                 for evidence in item["evidence"]:
                     connection.execute(

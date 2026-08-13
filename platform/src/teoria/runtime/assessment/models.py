@@ -10,6 +10,7 @@ from teoria.runtime.mapping.materializer import MaterializedObject
 class CompanyEvidenceSnapshot:
     objects: list[MaterializedObject] = field(default_factory=list)
     unavailable_capabilities: set[str] = field(default_factory=set)
+    assessment_context: dict[str, Any] = field(default_factory=dict)
 
     def by_type(self, object_type: str) -> list[MaterializedObject]:
         return [item for item in self.objects if item.object_type == object_type]

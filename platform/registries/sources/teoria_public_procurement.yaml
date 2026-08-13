@@ -11,6 +11,30 @@ source:
     engine: postgresql
     connection_env: TEORIA_RUNTIME_DATA_DATABASE_URL
   relations:
+    - id: procurement_industries
+      name: 나라장터 표준업종 사전
+      relation: public_procurement.procurement_industries
+      primary_key: [industry_code]
+      fields:
+        - {id: industry_code, name: 업종코드, data_type: string}
+        - {id: industry_name, name: 업종명, data_type: string}
+        - {id: classification_code, name: 업종분류코드, data_type: string}
+        - {id: classification_name, name: 업종분류명, data_type: string}
+        - {id: base_law_name, name: 근거법령명, data_type: string}
+        - {id: base_law_article, name: 근거법령조항명, data_type: string}
+        - {id: base_law_url, name: 근거법령 URL, data_type: string}
+        - {id: related_regulation_contents, name: 관련규정내용, data_type: string}
+        - {id: included_license_text, name: 포함면허 원문, data_type: string}
+        - {id: source_use_yn, name: 원천 업종사용여부, data_type: string}
+        - {id: source_registered_at, name: 원천 업종등록일시, data_type: datetime}
+        - {id: source_changed_at, name: 원천 업종변경일시, data_type: datetime}
+        - {id: first_seen_at, name: 최초 관찰시각, data_type: datetime}
+        - {id: last_seen_at, name: 최종 관찰시각, data_type: datetime}
+        - {id: is_active, name: 활성 여부, data_type: boolean}
+        - {id: missing_snapshot_count, name: 연속 누락 스냅샷 수, data_type: integer}
+        - {id: source_record_hash, name: 원천 레코드 해시, data_type: string}
+        - {id: updated_at, name: DB 수정일시, data_type: datetime}
+
     - id: contracts
       name: 조달계약
       relation: public_procurement.contracts
@@ -152,3 +176,6 @@ source:
         - {id: failure_effect, name: 불충족 효과, data_type: string}
         - {id: comparison_mode, name: 비교 방식, data_type: string}
         - {id: proof_summary, name: 증빙 요구 요약, data_type: string}
+        - {id: standard_rule_id, name: 표준 판정 규칙, data_type: string}
+        - {id: standard_rule_version, name: 표준 판정 규칙 버전, data_type: string}
+        - {id: rule_arguments_text, name: 판정 규칙 인수, data_type: string}

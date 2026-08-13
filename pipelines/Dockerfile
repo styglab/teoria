@@ -40,6 +40,7 @@ RUN apt-get update \
     && npm install --global @openai/codex@0.147.0 \
     && rm -rf /var/lib/apt/lists/*
 COPY --chown=teoria:teoria .agents/skills/extract-bid-eligibility /app/.agents/skills/extract-bid-eligibility
+COPY --chown=teoria:teoria .agents/skills/improve-bid-eligibility /app/.agents/skills/improve-bid-eligibility
 RUN mkdir -p /work /home/teoria/.codex \
     && chown -R teoria:teoria /work /home/teoria/.codex
 

@@ -62,6 +62,12 @@ mapping:
       - {field: teoria_public_procurement.bid_requirements.comparison_mode}
     bid_requirement.proof_summary:
       - {field: teoria_public_procurement.bid_requirements.proof_summary}
+    bid_requirement.standard_rule_id:
+      - {field: teoria_public_procurement.bid_requirements.standard_rule_id}
+    bid_requirement.standard_rule_version:
+      - {field: teoria_public_procurement.bid_requirements.standard_rule_version}
+    bid_requirement.rule_arguments_text:
+      - {field: teoria_public_procurement.bid_requirements.rule_arguments_text}
   materializations:
     teoria_public_procurement.bid_requirements:
       objects:

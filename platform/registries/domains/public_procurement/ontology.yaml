@@ -66,6 +66,9 @@ ontology:
         - {id: failure_effect, name: 불충족 효과, description: 참가불가·입찰무효·적격탈락·계약불가 등 요건 불충족의 효과, data_type: string}
         - {id: comparison_mode, name: 비교 방식, description: 정형 회사정보·문서증빙·수동검토 중 요건 확인 방식, data_type: string}
         - {id: proof_summary, name: 증빙 요구 요약, description: 요건과 분리하여 추출한 제출 증빙·단계·기한과 근거 요약, data_type: string}
+        - {id: standard_rule_id, name: 표준 판정 규칙, description: 요건에 바인딩된 Eligibility Rule Registry의 표준 Rule ID, data_type: string}
+        - {id: standard_rule_version, name: 표준 판정 규칙 버전, description: 요건에 바인딩된 표준 Rule 버전, data_type: string}
+        - {id: rule_arguments_text, name: 판정 규칙 인수, description: 공고별 표준 Rule 인수를 보존한 JSON 문자열, data_type: string}
 
     - id: procurement_supplier
       name: 나라장터 조달업체
@@ -109,6 +112,25 @@ ontology:
         - {id: status, name: 확인 상태, description: 조회 기준일에 확인된 직접생산확인의 유효 상태, value_set: qualification_status}
         - {id: reference_date, name: 판정 기준일, description: 원천 서비스가 직접생산확인의 유효성을 확인한 기준 날짜, data_type: date}
         - {id: observed_at, name: 조회시점, description: Teoria가 공식 원천에서 직접생산확인을 조회한 시점, data_type: datetime}
+
+    - id: procurement_industry
+      name: 나라장터 표준업종
+      description: 조달청 업종DB가 정의한 업종코드와 명칭, 분류 및 근거법규
+      primary_key: industry_code
+      properties:
+        - {id: industry_code, name: 업종코드, description: 나라장터 입찰참가자격등록규정에 따른 4자리 업종코드, data_type: string}
+        - {id: industry_name, name: 업종명, description: 조달청 업종DB의 공식 업종명, data_type: string}
+        - {id: classification_code, name: 업종분류코드, description: 법제처 법분야에 따른 업종분류코드, data_type: string}
+        - {id: classification_name, name: 업종분류명, description: 법제처 법분야에 따른 업종분류명, data_type: string}
+        - {id: base_law_name, name: 근거법령명, description: 업종의 근거 법령명, data_type: string}
+        - {id: base_law_article, name: 근거법령조항명, description: 업종의 근거 법령 조항명, data_type: string}
+        - {id: base_law_url, name: 근거법령 URL, description: 조달청이 제공하는 관련 법령 문서 링크, data_type: string}
+        - {id: related_regulation_contents, name: 관련규정내용, description: 업종과 관련된 규정 내용 원문, data_type: string}
+        - {id: included_license_text, name: 포함면허 원문, description: 제한업종과 허용업종에 관한 원천 서브데이터셋 문자열, data_type: string}
+        - {id: is_active, name: 업종사용여부, description: 조회 시점에 업종이 사용 중인지 여부, data_type: boolean}
+        - {id: registered_at, name: 업종등록일시, description: 업종DB 등록 시각, data_type: datetime}
+        - {id: changed_at, name: 업종변경일시, description: 업종DB 변경 시각, data_type: datetime}
+        - {id: observed_at, name: 조회시점, description: Teoria가 조달청 업종DB에서 관찰한 시점, data_type: datetime}
 
     - id: registered_industry
       name: 나라장터 등록업종
@@ -239,6 +261,10 @@ ontology:
       description: 나라장터 조달업체가 특정 업종을 등록했음을 나타낸다.
       source: procurement_supplier
       target: registered_industry
+    - id: registered_industry_classified_as
+      description: 회사의 나라장터 등록업종이 조달청 표준업종 코드 정의를 참조한다.
+      source: registered_industry
+      target: procurement_industry
     - id: procurement_supplier_has_registered_supply_product
       description: 나라장터 조달업체가 특정 세부품명을 공급 또는 제조 물품으로 등록했음을 나타낸다.
       source: procurement_supplier

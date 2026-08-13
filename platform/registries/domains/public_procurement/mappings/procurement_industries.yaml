@@ -1,0 +1,24 @@
+registry: {version: 1.0.0, registered_at: "2026-08-12"}
+mapping:
+  id: procurement_industries
+  name: 적재된 나라장터 표준업종 매핑
+  description: Pipeline이 월간 적재한 업종 사전을 공공조달 온톨로지로 연결한다.
+  ontology: public_procurement
+  bindings:
+    procurement_industry.industry_code: [{field: teoria_public_procurement.procurement_industries.industry_code}]
+    procurement_industry.industry_name: [{field: teoria_public_procurement.procurement_industries.industry_name}]
+    procurement_industry.classification_code: [{field: teoria_public_procurement.procurement_industries.classification_code}]
+    procurement_industry.classification_name: [{field: teoria_public_procurement.procurement_industries.classification_name}]
+    procurement_industry.base_law_name: [{field: teoria_public_procurement.procurement_industries.base_law_name}]
+    procurement_industry.base_law_article: [{field: teoria_public_procurement.procurement_industries.base_law_article}]
+    procurement_industry.base_law_url: [{field: teoria_public_procurement.procurement_industries.base_law_url}]
+    procurement_industry.related_regulation_contents: [{field: teoria_public_procurement.procurement_industries.related_regulation_contents}]
+    procurement_industry.included_license_text: [{field: teoria_public_procurement.procurement_industries.included_license_text}]
+    procurement_industry.is_active: [{field: teoria_public_procurement.procurement_industries.is_active}]
+    procurement_industry.registered_at: [{field: teoria_public_procurement.procurement_industries.source_registered_at}]
+    procurement_industry.changed_at: [{field: teoria_public_procurement.procurement_industries.source_changed_at}]
+    procurement_industry.observed_at: [{field: teoria_public_procurement.procurement_industries.last_seen_at}]
+  materializations:
+    teoria_public_procurement.procurement_industries:
+      objects:
+        procurement_industry: {type: procurement_industry, identity: [industry_code]}

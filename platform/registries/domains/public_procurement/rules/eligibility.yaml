@@ -1,0 +1,139 @@
+registry:
+  version: 2.1.0
+  registered_at: "2026-08-11"
+
+eligibility_rules:
+  - id: is_active_business
+    name: 계속사업자
+    description: 기준 시점에 사업자가 계속사업 상태인지 판정한다.
+    version: 1.0.0
+    evaluator: business_status_active
+    evaluability: machine_verifiable
+    required_facts: [company.taxpayer_status_observation.operating_status]
+
+  - id: is_registered_procurement_supplier
+    name: 나라장터 조달업체 등록
+    description: 사업자가 나라장터 입찰참가자격 등록 업체인지 판정한다.
+    version: 1.0.0
+    evaluator: procurement_supplier_registered
+    evaluability: machine_verifiable
+    required_facts: [public_procurement.procurement_supplier.business_registration_number]
+
+  - id: has_registered_industry
+    name: 업종·면허 등록 보유
+    description: 요구된 업종 또는 면허가 조달업체 등록업종과 일치하는지 판정한다.
+    version: 1.1.0
+    evaluator: industry_registration_matches
+    evaluability: machine_verifiable
+    arguments:
+      - {id: expected_value, name: 요구 업종, description: 요구되는 업종 코드 또는 명칭, data_type: string, required: true}
+    required_facts:
+      - public_procurement.registered_industry.industry_code
+      - public_procurement.registered_industry.industry_name
+      - public_procurement.registered_industry.registered_at
+      - public_procurement.registered_industry.valid_until
+      - public_procurement.registered_industry.status_name
+
+  - id: satisfies_participation_region
+    name: 참가 지역 충족
+    description: 조달업체 소재지가 공고의 참가 지역 제한을 충족하는지 판정한다.
+    version: 1.0.0
+    evaluator: participation_region_matches
+    evaluability: machine_verifiable
+    arguments:
+      - {id: expected_value, name: 요구 지역, description: 요구되는 지역 코드 또는 명칭, data_type: string, required: true}
+    required_facts:
+      - public_procurement.procurement_supplier.region_code
+      - public_procurement.procurement_supplier.region_name
+
+  - id: is_valid_women_owned_business
+    name: 여성기업 자격 유효
+    description: 기준일에 유효한 여성기업 확인을 보유했는지 판정한다.
+    version: 1.0.0
+    evaluator: qualification_valid
+    evaluability: machine_verifiable
+    required_facts:
+      - company.qualification.qualification_type
+      - company.qualification.valid_from
+      - company.qualification.valid_until
+
+  - id: is_valid_disabled_owned_business
+    name: 장애인기업 자격 유효
+    description: 기준일에 유효한 장애인기업 확인을 보유했는지 판정한다.
+    version: 1.0.0
+    evaluator: qualification_valid
+    evaluability: machine_verifiable
+    required_facts:
+      - company.qualification.qualification_type
+      - company.qualification.valid_from
+      - company.qualification.valid_until
+
+  - id: holds_valid_company_qualification
+    name: 기업 확인·인증 자격 유효
+    description: 요구된 기업 자격 유형의 공식 확인·인증이 기준일에 유효한지 판정한다.
+    version: 1.1.0
+    evaluator: qualification_valid
+    evaluability: machine_verifiable
+    arguments:
+      - {id: qualification_type, name: 기업 자격 유형, description: 여성기업·장애인기업 등 요구되는 표준 자격 유형, data_type: string, required: true}
+    required_facts:
+      - company.qualification.qualification_type
+      - company.qualification.valid_from
+      - company.qualification.valid_until
+      - company.venture_company_disclosure.status
+      - company.innovation_certification_observation.certification_kind
+      - company.innovation_certification_observation.valid_from
+      - company.innovation_certification_observation.valid_until
+
+  - id: has_company_scale_qualification
+    name: 기업규모 자격 보유
+    description: 중소기업·소기업·소상공인 등 요구된 기업규모를 구조화하고 공식 확인서의 수동 검증을 요구한다.
+    version: 1.1.0
+    evaluator: company_scale_qualification_valid
+    evaluability: document_verifiable
+    arguments:
+      - {id: company_scale, name: 기업규모, description: 공고가 요구하는 기업규모 유형, data_type: string, required: true}
+    required_facts: []
+
+  - id: is_consortium_allowed
+    name: 공동수급 참가방식 허용
+    description: 평가 요청의 단독·공동수급 참가방식이 공고에서 허용되는지 판정한다.
+    version: 1.0.0
+    evaluator: consortium_participation_allowed
+    evaluability: derived_verifiable
+    arguments:
+      - {id: consortium_allowed, name: 공동수급 허용 여부, description: 공고가 공동수급 참가를 허용하는지 여부, data_type: boolean, required: true}
+    required_facts: []
+
+  - id: holds_valid_direct_production_confirmation
+    name: 직접생산확인 보유
+    description: 요구 세부품명에 대한 직접생산확인이 기준일에 유효한지 판정한다.
+    version: 1.0.0
+    evaluator: product_certificate_valid
+    evaluability: machine_verifiable
+    arguments:
+      - {id: product_code, name: 세부품명번호, description: 확인서가 적용되어야 하는 세부품명번호, data_type: string, required: false}
+    required_facts:
+      - public_procurement.direct_production_confirmation.detailed_product_code
+      - public_procurement.direct_production_confirmation.valid_from
+      - public_procurement.direct_production_confirmation.valid_until
+
+  - id: has_registered_supply_product
+    name: 조달 물품 등록 보유
+    description: 요구된 세부품명이 조달업체 등록 공급물품과 일치하는지 판정한다.
+    version: 1.0.0
+    evaluator: product_registration_matches
+    evaluability: machine_verifiable
+    arguments:
+      - {id: product_code, name: 세부품명번호, description: 요구되는 세부품명번호 또는 명칭, data_type: string, required: true}
+    required_facts: [public_procurement.registered_supply_product.detailed_product_code]
+
+  - id: has_no_active_procurement_sanction
+    name: 유효한 입찰참가 제한 없음
+    description: 기준일에 유효한 조달 제재 또는 입찰참가 제한이 없는지 판정한다.
+    version: 1.0.0
+    evaluator: no_active_sanction
+    evaluability: machine_verifiable
+    required_facts:
+      - public_procurement.procurement_sanction.valid_from
+      - public_procurement.procurement_sanction.valid_until

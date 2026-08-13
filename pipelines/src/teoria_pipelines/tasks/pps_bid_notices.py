@@ -9,6 +9,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import httpx
 from prefect import task
@@ -34,6 +35,7 @@ NOTICE_OPERATIONS = [
     "list_construction_bid_notices", "list_service_bid_notices",
     "list_foreign_bid_notices", "list_goods_bid_notices", "list_other_bid_notices",
 ]
+SEOUL_TIMEZONE = ZoneInfo("Asia/Seoul")
 VIZ_WINDOW = CollectionWindow(date(2026, 8, 1), date(2026, 8, 1))
 VIZ_EXTRACTED = ExtractedBatch(execution_id=UUID(int=0), window=VIZ_WINDOW)
 VIZ_NORMALIZED = NormalizedBidNoticeBatch()
@@ -88,7 +90,8 @@ def _object_storage() -> ObjectStorage:
 
 @task(name="입찰공고 수집 구간 결정", viz_return_value=VIZ_WINDOW)
 def determine_bid_notice_window(lookback_days: int = 1) -> CollectionWindow:
-    return resolve_incremental_window(lookback_days=lookback_days)
+    today = datetime.now(SEOUL_TIMEZONE).date()
+    return resolve_incremental_window(lookback_days=lookback_days, today=today)
 
 
 @task(name="입찰공고 Operation 수집", retries=2, retry_delay_seconds=60,

@@ -8,6 +8,8 @@ import pytest
 
 from teoria.registry.loader import RegistryLoader
 from teoria.runtime.assessment.expression import aggregate_expression
+from teoria.runtime.assessment.evaluators import evaluate_requirement
+from teoria.runtime.assessment.models import CompanyEvidenceSnapshot
 from teoria.runtime.assessment.processor import execute_bid_eligibility_assessment
 from teoria.runtime.capability.runner import CapabilityResult
 from teoria.runtime.capability.presentation import serialize_capability_result
@@ -69,6 +71,7 @@ class AssessmentFixtureRunner:
                 _object(
                     "public_procurement", "bid_requirement", "requirement-1",
                     requirement_id="requirement-1", local_id="r1", requirement_type="business_status",
+                    standard_rule_id="is_active_business", standard_rule_version="1.0.0",
                     operator="equals", value_text='{"text":"active"}', original_text="계속사업자",
                     mandatory=True, evidence_summary="공고문 3쪽 | 계속사업자",
                 ),
@@ -76,6 +79,8 @@ class AssessmentFixtureRunner:
                     "public_procurement", "bid_requirement", "requirement-2",
                     requirement_id="requirement-2", local_id="r2", requirement_type="certificate",
                     operator="valid_on", value_text='{"text":"직접생산확인 8111159801"}',
+                    standard_rule_id="holds_valid_direct_production_confirmation", standard_rule_version="1.0.0",
+                    rule_arguments_text='{"product_code":"8111159801"}',
                     original_text="직접생산확인증명서를 보유하여야 한다.", mandatory=True,
                     evidence_summary="공고문 4쪽 | 직접생산확인증명서",
                 ),
@@ -123,7 +128,7 @@ async def test_computes_bid_eligibility_as_ontology_objects_with_evidence() -> N
     assert {item.properties["reason_code"] for item in details} == {
         "business_active",
         "direct_production_matched",
-        "unsupported_requirement",
+        "unsupported_standard_rule",
     }
     assert sum(item.object_type == "evidence" for item in result.objects) >= 5
     assert any(item.link_type == "requirement_assessment_supported_by_evidence" for item in result.links)
@@ -144,6 +149,148 @@ def test_expression_uses_three_state_logic() -> None:
     }
     assert aggregate_expression(expression, {"a": "unsatisfied", "b": "needs_review"}) == "needs_review"
     assert aggregate_expression(expression, {"a": "unsatisfied", "b": "satisfied"}) == "satisfied"
+
+
+def test_unbound_requirement_does_not_fall_back_to_requirement_type() -> None:
+    requirement = _object(
+        "public_procurement", "bid_requirement", "unbound-sanction",
+        requirement_type="sanction", operator="not_exists", original_text="제재를 받지 않은 자",
+    )
+
+    decision = evaluate_requirement(
+        requirement,
+        CompanyEvidenceSnapshot(),
+        date(2026, 8, 20),
+        RegistryLoader(REGISTRIES).load(),
+    )
+
+    assert decision.outcome == "needs_review"
+    assert decision.reason_code == "unsupported_standard_rule"
+
+
+@pytest.mark.parametrize(("status_name", "valid_until", "outcome", "reason"), [
+    ("정상", date(2026, 12, 31), "satisfied", "industry_code_matched"),
+    ("정상", date(2026, 7, 31), "unsatisfied", "industry_registration_inactive"),
+    ("말소", date(2026, 12, 31), "unsatisfied", "industry_registration_inactive"),
+])
+def test_registered_software_business_requires_active_procurement_industry(
+    status_name: str, valid_until: date, outcome: str, reason: str,
+) -> None:
+    requirement = _object(
+        "public_procurement", "bid_requirement", "software-business-rule",
+        standard_rule_id="has_registered_industry",
+        rule_arguments_text='{"expected_value":"1468"}',
+    )
+    industry = _object(
+        "public_procurement", "registered_industry", "software-business-industry",
+        industry_code="1468", industry_name="소프트웨어사업자(컴퓨터관련서비스사업)",
+        registered_at=datetime(2025, 1, 1), valid_until=valid_until, status_name=status_name,
+    )
+
+    decision = evaluate_requirement(
+        requirement, CompanyEvidenceSnapshot(objects=[industry]), date(2026, 8, 20),
+        RegistryLoader(REGISTRIES).load(),
+    )
+
+    assert decision.outcome == outcome
+    assert decision.reason_code == reason
+
+
+def test_generic_company_qualification_rule_uses_rule_argument() -> None:
+    requirement = _object(
+        "public_procurement", "bid_requirement", "women-rule",
+        standard_rule_id="holds_valid_company_qualification",
+        rule_arguments_text='{"qualification_type":"women_owned_business"}',
+        value_text='{"text":"여성기업"}',
+    )
+    qualification = _object(
+        "company", "qualification", "women-qualification",
+        qualification_type="women_owned_business",
+        valid_from=date(2026, 1, 1), valid_until=date(2026, 12, 31),
+    )
+    decision = evaluate_requirement(
+        requirement, CompanyEvidenceSnapshot(objects=[qualification]), date(2026, 8, 20),
+        RegistryLoader(REGISTRIES).load(),
+    )
+    assert decision.outcome == "satisfied"
+    assert decision.reason_code == "qualification_valid"
+
+
+def test_consortium_rule_compares_requested_participation_mode() -> None:
+    requirement = _object(
+        "public_procurement", "bid_requirement", "consortium-rule",
+        standard_rule_id="is_consortium_allowed", value_text='{"boolean":false}',
+    )
+    decision = evaluate_requirement(
+        requirement,
+        CompanyEvidenceSnapshot(assessment_context={"participation_mode": "consortium"}),
+        date(2026, 8, 20), RegistryLoader(REGISTRIES).load(),
+    )
+    assert decision.outcome == "unsatisfied"
+    assert decision.reason_code == "consortium_participation_prohibited"
+
+
+def test_company_scale_always_requires_official_document_review() -> None:
+    requirement = _object(
+        "public_procurement", "bid_requirement", "scale-rule",
+        standard_rule_id="has_company_scale_qualification",
+        rule_arguments_text='{"company_scale":"소기업"}', value_text='{"text":"소기업"}',
+    )
+    misleading_fact = _object(
+        "company", "qualification", "untrusted-scale",
+        qualification_type="소기업", source_code="small_business",
+        valid_from=date(2026, 1, 1), valid_until=date(2026, 12, 31),
+    )
+    decision = evaluate_requirement(
+        requirement, CompanyEvidenceSnapshot(objects=[misleading_fact]), date(2026, 8, 20),
+        RegistryLoader(REGISTRIES).load(),
+    )
+    assert decision.outcome == "needs_review"
+    assert decision.reason_code == "company_scale_document_required"
+    assert decision.evidence == []
+
+
+@pytest.mark.parametrize(("qualification_type", "certification_kind"), [
+    ("innobiz", "innobiz"),
+    ("mainbiz", "mainbiz"),
+])
+def test_innovation_qualification_compares_certification_period(
+    qualification_type: str, certification_kind: str,
+) -> None:
+    requirement = _object(
+        "public_procurement", "bid_requirement", f"{qualification_type}-rule",
+        standard_rule_id="holds_valid_company_qualification",
+        rule_arguments_text=json.dumps({"qualification_type": qualification_type}),
+    )
+    observation = _object(
+        "company", "innovation_certification_observation", f"{qualification_type}-observation",
+        certification_kind=certification_kind,
+        valid_from=date(2026, 1, 1), valid_until=date(2026, 12, 31),
+    )
+    decision = evaluate_requirement(
+        requirement, CompanyEvidenceSnapshot(objects=[observation]), date(2026, 8, 20),
+        RegistryLoader(REGISTRIES).load(),
+    )
+    assert decision.outcome == "satisfied"
+    assert decision.reason_code == "qualification_valid"
+
+
+def test_venture_qualification_uses_disclosure_lookup_without_period_comparison() -> None:
+    requirement = _object(
+        "public_procurement", "bid_requirement", "venture-rule",
+        standard_rule_id="holds_valid_company_qualification",
+        rule_arguments_text='{"qualification_type":"venture_business"}',
+    )
+    disclosure = _object(
+        "company", "venture_company_disclosure", "venture-disclosure",
+        status="currently_disclosed",
+    )
+    decision = evaluate_requirement(
+        requirement, CompanyEvidenceSnapshot(objects=[disclosure]), date(2026, 8, 20),
+        RegistryLoader(REGISTRIES).load(),
+    )
+    assert decision.outcome == "satisfied"
+    assert decision.reason_code == "qualification_valid"
 
 
 @pytest.mark.asyncio

@@ -141,6 +141,7 @@ def update_checkpoint(execution_id: UUID, pipeline_id: str, cursor_date: date,
         license_restrictions=load_summary.license_restrictions,
         participation_regions=load_summary.participation_regions,
         documents=load_summary.documents,
+        industries=load_summary.industries,
     )
 
 

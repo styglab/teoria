@@ -1,0 +1,59 @@
+{
+  "case_id": "selection_explicit_bid_outcome_late_block",
+  "partition": "regression",
+  "notice": {
+    "notice_number": "R26BK01677837",
+    "notice_order": "000",
+    "work_type": "service"
+  },
+  "provenance": {
+    "sampled_at": "2026-08-13T02:05:15.891914+00:00",
+    "input_fingerprint": "sha256:d36da73a043458d236f828e2e57773d195656d8c2bfdc249c0a457c51556a78b",
+    "versions": {
+      "parser": "pdf:2.1.1",
+      "selector_before": "1.4.1",
+      "selector_after": "1.4.2"
+    },
+    "expectation_method": "independent_source_review",
+    "document_checksums": []
+  },
+  "expected": {
+    "requirements": [
+      {
+        "type": "consortium",
+        "operator": "not_equals",
+        "holder_scope": "bidder",
+        "reference_date_type": "none",
+        "assessment_stage": "contract_execution",
+        "failure_effect": "contract_rejection",
+        "comparison_mode": "structured",
+        "mandatory": true,
+        "value": {
+          "text": "용역 전부 제3자 하도급 금지",
+          "boolean": false
+        },
+        "logic": {
+          "scope": "common"
+        },
+        "reproduction_block_text": "낙찰자는 낙찰일로부터 10일 이내에 계약을 체결하여야 한다. 낙찰자가 전항의 기일 내에 계약을 체결하지 않을 때에는 동 낙찰은 무효로 한다. 본 용역의 전부를 제3자에게 하도급 할 수 없다.",
+        "evidence": [
+          {
+            "source_type": "document",
+            "document_id": "36d105e0-f846-5c29-99f7-2ee6b5d98dc65",
+            "block_id": "p29",
+            "page": 29,
+            "excerpt": "본 용역의 전부를 제3자에게 하도급 할 수 없다."
+          }
+        ]
+      }
+    ],
+    "unresolved_candidates": [],
+    "adjudication_required": false
+  },
+  "classification": {
+    "earliest_layer": "selection",
+    "severity": "critical",
+    "error_codes": ["relevant_block_omitted"],
+    "adjudication_note": null
+  }
+}
