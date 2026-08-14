@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS public_procurement.bid_eligibility_gold_reviews;

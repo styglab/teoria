@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import hashlib
 import importlib.util
 import json
@@ -85,6 +86,52 @@ async def test_sample_runner_records_sanitized_failure_diagnostics(tmp_path: Pat
     assert failure["error_code"] == "TypeError"
     assert failure["error_message"] == "bad value at https://example.test/path?<redacted> next"
     assert "secret" not in json.dumps(failure)
+
+
+@pytest.mark.asyncio
+async def test_sample_runner_limits_concurrency_and_preserves_manifest_order(
+    tmp_path: Path,
+) -> None:
+    module = _load("extract_sampled_cases")
+    candidates = [
+        {"notice_number": f"notice-{index}", "notice_order": "000"}
+        for index in range(4)
+    ]
+    sample = tmp_path / "sample.json"
+    sample.write_text(json.dumps({"seed": "seed", "candidates": candidates}))
+    store = MagicMock()
+    store.list_notices_for_eligibility_extraction.return_value = candidates
+    active = 0
+    peak = 0
+
+    async def extract(notice: dict, **_: object) -> dict:
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+        return {
+            "extraction": {"requirements": [], "unresolved_candidates": []},
+            "source_input": {"notice_number": notice["notice_number"]},
+        }
+
+    args = argparse.Namespace(
+        sample=sample, partition="discovery", output_dir=tmp_path / "outputs",
+        max_cases=None, concurrency=2,
+    )
+    with (
+        patch.object(module, "bootstrap_pipeline_settings", return_value=MagicMock()),
+        patch.object(module, "PostgresStore", return_value=store),
+        patch.object(module.extract_bid_eligibility_notice, "fn", extract),
+    ):
+        assert await module.run(args) == 0
+
+    manifest = json.loads((args.output_dir / "manifest.json").read_text())
+    assert peak == 2
+    assert manifest["concurrency"] == 2
+    assert [item["notice_number"] for item in manifest["cases"]] == [
+        item["notice_number"] for item in candidates
+    ]
 
 
 def test_source_review_rejects_incomplete_expected_requirement(tmp_path: Path,

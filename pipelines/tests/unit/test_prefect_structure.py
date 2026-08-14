@@ -48,6 +48,7 @@ from teoria_pipelines.tasks.bid_eligibility import (
     _input_fingerprint,
     _prioritize_notices,
     _structured_api_result,
+    _deterministic_document_facts,
     _structured_license_candidates,
     _hydrate_structured_requirement_attributes,
     _preserve_company_scale_alternatives,
@@ -371,6 +372,53 @@ def test_bid_eligibility_extraction_runs_independent_notices_two_at_a_time() -> 
     assert extract_bid_eligibility_notice.retries == 0
     assert extract_bid_eligibility_notice.retry_delay_seconds == 0
     assert normalize_structured_bid_eligibility_notice.name == "공고별 API 참가자격 정규화"
+
+
+def _simple_document_inputs(text: str) -> dict:
+    return {
+        "documents": [{
+            "document_id": "doc-1",
+            "content": {"blocks": [{
+                "block_id": "p1", "page": 1, "section": "입찰참가자격", "text": text,
+            }]},
+        }],
+        "structured_requirements": [],
+    }
+
+
+def test_simple_document_eligibility_uses_deterministic_fast_path() -> None:
+    text = (
+        "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하고, "
+        "중소기업확인서를 소지하여야 한다."
+    )
+
+    facts = _deterministic_document_facts(_simple_document_inputs(text))
+
+    assert facts is not None
+    assert [(item["type"], item["value"]["text"]) for item in facts["requirements"]] == [
+        ("industry_license", "정보통신공사업"),
+        ("participation_region", "서울특별시"),
+        ("certificate", "중소기업확인서"),
+    ]
+    assert all(item["evidence"][0]["excerpt"] == text for item in facts["requirements"])
+
+
+@pytest.mark.parametrize("text", [
+    "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하여야 한다.",
+    "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하고, 중소기업확인서를 소지하여야 한다. 공동수급은 불허한다.",
+])
+def test_simple_document_fast_path_falls_back_for_missing_or_extra_conditions(text: str) -> None:
+    assert _deterministic_document_facts(_simple_document_inputs(text)) is None
+
+
+def test_simple_document_fast_path_falls_back_when_other_sources_exist() -> None:
+    inputs = _simple_document_inputs(
+        "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하고, "
+        "중소기업확인서를 소지하여야 한다."
+    )
+    inputs["structured_requirements"] = [{"source_id": "region:1"}]
+
+    assert _deterministic_document_facts(inputs) is None
 
 
 def test_structured_api_eligibility_preserves_license_groups_and_region_alternatives() -> None:
@@ -922,6 +970,19 @@ def test_semantic_normalization_rejects_bid_price_formula() -> None:
 
     with pytest.raises(ValueError, match="bid_price_must_not_be_eligibility"):
         _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_semantic_repair_drops_bid_price_formula_before_validation() -> None:
+    item = _validated_requirement(
+        "예정가격 대비 견적가격이 89.745% 이상인 자",
+        type="custom",
+        operator="greater_than_or_equal",
+    )
+    result = {"requirements": [item], "unresolved_candidates": []}
+
+    _repair_requirement_semantics(result)
+
+    assert result["requirements"] == []
 
 
 def test_semantic_normalization_ignores_incidental_price_in_shared_evidence() -> None:
@@ -1519,6 +1580,35 @@ def test_preserves_omitted_explicit_tax_evasion_disqualification() -> None:
     assert requirement["type"] == "sanction"
     assert requirement["operator"] == "not_exists"
     assert requirement["evidence"][0]["excerpt"] == clause
+
+
+def test_preserves_split_personal_authentication_bid_gate() -> None:
+    prefix = (
+        "3.4. 이 입찰은 국가종합전자조달시스템 전자입찰 특별유의서 제7조에 따른 "
+        "신원확인 입찰이 적용되며, 국가종합전자조달시스템 입찰참가자격등록규정 "
+        "제2조 제1항 제16호에 따른 개인인증수단을 이용(공동인증서 제외)하여"
+    )
+    suffix = "신원을 확인받은 후 입찰에 참여하여야 합니다."
+    result = {"requirements": [], "unresolved_candidates": []}
+    inputs = {"documents": [{"document_id": "doc", "content": {"blocks": [
+        {"block_id": "b1~23", "parent_block_id": "b1", "page": None,
+         "section": None, "text": prefix},
+        {"block_id": "b1~24", "parent_block_id": "b1", "page": None,
+         "section": None, "text": suffix},
+    ]}}]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    assert len(result["requirements"]) == 1
+    requirement = result["requirements"][0]
+    assert requirement["type"] == "procurement_registration"
+    assert requirement["operator"] == "exists"
+    assert requirement["holder_scope"] == "representative"
+    assert requirement["reference_date_type"] == "bid_deadline"
+    assert requirement["value"]["attributes"] == [{
+        "name": "authentication_method", "value": "personal_authentication",
+    }]
+    assert [item["block_id"] for item in requirement["evidence"]] == ["b1~23", "b1~24"]
 
 
 def test_preserves_omitted_explicit_equipment_ownership_gate() -> None:
@@ -2252,6 +2342,49 @@ async def test_write_free_extraction_never_persists_outputs_or_failures() -> Non
     store.save_eligibility_failure.assert_not_called()
     store.save_eligibility_extraction.assert_not_called()
     storage.put_bytes.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_simple_document_extraction_skips_codex_and_compiles_result() -> None:
+    text = (
+        "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하고, "
+        "중소기업확인서를 소지하여야 한다."
+    )
+    store = MagicMock()
+    storage = MagicMock()
+    storage.get_bytes.return_value = json.dumps({
+        "blocks": [{"block_id": "b1", "page": 1, "section": "입찰참가자격", "text": text}],
+    }).encode()
+    settings = MagicMock(bid_eligibility_input_max_chars=120_000)
+    notice = {
+        "notice_number": "simple", "notice_order": "000", "notice_hash": "hash",
+        "bid_deadline_at": None,
+        "documents": [{
+            "document_id": "doc", "file_name": "공고문.pdf", "checksum": "checksum",
+            "parsed_object_key": "parsed.json",
+        }],
+        "unavailable_documents": [], "licenses": [], "regions": [], "consortiums": [],
+        "coverage": {
+            "completeness": "complete", "requires_review": False,
+            "total_document_count": 1, "parsed_document_count": 1,
+            "unavailable_document_count": 0, "structured_requirement_count": 0,
+        },
+    }
+    skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
+    with (
+        patch("teoria_pipelines.tasks.bid_eligibility._resources", return_value=(store, storage)),
+        patch("teoria_pipelines.tasks.bid_eligibility.bootstrap_pipeline_settings",
+              return_value=settings),
+        patch("teoria_pipelines.tasks.bid_eligibility.subprocess.run") as codex,
+        patch("teoria_pipelines.tasks.bid_eligibility.SKILL_ROOT", skill_root),
+    ):
+        result = await extract_bid_eligibility_notice.fn(notice, persist=False)
+
+    codex.assert_not_called()
+    assert [item["type"] for item in result["requirements"]] == [
+        "industry_license", "participation_region", "certificate",
+    ]
+    assert result["expression"]["operator"] == "all"
 
 
 def test_bid_notice_deployments_are_hourly_and_staggered() -> None:

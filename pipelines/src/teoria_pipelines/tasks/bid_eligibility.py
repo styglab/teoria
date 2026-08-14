@@ -44,10 +44,20 @@ from teoria_pipelines.settings import bootstrap_pipeline_settings
 
 
 SKILL_ROOT = Path("/app/.agents/skills/extract-bid-eligibility")
-EXTRACTION_VERSION = "2.2.28"
+EXTRACTION_VERSION = "2.3.0"
 FINGERPRINT_COMPATIBILITY_VERSION = "2.2.28"
 CODEX_TRANSIENT_RETRY_DELAY_SECONDS = 5
 CODEX_TRANSIENT_ERRORS = ("selected model is at capacity", "rate limit", "too many requests")
+BID_PRICE_ELIGIBILITY_PATTERN = re.compile(
+    r"(?:예정(?:가격|금액)|견적(?:가격|금액)|투찰률|낙찰(?:하한율|가격)|"
+    r"(?:제한적\s*)?최저(?:가격|가))"
+)
+_SIMPLE_DOCUMENT_ELIGIBILITY = re.compile(
+    r"^\s*입찰참가자는\s+(?P<industry>[^,]+?)\s*\(\s*(?:업종)?코드\s*[:：]?\s*"
+    r"(?P<industry_code>\d{4})\s*\)\s*등록업체로서\s+"
+    r"(?P<region>[가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도))에\s+소재하고\s*,?\s*"
+    r"(?P<certificate>중소기업\s*확인서)를\s+소지하여야\s+한다[.。]?\s*$"
+)
 
 
 def _resources() -> tuple[PostgresStore, ObjectStorage]:
@@ -92,6 +102,74 @@ def _runtime_extraction_instructions() -> str:
         SKILL_ROOT / "references/assessment-stages.yaml",
     )
     return "\n\n".join(path.read_text(encoding="utf-8") for path in resources)
+
+
+def _deterministic_document_facts(inputs: dict) -> dict | None:
+    """Extract a deliberately narrow, completely recognized simple notice.
+
+    Returning ``None`` is the safety boundary: any extra block, structured restriction,
+    or unrecognized wording keeps the existing Codex path. This fast path can grow only
+    with positive, negative, and near-miss regression cases.
+    """
+    if inputs["structured_requirements"] or len(inputs["documents"]) != 1:
+        return None
+    document = inputs["documents"][0]
+    blocks = document.get("content", {}).get("blocks", [])
+    if len(blocks) != 1:
+        return None
+    block = blocks[0]
+    original = str(block.get("text") or "")
+    match = _SIMPLE_DOCUMENT_ELIGIBILITY.fullmatch(original)
+    if match is None:
+        return None
+
+    evidence = {
+        "source_type": "document", "source_id": str(document["document_id"]),
+        "document_id": str(document["document_id"]), "block_id": str(block["block_id"]),
+        "page": block.get("page"), "section": block.get("section"), "excerpt": original,
+    }
+
+    def requirement(local_id: str, kind: str, proposition: str, text: str,
+                    attributes: list[dict]) -> dict:
+        start = original.index(proposition)
+        return {
+            "id": local_id, "type": kind, "operator": "exists" if kind != "participation_region" else "in",
+            "value": {"text": text, "number": None, "boolean": None, "items": [],
+                      "attributes": attributes},
+            "original_text": original, "proposition_text": proposition,
+            "proposition_start": start, "proposition_end": start + len(proposition),
+            "holder_scope": "bidder", "reference_date_type": "bid_deadline",
+            "assessment_stage": "bid_entry", "failure_effect": "cannot_bid",
+            "comparison_mode": "document_evidence", "mandatory": True,
+            "review_status": "extracted", "confidence": 1.0,
+            "evidence": [dict(evidence)], "proof_requirements": [],
+            "logic": {"placements": [{"scope": "common", "alternative_group": None,
+                                        "alternative_branch": None}]},
+        }
+
+    industry = match.group("industry").strip()
+    industry_proposition = original[match.start("industry"):match.end("industry_code") + 1]
+    region = match.group("region")
+    region_proposition = original[match.start("region"):original.index("소재하고") + len("소재하고")]
+    certificate = match.group("certificate")
+    certificate_end = original.index("소지하여야") + len("소지하여야 한다")
+    certificate_proposition = original[match.start("certificate"):certificate_end]
+    return {
+        "schema_version": "1.4.0",
+        "requirements": [
+            requirement("r1", "industry_license", industry_proposition, industry, [
+                {"name": "industry_name", "value": industry},
+                {"name": "industry_code", "value": match.group("industry_code")},
+            ]),
+            requirement("r2", "participation_region", region_proposition, region, [
+                {"name": "region_name", "value": region},
+            ]),
+            requirement("r3", "certificate", certificate_proposition, certificate, [
+                {"name": "certificate_type", "value": "small_business_confirmation"},
+            ]),
+        ],
+        "unresolved_candidates": [],
+    }
 
 
 def _is_transient_codex_failure(stderr: str) -> bool:
@@ -712,6 +790,8 @@ def _repair_requirement_semantics(result: dict) -> None:
         value = requirement.get("value") or {}
         value_text = str(value.get("text") or "")
         compact_original = _citation_compact(original)
+        if BID_PRICE_ELIGIBILITY_PATTERN.search(_requirement_proposition(requirement)):
+            continue
         if not any(
             evidence.get("source_type") == "structured_api"
             for evidence in requirement.get("evidence", [])
@@ -1108,9 +1188,78 @@ def _preserve_omitted_manual_eligibility(result: dict, inputs: dict) -> None:
         + [item["text"] for item in result["unresolved_candidates"]]
     )
     for document in inputs["documents"]:
-        for block in document["content"]["blocks"]:
+        blocks = document["content"]["blocks"]
+        for index, block in enumerate(blocks):
             text = str(block.get("text") or "")
             section = str(block.get("section") or "")
+            next_block = blocks[index + 1] if index + 1 < len(blocks) else None
+            same_refined_parent = bool(
+                next_block
+                and block.get("parent_block_id")
+                and block.get("parent_block_id") == next_block.get("parent_block_id")
+            )
+            joined_text = text
+            if same_refined_parent:
+                joined_text = f"{text.rstrip()} {str(next_block.get('text') or '').lstrip()}"
+            personal_authentication = re.search(
+                r"신원확인\s*입찰이\s*적용[\s\S]{0,220}?개인인증수단을\s*이용"
+                r"[\s\S]{0,100}?신원을\s*확인받은\s*후\s*입찰에\s*참여하여야\s*합니다",
+                joined_text,
+            )
+            already_has_personal_authentication = any(
+                item.get("type") == "procurement_registration"
+                and (
+                    "개인인증수단" in str(item.get("original_text") or "")
+                    or any(
+                        attribute.get("name") == "authentication_method"
+                        and attribute.get("value") == "personal_authentication"
+                        for attribute in item.get("value", {}).get("attributes", [])
+                    )
+                )
+                for item in result["requirements"]
+            )
+            if personal_authentication and not already_has_personal_authentication:
+                original = personal_authentication.group(0).strip()
+                used_ids = {item["id"] for item in result["requirements"]}
+                next_id = len(used_ids) + 1
+                while f"r{next_id}" in used_ids:
+                    next_id += 1
+                evidence_blocks = [block]
+                if same_refined_parent and personal_authentication.end() > len(text):
+                    evidence_blocks.append(next_block)
+                result["requirements"].append({
+                    "id": f"r{next_id}", "type": "procurement_registration",
+                    "operator": "exists",
+                    "value": {
+                        "text": "나라장터 개인인증수단을 통한 신원확인",
+                        "number": None, "boolean": True, "items": [],
+                        "attributes": [{
+                            "name": "authentication_method",
+                            "value": "personal_authentication",
+                        }],
+                    },
+                    "original_text": original, "proposition_text": original,
+                    "proposition_start": 0, "proposition_end": len(original),
+                    "holder_scope": "representative",
+                    "reference_date_type": "bid_deadline",
+                    "assessment_stage": "bid_entry", "failure_effect": "cannot_bid",
+                    "comparison_mode": "manual", "mandatory": True,
+                    "review_status": "extracted", "confidence": 1.0,
+                    "evidence": [{
+                        "source_type": "document", "source_id": str(document["document_id"]),
+                        "document_id": str(document["document_id"]),
+                        "block_id": evidence_block.get("block_id"),
+                        "page": evidence_block.get("page"),
+                        "section": evidence_block.get("section"),
+                        "excerpt": str(evidence_block.get("text") or "").strip(),
+                    } for evidence_block in evidence_blocks],
+                    "proof_requirements": [],
+                    "logic": {"placements": [{
+                        "scope": "common", "alternative_group": None,
+                        "alternative_branch": None,
+                    }]},
+                })
+                represented += "\n" + original
             qualification_heading = re.search(
                 r"(?:입찰|견적(?:서)?\s*제출?)\s*참가\s*자격|입찰참가자격", text,
             )
@@ -1812,11 +1961,7 @@ def _validate_semantic_normalization(result: dict) -> None:
             )
         ):
             raise ValueError("qualification_review_bid_deadline_not_explicit")
-        if re.search(
-            r"(?:예정(?:가격|금액)|견적(?:가격|금액)|투찰률|낙찰(?:하한율|가격)|"
-            r"(?:제한적\s*)?최저(?:가격|가))",
-            proposition,
-        ):
+        if BID_PRICE_ELIGIBILITY_PATTERN.search(proposition):
             raise ValueError("bid_price_must_not_be_eligibility")
         if (
             stage == "contracting"
@@ -2242,6 +2387,7 @@ async def extract_bid_eligibility_notice(
         notice["notice_number"], notice["notice_order"], len(documents), selected_chars,
         original_chars, len(input_json), notice_input_char_budget,
     )
+    deterministic_facts = _deterministic_document_facts(inputs)
     prompt = (
         "다음은 extract-bid-eligibility의 실행 정책과 허용 스키마다.\n\n"
         f"{_runtime_extraction_instructions()}\n\n"
@@ -2307,7 +2453,18 @@ async def extract_bid_eligibility_notice(
     model_name = configured_model or "codex-default"
     try:
         process = None
-        for attempt in range(2):
+        if deterministic_facts is not None:
+            process = subprocess.CompletedProcess(
+                args=["deterministic-document-fast-path"], returncode=0,
+                stdout=json.dumps(deterministic_facts, ensure_ascii=False), stderr="",
+            )
+            model_name = "deterministic-document-fast-path"
+            run_logger.info(
+                "eligibility fast path notice=%s:%s requirements=%d",
+                notice["notice_number"], notice["notice_order"],
+                len(deterministic_facts["requirements"]),
+            )
+        for attempt in range(0 if process is not None else 2):
             attempt_model = configured_model if attempt == 0 else (fallback_model or configured_model)
             attempt_command = list(command)
             if attempt_model:

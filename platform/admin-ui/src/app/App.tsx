@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
-import { Activity, Boxes, Braces, CircleDot, Database, FileCheck2, GitFork, Moon, Network, Search, Sun, Workflow, X } from "lucide-react";
+import { Activity, Boxes, Braces, CircleDot, Database, GitFork, Moon, Network, Search, Sun, Workflow, X } from "lucide-react";
 import { adminApi, type CapabilitySummary, type LineageLink, type LinkEdge, type MappingSummary, type ObjectNode, type OntologyGraph as GraphData, type OntologySummary, type Overview, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/admin";
 import { MetricCard } from "../components/MetricCard";
 import { DetailPanel } from "../features/ontology/DetailPanel";
 import { OntologyGraph } from "../features/ontology/OntologyGraph";
 import { CapabilitiesView, LineageView, MappingsView, SourcesView } from "../features/registry/RegistryViews";
 import { ValidationView } from "../features/validation/ValidationView";
-import { BidCheckView } from "../features/bid-check/BidCheckView";
 
-type Section = "bid-check" | "ontologies" | "capabilities" | "sources" | "mappings" | "lineage";
+type Section = "ontologies" | "capabilities" | "sources" | "mappings" | "lineage";
 type Theme = "light" | "dark";
 
-const sectionCopy: Record<Exclude<Section, "ontologies" | "bid-check">, { eyebrow: string; title: string; description: string }> = {
+const sectionCopy: Record<Exclude<Section, "ontologies">, { eyebrow: string; title: string; description: string }> = {
   capabilities: { eyebrow: "SEMANTIC OPERATIONS", title: "Capabilities", description: "사용자 의도를 실행 가능한 Source Operation과 Ontology 반환 타입으로 연결합니다." },
   sources: { eyebrow: "DATA CONTRACTS", title: "Sources", description: "Semantic Runtime이 직접 호출하거나 조회하는 외부 API와 Database Source를 확인합니다." },
   mappings: { eyebrow: "SEMANTIC BINDINGS", title: "Mappings", description: "Source 필드가 Ontology 속성과 객체로 변환되는 계약을 확인합니다." },
@@ -86,8 +85,6 @@ export function App() {
           <button className={section === "sources" ? "active" : ""} onClick={() => { setSection("sources"); setSelectedItem(null); }}><Database size={16} /> Sources</button>
           <button className={section === "mappings" ? "active" : ""} onClick={() => { setSection("mappings"); setSelectedItem(null); }}><GitFork size={16} /> Mappings</button>
           <button className={section === "lineage" ? "active" : ""} onClick={() => { setSection("lineage"); setSelectedItem(null); }}><Workflow size={16} /> Lineage</button>
-          <span className="nav-group-label operations">OPERATIONS</span>
-          <button className={section === "bid-check" ? "active" : ""} onClick={() => { setSection("bid-check"); setSelectedItem(null); }}><FileCheck2 size={16} /> 입찰체크</button>
         </nav>
         {section === "ontologies" && <div className="ontology-list">
           <span>ONTOLOGIES</span>
@@ -103,12 +100,12 @@ export function App() {
       </aside>
 
       <main>
-        {section !== "bid-check" && <section className="overview-row">
+        <section className="overview-row">
           <MetricCard label="Ontologies" value={counts?.ontologies ?? 0} icon={<Network size={17} />} />
           <MetricCard label="Object types" value={counts?.object_types ?? 0} icon={<Boxes size={17} />} />
           <MetricCard label="Link types" value={counts?.link_types ?? 0} icon={<GitFork size={17} />} />
           <MetricCard label="Capabilities" value={counts?.capabilities ?? 0} icon={<Braces size={17} />} />
-        </section>}
+        </section>
         {section === "ontologies" ? <section className="workspace">
           <div className="workspace-header">
             <div><span>ONTOLOGY EXPLORER</span><h1>{graph?.ontology.name ?? "Registry 불러오는 중"}</h1><p>{graph?.ontology.description}</p></div>
@@ -119,8 +116,6 @@ export function App() {
             {!error && graph && <OntologyGraph graph={graph} onSelect={setSelectedItem} />}
             {!error && !graph && <div className="loading-state">Registry graph를 구성하고 있습니다…</div>}
           </div>
-        </section> : section === "bid-check" ? <section className="workspace bid-workspace">
-          <BidCheckView />
         </section> : <section className="workspace">
           <div className="workspace-header">
             <div><span>{sectionCopy[section].eyebrow}</span><h1>{sectionCopy[section].title}</h1><p>{sectionCopy[section].description}</p></div>

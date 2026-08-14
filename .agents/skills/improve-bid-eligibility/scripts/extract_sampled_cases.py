@@ -49,6 +49,8 @@ async def run(args: argparse.Namespace) -> int:
         (str(item["notice_number"]), str(item["notice_order"])): item
         for item in sample["candidates"]
     }
+    concurrency = getattr(args, "concurrency", 2)
+    semaphore = asyncio.Semaphore(concurrency)
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
@@ -57,9 +59,11 @@ async def run(args: argparse.Namespace) -> int:
         "extraction_version": EXTRACTION_VERSION,
         "started_at": datetime.now(timezone.utc).isoformat(),
         "persist": False,
+        "concurrency": concurrency,
         "cases": [],
     }
-    for number, order in keys:
+
+    async def extract_one(number: str, order: str) -> dict:
         case = {
             "notice_number": number,
             "notice_order": order,
@@ -76,12 +80,12 @@ async def run(args: argparse.Namespace) -> int:
                 "unavailable_count": metadata.get("unavailable_count"),
                 "unsupported_count": metadata.get("unsupported_count"),
             })
-            manifest["cases"].append(case)
-            continue
+            return case
         try:
-            evaluation = await extract_bid_eligibility_notice.fn(
-                notice, persist=False, include_evaluation_input=True,
-            )
+            async with semaphore:
+                evaluation = await extract_bid_eligibility_notice.fn(
+                    notice, persist=False, include_evaluation_input=True,
+                )
         except Exception as exc:
             case.update({
                 "status": "extraction_failed",
@@ -89,8 +93,7 @@ async def run(args: argparse.Namespace) -> int:
                 "error_code": type(exc).__name__,
                 "error_message": _safe_error_message(exc),
             })
-            manifest["cases"].append(case)
-            continue
+            return case
         result = evaluation["extraction"]
         source_input = args.output_dir / f"{number}_{order}.source.json"
         source_input.write_text(
@@ -106,7 +109,11 @@ async def run(args: argparse.Namespace) -> int:
             "requirement_count": len(result["requirements"]),
             "unresolved_count": len(result["unresolved_candidates"]),
         })
-        manifest["cases"].append(case)
+        return case
+
+    manifest["cases"] = await asyncio.gather(*(
+        extract_one(number, order) for number, order in keys
+    ))
     manifest["finished_at"] = datetime.now(timezone.utc).isoformat()
     (args.output_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
@@ -121,9 +128,12 @@ def main() -> int:
     parser.add_argument("--partition", choices=("discovery", "holdout"), required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--max-cases", type=int)
+    parser.add_argument("--concurrency", type=int, default=2)
     args = parser.parse_args()
     if args.max_cases is not None and args.max_cases < 1:
         parser.error("--max-cases must be positive")
+    if args.concurrency < 1:
+        parser.error("--concurrency must be positive")
     return asyncio.run(run(args))
 
 

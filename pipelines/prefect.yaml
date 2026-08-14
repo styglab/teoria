@@ -109,8 +109,8 @@ deployments:
       work_queue_name: default
 
   - name: pps-bid-eligibility-extraction
-    version: 1.12.4
-    description: 12만 자 후보 예산과 결정적 의미 보정으로 최대 2개를 병렬 추출하고 전체 재시도 없이 검증한다.
+    version: 1.13.0
+    description: 완전히 인식된 단순 문서는 결정론적으로 추출하고 나머지는 Codex로 최대 2개를 병렬 추출한다.
     entrypoint: teoria_pipelines.flows.bid_eligibility.extract_pps_bid_eligibility
     concurrency_limit:
       limit: 1

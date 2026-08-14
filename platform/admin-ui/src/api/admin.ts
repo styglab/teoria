@@ -64,27 +64,6 @@ export type CapabilitySummary = { id: string; name: string; description: string;
 export type SourceSummary = { id: string; name: string; description: string | null; type: "api" | "database"; provider: string | null; items: number; item_label: string };
 export type MappingSummary = { id: string; name: string; description: string; ontology: string; binding_count: number; property_count: number };
 export type LineageLink = { from: string; via: string; to: string; kind: "mapping" | "capability" };
-export type BidNoticeSummary = {
-  bid_notice_id: string; notice_number: string; notice_order: string; notice_name: string;
-  work_type: string | null; notice_published_at: string | null; bid_deadline_at: string | null;
-  bid_status: "open" | "scheduled" | "closed" | "unknown"; notice_organization_name: string | null;
-  demand_organization_name: string | null; extraction_completeness: "complete" | "partial" | "api_only" | null;
-  requires_review: boolean | null; requirement_count: number;
-};
-export type BidRequirement = {
-  requirement_id: string; local_id: string; requirement_type: string; operator: string;
-  value_text: string | null; original_text: string; proposition_text: string | null;
-  proposition_start: number | null; proposition_end: number | null; holder_scope: string;
-  reference_date_type: string; assessment_stage: "bid_entry" | "qualification_review" | "contracting";
-  failure_effect: string; comparison_mode: "structured" | "document_evidence" | "manual";
-  mandatory: boolean; review_status: string; confidence: number;
-  evidence_summary: string | null; proof_summary: string | null;
-};
-export type BidNoticePage = { items: BidNoticeSummary[]; page: number; page_size: number; total: number; total_pages: number };
-export type BidNoticeFilters = {
-  query?: string; bidStatus?: string; workType?: string; extractionStatus?: string; reviewStatus?: string;
-};
-
 const API_ROOT = "/admin-api/v1/admin";
 
 async function getJson<T>(path: string): Promise<T> {
@@ -103,14 +82,4 @@ export const adminApi = {
   lineage: () => getJson<{ links: LineageLink[] }>("/lineage"),
   validation: () => getJson<ValidationReport>("/validation"),
   registryRelease: () => getJson<RegistryRelease>("/registry-release"),
-  bidNotices: (page = 1, pageSize = 50, filters: BidNoticeFilters = {}) => {
-    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
-    if (filters.query?.trim()) params.set("query", filters.query.trim());
-    if (filters.bidStatus) params.set("bid_status", filters.bidStatus);
-    if (filters.workType) params.set("work_type", filters.workType);
-    if (filters.extractionStatus) params.set("extraction_status", filters.extractionStatus);
-    if (filters.reviewStatus) params.set("review_status", filters.reviewStatus);
-    return getJson<BidNoticePage>(`/bid-check/notices?${params}`);
-  },
-  bidRequirements: (id: string) => getJson<{ requirements: BidRequirement[] }>(`/bid-check/notices/${encodeURIComponent(id)}/requirements`),
 };
