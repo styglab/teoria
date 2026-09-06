@@ -5,6 +5,7 @@ import re
 import subprocess
 import tempfile
 import zipfile
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
@@ -13,7 +14,7 @@ from openpyxl import load_workbook
 from pypdf import PdfReader
 
 
-PARSER_VERSION = "2.1.1"
+PARSER_VERSION = "2.1.2"
 
 _OLE_COMPOUND_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
@@ -43,6 +44,8 @@ def parse_document(value: bytes, file_name: str | None, media_type: str | None) 
         return "zip", _parse_zip(value)
     if suffix == ".hwp":
         raise UnsupportedDocumentError("invalid_hwp_container")
+    if suffix in {".html", ".htm"} or (media_type or "").split(";", 1)[0] == "text/html":
+        return "html", _parse_html(value)
     if (media_type or "").startswith("text/"):
         text = value.decode("utf-8", errors="replace")
         return "text", {"blocks": [_block("b1", None, None, "paragraph", text)]}
@@ -65,6 +68,40 @@ def sanitize_document_content(content: dict[str, Any]) -> dict[str, Any]:
 
 def _sanitize_text(text: str) -> str:
     return text.replace("\x00", " ").strip()
+
+
+class _HTMLTextExtractor(HTMLParser):
+    _BREAK_TAGS = {"br", "div", "p", "li", "tr", "section", "article", "h1", "h2", "h3", "h4"}
+    _SKIP_TAGS = {"script", "style", "noscript"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in self._SKIP_TAGS:
+            self.skip_depth += 1
+        elif not self.skip_depth and tag in self._BREAK_TAGS:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self._SKIP_TAGS:
+            self.skip_depth = max(0, self.skip_depth - 1)
+        elif not self.skip_depth and tag in self._BREAK_TAGS:
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self.skip_depth:
+            self.parts.append(data)
+
+
+def _parse_html(value: bytes) -> dict[str, Any]:
+    parser = _HTMLTextExtractor()
+    parser.feed(value.decode("utf-8", errors="replace"))
+    lines = [re.sub(r"\s+", " ", line).strip() for line in "".join(parser.parts).splitlines()]
+    text = "\n".join(line for line in lines if line)
+    return {"blocks": [_block("b1", None, None, "paragraph", text)] if text else []}
 
 
 def _parse_pdf(value: bytes) -> dict[str, Any]:

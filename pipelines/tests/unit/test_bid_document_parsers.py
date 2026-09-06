@@ -20,6 +20,25 @@ def test_text_parser_replaces_nul_with_space() -> None:
     assert result["blocks"][0]["text"] == "입찰 자격"
 
 
+def test_html_parser_removes_markup_and_preserves_text_boundaries() -> None:
+    source = (
+        b'<html><head><style>.x{display:none}</style></head><body>'
+        b'<div>2. Bid eligibility</div><div><span>G2B registration</span>'
+        b' &amp; <b>license 4991</b></div><script>ignore()</script></body></html>'
+    )
+
+    parser, result = parse_document(source, "notice.html", "text/html")
+
+    assert parser == "html"
+    assert result["blocks"] == [{
+        "block_id": "b1",
+        "page": None,
+        "section": None,
+        "type": "paragraph",
+        "text": "2. Bid eligibility\nG2B registration & license 4991",
+    }]
+
+
 def test_sanitizes_legacy_parsed_document_blocks() -> None:
     content = {"blocks": [{"block_id": "p1", "text": "입찰\x00참가\x00자격"}]}
 

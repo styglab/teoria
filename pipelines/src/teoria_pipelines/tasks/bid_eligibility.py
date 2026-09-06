@@ -44,8 +44,8 @@ from teoria_pipelines.settings import bootstrap_pipeline_settings
 
 
 SKILL_ROOT = Path("/app/.agents/skills/extract-bid-eligibility")
-EXTRACTION_VERSION = "2.3.0"
-FINGERPRINT_COMPATIBILITY_VERSION = "2.2.28"
+EXTRACTION_VERSION = "2.3.11"
+FINGERPRINT_COMPATIBILITY_VERSION = "2.2.39"
 CODEX_TRANSIENT_RETRY_DELAY_SECONDS = 5
 CODEX_TRANSIENT_ERRORS = ("selected model is at capacity", "rate limit", "too many requests")
 BID_PRICE_ELIGIBILITY_PATTERN = re.compile(
@@ -720,6 +720,11 @@ def _repair_requirement_fields(result: dict) -> None:
         proposition = str(
             requirement.get("proposition_text") or requirement.get("original_text") or ""
         )
+        evidence_text = " ".join(
+            str(evidence.get("excerpt") or "")
+            for evidence in requirement.get("evidence", [])
+        )
+        registration_text = f"{proposition} {evidence_text}"
         expected_stage = stage_by_effect.get(requirement["failure_effect"])
         if expected_stage and requirement["assessment_stage"] != expected_stage:
             requirement["assessment_stage"] = expected_stage
@@ -733,6 +738,25 @@ def _repair_requirement_fields(result: dict) -> None:
             requirement["reference_date_type"] = "none"
         if requirement["type"] == "sanction" and requirement["operator"] == "not_equals":
             requirement["operator"] = "not_exists"
+        if (
+            requirement["type"] == "product_registration"
+            and requirement["operator"] in {"contains", "equals"}
+            and re.search(r"(?:제조|공급)?물품.{0,30}등록|등록.{0,30}(?:제조|공급)?물품", proposition)
+        ):
+            requirement["operator"] = "exists"
+        if (
+            requirement["type"] in {"industry_license", "procurement_registration"}
+            and requirement["operator"] in {"contains", "equals"}
+            and re.search(r"등록(?:한|된|을\s*필|하여야|해야|완료|보유)", registration_text)
+            and not re.search(r"미등록|등록하지\s*않|등록되지\s*않", registration_text)
+        ):
+            requirement["operator"] = "exists"
+        if (
+            requirement["type"] == "industry_license"
+            and any(evidence.get("source_type") == "structured_api"
+                    for evidence in requirement.get("evidence", []))
+        ):
+            requirement["reference_date_type"] = "qualification_registration_deadline"
         if requirement["type"] == "consortium" and requirement["operator"] == "not_exists":
             value = requirement.get("value") or {}
             attributes = [
@@ -757,12 +781,19 @@ def _repair_requirement_fields(result: dict) -> None:
                 attributes.append({"name": "participation_mode", "value": "single_only"})
             value["attributes"] = attributes
             requirement["value"] = value
+            if not deadline.search(requirement["original_text"]):
+                requirement["reference_date_type"] = "none"
         if (
             requirement["type"] == "consortium"
             and requirement["operator"] in {"equals", "not_equals"}
-            and re.search(r"하도급.{0,12}(?:불가|불허|금지|할\s*수\s*없)", proposition)
+            and re.search(
+                r"하도급.{0,16}(?:불가|불허|금지|할\s*수\s*없|허용하지\s*않)",
+                proposition,
+            )
         ):
             requirement["operator"] = "not_exists"
+            if not deadline.search(requirement["original_text"]):
+                requirement["reference_date_type"] = "none"
         if (
             requirement["type"] == "legal_qualification"
             and requirement["reference_date_type"] == "qualification_registration_deadline"
@@ -1362,6 +1393,242 @@ def _preserve_omitted_manual_eligibility(result: dict, inputs: dict) -> None:
                     }]},
                 })
                 represented += "\nprocurement_registration_type\n" + original
+            local_bid_registration = re.search(
+                r"(?:제시한\s*조건[\s\S]{0,40}?수락하고\s*)?"
+                r"소정의\s*입찰등록을?\s*마친\s*자",
+                text,
+            )
+            if local_bid_registration:
+                matching_local_requirement = next((
+                    item for item in result["requirements"]
+                    if item.get("type") == "custom"
+                    and (
+                        "입찰참가 승락" in str(item.get("value", {}).get("text") or "")
+                        or "소정의 입찰등록" in str(item.get("value", {}).get("text") or "")
+                        or "입찰참가 승락" in str(item.get("original_text") or "")
+                    )
+                ), None)
+                if matching_local_requirement is not None:
+                    evidence = {
+                        "source_type": "document",
+                        "source_id": str(document["document_id"]),
+                        "document_id": str(document["document_id"]),
+                        "block_id": block.get("block_id"),
+                        "page": block.get("page"),
+                        "section": block.get("section"),
+                        "excerpt": text.strip(),
+                    }
+                    evidence_key = (
+                        evidence["document_id"], evidence["block_id"],
+                        _citation_compact(evidence["excerpt"]),
+                    )
+                    existing_keys = {
+                        (
+                            str(item.get("document_id") or ""),
+                            item.get("block_id"),
+                            _citation_compact(str(item.get("excerpt") or "")),
+                        )
+                        for item in matching_local_requirement.get("evidence", [])
+                    }
+                    if evidence_key not in existing_keys:
+                        matching_local_requirement.setdefault("evidence", []).append(evidence)
+            product_window = blocks[index:index + 3]
+            product_window_text = " ".join(
+                str(candidate.get("text") or "").strip() for candidate in product_window
+            )
+            product_registration = re.search(
+                r"전자입찰서\s*제출\s*마감일\s*전일까지[\s\S]{0,160}?"
+                r"나라장터(?:\(G2B\))?에\s*"
+                r"(?P<name>[가-힣A-Za-z0-9ㆍ·‧()\s]{2,80}?)"
+                r"\s*\(세부품명번호\s*(?:10자리)?\s*:\s*(?P<code>\d{10})\)를\s*"
+                r"제조\s*또는\s*공급\s*물품으로[\s\S]{0,80}?입찰참가\s*등록한\s*업체",
+                product_window_text,
+            )
+            existing_product_registration = next((
+                item for item in result["requirements"]
+                if item.get("type") == "product_registration"
+                and product_registration
+                and product_registration.group("code") in json.dumps(
+                    item.get("value") or {}, ensure_ascii=False
+                )
+            ), None)
+            if product_registration:
+                product_name = product_registration.group("name").strip()
+                product_code = product_registration.group("code")
+                source_block = next(
+                    candidate for candidate in product_window
+                    if product_code in str(candidate.get("text") or "")
+                )
+                original = str(source_block.get("text") or "").strip()
+                used_ids = {item["id"] for item in result["requirements"]}
+                next_id = len(used_ids) + 1
+                while f"r{next_id}" in used_ids:
+                    next_id += 1
+                recovered_requirement = {
+                    "id": (
+                        existing_product_registration["id"]
+                        if existing_product_registration is not None
+                        else f"r{next_id}"
+                    ),
+                    "type": "product_registration",
+                    "operator": "exists",
+                    "value": {
+                        "text": f"{product_name} 제조 또는 공급물품 등록",
+                        "number": None, "boolean": True, "items": [product_code],
+                        "attributes": [
+                            {"name": "product_code", "value": product_code},
+                            {"name": "product_name", "value": product_name},
+                            {"name": "registration_category",
+                             "value": "제조물품 또는 공급물품"},
+                        ],
+                    },
+                    "original_text": original, "proposition_text": original,
+                    "proposition_start": 0, "proposition_end": len(original),
+                    "holder_scope": "bidder", "reference_date_type": "bid_deadline",
+                    "assessment_stage": "bid_entry", "failure_effect": "cannot_bid",
+                    "comparison_mode": "structured", "mandatory": True,
+                    "review_status": "extracted", "confidence": 1.0,
+                    "evidence": [{
+                        "source_type": "document", "source_id": str(document["document_id"]),
+                        "document_id": str(document["document_id"]),
+                        "block_id": candidate.get("block_id"), "page": candidate.get("page"),
+                        "section": candidate.get("section"),
+                        "excerpt": str(candidate.get("text") or "").strip(),
+                    } for candidate in product_window],
+                    "proof_requirements": [], "logic": {"placements": [{
+                        "scope": "common", "alternative_group": None,
+                        "alternative_branch": None,
+                    }]},
+                }
+                if existing_product_registration is None:
+                    result["requirements"].append(recovered_requirement)
+                else:
+                    existing_product_registration.clear()
+                    existing_product_registration.update(recovered_requirement)
+            representative_registration = re.search(
+                r"대표자가\s*수인\(2인\s*이상\)\s*업체의\s*경우[\s\S]{0,220}?"
+                r"입찰참가자격\s*등록\s*시\s*대표자\s*전원을\s*등록하여야\s*하고"
+                r"[\s\S]{0,220}?변경등록을\s*하지\s*아니하고\s*입찰에\s*참가한\s*자는"
+                r"[\s\S]{0,120}?입찰무효\s*사유에\s*해당합니다",
+                text,
+            )
+            existing_representative_registration = next((
+                item for item in result["requirements"]
+                if item.get("type") == "procurement_registration"
+                and item.get("holder_scope") == "representative"
+                and "대표자 전원" in str((item.get("value") or {}).get("text") or "")
+            ), None)
+            if representative_registration:
+                original = representative_registration.group(0).strip()
+                proposition_match = re.search(
+                    r"입찰참가자격\s*등록\s*시\s*대표자\s*전원을\s*등록하여야\s*하고",
+                    original,
+                )
+                assert proposition_match is not None
+                proposition = proposition_match.group(0)
+                used_ids = {item["id"] for item in result["requirements"]}
+                next_id = len(used_ids) + 1
+                while f"r{next_id}" in used_ids:
+                    next_id += 1
+                recovered_requirement = {
+                    "id": (
+                        existing_representative_registration["id"]
+                        if existing_representative_registration is not None
+                        else f"r{next_id}"
+                    ),
+                    "type": "procurement_registration",
+                    "operator": "exists",
+                    "value": {
+                        "text": "복수 대표자 전원의 입찰참가자격 등록",
+                        "number": None, "boolean": True, "items": [],
+                        "attributes": [{
+                            "name": "registration_scope", "value": "all_representatives",
+                        }],
+                    },
+                    "original_text": original, "proposition_text": proposition,
+                    "proposition_start": proposition_match.start(),
+                    "proposition_end": proposition_match.end(),
+                    "holder_scope": "representative",
+                    "reference_date_type": "qualification_registration_deadline",
+                    "assessment_stage": "bid_entry", "failure_effect": "invalid_bid",
+                    "comparison_mode": "structured", "mandatory": True,
+                    "review_status": "extracted", "confidence": 1.0,
+                    "evidence": [{
+                        "source_type": "document", "source_id": str(document["document_id"]),
+                        "document_id": str(document["document_id"]),
+                        "block_id": block.get("block_id"), "page": block.get("page"),
+                        "section": block.get("section"), "excerpt": original,
+                    }],
+                    "proof_requirements": [], "logic": {"placements": [{
+                        "scope": "common", "alternative_group": None,
+                        "alternative_branch": None,
+                    }]},
+                }
+                if existing_representative_registration is None:
+                    result["requirements"].append(recovered_requirement)
+                else:
+                    existing_representative_registration.clear()
+                    existing_representative_registration.update(recovered_requirement)
+                recovered = _citation_compact(original)
+                result["unresolved_candidates"] = [
+                    candidate for candidate in result["unresolved_candidates"]
+                    if recovered not in _citation_compact(candidate["text"])
+                    and _citation_compact(candidate["text"]) not in recovered
+                ]
+            subcontracting_prohibition = re.search(
+                r"공동수급\s*및\s*하도급(?:은|을)?\s*허용하지\s*않습니다",
+                text,
+            )
+            existing_subcontracting_prohibition = next((
+                item for item in result["requirements"]
+                if item.get("type") == "consortium"
+                and item.get("holder_scope") == "subcontractor"
+            ), None)
+            if subcontracting_prohibition:
+                original = subcontracting_prohibition.group(0).strip()
+                proposition_start = original.index("하도급")
+                proposition = original[proposition_start:]
+                used_ids = {item["id"] for item in result["requirements"]}
+                next_id = len(used_ids) + 1
+                while f"r{next_id}" in used_ids:
+                    next_id += 1
+                recovered_requirement = {
+                    "id": (
+                        existing_subcontracting_prohibition["id"]
+                        if existing_subcontracting_prohibition is not None
+                        else f"r{next_id}"
+                    ),
+                    "type": "consortium",
+                    "operator": "not_exists",
+                    "value": {
+                        "text": "하도급 불가", "number": None,
+                        "boolean": False, "items": [], "attributes": [{
+                            "name": "subcontracting_allowed", "value": "false",
+                        }],
+                    },
+                    "original_text": original, "proposition_text": proposition,
+                    "proposition_start": proposition_start,
+                    "proposition_end": proposition_start + len(proposition),
+                    "holder_scope": "subcontractor", "reference_date_type": "none",
+                    "assessment_stage": "bid_entry", "failure_effect": "cannot_bid",
+                    "comparison_mode": "manual", "mandatory": True,
+                    "review_status": "extracted", "confidence": 1.0,
+                    "evidence": [{
+                        "source_type": "document", "source_id": str(document["document_id"]),
+                        "document_id": str(document["document_id"]),
+                        "block_id": block.get("block_id"), "page": block.get("page"),
+                        "section": block.get("section"), "excerpt": original,
+                    }],
+                    "proof_requirements": [], "logic": {"placements": [{
+                        "scope": "common", "alternative_group": None,
+                        "alternative_branch": None,
+                    }]},
+                }
+                if existing_subcontracting_prohibition is None:
+                    result["requirements"].append(recovered_requirement)
+                else:
+                    existing_subcontracting_prohibition.clear()
+                    existing_subcontracting_prohibition.update(recovered_requirement)
             tax_evasion = re.search(
                 r"조세포탈\s*등을\s*한\s*자로서[\s\S]{0,100}?"
                 r"유죄판결이\s*확정된\s*날부터\s*2년이\s*지나지\s*"
@@ -1407,18 +1674,21 @@ def _preserve_omitted_manual_eligibility(result: dict, inputs: dict) -> None:
                 })
                 represented += "\n" + original
             score_threshold = re.search(
-                r"[^\n.]{0,100}(?:종합평점|기술능력평가(?:\s*분야)?(?:\s*점수)?)[^\n.]{0,80}?"
+                r"[^\n.]{0,100}(?P<proposition>"
+                r"(?:종합평점|기술능력평가(?:\s*분야)?(?:\s*점수)?)[^\n.]{0,80}?"
                 r"(?:100점\s*만점에\s*)?(\d{2,3})\s*(%|점)\s*이상[^\n.]{0,100}?"
-                r"(?:적격업체|협상적격자|협상\s*실시)",
+                r"(?:적격업체|협상적격자|협상\s*실시|낙찰자로\s*결정))",
                 text,
             )
             if score_threshold and not any(
                 item.get("assessment_stage") == "qualification_review"
-                and item.get("value", {}).get("number") == int(score_threshold.group(1))
-                and re.search(r"적격|협상", str(item.get("original_text") or ""))
+                and item.get("value", {}).get("number") == int(score_threshold.group(2))
+                and re.search(r"적격|협상|낙찰", str(item.get("original_text") or ""))
                 for item in result["requirements"]
             ):
                 original = score_threshold.group(0).strip()
+                proposition = score_threshold.group("proposition").strip()
+                proposition_start = original.index(proposition)
                 used_ids = {item["id"] for item in result["requirements"]}
                 next_id = len(used_ids) + 1
                 while f"r{next_id}" in used_ids:
@@ -1427,14 +1697,15 @@ def _preserve_omitted_manual_eligibility(result: dict, inputs: dict) -> None:
                     "id": f"r{next_id}", "type": "custom",
                     "operator": "greater_than_or_equal",
                     "value": {
-                        "text": original, "number": int(score_threshold.group(1)),
+                        "text": proposition, "number": int(score_threshold.group(2)),
                         "boolean": None, "items": [], "attributes": [{
                             "name": "score_unit",
-                            "value": "percent" if score_threshold.group(2) == "%" else "points",
+                            "value": "percent" if score_threshold.group(3) == "%" else "points",
                         }],
                     },
-                    "original_text": original, "proposition_text": original,
-                    "proposition_start": 0, "proposition_end": len(original),
+                    "original_text": original, "proposition_text": proposition,
+                    "proposition_start": proposition_start,
+                    "proposition_end": proposition_start + len(proposition),
                     "holder_scope": "bidder", "reference_date_type": "none",
                     "assessment_stage": "qualification_review",
                     "failure_effect": "qualification_rejection",
@@ -1660,14 +1931,14 @@ def _preserve_legal_administration_disqualification(result: dict, inputs: dict) 
         for block in document["content"]["blocks"]:
             text = str(block.get("text") or "")
             match = re.search(
-                r"[^\n.]{0,20}법정관리\s*중이거나[\s\S]{0,140}?"
-                r"부정[.\s]*당업체로\s*제재\s*중인\s*업체는\s*참여할\s*수\s*없다",
+                r"[^\n.]{0,20}법정관리\s*(?:중이거나|등이나)[\s\S]{0,140}?"
+                r"부정[.\s]*당업체로\s*제재\s*중인\s*업체는\s*참여할\s*수\s*없(?:다|음)",
                 text,
             )
             if not match:
                 continue
             original = match.group(0).strip()
-            proposition_match = re.search(r"법정관리\s*중", original)
+            proposition_match = re.search(r"법정관리(?:\s*중)?", original)
             if proposition_match is None:
                 continue
             used_ids = {item["id"] for item in result["requirements"]}
@@ -1702,6 +1973,104 @@ def _preserve_legal_administration_disqualification(result: dict, inputs: dict) 
                     "alternative_branch": None,
                 }]},
             })
+            return
+
+
+def _preserve_compound_debarment_disqualification(result: dict, inputs: dict) -> None:
+    """Keep active debarment distinct from an adjacent FTC-history condition."""
+    if any(
+        item.get("type") == "sanction"
+        and re.search(
+            r"부정[.\s]*당(?:업자|업체).{0,30}(?:참가\s*자격제한|제재\s*중)",
+            str(item.get("proposition_text") or item.get("original_text") or ""),
+        )
+        for item in result["requirements"]
+    ):
+        return
+    for document in inputs["documents"]:
+        for block in document["content"]["blocks"]:
+            text = str(block.get("text") or "")
+            match = re.search(
+                r"부정[.\s]*당업자의?\s*입찰\s*참가\s*자격제한[”\"']?에\s*"
+                r"해당되지\s*않는\s*업체",
+                text,
+            )
+            if match is None:
+                continue
+            proposition = match.group(0).strip()
+            used_ids = {item["id"] for item in result["requirements"]}
+            next_id = len(used_ids) + 1
+            while f"r{next_id}" in used_ids:
+                next_id += 1
+            result["requirements"].append({
+                "id": f"r{next_id}", "type": "sanction", "operator": "not_exists",
+                "value": {
+                    "text": "부정당업자 입찰참가자격 제한 상태",
+                    "number": None, "boolean": False, "items": [],
+                    "attributes": [{
+                        "name": "sanction_type",
+                        "value": "procurement_participation_restriction",
+                    }],
+                },
+                "original_text": proposition, "proposition_text": proposition,
+                "proposition_start": 0, "proposition_end": len(proposition),
+                "holder_scope": "bidder", "reference_date_type": "bid_deadline",
+                "assessment_stage": "bid_entry", "failure_effect": "cannot_bid",
+                "comparison_mode": "structured", "mandatory": True,
+                "review_status": "extracted", "confidence": 1.0,
+                "evidence": [{
+                    "source_type": "document", "source_id": document["document_id"],
+                    "document_id": document["document_id"], "block_id": block["block_id"],
+                    "page": block.get("page"), "section": block.get("section"),
+                    "excerpt": proposition,
+                }],
+                "proof_requirements": [], "logic": {"placements": [{
+                    "scope": "common", "alternative_group": None,
+                    "alternative_branch": None,
+                }]},
+            })
+            return
+
+
+def _repair_explicit_performance_review_alternative(result: dict, inputs: dict) -> None:
+    """Restore a source-explicit performance OR prior-review branch."""
+    for document in inputs["documents"]:
+        for block in document["content"]["blocks"]:
+            text = str(block.get("text") or "")
+            alternative = re.search(
+                r"(?P<performance>[^\n.]{0,120}납품\s*실적[^\n.]{0,80}?업체)\s*"
+                r"또는(?:\s*또는)?\s*"
+                r"(?P<review>사전에[^\n.]{0,100}?심사[^\n.]{0,100}?입찰\s*자격[^\n.]{0,40}?업체)",
+                text,
+            )
+            if alternative is None:
+                continue
+            performance = next((
+                item for item in result["requirements"]
+                if item.get("type") == "past_performance"
+                and "납품" in str(item.get("proposition_text") or item.get("original_text") or "")
+                and any(evidence.get("document_id") == document["document_id"]
+                        and evidence.get("block_id") == block["block_id"]
+                        for evidence in item.get("evidence", []))
+            ), None)
+            prior_review = next((
+                item for item in result["requirements"]
+                if item.get("type") == "custom"
+                and re.search(r"사전.{0,40}심사.{0,40}입찰\s*자격", str(
+                    item.get("proposition_text") or item.get("original_text") or ""
+                ))
+                and any(evidence.get("document_id") == document["document_id"]
+                        and evidence.get("block_id") == block["block_id"]
+                        for evidence in item.get("evidence", []))
+            ), None)
+            if performance is None or prior_review is None:
+                continue
+            group = f"source_{block['block_id']}_performance_review"
+            for item, branch in ((performance, "performance"), (prior_review, "prior_review")):
+                item["logic"] = {"placements": [{
+                    "scope": "common", "alternative_group": group,
+                    "alternative_branch": branch,
+                }]}
             return
 
 
@@ -2100,6 +2469,14 @@ def _normalize_joint_participation_prohibition(requirement: dict) -> None:
         **value,
         "text": "공동수급 불가",
         "boolean": False,
+        "attributes": [
+            attribute for attribute in value.get("attributes", [])
+            if attribute.get("name") not in {"allowed", "consortium_allowed"}
+            and not (
+                attribute.get("name") == "arrangement_type"
+                and str(attribute.get("value") or "").casefold() == "subcontracting"
+            )
+        ] + [{"name": "allowed", "value": "false"}],
     }
     requirement["logic"] = {"placements": [{
         "scope": "common", "alternative_group": None, "alternative_branch": None,
@@ -2369,6 +2746,36 @@ async def extract_bid_eligibility_notice(
             for item in notice["unavailable_documents"]
         ],
     }
+    if not documents and structured:
+        result = _structured_api_result(notice)
+        store.resolve_requirement_industries(result)
+        _bind_standard_rules(result)
+        if list(Draft202012Validator(result_schema).iter_errors(result)):
+            raise ValueError("invalid_compiled_extraction_schema")
+        validate_compiled_expression(result)
+        _validate_citations(result, inputs)
+        if not persist:
+            if include_evaluation_input:
+                return {"extraction": result, "source_input": inputs}
+            return result
+        raw_key = (
+            f"public-procurement/bid-notices/{notice['notice_number']}/"
+            f"{notice['notice_order']}/extractions/eligibility/{EXTRACTION_VERSION}/"
+            f"{fingerprint}/structured-output.json"
+        )
+        storage.put_bytes(
+            raw_key,
+            json.dumps(result, ensure_ascii=False).encode(),
+            "application/json",
+        )
+        return store.save_eligibility_extraction(
+            notice,
+            fingerprint,
+            result,
+            raw_key,
+            "deterministic-structured-api",
+            EXTRACTION_VERSION,
+        )
     input_json = json.dumps(inputs, ensure_ascii=False)
     selected_chars = sum(
         document.get("selection", {}).get("selected_char_count", 0)
@@ -2540,7 +2947,9 @@ async def extract_bid_eligibility_notice(
         _preserve_certificate_borrowing_invalid_bid(facts, inputs)
         _preserve_shared_representative_invalid_bid(facts, inputs)
         _preserve_legal_administration_disqualification(facts, inputs)
+        _preserve_compound_debarment_disqualification(facts, inputs)
         _preserve_omitted_manual_eligibility(facts, inputs)
+        _repair_explicit_performance_review_alternative(facts, inputs)
         _repair_unresolved_candidates(facts)
         _prune_redundant_aggregate_unresolved(facts)
         # Consolidation and deterministic recovery can replace or add citations.

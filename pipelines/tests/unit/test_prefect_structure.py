@@ -40,7 +40,9 @@ from teoria_pipelines.tasks.bid_eligibility import (
     _prune_resolved_unresolved_candidates,
     _preserve_certificate_borrowing_invalid_bid,
     _preserve_shared_representative_invalid_bid,
+    _preserve_compound_debarment_disqualification,
     _preserve_legal_administration_disqualification,
+    _repair_explicit_performance_review_alternative,
     _preserve_omitted_manual_eligibility,
     _skill_instructions,
     _runtime_extraction_instructions,
@@ -1156,7 +1158,10 @@ def test_single_only_and_joint_denial_merge_as_one_common_requirement() -> None:
         "공동수급은 불가합니다.", id="r2", type="consortium",
         operator="not_exists",
         value={"text": "공동수급 불가", "number": None, "boolean": False,
-               "items": [], "attributes": []},
+               "items": [], "attributes": [
+                   {"name": "allowed", "value": "true"},
+                   {"name": "arrangement_type", "value": "subcontracting"},
+               ]},
         logic={"placements": [{"scope": "common", "alternative_group": "mode",
                                 "alternative_branch": "joint"}]},
     )
@@ -1168,6 +1173,7 @@ def test_single_only_and_joint_denial_merge_as_one_common_requirement() -> None:
     item = result["requirements"][0]
     assert item["operator"] == "not_exists"
     assert item["value"]["text"] == "공동수급 불가"
+    assert item["value"]["attributes"] == [{"name": "allowed", "value": "false"}]
     assert item["logic"]["placements"] == [{
         "scope": "common", "alternative_group": None, "alternative_branch": None,
     }]
@@ -1563,6 +1569,50 @@ def test_preserves_compact_g2b_bid_registration_gate() -> None:
     )
 
 
+def test_merges_omitted_local_bid_registration_evidence() -> None:
+    notice_clause = "복지센터에서 제시한 조건 등을 수락하고 소정의 입찰등록을 마친 자"
+    instruction_clause = (
+        "입찰참가신청서를 제출하고 입찰참가 승락을 득한 후가 아니면 "
+        "입찰에 참가할 수 없으며"
+    )
+    requirement = _validated_requirement(
+        instruction_clause,
+        type="custom",
+        operator="equals",
+        value={
+            "text": "복지센터의 소정 입찰등록 완료 및 입찰참가 승락 획득",
+            "number": None,
+            "boolean": True,
+            "items": [],
+            "attributes": [],
+        },
+    )
+    result = {"requirements": [requirement], "unresolved_candidates": []}
+    inputs = {"documents": [{
+        "document_id": "notice-doc",
+        "content": {"blocks": [{
+            "block_id": "p1b8",
+            "page": 1,
+            "section": "입찰참가자격",
+            "text": notice_clause,
+        }]},
+    }]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    assert len(result["requirements"]) == 1
+    assert result["requirements"][0]["type"] == "custom"
+    assert result["requirements"][0]["evidence"][-1] == {
+        "source_type": "document",
+        "source_id": "notice-doc",
+        "document_id": "notice-doc",
+        "block_id": "p1b8",
+        "page": 1,
+        "section": "입찰참가자격",
+        "excerpt": notice_clause,
+    }
+
+
 def test_preserves_omitted_explicit_tax_evasion_disqualification() -> None:
     clause = (
         "조세포탈 등을 한 자로서 유죄판결이 확정된 날부터 2년이 지나지 "
@@ -1867,9 +1917,230 @@ def test_repair_normalizes_subcontracting_unavailable_operator() -> None:
     assert item["operator"] == "not_exists"
 
 
+@pytest.mark.parametrize(("operator", "text"), [
+    ("contains", "전자조달시스템에 터보냉동기 4010171101을 제조물품으로 등록한 자"),
+    ("equals", "압출성형시멘트판을 나라장터에 제조 또는 공급 물품으로 입찰참가 등록"),
+])
+def test_repair_normalizes_positive_product_registration_operator(
+    operator: str, text: str,
+) -> None:
+    item = _validated_requirement(
+        text, type="product_registration", operator=operator,
+    )
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["operator"] == "exists"
+
+
+@pytest.mark.parametrize("requirement_type", ["industry_license", "procurement_registration"])
+def test_repair_normalizes_positive_registration_operator(requirement_type: str) -> None:
+    item = _validated_requirement(
+        "입찰참가자격 등록한 업체",
+        type=requirement_type,
+        operator="equals",
+    )
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["operator"] == "exists"
+
+
+def test_repair_uses_registration_deadline_for_structured_industry() -> None:
+    item = _validated_requirement(
+        "금속창호공사업 등록",
+        type="industry_license",
+        operator="equals",
+        reference_date_type="bid_deadline",
+    )
+    item["evidence"].append({
+        "source_type": "structured_api", "source_id": "license:1:1:primary",
+        "document_id": None, "block_id": None, "page": None, "section": None,
+        "excerpt": "금속창호공사업/4991",
+    })
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["reference_date_type"] == "qualification_registration_deadline"
+
+
+def test_repair_uses_document_registration_evidence_for_industry_operator() -> None:
+    item = _validated_requirement(
+        "금속창호공사업/4991",
+        type="industry_license",
+        operator="equals",
+        reference_date_type="bid_deadline",
+    )
+    item["evidence"].append({
+        "source_type": "document", "source_id": "doc", "document_id": "doc",
+        "block_id": "b2", "page": 1, "section": "입찰참가자격",
+        "excerpt": "금속창호공사업(업종코드:4991)를 등록한 업체",
+    })
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["operator"] == "exists"
+
+
+def test_repair_removes_inferred_date_from_joint_participation_prohibition() -> None:
+    item = _validated_requirement(
+        "공동수급은 허용하지 않습니다.",
+        type="consortium",
+        operator="not_exists",
+        reference_date_type="bid_deadline",
+    )
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["reference_date_type"] == "none"
+
+
+def test_repair_normalizes_subcontracting_not_allowed_phrase() -> None:
+    item = _validated_requirement(
+        "하도급은 허용하지 않습니다.",
+        type="consortium",
+        operator="equals",
+        holder_scope="subcontractor",
+        reference_date_type="bid_deadline",
+    )
+
+    _repair_requirement_fields({"requirements": [item]})
+
+    assert item["operator"] == "not_exists"
+    assert item["reference_date_type"] == "none"
+
+
+def test_recovers_product_registration_split_across_adjacent_blocks() -> None:
+    result = {"requirements": [], "unresolved_candidates": []}
+    inputs = {"documents": [{
+        "document_id": "doc", "content": {"blocks": [
+            {"block_id": "b1", "page": 1, "section": "입찰참가자격",
+             "text": "전자입찰서 제출 마감일 전일까지"},
+            {"block_id": "b2", "page": 1, "section": "입찰참가자격",
+             "text": "나라장터(G2B)에 압출성형시멘트판(세부품명번호 10자리 : 3016150503)를 제조 또는 공급 물품으로"},
+            {"block_id": "b3", "page": 1, "section": "입찰참가자격",
+             "text": "입찰참가 등록한 업체"},
+        ]},
+    }]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    assert len(result["requirements"]) == 1
+    requirement = result["requirements"][0]
+    assert requirement["type"] == "product_registration"
+    assert requirement["operator"] == "exists"
+    assert requirement["reference_date_type"] == "bid_deadline"
+    assert requirement["value"]["attributes"] == [
+        {"name": "product_code", "value": "3016150503"},
+        {"name": "product_name", "value": "압출성형시멘트판"},
+        {"name": "registration_category", "value": "제조물품 또는 공급물품"},
+    ]
+    assert [item["block_id"] for item in requirement["evidence"]] == ["b1", "b2", "b3"]
+
+
+def test_recovers_all_representatives_registration_invalid_bid_gate() -> None:
+    clause = (
+        "대표자가 수인(2인 이상) 업체의 경우 입찰참가자격 등록 시 대표자 전원을 등록하여야 하고 "
+        "현재 1인만 등록된 경우 변경등록을 하여야 하며, 변경등록을 하지 아니하고 입찰에 참가한 자는 "
+        "입찰무효 사유에 해당합니다."
+    )
+    result = {"requirements": [], "unresolved_candidates": [{
+        "text": clause, "review_reason": "manual_evidence_interpretation",
+        "blocks_qualification": True,
+    }]}
+    inputs = {"documents": [{
+        "document_id": "doc", "content": {"blocks": [{
+            "block_id": "b1", "page": 1, "section": "입찰참가자격", "text": clause,
+        }]},
+    }]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    assert len(result["requirements"]) == 1
+    requirement = result["requirements"][0]
+    assert requirement["type"] == "procurement_registration"
+    assert requirement["holder_scope"] == "representative"
+    assert requirement["reference_date_type"] == "qualification_registration_deadline"
+    assert requirement["failure_effect"] == "invalid_bid"
+    assert result["unresolved_candidates"] == []
+
+
+def test_reanchors_existing_all_representatives_registration_to_clean_clause() -> None:
+    clause = (
+        "대표자가 수인(2인 이상) 업체의 경우 입찰참가자격 등록 시 대표자 전원을 등록하여야 하고 "
+        "현재 1인만 등록된 경우 변경등록을 하여야 하며, 변경등록을 하지 아니하고 입찰에 참가한 자는"
+        "「지방자치단체를 당사자로 하는 계약에 관한 법률 시행규칙」제42조제5호에 의하여 "
+        "입찰무효 사유에 해당합니다."
+    )
+    expanded = "다. " + ("동일 대표자 중복 입찰 설명 " * 15) + clause
+    result = {"requirements": [{
+        "id": "r1", "type": "procurement_registration", "operator": "exists",
+        "value": {
+            "text": "복수 대표자 전원의 입찰참가자격 등록", "number": None,
+            "boolean": True, "items": [], "attributes": [],
+        },
+        "original_text": expanded, "proposition_text": expanded,
+        "proposition_start": 0, "proposition_end": len(expanded),
+        "holder_scope": "representative", "reference_date_type": "bid_deadline",
+        "assessment_stage": "bid_entry", "failure_effect": "invalid_bid",
+        "comparison_mode": "manual", "mandatory": True,
+        "review_status": "needs_review", "confidence": 0.6,
+        "evidence": [{
+            "source_type": "document", "source_id": "doc", "document_id": "doc",
+            "block_id": "dirty", "page": 1, "section": "입찰참가자격",
+            "excerpt": expanded,
+        }],
+        "proof_requirements": [], "logic": {"placements": [{
+            "scope": "common", "alternative_group": None, "alternative_branch": None,
+        }]},
+    }], "unresolved_candidates": [{
+        "text": clause, "review_reason": "manual_evidence_interpretation",
+        "blocks_qualification": True,
+    }]}
+    inputs = {"documents": [{
+        "document_id": "doc", "content": {"blocks": [{
+            "block_id": "clean", "page": 1, "section": "입찰참가자격", "text": clause,
+        }]},
+    }]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+    _repair_non_atomic_propositions(result)
+
+    assert len(result["requirements"]) == 1
+    requirement = result["requirements"][0]
+    assert requirement["original_text"] == clause.removesuffix(".")
+    assert requirement["proposition_text"] == "입찰참가자격 등록 시 대표자 전원을 등록하여야 하고"
+    assert requirement["reference_date_type"] == "qualification_registration_deadline"
+    assert requirement["comparison_mode"] == "structured"
+    assert requirement["evidence"][0]["block_id"] == "clean"
+
+
+def test_recovers_subcontracting_prohibition_from_compound_joint_clause() -> None:
+    clause = "본 사업의 원활한 수행을 위하여 공동수급 및 하도급은 허용하지 않습니다."
+    result = {"requirements": [], "unresolved_candidates": []}
+    inputs = {"documents": [{
+        "document_id": "doc", "content": {"blocks": [{
+            "block_id": "b1", "page": 1, "section": "입찰참가자격", "text": clause,
+        }]},
+    }]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    assert len(result["requirements"]) == 1
+    requirement = result["requirements"][0]
+    assert requirement["type"] == "consortium"
+    assert requirement["operator"] == "not_exists"
+    assert requirement["holder_scope"] == "subcontractor"
+    assert requirement["reference_date_type"] == "none"
+    assert requirement["value"]["attributes"] == [{
+        "name": "subcontracting_allowed", "value": "false",
+    }]
+
+
 @pytest.mark.parametrize("clause", [
     "평가위원들의 종합평점이 100점 만점에 85점 이상을 득한 업체를 규격입찰 적격업체로 선정하되",
     "기술능력평가 분야 배점한도의 85% 이상인 자 중 종합평가점수가 높은 업체부터 협상 실시",
+    "입찰자 중 최저가격을 제출한자 순으로 적격심사 평가하며, 종합평점이 85점 이상인 자를 낙찰자로 결정합니다.",
 ])
 def test_preserves_explicit_eligibility_score_threshold(clause: str) -> None:
     result = {"requirements": [], "unresolved_candidates": []}
@@ -1885,6 +2156,7 @@ def test_preserves_explicit_eligibility_score_threshold(clause: str) -> None:
     assert requirement["assessment_stage"] == "qualification_review"
     assert requirement["failure_effect"] == "qualification_rejection"
     assert requirement["value"]["number"] == 85
+    assert "최저가격" not in requirement["proposition_text"]
 
 
 def test_does_not_turn_individual_proposal_score_into_eligibility_threshold() -> None:
@@ -2067,6 +2339,94 @@ def test_repair_recovers_legal_administration_from_compound_exclusion() -> None:
         "name": "excluded_status", "value": "legal_administration",
     }]
     assert requirement["failure_effect"] == "cannot_bid"
+
+
+def test_repair_recovers_legal_administration_from_ocr_variant() -> None:
+    text = (
+        "법정관리 등이나 국가, 지방자치단체, 정부출연 및 투자기관에 의하여 "
+        "부정당업체로 제재 중인 업체는 참여할 수 없음."
+    )
+    result = {"requirements": [], "unresolved_candidates": []}
+    inputs = {"documents": [{
+        "document_id": "doc", "content": {"blocks": [{
+            "block_id": "p1b6", "page": 1, "section": "입찰참가자격", "text": text,
+        }]},
+    }]}
+
+    _preserve_legal_administration_disqualification(result, inputs)
+
+    assert len(result["requirements"]) == 1
+    requirement = result["requirements"][0]
+    assert requirement["type"] == "legal_qualification"
+    assert requirement["operator"] == "not_equals"
+    assert requirement["proposition_text"] == "법정관리"
+    assert requirement["value"]["attributes"] == [{
+        "name": "excluded_status", "value": "legal_administration",
+    }]
+    assert requirement["evidence"][0]["excerpt"] == text[:-1]
+
+
+def test_recovers_debarment_separately_from_parenthetical_ftc_condition() -> None:
+    text = (
+        "국가계약법 시행령 제76조 부정당업자의 입찰 참가 자격제한에 해당되지 않는 "
+        "업체 (최근 3년내 공정위의 시정명령을 받은 사실이 없는 업체)"
+    )
+    ftc = _validated_requirement(
+        "최근 3년내 공정위의 시정명령을 받은 사실이 없는 업체",
+        type="sanction",
+        operator="not_exists",
+    )
+    result = {"requirements": [ftc], "unresolved_candidates": []}
+    inputs = {"documents": [{
+        "document_id": "doc", "content": {"blocks": [{
+            "block_id": "z1b9", "page": 1, "section": "입찰 참가 자격", "text": text,
+        }]},
+    }]}
+
+    _preserve_compound_debarment_disqualification(result, inputs)
+
+    assert len(result["requirements"]) == 2
+    recovered = result["requirements"][1]
+    assert recovered["type"] == "sanction"
+    assert recovered["operator"] == "not_exists"
+    assert recovered["value"]["attributes"] == [{
+        "name": "sanction_type", "value": "procurement_participation_restriction",
+    }]
+    assert "부정당업자의 입찰 참가 자격제한에 해당되지 않는 업체" == recovered["proposition_text"]
+
+
+def test_repairs_explicit_performance_or_prior_review_logic() -> None:
+    text = (
+        "2021년 08월 이후, 600병상 이상 종합병원에 납품 실적을 보유한 업체 또는 "
+        "사전에 별도의 심사를 통하여 입찰 자격을 취득한 업체"
+    )
+    performance = _validated_requirement(
+        "2021년 08월 이후, 600병상 이상 종합병원에 납품 실적을 보유한 업체",
+        type="past_performance",
+    )
+    review = _validated_requirement(
+        "사전에 별도의 심사를 통하여 입찰 자격을 취득한 업체",
+        id="r2",
+        type="custom",
+    )
+    for item in (performance, review):
+        item["evidence"][0].update({"document_id": "doc", "source_id": "doc", "block_id": "z1b9"})
+    result = {"requirements": [performance, review], "unresolved_candidates": []}
+    inputs = {"documents": [{
+        "document_id": "doc", "content": {"blocks": [{
+            "block_id": "z1b9", "page": 1, "section": "입찰 참가 자격", "text": text,
+        }]},
+    }]}
+
+    _repair_explicit_performance_review_alternative(result, inputs)
+
+    placements = [item["logic"]["placements"][0] for item in result["requirements"]]
+    assert placements == [
+        {"scope": "common", "alternative_group": "source_z1b9_performance_review",
+         "alternative_branch": "performance"},
+        {"scope": "common", "alternative_group": "source_z1b9_performance_review",
+         "alternative_branch": "prior_review"},
+    ]
 
 
 def test_unavailable_renditions_are_covered_transitively_by_parsed_pdf() -> None:
@@ -2383,6 +2743,65 @@ async def test_simple_document_extraction_skips_codex_and_compiles_result() -> N
     codex.assert_not_called()
     assert [item["type"] for item in result["requirements"]] == [
         "industry_license", "participation_region", "certificate",
+    ]
+    assert result["expression"]["operator"] == "all"
+
+
+@pytest.mark.asyncio
+async def test_api_only_extraction_skips_codex_and_uses_structured_compiler() -> None:
+    store = MagicMock()
+    storage = MagicMock()
+    settings = MagicMock(bid_eligibility_input_max_chars=120_000)
+    notice = {
+        "notice_number": "api-only",
+        "notice_order": "000",
+        "notice_hash": "hash",
+        "bid_deadline_at": "2026-08-27T16:00:00+00:00",
+        "documents": [],
+        "unavailable_documents": [],
+        "licenses": [{
+            "group": "1",
+            "sequence": "1",
+            "name": "학술.연구용역/1169",
+            "permitted_industries": [],
+            "main_fields": None,
+            "business_type": "용역",
+            "source_hash": "license-hash",
+        }],
+        "regions": [],
+        "consortiums": [{
+            "sequence": "method",
+            "name": "(전자)공동이행",
+            "source_hash": "consortium-hash",
+        }],
+        "coverage": {
+            "completeness": "api_only",
+            "requires_review": False,
+            "total_document_count": 0,
+            "parsed_document_count": 0,
+            "unavailable_document_count": 0,
+            "structured_requirement_count": 2,
+        },
+    }
+    skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
+    with (
+        patch("teoria_pipelines.tasks.bid_eligibility._resources", return_value=(store, storage)),
+        patch("teoria_pipelines.tasks.bid_eligibility.bootstrap_pipeline_settings",
+              return_value=settings),
+        patch("teoria_pipelines.tasks.bid_eligibility.subprocess.run") as codex,
+        patch("teoria_pipelines.tasks.bid_eligibility.SKILL_ROOT", skill_root),
+    ):
+        result = await extract_bid_eligibility_notice.fn(notice, persist=False)
+
+    codex.assert_not_called()
+    assert [(item["type"], item["operator"], item["reference_date_type"])
+            for item in result["requirements"]] == [
+        ("industry_license", "exists", "qualification_registration_deadline"),
+        ("consortium", "equals", "qualification_registration_deadline"),
+    ]
+    assert result["requirements"][0]["value"]["attributes"][-2:] == [
+        {"name": "industry_name", "value": "학술.연구용역"},
+        {"name": "industry_code", "value": "1169"},
     ]
     assert result["expression"]["operator"] == "all"
 
