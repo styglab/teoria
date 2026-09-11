@@ -104,7 +104,7 @@
       }
     },
     "expression": {"$ref": "#/$defs/expression"},
-    "unresolved_candidates": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["text", "review_reason", "blocks_qualification"], "properties": {"text": {"type": "string", "minLength": 1}, "review_reason": {"enum": ["referenced_document_missing", "ambiguous_stage", "ambiguous_failure_effect", "manual_evidence_interpretation", "informational_exclusion"]}, "blocks_qualification": {"type": "boolean"}}}}
+    "unresolved_candidates": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["text", "review_reason", "blocks_qualification"], "properties": {"text": {"type": "string", "minLength": 1}, "review_reason": {"enum": ["referenced_document_missing", "ambiguous_stage", "ambiguous_failure_effect", "manual_evidence_interpretation", "informational_exclusion", "source_conflict"]}, "blocks_qualification": {"type": "boolean"}}}}
   },
   "$defs": {
     "expression": {

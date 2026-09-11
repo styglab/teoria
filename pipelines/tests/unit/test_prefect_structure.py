@@ -1613,6 +1613,29 @@ def test_merges_omitted_local_bid_registration_evidence() -> None:
     }
 
 
+def test_recovers_omitted_local_bid_registration_gate() -> None:
+    clause = "복지센터에서 제시한 조건 등을 수락하고 소정의 입찰등록을 마친 자"
+    result = {"requirements": [], "unresolved_candidates": []}
+    inputs = {"documents": [{
+        "document_id": "notice-doc",
+        "content": {"blocks": [{
+            "block_id": "p1b8", "page": 1, "section": "입찰참가자격",
+            "text": clause,
+        }]},
+    }]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    assert len(result["requirements"]) == 1
+    requirement = result["requirements"][0]
+    assert requirement["type"] == "custom"
+    assert requirement["operator"] == "equals"
+    assert requirement["assessment_stage"] == "bid_entry"
+    assert requirement["failure_effect"] == "cannot_bid"
+    assert requirement["review_status"] == "needs_review"
+    assert requirement["original_text"] == clause
+
+
 def test_preserves_omitted_explicit_tax_evasion_disqualification() -> None:
     clause = (
         "조세포탈 등을 한 자로서 유죄판결이 확정된 날부터 2년이 지나지 "
@@ -2135,6 +2158,95 @@ def test_recovers_subcontracting_prohibition_from_compound_joint_clause() -> Non
     assert requirement["value"]["attributes"] == [{
         "name": "subcontracting_allowed", "value": "false",
     }]
+
+
+def test_recovers_representative_registration_consistency_invalid_bid() -> None:
+    clause = (
+        "입찰참가자격등록증 상의 상호 및 대표자(대표자가 다수인 경우 대표자 전원의 성명을 모두 등재, "
+        "각자 대표도 해당)가 법인등기부등본 상의 상호, 대표자와 다른 경우에는 입찰참가자격등록증을 "
+        "변경등록하고 입찰에 참여하여야 하며, 변경등록하지 않고 참여한 입찰은 무효입찰입니다."
+    )
+    result = {"requirements": [], "unresolved_candidates": []}
+    inputs = {"documents": [{"document_id": "doc", "content": {"blocks": [{
+        "block_id": "b1", "page": 3, "section": "입찰 무효", "text": clause,
+    }]}}], "structured_requirements": []}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    assert len(result["requirements"]) == 1
+    requirement = result["requirements"][0]
+    assert requirement["type"] == "procurement_registration"
+    assert requirement["operator"] == "exists"
+    assert requirement["holder_scope"] == "representative"
+    assert requirement["failure_effect"] == "invalid_bid"
+    assert requirement["value"]["attributes"] == [{
+        "name": "registration_scope", "value": "all_representatives_and_identity",
+    }]
+
+
+def test_marks_structured_consortium_denial_conflicting_with_document_participation() -> None:
+    consortium = _validated_requirement(
+        "()공동수급불허", type="consortium", operator="not_exists",
+        value={"text": "공동수급 불가", "number": None, "boolean": False,
+               "items": [], "attributes": [{"name": "allowed", "value": "false"}]},
+        evidence=[{
+            "source_type": "structured_api", "source_id": "consortium:method",
+            "document_id": None, "block_id": None, "page": None, "section": None,
+            "excerpt": "()공동수급불허",
+        }],
+    )
+    clause = "○공동계약 및 구성방식:전자문서 / 공동수급"
+    result = {"requirements": [consortium], "unresolved_candidates": []}
+    inputs = {
+        "structured_requirements": [{
+            "source_id": "consortium:method", "kind": "consortium",
+            "name": "()공동수급불허",
+        }],
+        "documents": [{"document_id": "doc", "content": {"blocks": [{
+            "block_id": "b1", "page": 1, "section": "입찰개요", "text": clause,
+        }]}}],
+    }
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    assert consortium["review_status"] == "needs_review"
+    assert consortium["failure_effect"] == "needs_review"
+    assert result["unresolved_candidates"] == [{
+        "text": clause, "review_reason": "source_conflict",
+        "blocks_qualification": True,
+    }]
+
+
+def test_recovers_both_manufacturer_and_supplier_certificates() -> None:
+    clause = (
+        "제안 장비에 대한 제작사의 제작사증명서 및 공급사의 공급사증명서를 보유한 자로, "
+        "입찰참가등록 마감일까지 입찰참가신청을 마친 자. 증명서를 기한 내 제출하지 아니한 "
+        "업체의 입찰은 참가자격이 없는 자의 입찰로 간주하여 무효 처리합니다."
+    )
+    supplier = _validated_requirement(
+        clause, type="certificate", operator="exists",
+        value={"text": "공급사증명서 보유", "number": None, "boolean": True,
+               "items": [], "attributes": [{
+                   "name": "certificate_type", "value": "supplier_certificate",
+               }]},
+    )
+    result = {"requirements": [supplier], "unresolved_candidates": []}
+    inputs = {"structured_requirements": [], "documents": [{
+        "document_id": "doc", "content": {"blocks": [{
+            "block_id": "b1", "page": 2, "section": "입찰참가자격", "text": clause,
+        }]},
+    }]}
+
+    _preserve_omitted_manual_eligibility(result, inputs)
+
+    certificate_types = {
+        attribute["value"]
+        for requirement in result["requirements"]
+        for attribute in requirement["value"]["attributes"]
+        if attribute["name"] == "certificate_type"
+    }
+    assert certificate_types == {"manufacturer_certificate", "supplier_certificate"}
+    assert all(item["failure_effect"] == "invalid_bid" for item in result["requirements"])
 
 
 @pytest.mark.parametrize("clause", [

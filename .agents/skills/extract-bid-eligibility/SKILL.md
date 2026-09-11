@@ -38,4 +38,5 @@ Conform the extraction response to `references/eligibility-facts.schema.json`. T
     - classify tax-evasion convictions, debarment, and participation restrictions as `sanction`.
     Requirements split from one compound source sentence may retain the same `original_text` and Evidence. Give each its own atomic `proposition_text`; do not merge them when their normalized fact or holder scope differs.
 15. Give every unresolved candidate a `review_reason` and `blocks_qualification`. Set `blocks_qualification: true` only when resolving it could add, remove, or change a bidder eligibility result.
+    Use `review_reason: source_conflict` when structured API data and an explicit document clause disagree; mark the affected requirement `needs_review` instead of silently selecting either source.
 16. Return only the normalized fact JSON, never an expression tree, draft, or explanation.

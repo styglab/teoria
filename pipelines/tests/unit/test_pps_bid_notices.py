@@ -40,7 +40,12 @@ def test_normalizes_notice_and_discovers_documents() -> None:
 
     assert result.notices[0]["work_type"] == "service"
     assert result.notices[0]["notice_number"] == "R26BK00000001"
-    assert result.notices[0]["bid_deadline_at"] == datetime(2026, 8, 14, 18, 0)
+    assert result.notices[0]["notice_published_at"] == datetime(
+        2026, 8, 7, 1, 0, tzinfo=timezone.utc
+    )
+    assert result.notices[0]["bid_deadline_at"] == datetime(
+        2026, 8, 14, 9, 0, tzinfo=timezone.utc
+    )
     assert str(result.notices[0]["estimated_price"]) == "100000000"
     assert result.notices[0]["participation_restriction_region_code"] == "11"
     assert result.notices[0]["participation_restriction_region_name"] == "서울특별시"

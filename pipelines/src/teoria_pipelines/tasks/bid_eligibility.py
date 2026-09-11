@@ -44,8 +44,8 @@ from teoria_pipelines.settings import bootstrap_pipeline_settings
 
 
 SKILL_ROOT = Path("/app/.agents/skills/extract-bid-eligibility")
-EXTRACTION_VERSION = "2.3.11"
-FINGERPRINT_COMPATIBILITY_VERSION = "2.2.39"
+EXTRACTION_VERSION = "2.3.15"
+FINGERPRINT_COMPATIBILITY_VERSION = "2.2.42"
 CODEX_TRANSIENT_RETRY_DELAY_SECONDS = 5
 CODEX_TRANSIENT_ERRORS = ("selected model is at capacity", "rate limit", "too many requests")
 BID_PRICE_ELIGIBILITY_PATTERN = re.compile(
@@ -1218,6 +1218,11 @@ def _preserve_omitted_manual_eligibility(result: dict, inputs: dict) -> None:
         [item["original_text"] for item in result["requirements"]]
         + [item["text"] for item in result["unresolved_candidates"]]
     )
+    structured_consortium_denial = any(
+        item.get("kind") == "consortium"
+        and re.search(r"공동수급\s*불허", str(item.get("name") or ""))
+        for item in inputs.get("structured_requirements", [])
+    )
     for document in inputs["documents"]:
         blocks = document["content"]["blocks"]
         for index, block in enumerate(blocks):
@@ -1232,6 +1237,143 @@ def _preserve_omitted_manual_eligibility(result: dict, inputs: dict) -> None:
             joined_text = text
             if same_refined_parent:
                 joined_text = f"{text.rstrip()} {str(next_block.get('text') or '').lstrip()}"
+            consortium_document_conflict = re.search(
+                r"○?\s*공동계약\s*및\s*구성방식\s*:\s*전자문서\s*/\s*공동수급",
+                text,
+            )
+            if structured_consortium_denial and consortium_document_conflict:
+                for requirement in result["requirements"]:
+                    if (
+                        requirement.get("type") == "consortium"
+                        and requirement.get("operator") == "not_exists"
+                        and any(
+                            evidence.get("source_type") == "structured_api"
+                            and evidence.get("source_id") == "consortium:method"
+                            for evidence in requirement.get("evidence", [])
+                        )
+                    ):
+                        requirement["review_status"] = "needs_review"
+                        requirement["failure_effect"] = "needs_review"
+                        requirement["confidence"] = min(requirement.get("confidence", 1.0), 0.5)
+                _add_unresolved(
+                    result, consortium_document_conflict.group(0).strip(),
+                    "source_conflict", True,
+                )
+            representative_consistency = re.search(
+                r"입찰참가자격등록증\s*상의\s*상호\s*및\s*대표자"
+                r"[\s\S]{0,180}?대표자\s*전원[\s\S]{0,220}?"
+                r"입찰참가자격등록증을\s*변경등록하고\s*입찰에\s*참여하여야\s*하며"
+                r"[\s\S]{0,100}?변경등록하지\s*않고\s*참여한\s*입찰은\s*무효입찰",
+                text,
+            )
+            if representative_consistency and not any(
+                item.get("type") == "procurement_registration"
+                and item.get("holder_scope") == "representative"
+                and any(
+                    attribute.get("name") == "registration_scope"
+                    and attribute.get("value") == "all_representatives_and_identity"
+                    for attribute in (item.get("value") or {}).get("attributes", [])
+                )
+                for item in result["requirements"]
+            ):
+                original = representative_consistency.group(0).strip()
+                used_ids = {item["id"] for item in result["requirements"]}
+                next_id = len(used_ids) + 1
+                while f"r{next_id}" in used_ids:
+                    next_id += 1
+                result["requirements"].append({
+                    "id": f"r{next_id}", "type": "procurement_registration",
+                    "operator": "exists",
+                    "value": {
+                        "text": "상호 및 복수 대표자 전원의 입찰참가자격 변경등록",
+                        "number": None, "boolean": True, "items": [],
+                        "attributes": [{
+                            "name": "registration_scope",
+                            "value": "all_representatives_and_identity",
+                        }],
+                    },
+                    "original_text": original, "proposition_text": original,
+                    "proposition_start": 0, "proposition_end": len(original),
+                    "holder_scope": "representative",
+                    "reference_date_type": "qualification_registration_deadline",
+                    "assessment_stage": "bid_entry", "failure_effect": "invalid_bid",
+                    "comparison_mode": "structured", "mandatory": True,
+                    "review_status": "extracted", "confidence": 1.0,
+                    "evidence": [{
+                        "source_type": "document", "source_id": str(document["document_id"]),
+                        "document_id": str(document["document_id"]),
+                        "block_id": block.get("block_id"), "page": block.get("page"),
+                        "section": block.get("section"), "excerpt": original,
+                    }],
+                    "proof_requirements": [], "logic": {"placements": [{
+                        "scope": "common", "alternative_group": None,
+                        "alternative_branch": None,
+                    }]},
+                })
+            paired_certificates = re.search(
+                r"(?P<manufacturer>제작사의\s*제작사증명서)\s*및\s*"
+                r"(?P<supplier>공급사의\s*공급사증명서를\s*보유한\s*자)",
+                text,
+            )
+            if paired_certificates:
+                invalid_when_missing = bool(re.search(
+                    r"증명서를\s*기한\s*내\s*제출하지\s*아니한[\s\S]{0,80}?무효",
+                    text,
+                ))
+                original = paired_certificates.group(0).strip()
+                certificate_specs = (
+                    ("manufacturer_certificate", "제안 장비 제작사의 제작사증명서 보유", "manufacturer"),
+                    ("supplier_certificate", "제안 장비 공급사의 공급사증명서 보유", "supplier"),
+                )
+                for certificate_type, normalized_text, group_name in certificate_specs:
+                    existing_certificate = next((
+                        item for item in result["requirements"]
+                        if item.get("type") == "certificate"
+                        and any(
+                            attribute.get("name") == "certificate_type"
+                            and attribute.get("value") == certificate_type
+                            for attribute in (item.get("value") or {}).get("attributes", [])
+                        )
+                    ), None)
+                    if existing_certificate:
+                        if invalid_when_missing:
+                            existing_certificate["failure_effect"] = "invalid_bid"
+                        continue
+                    proposition = paired_certificates.group(group_name)
+                    proposition_start = original.index(proposition)
+                    used_ids = {item["id"] for item in result["requirements"]}
+                    next_id = len(used_ids) + 1
+                    while f"r{next_id}" in used_ids:
+                        next_id += 1
+                    result["requirements"].append({
+                        "id": f"r{next_id}", "type": "certificate",
+                        "operator": "exists",
+                        "value": {
+                            "text": normalized_text, "number": None,
+                            "boolean": True, "items": [], "attributes": [{
+                                "name": "certificate_type", "value": certificate_type,
+                            }],
+                        },
+                        "original_text": original, "proposition_text": proposition,
+                        "proposition_start": proposition_start,
+                        "proposition_end": proposition_start + len(proposition),
+                        "holder_scope": "bidder",
+                        "reference_date_type": "qualification_registration_deadline",
+                        "assessment_stage": "bid_entry",
+                        "failure_effect": "invalid_bid" if invalid_when_missing else "cannot_bid",
+                        "comparison_mode": "document_evidence", "mandatory": True,
+                        "review_status": "extracted", "confidence": 1.0,
+                        "evidence": [{
+                            "source_type": "document", "source_id": str(document["document_id"]),
+                            "document_id": str(document["document_id"]),
+                            "block_id": block.get("block_id"), "page": block.get("page"),
+                            "section": block.get("section"), "excerpt": original,
+                        }],
+                        "proof_requirements": [], "logic": {"placements": [{
+                            "scope": "common", "alternative_group": None,
+                            "alternative_branch": None,
+                        }]},
+                    })
             personal_authentication = re.search(
                 r"신원확인\s*입찰이\s*적용[\s\S]{0,220}?개인인증수단을\s*이용"
                 r"[\s\S]{0,100}?신원을\s*확인받은\s*후\s*입찰에\s*참여하여야\s*합니다",
@@ -1408,6 +1550,42 @@ def _preserve_omitted_manual_eligibility(result: dict, inputs: dict) -> None:
                         or "입찰참가 승락" in str(item.get("original_text") or "")
                     )
                 ), None)
+                if matching_local_requirement is None:
+                    original = text.strip()
+                    proposition = local_bid_registration.group(0).strip()
+                    proposition_start = original.index(proposition)
+                    used_ids = {item["id"] for item in result["requirements"]}
+                    next_id = len(used_ids) + 1
+                    while f"r{next_id}" in used_ids:
+                        next_id += 1
+                    matching_local_requirement = {
+                        "id": f"r{next_id}", "type": "custom",
+                        "operator": "equals",
+                        "value": {
+                            "text": "발주기관의 소정 입찰등록 완료",
+                            "number": None, "boolean": True, "items": [],
+                            "attributes": [],
+                        },
+                        "original_text": original,
+                        "proposition_text": proposition,
+                        "proposition_start": proposition_start,
+                        "proposition_end": proposition_start + len(proposition),
+                        "holder_scope": "bidder",
+                        "reference_date_type": "qualification_registration_deadline",
+                        "assessment_stage": "bid_entry",
+                        "failure_effect": "cannot_bid",
+                        "comparison_mode": "manual",
+                        "mandatory": True,
+                        "review_status": "needs_review",
+                        "confidence": 0.9,
+                        "evidence": [],
+                        "proof_requirements": [],
+                        "logic": {"placements": [{
+                            "scope": "common", "alternative_group": None,
+                            "alternative_branch": None,
+                        }]},
+                    }
+                    result["requirements"].append(matching_local_requirement)
                 if matching_local_requirement is not None:
                     evidence = {
                         "source_type": "document",

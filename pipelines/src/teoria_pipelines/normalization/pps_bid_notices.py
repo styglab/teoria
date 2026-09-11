@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
+from zoneinfo import ZoneInfo
 
 from teoria_pipelines.models import ExtractedBatch, NormalizedBidNoticeBatch, RawProviderRecord
 
@@ -16,6 +17,8 @@ NOTICE_TYPES = {
     "list_goods_bid_notices": "goods",
     "list_other_bid_notices": "other",
 }
+
+PPS_TIMEZONE = ZoneInfo("Asia/Seoul")
 
 PARTICIPATION_REGION_CODES = {
     "전국": "00", "서울특별시": "11", "부산광역시": "26", "대구광역시": "27",
@@ -211,6 +214,8 @@ def _datetime(value: Any) -> datetime | None:
     text = _text(value)
     if text is None: return None
     for pattern in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y%m%d%H%M%S", "%Y%m%d%H%M", "%Y-%m-%dT%H:%M:%S"):
-        try: return datetime.strptime(text, pattern)
+        try:
+            local_datetime = datetime.strptime(text, pattern).replace(tzinfo=PPS_TIMEZONE)
+            return local_datetime.astimezone(timezone.utc)
         except ValueError: continue
     raise BidNoticeNormalizationError(f"invalid datetime value {value!r}")

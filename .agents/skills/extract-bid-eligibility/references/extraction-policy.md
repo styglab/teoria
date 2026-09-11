@@ -62,6 +62,7 @@ A 직접생산확인증명서 is a bidder-held `certificate`, including when it 
 ## Source priority
 
 Structured API license and region rows are authoritative structured candidates. Documents can add detail or reveal conflict. Preserve conflicts with `review_status: needs_review`; never silently choose one source.
+Record the conflicting document clause in `unresolved_candidates` with `review_reason: source_conflict` and `blocks_qualification: true` when resolving the conflict can change eligibility.
 
 ## Input efficiency
 
