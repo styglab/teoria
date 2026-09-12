@@ -507,7 +507,11 @@ class PostgresStore:
                 "OR (d.status='stored' AND (d.parse_status IN ('pending','processing') "
                 "OR (d.parse_status='failed' AND d.parse_attempts < %s))))) "
                 + key_filter +
-                "AND n.notice_kind_name IS DISTINCT FROM '취소공고' AND NOT EXISTS (SELECT 1 "
+                "AND n.notice_kind_name IS DISTINCT FROM '취소공고' "
+                "AND COALESCE(n.notice_kind_name, '') !~ '(평가|개찰|낙찰|계약).*(결과|결정)' "
+                "AND COALESCE(n.notice_name, '') !~ '^\\s*(\\([^)]*\\)\\s*)?"
+                "(제안서\\s*)?(평가|개찰|낙찰|계약).*(결과|결정|공개)' "
+                "AND NOT EXISTS (SELECT 1 "
                 "FROM public_procurement.bid_notices newer WHERE newer.notice_number=n.notice_number "
                 "AND (COALESCE(CASE WHEN newer.notice_order ~ '^[0-9]+$' "
                 "THEN newer.notice_order::numeric END,-1), newer.notice_order, "
@@ -717,6 +721,29 @@ class PostgresStore:
                 "(extraction_id,expression,unresolved_candidates) VALUES (%s,%s,%s)",
                 (extraction_id, Jsonb(result["expression"]), Jsonb(result["unresolved_candidates"])),
             )
+            for item in result.get("participation_findings", []):
+                finding_id = uuid5(NAMESPACE_URL, f"teoria:{extraction_id}:{item['id']}")
+                connection.execute(
+                    "INSERT INTO public_procurement.bid_participation_findings "
+                    "(finding_id,extraction_id,local_id,notice_number,notice_order,category,"
+                    "finding_type,title,subject,stage,description,deadline_text,failure_effect,"
+                    "importance,competitive_effect,legitimate_justification,review_status,confidence) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (finding_id, extraction_id, item["id"], notice["notice_number"],
+                     notice["notice_order"], item["category"], item["type"], item["title"],
+                     item["subject"], item["stage"], item["description"], item["deadline_text"],
+                     item["failure_effect"], item["importance"], item["competitive_effect"],
+                     item["legitimate_justification"], item["review_status"], item["confidence"]),
+                )
+                for evidence in item["evidence"]:
+                    connection.execute(
+                        "INSERT INTO public_procurement.bid_participation_finding_evidence "
+                        "(evidence_id,finding_id,source_type,source_id,document_id,block_id,"
+                        "page_number,section,excerpt) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        (uuid4(), finding_id, evidence["source_type"], evidence["source_id"],
+                         evidence["document_id"], evidence["block_id"], evidence["page"],
+                         evidence["section"], evidence["excerpt"]),
+                    )
             for item in result["requirements"]:
                 requirement_id = uuid5(NAMESPACE_URL, f"teoria:{extraction_id}:{item['id']}")
                 connection.execute(

@@ -43,6 +43,25 @@ Qualification-review wording does not imply a bid-deadline condition. Use `quali
 - Set `needs_review` when a clause depends on another unavailable document, ambiguous law, calculation, or human interpretation.
 - Mark an unresolved candidate as qualification-blocking only when resolving it can change bidder eligibility. Informational, price-only, scoring-only, and performance-only candidates do not roll up to extraction review.
 - Multiple documents may support one requirement. Keep every material citation.
+
+## Participation information outside eligibility
+
+Excluding a clause from company eligibility does not mean discarding it. Preserve material bid
+preparation and submission instructions, explicit invalidation risks, first-ranked-bidder follow-up,
+and contracting steps as `participation_note`. Preserve staffing, delivery, insurance, security,
+maintenance, reporting, and other duties that arise only after award or contract as
+`performance_obligation`.
+
+Preserve a source-supported potential competition constraint as `competition_risk_signal` when it
+depends on a named brand or manufacturer, manufacturer authorization or support, proprietary
+interoperability, patent/certification access, unusually specific experience, or another condition
+that may materially narrow available suppliers. Never infer the favored company or unlawful
+intent. Record an explicit technical, compatibility, security, or continuity justification when
+the source gives one; otherwise leave `legitimate_justification` null.
+
+These findings never enter the eligibility expression and never change a company satisfaction
+result. They retain exact document Evidence and may share Evidence with a genuine eligibility
+requirement when the same clause has both effects.
 - Do not treat missing company data as a result; this workflow has no company input.
 
 ## Semantic normalization

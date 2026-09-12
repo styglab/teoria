@@ -1,0 +1,31 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-12"
+mapping:
+  id: bid_participation_finding_evidence
+  name: 입찰 참여정보 근거 매핑
+  description: 최신 참여정보의 개별 원문 근거를 finding에 연결한다.
+  ontology: public_procurement
+  bindings:
+    bid_participation_finding.finding_id: [{field: teoria_public_procurement.bid_participation_finding_evidence.finding_id, role: evidence_finding}]
+    bid_participation_finding.notice_number: [{field: teoria_public_procurement.bid_participation_finding_evidence.notice_number, role: evidence_finding}]
+    bid_participation_finding.notice_order: [{field: teoria_public_procurement.bid_participation_finding_evidence.notice_order, role: evidence_finding}]
+    bid_participation_finding_evidence.evidence_id: [{field: teoria_public_procurement.bid_participation_finding_evidence.evidence_id}]
+    bid_participation_finding_evidence.finding_id: [{field: teoria_public_procurement.bid_participation_finding_evidence.finding_id}]
+    bid_participation_finding_evidence.notice_number: [{field: teoria_public_procurement.bid_participation_finding_evidence.notice_number}]
+    bid_participation_finding_evidence.notice_order: [{field: teoria_public_procurement.bid_participation_finding_evidence.notice_order}]
+    bid_participation_finding_evidence.source_type: [{field: teoria_public_procurement.bid_participation_finding_evidence.source_type}]
+    bid_participation_finding_evidence.source_id: [{field: teoria_public_procurement.bid_participation_finding_evidence.source_id}]
+    bid_participation_finding_evidence.document_id: [{field: teoria_public_procurement.bid_participation_finding_evidence.document_id}]
+    bid_participation_finding_evidence.source_document: [{field: teoria_public_procurement.bid_participation_finding_evidence.source_document}]
+    bid_participation_finding_evidence.source_page: [{field: teoria_public_procurement.bid_participation_finding_evidence.source_page}]
+    bid_participation_finding_evidence.source_clause: [{field: teoria_public_procurement.bid_participation_finding_evidence.source_clause}]
+    bid_participation_finding_evidence.source_excerpt: [{field: teoria_public_procurement.bid_participation_finding_evidence.source_excerpt}]
+    bid_participation_finding_evidence.source_url: [{field: teoria_public_procurement.bid_participation_finding_evidence.source_url}]
+  materializations:
+    teoria_public_procurement.bid_participation_finding_evidence:
+      objects:
+        evidence_finding: {type: bid_participation_finding, identity: [finding_id]}
+        bid_participation_finding_evidence: {type: bid_participation_finding_evidence, identity: [evidence_id]}
+      links:
+        - {type: bid_participation_finding_supported_by_evidence, source: evidence_finding, target: bid_participation_finding_evidence}

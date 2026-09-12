@@ -1,0 +1,36 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-12"
+mapping:
+  id: bid_participation_findings
+  name: 입찰 참여정보 매핑
+  description: 최신 완료 추출본의 참여 특이사항·수행 의무·경쟁 제한 신호를 입찰공고에 연결한다.
+  ontology: public_procurement
+  bindings:
+    bid_notice.bid_notice_id: [{field: teoria_public_procurement.bid_participation_findings.bid_notice_id, role: finding_notice}]
+    bid_notice.notice_number: [{field: teoria_public_procurement.bid_participation_findings.notice_number, role: finding_notice}]
+    bid_notice.notice_order: [{field: teoria_public_procurement.bid_participation_findings.notice_order, role: finding_notice}]
+    bid_participation_finding.finding_id: [{field: teoria_public_procurement.bid_participation_findings.finding_id}]
+    bid_participation_finding.bid_notice_id: [{field: teoria_public_procurement.bid_participation_findings.bid_notice_id}]
+    bid_participation_finding.notice_number: [{field: teoria_public_procurement.bid_participation_findings.notice_number}]
+    bid_participation_finding.notice_order: [{field: teoria_public_procurement.bid_participation_findings.notice_order}]
+    bid_participation_finding.category: [{field: teoria_public_procurement.bid_participation_findings.category}]
+    bid_participation_finding.finding_type: [{field: teoria_public_procurement.bid_participation_findings.finding_type}]
+    bid_participation_finding.title: [{field: teoria_public_procurement.bid_participation_findings.title}]
+    bid_participation_finding.subject: [{field: teoria_public_procurement.bid_participation_findings.subject}]
+    bid_participation_finding.stage: [{field: teoria_public_procurement.bid_participation_findings.stage}]
+    bid_participation_finding.description: [{field: teoria_public_procurement.bid_participation_findings.description}]
+    bid_participation_finding.deadline_text: [{field: teoria_public_procurement.bid_participation_findings.deadline_text}]
+    bid_participation_finding.failure_effect: [{field: teoria_public_procurement.bid_participation_findings.failure_effect}]
+    bid_participation_finding.importance: [{field: teoria_public_procurement.bid_participation_findings.importance}]
+    bid_participation_finding.competitive_effect: [{field: teoria_public_procurement.bid_participation_findings.competitive_effect}]
+    bid_participation_finding.legitimate_justification: [{field: teoria_public_procurement.bid_participation_findings.legitimate_justification}]
+    bid_participation_finding.review_status: [{field: teoria_public_procurement.bid_participation_findings.review_status}]
+    bid_participation_finding.confidence: [{field: teoria_public_procurement.bid_participation_findings.confidence}]
+  materializations:
+    teoria_public_procurement.bid_participation_findings:
+      objects:
+        finding_notice: {type: bid_notice, identity: [bid_notice_id]}
+        bid_participation_finding: {type: bid_participation_finding, identity: [finding_id]}
+      links:
+        - {type: bid_notice_has_participation_finding, source: finding_notice, target: bid_participation_finding}

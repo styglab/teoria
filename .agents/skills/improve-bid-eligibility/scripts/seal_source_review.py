@@ -14,6 +14,9 @@ EXPECTED_REQUIREMENT_FIELDS = {
     "type", "operator", "value", "holder_scope", "reference_date_type",
     "assessment_stage", "failure_effect", "mandatory", "evidence",
 }
+EXPECTED_FINDING_FIELDS = {
+    "category", "type", "subject", "stage", "description", "failure_effect", "evidence",
+}
 
 
 def main() -> int:
@@ -74,6 +77,19 @@ def main() -> int:
                         evidence_errors.append("proof_evidence_not_in_source")
                 elif excerpt not in structured.get(str(evidence.get("source_id")), ""):
                     evidence_errors.append("proof_structured_evidence_not_in_source")
+    for finding in case["expected"].get("participation_findings", []):
+        missing = EXPECTED_FINDING_FIELDS - finding.keys()
+        if missing or not finding.get("evidence"):
+            raise ValueError("incomplete_expected_finding:" + ",".join(sorted(missing)))
+        for evidence in finding["evidence"]:
+            excerpt = str(evidence.get("excerpt") or "")
+            if evidence.get("source_type") == "document":
+                text = blocks.get((str(evidence.get("document_id")),
+                                   str(evidence.get("block_id"))))
+                if text is None or excerpt not in text:
+                    evidence_errors.append("finding_evidence_not_in_source")
+            elif excerpt not in structured.get(str(evidence.get("source_id")), ""):
+                evidence_errors.append("finding_structured_evidence_not_in_source")
     if evidence_errors:
         raise ValueError(",".join(sorted(set(evidence_errors))))
     seal = {

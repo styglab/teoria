@@ -44,6 +44,7 @@ def test_golden_expression_cases(case: dict) -> None:
     facts = {
         "schema_version": "1.4.0",
         "requirements": [_requirement(key, value) for key, value in case["placements"].items()],
+        "participation_findings": [],
         "unresolved_candidates": [],
     }
 
@@ -58,6 +59,29 @@ def test_compiler_rejects_missing_logic() -> None:
     item.pop("logic")
     with pytest.raises(ValueError, match="requirement_logic_missing"):
         compile_eligibility_facts({"requirements": [item], "unresolved_candidates": []})
+
+
+def test_participation_findings_are_validated_and_preserved_outside_expression() -> None:
+    evidence = {"source_type": "document", "source_id": "doc", "document_id": "doc",
+                "block_id": "b1", "page": 1, "section": "제출서류",
+                "excerpt": "낙찰자는 지정기일 이내에 계약을 체결하여야 합니다."}
+    finding = {
+        "id": "f1", "category": "participation_note", "type": "contract_deadline",
+        "title": "낙찰자 계약 체결", "subject": "successful_bidder",
+        "stage": "contracting", "description": "지정기일 이내 계약 체결",
+        "deadline_text": "지정기일 이내", "failure_effect": "cannot_contract",
+        "importance": "high", "competitive_effect": None,
+        "legitimate_justification": None, "review_status": "extracted",
+        "confidence": 1.0, "evidence": [evidence],
+    }
+    facts = {"schema_version": "1.4.0", "requirements": [],
+             "participation_findings": [finding], "unresolved_candidates": []}
+
+    schema = __import__("json").loads(FACT_SCHEMA.read_text())
+    assert list(Draft202012Validator(schema).iter_errors(facts)) == []
+    result = compile_eligibility_facts(facts)
+    assert result["participation_findings"] == [finding]
+    assert result["expression"]["operator"] == "all"
 
 
 def test_unconditional_common_placement_subsumes_mode_duplicate() -> None:

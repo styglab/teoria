@@ -71,6 +71,65 @@ ontology:
         - {id: standard_rule_version, name: 표준 판정 규칙 버전, description: 요건에 바인딩된 표준 Rule 버전, data_type: string}
         - {id: rule_arguments_text, name: 판정 규칙 인수, description: 공고별 표준 Rule 인수를 보존한 JSON 문자열, data_type: string}
 
+    - id: bid_requirement_evidence
+      name: 입찰 참가요건 근거
+      description: 개별 참가요건을 뒷받침하는 첨부문서 또는 정형 API의 원문 근거
+      primary_key: evidence_id
+      properties:
+        - {id: evidence_id, name: 근거 식별자, description: 참가요건 근거 레코드의 고유 식별자, data_type: string}
+        - {id: requirement_id, name: 참가요건 식별자, description: 이 근거가 뒷받침하는 참가요건 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, description: 근거가 속한 나라장터 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, description: 근거가 속한 공고 차수, data_type: string}
+        - {id: source_type, name: 근거 원천 유형, description: document 또는 structured_api 원천 구분, data_type: string}
+        - {id: source_id, name: 원천 레코드 식별자, description: 문서 또는 정형 API 레코드의 원천 식별자, data_type: string}
+        - {id: document_id, name: 첨부문서 식별자, description: 문서 근거일 때 연결된 첨부문서 식별자, data_type: string}
+        - {id: source_document, name: 첨부파일명, description: 근거가 발견된 첨부파일명, data_type: string}
+        - {id: source_page, name: 페이지 번호, description: 첨부문서에서 근거가 발견된 페이지 번호, data_type: integer}
+        - {id: source_clause, name: 조항 또는 위치, description: 첨부문서에서 근거가 발견된 절 또는 구역, data_type: string}
+        - {id: source_excerpt, name: 근거 원문, description: 요건을 뒷받침하는 원문 발췌, data_type: string}
+        - {id: source_url, name: 첨부파일 URL, description: 원천 첨부파일을 조회할 수 있는 URL, data_type: string}
+
+    - id: bid_participation_finding
+      name: 입찰 참여정보
+      description: 참가자가 입찰 전후에 알아야 할 절차·수행 의무 또는 경쟁 제한 검토 신호
+      primary_key: finding_id
+      properties:
+        - {id: finding_id, name: 참여정보 식별자, description: 추출 실행과 로컬 finding ID로 생성한 고유 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, description: 참여정보가 속한 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, description: 나라장터 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, description: 공고 차수, data_type: string}
+        - {id: category, name: 참여정보 범주, description: participation_note·performance_obligation·competition_risk_signal 구분, data_type: string}
+        - {id: finding_type, name: 참여정보 유형, description: 범주 안에서 세분한 안정적인 유형, data_type: string}
+        - {id: title, name: 제목, description: 사용자에게 표시할 간결한 제목, data_type: string}
+        - {id: subject, name: 적용 대상, description: 모든 참가자·1순위 업체·계약상대자 등 적용 대상, data_type: string}
+        - {id: stage, name: 적용 단계, description: 입찰 전·제출·개찰 후·계약·수행 단계, data_type: string}
+        - {id: description, name: 설명, description: 원문에 근거한 정규화 설명, data_type: string}
+        - {id: deadline_text, name: 기한 원문, description: 문서에 명시된 기한 표현, data_type: string}
+        - {id: failure_effect, name: 미이행 효과, description: 무효·실격·계약상 책임 등 명시된 효과, data_type: string}
+        - {id: importance, name: 중요도, description: 참여 의사결정과 준비에 미치는 중요도, data_type: string}
+        - {id: competitive_effect, name: 경쟁 영향, description: 경쟁 제한 신호가 잠재적으로 미칠 객관적 영향, data_type: string}
+        - {id: legitimate_justification, name: 명시된 정당화 사유, description: 문서가 직접 제시한 호환성·보안 등 사유, data_type: string}
+        - {id: review_status, name: 검토상태, description: 자동 추출 또는 사람 검토 필요 상태, data_type: string}
+        - {id: confidence, name: 추출신뢰도, description: 0 이상 1 이하 추출 신뢰도, data_type: number}
+
+    - id: bid_participation_finding_evidence
+      name: 입찰 참여정보 근거
+      description: 참여 특이사항·수행 의무·경쟁 제한 신호를 뒷받침하는 개별 원문 근거
+      primary_key: evidence_id
+      properties:
+        - {id: evidence_id, name: 근거 식별자, description: 근거 레코드의 고유 식별자, data_type: string}
+        - {id: finding_id, name: 참여정보 식별자, description: 근거가 연결되는 참여정보 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, description: 근거가 속한 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, description: 근거가 속한 공고차수, data_type: string}
+        - {id: source_type, name: 근거 원천 유형, description: document 또는 structured_api, data_type: string}
+        - {id: source_id, name: 원천 레코드 식별자, description: 원천 레코드 식별자, data_type: string}
+        - {id: document_id, name: 첨부문서 식별자, description: 연결된 첨부문서 식별자, data_type: string}
+        - {id: source_document, name: 첨부파일명, description: 근거가 발견된 첨부파일명, data_type: string}
+        - {id: source_page, name: 페이지 번호, description: 근거가 발견된 페이지, data_type: integer}
+        - {id: source_clause, name: 조항 또는 위치, description: 근거가 발견된 절 또는 구역, data_type: string}
+        - {id: source_excerpt, name: 근거 원문, description: 근거 원문 발췌, data_type: string}
+        - {id: source_url, name: 첨부파일 URL, description: 원천 첨부파일 URL, data_type: string}
+
     - id: procurement_supplier
       name: 나라장터 조달업체
       description: 사업자등록번호로 식별되며 나라장터 입찰참가자격을 등록한 조달업체
@@ -242,6 +301,18 @@ ontology:
         - {id: participation_share_rate, name: 참여 지분율, description: 공동계약에서 해당 업체가 차지하는 참여 지분율, data_type: number}
 
   link_types:
+    - id: bid_notice_has_participation_finding
+      description: 입찰공고를 참가자가 알아야 할 참여정보와 연결한다.
+      source: bid_notice
+      target: bid_participation_finding
+    - id: bid_participation_finding_supported_by_evidence
+      description: 입찰 참여정보를 그 원문 근거와 연결한다.
+      source: bid_participation_finding
+      target: bid_participation_finding_evidence
+    - id: bid_requirement_supported_by_evidence
+      description: 개별 입찰 참가요건을 그 근거 레코드와 연결한다.
+      source: bid_requirement
+      target: bid_requirement_evidence
     - id: bid_notice_requires_bid_requirement
       description: 입찰공고가 업체에 특정 참가요건의 충족을 요구함을 나타낸다.
       source: bid_notice

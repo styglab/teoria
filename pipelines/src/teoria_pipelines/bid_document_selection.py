@@ -6,7 +6,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 
-SELECTION_VERSION = "1.4.3"
+SELECTION_VERSION = "1.5.0"
 DEFAULT_DOCUMENT_CHAR_BUDGET = 40_000
 
 _FULL_DOCUMENT_NAME = re.compile(r"입찰\s*공고|공고문|표준\s*공고", re.IGNORECASE)
@@ -35,6 +35,16 @@ _OMISSION_GUARD = re.compile(
 _ELIGIBILITY_OUTCOME = re.compile(
     r"(?:입찰|낙찰|계약업체\s*선정).{0,40}(?:무효|배제|취소)|"
     r"(?:무효|배제|취소).{0,40}(?:입찰|낙찰|계약업체\s*선정)",
+    re.IGNORECASE,
+)
+_PARTICIPATION_INFORMATION = re.compile(
+    r"제출(?:서류|기한|방법|하여야)|현장\s*설명|사전\s*등록|입찰\s*보증|"
+    r"(?:무효|실격|탈락|배제)\s*(?:처리|사유|대상)?|낙찰자|1순위|우선\s*협상|"
+    r"계약\s*(?:체결|이행)|납품\s*(?:기한|조건)|과업\s*(?:내용|조건)|상주|"
+    r"보험\s*(?:가입|증권)|하자\s*보증|유지\s*보수|보안\s*(?:서약|요구)|"
+    r"특정\s*(?:규격|모델|제품)|브랜드|제조사|공급사|총판|공식\s*파트너|"
+    r"기술\s*지원\s*확약|정품\s*공급\s*확약|특허|호환(?:성|하여야)|동등\s*(?:제품|규격)|"
+    r"최근.{0,30}실적|유사.{0,20}실적|전담\s*인력|필수\s*인력|장비\s*(?:보유|확보)",
     re.IGNORECASE,
 )
 _REQUIREMENT_HEADING = re.compile(
@@ -100,6 +110,11 @@ def select_eligibility_blocks(
         _add_context(selected, outcome_hits, len(blocks), radius=3)
         passes.append("eligibility_outcome")
 
+    participation_hits = _matching_indexes(blocks, _PARTICIPATION_INFORMATION)
+    if participation_hits:
+        _add_context(selected, participation_hits, len(blocks), radius=2)
+        passes.append("participation_information")
+
     # Optional dense-retrieval results are unioned with exact-term retrieval. The
     # selector remains deterministic when no embedding service is configured.
     semantic_hits = {
@@ -110,11 +125,19 @@ def select_eligibility_blocks(
         _add_context(selected, semantic_hits, len(blocks), radius=3)
         passes.append("semantic_retrieval")
 
+    signal_indexes = {
+        index for index in selected
+        if (_PRIMARY_REQUIREMENT.search(str(blocks[index].get("text") or ""))
+            or _OMISSION_GUARD.search(str(blocks[index].get("text") or ""))
+            or _ELIGIBILITY_OUTCOME.search(str(blocks[index].get("text") or ""))
+            or _PARTICIPATION_INFORMATION.search(str(blocks[index].get("text") or "")))
+    }
     selected = _fit_indexes_to_budget(blocks, selected, max_chars)
     chosen = [block for index, block in enumerate(blocks) if index in selected]
     return _with_selection(
         document, chosen, "focused_with_omission_guard", len(blocks), passes,
-        original_chars, max_chars,
+        original_chars, max_chars, signal_block_count=len(signal_indexes),
+        omitted_signal_block_count=len(signal_indexes - selected),
     )
 
 
@@ -261,6 +284,8 @@ def _fit_indexes_to_budget(
             score += 5
         if _REQUIREMENT_HEADING.search(text):
             score += 4
+        if _PARTICIPATION_INFORMATION.search(text):
+            score += 7
         if isinstance(block.get("page"), int) and block["page"] <= 10:
             score += 2
         if index < 20:
@@ -298,7 +323,9 @@ def _fit_indexes_to_budget(
 
 def _with_selection(document: dict[str, Any], blocks: list[dict[str, Any]],
                     strategy: str, original_count: int, passes: list[str],
-                    original_chars: int, max_chars: int) -> dict[str, Any]:
+                    original_chars: int, max_chars: int,
+                    signal_block_count: int = 0,
+                    omitted_signal_block_count: int = 0) -> dict[str, Any]:
     return {
         **document,
         "content": {**document.get("content", {}), "blocks": blocks},
@@ -312,5 +339,7 @@ def _with_selection(document: dict[str, Any], blocks: list[dict[str, Any]],
             "selected_char_count": _block_chars(blocks),
             "char_budget": max_chars,
             "passes": passes,
+            "signal_block_count": signal_block_count,
+            "omitted_signal_block_count": omitted_signal_block_count,
         },
     }

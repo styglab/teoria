@@ -180,3 +180,62 @@ source:
         - {id: standard_rule_id, name: 표준 판정 규칙, data_type: string}
         - {id: standard_rule_version, name: 표준 판정 규칙 버전, data_type: string}
         - {id: rule_arguments_text, name: 판정 규칙 인수, data_type: string}
+
+    - id: bid_requirement_evidence
+      name: 입찰 참가요건 근거
+      relation: public_procurement.runtime_bid_requirement_evidence
+      primary_key: [evidence_id]
+      fields:
+        - {id: evidence_id, name: 근거 식별자, data_type: string}
+        - {id: requirement_id, name: 참가요건 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, data_type: string}
+        - {id: source_type, name: 근거 원천 유형, data_type: string}
+        - {id: source_id, name: 원천 레코드 식별자, data_type: string}
+        - {id: document_id, name: 첨부문서 식별자, data_type: string}
+        - {id: source_document, name: 첨부파일명, data_type: string}
+        - {id: source_page, name: 페이지 번호, data_type: integer}
+        - {id: source_clause, name: 조항 또는 위치, data_type: string}
+        - {id: source_excerpt, name: 근거 원문, data_type: string}
+        - {id: source_url, name: 첨부파일 URL, data_type: string}
+
+    - id: bid_participation_findings
+      name: 입찰 참여정보
+      relation: public_procurement.runtime_bid_participation_findings
+      primary_key: [finding_id]
+      fields:
+        - {id: finding_id, name: 참여정보 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, data_type: string}
+        - {id: category, name: 참여정보 범주, data_type: string}
+        - {id: finding_type, name: 참여정보 유형, data_type: string}
+        - {id: title, name: 제목, data_type: string}
+        - {id: subject, name: 적용 대상, data_type: string}
+        - {id: stage, name: 적용 단계, data_type: string}
+        - {id: description, name: 설명, data_type: string}
+        - {id: deadline_text, name: 기한 원문, data_type: string}
+        - {id: failure_effect, name: 미이행 효과, data_type: string}
+        - {id: importance, name: 중요도, data_type: string}
+        - {id: competitive_effect, name: 경쟁 영향, data_type: string}
+        - {id: legitimate_justification, name: 명시된 정당화 사유, data_type: string}
+        - {id: review_status, name: 검토상태, data_type: string}
+        - {id: confidence, name: 추출신뢰도, data_type: number}
+
+    - id: bid_participation_finding_evidence
+      name: 입찰 참여정보 근거
+      relation: public_procurement.runtime_bid_participation_finding_evidence
+      primary_key: [evidence_id]
+      fields:
+        - {id: evidence_id, name: 근거 식별자, data_type: string}
+        - {id: finding_id, name: 참여정보 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, data_type: string}
+        - {id: source_type, name: 근거 원천 유형, data_type: string}
+        - {id: source_id, name: 원천 레코드 식별자, data_type: string}
+        - {id: document_id, name: 첨부문서 식별자, data_type: string}
+        - {id: source_document, name: 첨부파일명, data_type: string}
+        - {id: source_page, name: 페이지 번호, data_type: integer}
+        - {id: source_clause, name: 조항 또는 위치, data_type: string}
+        - {id: source_excerpt, name: 근거 원문, data_type: string}
+        - {id: source_url, name: 첨부파일 URL, data_type: string}

@@ -35,6 +35,8 @@ def test_extraction_selection_prioritizes_latest_active_notice_revision() -> Non
 
     sql, parameters = connection.execute.call_args.args
     assert "n.notice_kind_name IS DISTINCT FROM '취소공고'" in sql
+    assert "COALESCE(n.notice_kind_name, '') !~ '(평가|개찰|낙찰|계약).*(결과|결정)'" in sql
+    assert "COALESCE(n.notice_name, '') !~" in sql
     assert "FROM public_procurement.bid_notices newer" in sql
     assert "ORDER BY n.notice_published_at DESC NULLS LAST" in sql
     assert parameters == [3, 3, 10]

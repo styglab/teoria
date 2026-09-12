@@ -51,6 +51,7 @@ def compile_eligibility_facts(facts: dict[str, Any]) -> dict[str, Any]:
         "schema_version": "1.3.0",
         "requirements": compiled_requirements,
         "expression": root,
+        "participation_findings": facts.get("participation_findings", []),
         "unresolved_candidates": facts["unresolved_candidates"],
     }
     validate_compiled_expression(result, known_ids)

@@ -17,6 +17,11 @@ REQUIREMENT_FIELDS = (
     "review_status", "evidence", "proof_requirements", "standard_rule_id",
     "standard_rule_version", "rule_arguments", "logic",
 )
+FINDING_FIELDS = (
+    "category", "type", "title", "subject", "stage", "description", "deadline_text",
+    "failure_effect", "importance", "competitive_effect", "legitimate_justification",
+    "review_status", "evidence",
+)
 
 
 def _normalized(value):
@@ -30,10 +35,10 @@ def _normalized(value):
     return value
 
 
-def _project(requirement: dict, expected: dict) -> dict:
+def _project(requirement: dict, expected: dict, fields=REQUIREMENT_FIELDS) -> dict:
     return {
         field: _normalized(requirement.get(field))
-        for field in REQUIREMENT_FIELDS if field in expected
+        for field in fields if field in expected
     }
 
 
@@ -54,6 +59,66 @@ def _match_requirements(expected: list[dict], actual: list[dict]) -> tuple[list,
             matched += 1
             unmatched.pop(index)
     return missing, unmatched, matched
+
+
+def _match_findings(expected: list[dict], actual: list[dict]) -> tuple[list, list, int]:
+    unmatched = list(actual)
+    missing = []
+    matched = 0
+    for finding in expected:
+        target = _project(finding, finding, FINDING_FIELDS)
+        index = next((i for i, observed in enumerate(unmatched)
+                      if _project(observed, finding, FINDING_FIELDS) == target), None)
+        if index is None:
+            missing.append(target)
+        else:
+            matched += 1
+            unmatched.pop(index)
+    return missing, unmatched, matched
+
+
+def _finding_evidence_identity(finding: dict) -> set[tuple]:
+    return {
+        (item.get("source_type"), item.get("source_id"), item.get("document_id"),
+         item.get("block_id"))
+        for item in finding.get("evidence", [])
+    }
+
+
+def _pair_findings(expected: list[dict], actual: list[dict]) -> tuple[list, list, list]:
+    """Pair open-vocabulary findings by category and source before wording review."""
+    remaining = list(actual)
+    paired = []
+    missing = []
+    for wanted in expected:
+        target = _project(wanted, wanted, FINDING_FIELDS)
+        index = next((i for i, item in enumerate(remaining)
+                      if _project(item, wanted, FINDING_FIELDS) == target), None)
+        basis = "exact"
+        if index is None:
+            wanted_evidence = _finding_evidence_identity(wanted)
+            index = next((i for i, item in enumerate(remaining)
+                          if item.get("category") == wanted.get("category")
+                          and wanted_evidence
+                          and wanted_evidence & _finding_evidence_identity(item)), None)
+            basis = "same_category_and_evidence"
+        if index is None:
+            missing.append(target)
+            continue
+        observed = remaining.pop(index)
+        differences = {
+            field: {"expected": _normalized(wanted.get(field)),
+                    "actual": _normalized(observed.get(field))}
+            for field in FINDING_FIELDS if field in wanted
+            and _normalized(wanted.get(field)) != _normalized(observed.get(field))
+        }
+        paired.append({
+            "matching_basis": basis,
+            "expected_category": wanted.get("category"),
+            "actual_id": observed.get("id"),
+            "field_differences": differences,
+        })
+    return paired, missing, remaining
 
 
 def _evidence_identity(requirement: dict) -> set[tuple]:
@@ -163,6 +228,14 @@ def main() -> int:
     expected_items = case["expected"]["requirements"]
     actual_items = actual.get("requirements", [])
     paired, missing, unexpected = _pair_requirements(expected_items, actual_items)
+    finding_pairs, missing_findings, unexpected_findings = _pair_findings(
+        case["expected"].get("participation_findings", []),
+        actual.get("participation_findings", []),
+    )
+    matched_findings = sum(not item["field_differences"] for item in finding_pairs)
+    finding_semantic_mismatches = [
+        item for item in finding_pairs if item["field_differences"]
+    ]
     matched = sum(not item["field_differences"] for item in paired)
     semantic_mismatches = [item for item in paired if item["field_differences"]]
     expected_unresolved = Counter(
@@ -187,7 +260,8 @@ def main() -> int:
         *_validate_manifest(args.actual, case, args.manifest),
         *_schema_errors(actual),
     ]
-    passed = not any((missing, unexpected, semantic_mismatches, missing_unresolved,
+    passed = not any((missing, unexpected, missing_findings, unexpected_findings,
+                      semantic_mismatches, finding_semantic_mismatches, missing_unresolved,
                       unexpected_unresolved, integrity_errors))
     if expression_matches is False:
         passed = False
@@ -201,6 +275,13 @@ def main() -> int:
         "semantic_mismatches": semantic_mismatches,
         "missing": missing,
         "unexpected": unexpected,
+        "expected_finding_count": len(case["expected"].get("participation_findings", [])),
+        "actual_finding_count": len(actual.get("participation_findings", [])),
+        "matched_finding_count": matched_findings,
+        "paired_finding_count": len(finding_pairs),
+        "finding_semantic_mismatches": finding_semantic_mismatches,
+        "missing_findings": missing_findings,
+        "unexpected_findings": unexpected_findings,
         "missing_unresolved": missing_unresolved,
         "unexpected_unresolved": unexpected_unresolved,
         "expression_matches": expression_matches,

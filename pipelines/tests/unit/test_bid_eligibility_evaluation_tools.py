@@ -237,6 +237,7 @@ def test_comparator_requires_seal_manifest_and_checks_expression(tmp_path: Path,
     actual = tmp_path / "sample_000.json"
     actual.write_text(json.dumps({
         "schema_version": "1.3.0", "requirements": [],
+        "participation_findings": [],
         "expression": {"operator": "all", "requirement_id": None, "conditions": []},
         "unresolved_candidates": [],
     }))
@@ -275,6 +276,43 @@ def test_comparator_detects_evidence_and_proof_mismatches() -> None:
     assert matched == 0
     assert len(missing) == 1
     assert len(unexpected) == 1
+
+
+def test_comparator_matches_participation_findings_independently() -> None:
+    module = _load("compare_extractions")
+    expected = [{"category": "performance_obligation", "type": "contract_deadline",
+                 "subject": "successful_bidder", "stage": "contracting",
+                 "description": "낙찰일로부터 10일 이내 계약 체결"}]
+    actual = [{"id": "f1", **expected[0], "title": "계약 체결",
+               "deadline_text": "10일 이내", "failure_effect": "cannot_contract",
+               "importance": "high", "competitive_effect": None,
+               "legitimate_justification": None, "review_status": "extracted",
+               "confidence": 1.0, "evidence": []}]
+
+    missing, unexpected, matched = module._match_findings(expected, actual)
+
+    assert missing == []
+    assert unexpected == []
+    assert matched == 1
+
+
+def test_comparator_pairs_open_vocabulary_finding_by_category_and_evidence() -> None:
+    module = _load("compare_extractions")
+    evidence = [{"source_type": "document", "source_id": "doc",
+                 "document_id": "doc", "block_id": "b1", "excerpt": "전자견적 제출"}]
+    expected = [{"category": "participation_note", "type": "electronic_quote",
+                 "title": "전자 견적서 제출", "description": "전자 견적서를 제출한다",
+                 "evidence": evidence}]
+    actual = [{"id": "f1", "category": "participation_note",
+               "type": "electronic_submission", "title": "전자견적 제출",
+               "description": "나라장터에서 전자견적을 제출한다", "evidence": evidence}]
+
+    paired, missing, unexpected = module._pair_findings(expected, actual)
+
+    assert missing == []
+    assert unexpected == []
+    assert paired[0]["matching_basis"] == "same_category_and_evidence"
+    assert set(paired[0]["field_differences"]) == {"type", "title", "description"}
 
 
 def test_comparator_pairs_same_evidence_fact_and_reports_field_differences() -> None:

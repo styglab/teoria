@@ -1,0 +1,51 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-12"
+
+mapping:
+  id: bid_requirement_evidence
+  name: 입찰 참가요건 근거 매핑
+  description: 최신 완료 추출본의 근거를 참가요건과 개별 Evidence 객체로 연결한다.
+  ontology: public_procurement
+  bindings:
+    bid_requirement.requirement_id:
+      - {field: teoria_public_procurement.bid_requirement_evidence.requirement_id, role: evidence_requirement}
+    bid_requirement.notice_number:
+      - {field: teoria_public_procurement.bid_requirement_evidence.notice_number, role: evidence_requirement}
+    bid_requirement.notice_order:
+      - {field: teoria_public_procurement.bid_requirement_evidence.notice_order, role: evidence_requirement}
+    bid_requirement_evidence.evidence_id:
+      - {field: teoria_public_procurement.bid_requirement_evidence.evidence_id}
+    bid_requirement_evidence.requirement_id:
+      - {field: teoria_public_procurement.bid_requirement_evidence.requirement_id}
+    bid_requirement_evidence.notice_number:
+      - {field: teoria_public_procurement.bid_requirement_evidence.notice_number}
+    bid_requirement_evidence.notice_order:
+      - {field: teoria_public_procurement.bid_requirement_evidence.notice_order}
+    bid_requirement_evidence.source_type:
+      - {field: teoria_public_procurement.bid_requirement_evidence.source_type}
+    bid_requirement_evidence.source_id:
+      - {field: teoria_public_procurement.bid_requirement_evidence.source_id}
+    bid_requirement_evidence.document_id:
+      - {field: teoria_public_procurement.bid_requirement_evidence.document_id}
+    bid_requirement_evidence.source_document:
+      - {field: teoria_public_procurement.bid_requirement_evidence.source_document}
+    bid_requirement_evidence.source_page:
+      - {field: teoria_public_procurement.bid_requirement_evidence.source_page}
+    bid_requirement_evidence.source_clause:
+      - {field: teoria_public_procurement.bid_requirement_evidence.source_clause}
+    bid_requirement_evidence.source_excerpt:
+      - {field: teoria_public_procurement.bid_requirement_evidence.source_excerpt}
+    bid_requirement_evidence.source_url:
+      - {field: teoria_public_procurement.bid_requirement_evidence.source_url}
+  materializations:
+    teoria_public_procurement.bid_requirement_evidence:
+      objects:
+        evidence_requirement:
+          type: bid_requirement
+          identity: [requirement_id]
+        bid_requirement_evidence:
+          type: bid_requirement_evidence
+          identity: [evidence_id]
+      links:
+        - {type: bid_requirement_supported_by_evidence, source: evidence_requirement, target: bid_requirement_evidence}

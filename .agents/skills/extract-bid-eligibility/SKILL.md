@@ -40,3 +40,22 @@ Conform the extraction response to `references/eligibility-facts.schema.json`. T
 15. Give every unresolved candidate a `review_reason` and `blocks_qualification`. Set `blocks_qualification: true` only when resolving it could add, remove, or change a bidder eligibility result.
     Use `review_reason: source_conflict` when structured API data and an explicit document clause disagree; mark the affected requirement `needs_review` instead of silently selecting either source.
 16. Return only the normalized fact JSON, never an expression tree, draft, or explanation.
+
+## Participation findings
+
+In addition to bidder eligibility requirements, preserve material information a company must
+know to decide whether and how to bid in `participation_findings`. Classify procedural and
+submission instructions as `participation_note`, post-award or contract-performance duties as
+`performance_obligation`, and objectively supportable conditions that may narrow competition as
+`competition_risk_signal`. Do not duplicate an eligibility requirement merely as a note.
+
+A competition signal is not a finding of favoritism, illegality, or intent. State only the
+condition, its possible competitive effect, and any justification expressly present in the
+source. Manufacturer authorization, brand/model specificity, interoperability dependence,
+unusually narrow experience, patent/certification dependence, and unusually short preparation
+periods are candidates only when the exact source supports them.
+
+Every finding needs exact Evidence under the same citation rules as a requirement. Preserve the
+actual affected subject and stage, especially first-ranked bidder, successful bidder,
+post-opening, contracting, and performance duties. Do not turn routine contact details, generic
+legal boilerplate, price formulas, or ordinary schedules into findings.

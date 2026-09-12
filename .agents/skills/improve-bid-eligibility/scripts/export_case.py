@@ -36,6 +36,7 @@ def main() -> int:
         },
         "expected": {
             "requirements": [],
+            "participation_findings": [],
             "unresolved_candidates": [],
             "adjudication_required": False,
         },

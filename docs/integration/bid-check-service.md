@@ -135,7 +135,24 @@ POST /v1/capabilities/get_bid_requirements:execute
 }
 ```
 
-`bid_requirement` 객체는 요건 유형·연산자·요구값, 원문, 적용 주체, 기준일, 필수 여부, 추출 신뢰도, 표준 판정 규칙 및 문서 근거를 제공한다. 화면에서는 정규화된 판정 결과와 함께 `original_text`, `proposition_text`, `evidence_summary`를 사용자가 확인할 수 있게 표시하는 것을 권장한다.
+`bid_requirement` 객체는 요건 유형·연산자·요구값, 원문, 적용 주체, 기준일, 필수 여부, 추출 신뢰도와 표준 판정 규칙을 제공한다. 근거는 `bid_requirement_supported_by_evidence` 관계의 `bid_requirement_evidence` 객체를 사용한다. `requirement_id`별로 근거를 묶어 `source_document`, `source_page`, `source_clause`, `source_excerpt`, `source_url`을 표시한다. `evidence_summary`는 기존 호환 필드이므로 신규 입찰체크 화면에서는 파싱하거나 사용하지 않는다.
+
+참가자격 외에 입찰 전에 확인할 제출·절차, 낙찰 후 수행 의무, 경쟁 제한 검토 신호는 별도 Capability로 조회한다.
+
+```http
+POST /v1/capabilities/get_bid_participation_findings:execute
+Authorization: Bearer <runtime-token>
+Content-Type: application/json
+
+{
+  "inputs": {
+    "notice_number": "R26BK01710487",
+    "notice_order": "000"
+  }
+}
+```
+
+입찰체크는 `category`별로 `participation_note`, `performance_obligation`, `competition_risk_signal`을 구분해 표시한다. 경쟁 제한 신호는 위법·특혜 판정이 아니라 검토 대상이며, `competitive_effect`, 문서에 명시된 `legitimate_justification`, 연결된 `bid_participation_finding_evidence` 원문을 함께 보여준다. 이 객체들은 회사 적격성 평가식에는 포함하지 않는다.
 
 ### 3. 회사의 종합 입찰 적격성 평가
 

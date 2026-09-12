@@ -23,6 +23,18 @@ def test_capabilities_load_and_references_are_valid() -> None:
     assert search.steps[0].call == "fsc_company_basic.get_company_overview"
     assert search.kind == "query"
     assert search.effects.reads == []
+    requirements = catalog.capabilities["get_bid_requirements"]
+    assert [step.call for step in requirements.steps] == [
+        "teoria_public_procurement.bid_requirements",
+        "teoria_public_procurement.bid_requirement_evidence",
+    ]
+    assert "public_procurement.bid_requirement_evidence" in requirements.returns
+    assert "public_procurement.bid_requirement_supported_by_evidence" in requirements.returns
+    findings = catalog.capabilities["get_bid_participation_findings"]
+    assert [step.call for step in findings.steps] == [
+        "teoria_public_procurement.bid_participation_findings",
+        "teoria_public_procurement.bid_participation_finding_evidence",
+    ]
 
 
 def test_capability_inputs_are_semantic_ontology_references() -> None:

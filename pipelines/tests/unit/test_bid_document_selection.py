@@ -68,6 +68,18 @@ def test_large_rfp_uses_terms_and_independent_omission_guard() -> None:
     assert selected["selection"]["omitted_block_count"] == 220 - len(chosen)
 
 
+def test_large_rfp_keeps_late_participation_and_competition_information() -> None:
+    texts = [f"일반 과업 설명 {index}" for index in range(300)]
+    texts[210] = "낙찰자는 출국 10일 전까지 보험증권을 제출하여야 한다."
+    texts[270] = "ADOBE사 공식파트너이며 제조사 기술지원확약서를 제출할 수 있어야 한다."
+
+    selected = select_eligibility_blocks(_document("제안요청서.hwpx", texts))
+    chosen_ids = {block["block_id"] for block in selected["content"]["blocks"]}
+
+    assert {"b210", "b270"} <= chosen_ids
+    assert "participation_information" in selected["selection"]["passes"]
+
+
 def test_unknown_document_type_defaults_to_full_for_safety() -> None:
     document = _document("기타첨부.dat", [f"내용 {index}" for index in range(200)])
 
@@ -211,3 +223,14 @@ def test_budget_keeps_continuation_of_split_eligibility_clause() -> None:
     trigger = next(block for block in chosen if "신원을" in block["text"])
     suffix = int(trigger["block_id"].rsplit("~", 1)[1]) + 1
     assert any(block["block_id"] == f"b30~{suffix}" for block in chosen)
+
+
+def test_selection_reports_signal_blocks_dropped_by_tiny_budget() -> None:
+    texts = [f"입찰참가자격 면허 조건 {index} " + ("가" * 800) for index in range(20)]
+
+    selected = select_eligibility_blocks(
+        _document("제안요청서.pdf", texts), max_chars=900,
+    )
+
+    assert selected["selection"]["signal_block_count"] == 20
+    assert selected["selection"]["omitted_signal_block_count"] > 0
