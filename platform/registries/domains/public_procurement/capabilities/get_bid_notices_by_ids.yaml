@@ -1,0 +1,20 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-12"
+
+capability:
+  id: get_bid_notices_by_ids
+  name: 입찰공고 일괄 조회
+  description: 최대 100개의 입찰공고 식별자로 공고와 최신 참가요건 조건식을 한 번에 조회한다.
+  inputs:
+    bid_notice_ids:
+      property: public_procurement.bid_notice.bid_notice_id
+      collection: list
+      operator: in
+      required: true
+  steps:
+    - call: teoria_public_procurement.bid_notices
+  returns:
+    - public_procurement.bid_notice
+    - public_procurement.public_organization
+    - public_procurement.public_organization_publishes_bid_notice

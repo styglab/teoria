@@ -50,8 +50,12 @@ def _clear_runtime_assessment_cache() -> None:
 
 
 class AssessmentFixtureRunner:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
     async def run(self, catalog, capability_id, inputs):
-        if capability_id == "get_bid_notice":
+        self.calls.append(capability_id)
+        if capability_id in {"get_bid_notice", "get_bid_notices_by_ids"}:
             expression = {
                 "operator": "all",
                 "requirement_id": None,
@@ -61,32 +65,40 @@ class AssessmentFixtureRunner:
                     {"operator": "leaf", "requirement_id": "r3", "conditions": []},
                 ],
             }
+            notice_ids = inputs.get("bid_notice_ids") or [
+                f'{inputs.get("notice_number", "R26TEST")}:{inputs.get("notice_order", "00")}'
+            ]
             return CapabilityResult(capability_id=capability_id, objects=[
                 _object(
                     "public_procurement",
                     "bid_notice",
-                    "notice-object",
-                    bid_notice_id="R26TEST:00",
-                    notice_number="R26TEST",
+                    f"notice-object-{bid_notice_id}",
+                    bid_notice_id=bid_notice_id,
+                    notice_number=bid_notice_id.rsplit(":", 1)[0],
                     notice_order="00",
                     bid_deadline_at=datetime(2026, 8, 20, tzinfo=timezone.utc),
                     requirement_expression=json.dumps(expression),
                     extraction_completeness="complete",
                     requires_review=False,
-                )
+                ) for bid_notice_id in notice_ids
             ])
-        if capability_id == "get_bid_requirements":
-            requirements = [
+        if capability_id in {"get_bid_requirements", "get_bid_requirements_by_notice_ids"}:
+            notice_ids = inputs.get("bid_notice_ids") or [
+                f'{inputs.get("notice_number", "R26TEST")}:{inputs.get("notice_order", "00")}'
+            ]
+            requirements = [item for bid_notice_id in notice_ids for item in [
                 _object(
-                    "public_procurement", "bid_requirement", "requirement-1",
-                    requirement_id="requirement-1", local_id="r1", requirement_type="business_status",
+                    "public_procurement", "bid_requirement", f"requirement-1-{bid_notice_id}",
+                    requirement_id=f"requirement-1-{bid_notice_id}", bid_notice_id=bid_notice_id,
+                    local_id="r1", requirement_type="business_status",
                     standard_rule_id="is_active_business", standard_rule_version="1.0.0",
                     operator="equals", value_text='{"text":"active"}', original_text="계속사업자",
                     mandatory=True, evidence_summary="공고문 3쪽 | 계속사업자",
                 ),
                 _object(
-                    "public_procurement", "bid_requirement", "requirement-2",
-                    requirement_id="requirement-2", local_id="r2", requirement_type="certificate",
+                    "public_procurement", "bid_requirement", f"requirement-2-{bid_notice_id}",
+                    requirement_id=f"requirement-2-{bid_notice_id}", bid_notice_id=bid_notice_id,
+                    local_id="r2", requirement_type="certificate",
                     operator="valid_on", value_text='{"text":"직접생산확인 8111159801"}',
                     standard_rule_id="holds_valid_direct_production_confirmation", standard_rule_version="1.0.0",
                     rule_arguments_text='{"product_code":"8111159801"}',
@@ -94,13 +106,14 @@ class AssessmentFixtureRunner:
                     evidence_summary="공고문 4쪽 | 직접생산확인증명서",
                 ),
                 _object(
-                    "public_procurement", "bid_requirement", "requirement-3",
-                    requirement_id="requirement-3", local_id="r3", requirement_type="past_performance",
+                    "public_procurement", "bid_requirement", f"requirement-3-{bid_notice_id}",
+                    requirement_id=f"requirement-3-{bid_notice_id}", bid_notice_id=bid_notice_id,
+                    local_id="r3", requirement_type="past_performance",
                     operator="greater_than_or_equal", value_text='{"number":100000000}',
                     original_text="최근 3년 유사실적 1억원 이상", mandatory=True,
                     evidence_summary="공고문 5쪽 | 유사실적",
                 ),
-            ]
+            ]]
             return CapabilityResult(capability_id=capability_id, objects=requirements)
         if capability_id == "get_business_registration_status":
             return CapabilityResult(capability_id=capability_id, objects=[
@@ -168,6 +181,37 @@ async def test_batch_assessment_returns_list_summaries_and_reuses_cache() -> Non
     assert first.outcome["items"][0]["satisfied_count"] == 2
     assert first.outcome["items"][0]["needs_review_count"] == 1
     assert len(first.outcome["items"][0]["issues"]) == 1
+    assert runner.calls.count("get_bid_notices_by_ids") == 2
+    assert runner.calls.count("get_bid_requirements_by_notice_ids") == 2
+    assert runner.calls.count("get_business_registration_status") == 1
+    assert runner.calls.count("get_company_qualifications") == 1
+    assert runner.calls.count("get_direct_production_confirmations") == 1
+    assert "get_bid_notice" not in runner.calls
+    assert "get_bid_requirements" not in runner.calls
+
+
+@pytest.mark.asyncio
+async def test_batch_assessment_loads_static_company_evidence_once_for_multiple_notices() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    runner = AssessmentFixtureRunner()
+
+    result = await execute_bid_eligibility_assessments(
+        runner,
+        catalog,
+        "assess_company_bid_eligibilities",
+        {
+            "business_registration_number": "1234567890",
+            "bid_notice_ids": ["R26TEST:00", "R26OTHER:00"],
+            "reference_date": date(2026, 8, 20),
+        },
+    )
+
+    assert len(result.outcome["items"]) == 2
+    assert runner.calls.count("get_bid_notices_by_ids") == 1
+    assert runner.calls.count("get_bid_requirements_by_notice_ids") == 1
+    assert runner.calls.count("get_business_registration_status") == 1
+    assert runner.calls.count("get_company_qualifications") == 1
+    assert runner.calls.count("get_direct_production_confirmations") == 1
 
 
 def test_expression_uses_three_state_logic() -> None:

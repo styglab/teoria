@@ -1,0 +1,20 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-12"
+
+capability:
+  id: get_bid_requirements_by_notice_ids
+  name: 입찰 참가요건 일괄 조회
+  description: 최대 100개의 입찰공고 식별자로 최신 완료 추출본의 참가요건을 한 번에 조회한다.
+  inputs:
+    bid_notice_ids:
+      property: public_procurement.bid_requirement.bid_notice_id
+      collection: list
+      operator: in
+      required: true
+  steps:
+    - call: teoria_public_procurement.bid_requirements
+  returns:
+    - public_procurement.bid_notice
+    - public_procurement.bid_requirement
+    - public_procurement.bid_notice_requires_bid_requirement
