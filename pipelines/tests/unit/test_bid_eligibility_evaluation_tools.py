@@ -31,6 +31,8 @@ async def test_sample_runner_isolates_not_ready_cases_and_conceals_output(tmp_pa
          "unavailable_count": 0, "unsupported_count": 0},
         {"notice_number": "missing", "notice_order": "000", "document_count": 1,
          "unavailable_count": 1, "unsupported_count": 0},
+        {"notice_number": "no-documents", "notice_order": "000", "document_count": 0,
+         "unavailable_count": 0, "unsupported_count": 0},
     ]}))
     output = tmp_path / "outputs"
     store = MagicMock()
@@ -52,8 +54,10 @@ async def test_sample_runner_isolates_not_ready_cases_and_conceals_output(tmp_pa
     manifest = json.loads((output / "manifest.json").read_text())
     assert return_code == 1
     assert [item["status"] for item in manifest["cases"]] == [
-        "completed_unrevealed", "not_extraction_ready",
+        "completed_unrevealed", "not_extraction_ready", "not_extraction_ready",
     ]
+    assert manifest["cases"][1]["error_class"] == "acquisition"
+    assert manifest["cases"][2]["error_class"] == "acquisition"
     pending = output / manifest["cases"][0]["pending_output"]
     assert pending.stat().st_mode & 0o777 == 0
 

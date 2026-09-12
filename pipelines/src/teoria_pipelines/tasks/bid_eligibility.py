@@ -229,7 +229,7 @@ async def parse_bid_documents(documents: list[dict], concurrency: int = 4) -> Lo
 
 
 @task(name="요건 추출 대상 공고 선택", viz_return_value=[])
-def select_notices_for_extraction(batch_size: int = 10) -> list[dict]:
+def select_notices_for_extraction(batch_size: int = 20) -> list[dict]:
     settings = bootstrap_pipeline_settings()
     store = _resources()[0]
     candidates = store.list_notices_for_eligibility_extraction(
@@ -238,22 +238,16 @@ def select_notices_for_extraction(batch_size: int = 10) -> list[dict]:
         settings.bid_document_parse_max_attempts,
     )
     completed = store.completed_eligibility_fingerprints()
-    eligible = [notice for notice in candidates if _input_fingerprint(notice) not in completed]
-    return _prioritize_notices(eligible, batch_size)
-
-
-def _prioritize_notices(eligible: list[dict], batch_size: int) -> list[dict]:
-    document_notices = [notice for notice in eligible if notice["documents"]]
-    api_only_notices = [notice for notice in eligible if not notice["documents"]]
-    document_limit = max(1, batch_size * 4 // 5)
-    selected = document_notices[:document_limit] + api_only_notices[:batch_size - document_limit]
-    if len(selected) < batch_size:
-        selected_ids = {(item["notice_number"], item["notice_order"]) for item in selected}
-        selected.extend(
-            item for item in eligible
-            if (item["notice_number"], item["notice_order"]) not in selected_ids
-        )
-    return selected[:batch_size]
+    selected = []
+    for notice in candidates:
+        fingerprint = _input_fingerprint(notice)
+        if fingerprint in completed:
+            continue
+        if store.claim_eligibility_extraction(notice, fingerprint, EXTRACTION_VERSION):
+            selected.append(notice)
+        if len(selected) == batch_size:
+            break
+    return selected
 
 
 @task(name="Codex 인증 확인")

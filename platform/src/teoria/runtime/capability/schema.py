@@ -51,10 +51,12 @@ def _input_schema(catalog: RegistryCatalog, definition: CapabilityInput) -> dict
         type_id = _effective_type(property_definition, definition)
         schema = _type_schema(catalog, type_id, property_definition)
     if definition.collection == "list":
+        if definition.enum is not None:
+            schema["enum"] = definition.enum
         schema = {"type": "array", "items": schema}
     if definition.default is not None:
         schema["default"] = definition.default
-    if definition.enum is not None:
+    if definition.enum is not None and definition.collection != "list":
         schema["enum"] = definition.enum
     if definition.minimum is not None:
         schema["minimum"] = definition.minimum

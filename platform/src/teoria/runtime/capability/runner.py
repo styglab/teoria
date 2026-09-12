@@ -126,6 +126,10 @@ class CapabilityRunner:
                 from teoria.runtime.assessment.processor import execute_bid_eligibility_assessment
 
                 return await execute_bid_eligibility_assessment(self, catalog, capability_id, inputs)
+            if capability.processor == "assessment.evaluate_bid_eligibilities":
+                from teoria.runtime.assessment.processor import execute_bid_eligibility_assessments
+
+                return await execute_bid_eligibility_assessments(self, catalog, capability_id, inputs)
             raise CapabilityExecutionError(
                 "unknown_capability_processor",
                 f"unknown capability processor '{capability.processor}'",

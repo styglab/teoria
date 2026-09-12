@@ -48,7 +48,6 @@ from teoria_pipelines.tasks.bid_eligibility import (
     _runtime_extraction_instructions,
     _is_transient_codex_failure,
     _input_fingerprint,
-    _prioritize_notices,
     _structured_api_result,
     _deterministic_document_facts,
     _structured_license_candidates,
@@ -366,8 +365,8 @@ def test_codex_authentication_failure_has_login_instruction() -> None:
             raise AssertionError("missing Codex login must fail")
 
 
-def test_bid_eligibility_extraction_runs_independent_notices_two_at_a_time() -> None:
-    assert extract_pps_bid_eligibility.task_runner._max_workers == 2
+def test_bid_eligibility_extraction_runs_independent_notices_four_at_a_time() -> None:
+    assert extract_pps_bid_eligibility.task_runner._max_workers == 4
     assert extract_bid_eligibility_notice.name == "공고별 Codex 참가자격 추출"
     # Semantic validation failures must not spend tokens by regenerating the whole notice.
     # The scheduler can retry transient failures after the one-hour fingerprint cooldown.
@@ -552,16 +551,6 @@ def test_structured_api_parses_industry_codes_and_preserves_main_field_logic() -
         ],
     }
     assert all(item["review_status"] == "needs_review" for item in result["requirements"])
-
-
-def test_eligibility_batch_reserves_capacity_for_documents_and_api_only() -> None:
-    document_notices = [{"notice_number": f"doc-{index}", "notice_order": "0", "documents": [{}]}
-                        for index in range(12)]
-    api_notices = [{"notice_number": f"api-{index}", "notice_order": "0", "documents": []}
-                   for index in range(5)]
-    selected = _prioritize_notices(document_notices + api_notices, 10)
-    assert sum(bool(item["documents"]) for item in selected) == 8
-    assert sum(not item["documents"] for item in selected) == 2
 
 
 def test_document_citation_comparison_normalizes_unicode_and_whitespace() -> None:
@@ -2930,6 +2919,8 @@ def test_bid_notice_deployments_are_hourly_and_staggered() -> None:
     assert documents["schedules"][0]["cron"] == "15 * * * *"
     assert parsing["schedules"][0]["cron"] == "*/10 * * * *"
     assert extraction["schedules"][0]["cron"] == "5-55/10 * * * *"
+    assert extraction["schedules"][0]["active"] is True
+    assert extraction["parameters"] == {"batch_size": 20}
     assert retention["schedules"][0] == {
         "cron": "45 3 * * *",
         "timezone": "Asia/Seoul",

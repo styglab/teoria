@@ -114,6 +114,9 @@ class PaginatedBidNoticeExecutor:
                 {"field": "notice_published_at", "operator": "lte",
                  "value": datetime(2026, 8, 31, tzinfo=timezone.utc)},
                 {"field": "work_type", "operator": "eq", "value": "service"},
+                {"field": "bid_status", "operator": "in",
+                 "value": ["scheduled", "open", "unknown"]},
+                {"field": "notice_status", "operator": "eq", "value": "active"},
             ],
             "search": {
                 "fields": ["notice_name", "notice_number", "notice_organization_name",
@@ -132,6 +135,7 @@ class PaginatedBidNoticeExecutor:
             "notice_order": "000",
             "notice_name": "정보시스템 운영 용역",
             "work_type": "service",
+            "bid_statuses": ["scheduled", "open", "unknown"],
             "notice_organization_code": "B000001",
             "notice_organization_name": "테스트기관",
         }], {"page": 2, "page_size": 20, "total_items": 41, "total_pages": 3})
@@ -148,6 +152,7 @@ async def test_search_bid_notices_returns_root_object_pagination() -> None:
             "notice_published_at_to": datetime(2026, 8, 31, tzinfo=timezone.utc),
             "query": "정보시스템",
             "work_type": "service",
+            "bid_statuses": ["scheduled", "open", "unknown"],
             "sort": "deadline_asc",
             "page": 2,
             "page_size": 20,
@@ -185,4 +190,7 @@ def test_bid_notice_search_uses_declared_query_defaults() -> None:
     ]
     assert query["pagination"] == {
         "page": 1, "page_size": 20, "root_field": "bid_notice_id",
+    }
+    assert query["filters"][-1] == {
+        "field": "notice_status", "operator": "eq", "value": "active",
     }

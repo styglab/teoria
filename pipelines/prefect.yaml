@@ -109,18 +109,18 @@ deployments:
       work_queue_name: default
 
   - name: pps-bid-eligibility-extraction
-    version: 1.13.0
-    description: 완전히 인식된 단순 문서는 결정론적으로 추출하고 나머지는 Codex로 최대 2개를 병렬 추출한다.
+    version: 1.14.0
+    description: 최신 활성 공고 20건을 선점하고 결정론적 추출 또는 Codex 추출을 최대 4개 병렬 실행한다.
     entrypoint: teoria_pipelines.flows.bid_eligibility.extract_pps_bid_eligibility
     concurrency_limit:
       limit: 1
       collision_strategy: CANCEL_NEW
     parameters:
-      batch_size: 10
+      batch_size: 20
     schedules:
       - cron: "5-55/10 * * * *"
         timezone: Asia/Seoul
-        active: false
+        active: true
     work_pool:
       name: teoria-ai-extraction
       work_queue_name: default

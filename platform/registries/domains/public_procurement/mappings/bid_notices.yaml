@@ -1,5 +1,5 @@
 registry:
-  version: 1.0.0
+  version: 1.1.0
   registered_at: "2026-08-07"
 
 mapping:
@@ -32,6 +32,8 @@ mapping:
       - {field: teoria_public_procurement.bid_notices.opening_at}
     bid_notice.bid_status:
       - {field: teoria_public_procurement.bid_notices.bid_status}
+    bid_notice.notice_status:
+      - {field: teoria_public_procurement.bid_notices.notice_status}
     bid_notice.notice_organization_code:
       - {field: teoria_public_procurement.bid_notices.notice_organization_code}
     bid_notice.notice_organization_name:

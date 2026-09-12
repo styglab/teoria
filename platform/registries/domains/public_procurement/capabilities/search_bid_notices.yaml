@@ -1,5 +1,5 @@
 registry:
-  version: 1.1.0
+  version: 1.3.0
   registered_at: "2026-08-07"
 
 capability:
@@ -25,6 +25,15 @@ capability:
     bid_status:
       property: public_procurement.bid_notice.bid_status
       enum: [scheduled, open, closed, unknown]
+    bid_statuses:
+      property: public_procurement.bid_notice.bid_status
+      collection: list
+      operator: in
+      enum: [scheduled, open, closed, unknown]
+    notice_status:
+      property: public_procurement.bid_notice.notice_status
+      enum: [active, cancelled, superseded]
+      default: active
     bid_deadline_at_from:
       property: public_procurement.bid_notice.bid_deadline_at
       operator: gte

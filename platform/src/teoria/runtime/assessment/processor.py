@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import time
+from collections import OrderedDict
 from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -19,10 +21,50 @@ if TYPE_CHECKING:
 
 
 PROCESSOR_ID = "assessment.evaluate_bid_eligibility"
+BATCH_PROCESSOR_ID = "assessment.evaluate_bid_eligibilities"
 RULESET_VERSION = "1.0.0"
+CACHE_TTL_SECONDS = 300.0
+CACHE_MAX_ENTRIES = 2048
+_assessment_cache: OrderedDict[str, tuple[float, CapabilityResult]] = OrderedDict()
+
+
+def clear_assessment_cache() -> None:
+    _assessment_cache.clear()
 
 
 async def execute_bid_eligibility_assessment(
+    runner: CapabilityRunner,
+    catalog: RegistryCatalog,
+    capability_id: str,
+    inputs: dict[str, Any],
+) -> CapabilityResult:
+    cache_key = _hash({
+        "business_registration_number": inputs.get("business_registration_number"),
+        "bid_notice_id": inputs.get("bid_notice_id"),
+        "reference_date": inputs.get("reference_date"),
+        "participation_mode": inputs.get("participation_mode") or "single",
+        "registry_version": catalog.release.version if catalog.release else "draft",
+        "ruleset_version": RULESET_VERSION,
+    })
+    cached = _assessment_cache.get(cache_key)
+    now_monotonic = time.monotonic()
+    if cached and now_monotonic - cached[0] < CACHE_TTL_SECONDS:
+        _assessment_cache.move_to_end(cache_key)
+        return cached[1].model_copy(deep=True)
+    if cached:
+        del _assessment_cache[cache_key]
+
+    result = await _execute_bid_eligibility_assessment_uncached(
+        runner, catalog, capability_id, inputs,
+    )
+    _assessment_cache[cache_key] = (now_monotonic, result.model_copy(deep=True))
+    _assessment_cache.move_to_end(cache_key)
+    while len(_assessment_cache) > CACHE_MAX_ENTRIES:
+        _assessment_cache.popitem(last=False)
+    return result
+
+
+async def _execute_bid_eligibility_assessment_uncached(
     runner: CapabilityRunner,
     catalog: RegistryCatalog,
     capability_id: str,
@@ -67,6 +109,67 @@ async def execute_bid_eligibility_assessment(
         snapshot,
         evaluations,
         reference_date,
+    )
+
+
+async def execute_bid_eligibility_assessments(
+    runner: CapabilityRunner,
+    catalog: RegistryCatalog,
+    capability_id: str,
+    inputs: dict[str, Any],
+) -> CapabilityResult:
+    bid_notice_ids = list(dict.fromkeys(str(item) for item in inputs["bid_notice_ids"]))
+    if not 1 <= len(bid_notice_ids) <= 100:
+        raise CapabilityExecutionError(
+            "invalid_batch_size",
+            "bid_notice_ids must contain between 1 and 100 unique values",
+            capability_id=capability_id,
+        )
+    common = {
+        "business_registration_number": inputs["business_registration_number"],
+        "participation_mode": inputs.get("participation_mode") or "single",
+    }
+    if inputs.get("reference_date") is not None:
+        common["reference_date"] = inputs["reference_date"]
+    results = await asyncio.gather(*(
+        execute_bid_eligibility_assessment(
+            runner, catalog, "assess_company_bid_eligibility",
+            {**common, "bid_notice_id": bid_notice_id},
+        )
+        for bid_notice_id in bid_notice_ids
+    ), return_exceptions=True)
+
+    summaries: list[dict[str, Any]] = []
+    assessments: list[MaterializedObject] = []
+    for bid_notice_id, result in zip(bid_notice_ids, results, strict=True):
+        if isinstance(result, BaseException):
+            code = result.code if isinstance(result, CapabilityExecutionError) else "assessment_failed"
+            summaries.append({"bid_notice_id": bid_notice_id, "status": "error", "error_code": code})
+            continue
+        assessment = next(item for item in result.objects if item.object_type == "bid_eligibility_assessment")
+        assessments.append(assessment)
+        details = [item for item in result.objects if item.object_type == "requirement_assessment"]
+        problems = sorted(
+            (item for item in details if item.properties.get("outcome") in {"unsatisfied", "needs_review"}),
+            key=lambda item: 0 if item.properties.get("outcome") == "unsatisfied" else 1,
+        )[:2]
+        summaries.append({
+            "bid_notice_id": bid_notice_id,
+            "status": "completed",
+            "outcome": assessment.properties.get("outcome"),
+            "satisfied_count": assessment.properties.get("satisfied_count", 0),
+            "unsatisfied_count": assessment.properties.get("unsatisfied_count", 0),
+            "needs_review_count": assessment.properties.get("needs_review_count", 0),
+            "issues": [{
+                "requirement_id": item.properties.get("requirement_id"),
+                "outcome": item.properties.get("outcome"),
+                "summary": item.properties.get("reasoning_summary"),
+            } for item in problems],
+        })
+    return CapabilityResult(
+        capability_id=capability_id,
+        objects=assessments,
+        outcome={"items": summaries},
     )
 
 

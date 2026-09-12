@@ -63,11 +63,18 @@ class DatabaseSourceExecutor:
                     f"field '{field}' is not declared on relation '{relation_id}'"
                 )
             if operator not in self.OPERATORS:
-                raise DatabaseSourceExecutionError(f"unsupported database operator '{operator}'")
-            conditions.append(
-                sql.SQL("{} {} %s").format(sql.Identifier(field), self.OPERATORS[operator])
-            )
-            parameters.append(item["value"])
+                if operator != "in":
+                    raise DatabaseSourceExecutionError(f"unsupported database operator '{operator}'")
+                values = item["value"]
+                if not isinstance(values, list) or not values:
+                    raise DatabaseSourceExecutionError("in operator requires a non-empty list")
+                conditions.append(sql.SQL("{} = ANY(%s)").format(sql.Identifier(field)))
+                parameters.append(values)
+            else:
+                conditions.append(
+                    sql.SQL("{} {} %s").format(sql.Identifier(field), self.OPERATORS[operator])
+                )
+                parameters.append(item["value"])
 
         search = query.get("search")
         if search:

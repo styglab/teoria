@@ -428,18 +428,22 @@ class PostgresStore:
                                     max_attempts: int = 3) -> list[dict[str, Any]]:
         with psycopg.connect(self.database_url) as connection:
             rows = connection.execute(
-                "WITH candidates AS (SELECT document_id FROM public_procurement.bid_notice_documents "
+                "WITH candidates AS (SELECT document_id, "
+                "parser_version IS DISTINCT FROM %s AS parser_version_changed "
+                "FROM public_procurement.bid_notice_documents "
                 "WHERE status='stored' AND (((parse_status IN ('pending','failed') "
                 "OR (parse_status='processing' AND updated_at <= now()-interval '1 hour')) "
                 "AND parse_attempts < %s) "
-                "OR (parse_status='unsupported' AND parser_version IS DISTINCT FROM %s)) "
+                "OR (parse_status IN ('parsed','unsupported') "
+                "AND parser_version IS DISTINCT FROM %s)) "
                 "AND parse_next_retry_at <= now() ORDER BY downloaded_at "
                 "FOR UPDATE SKIP LOCKED LIMIT %s) "
                 "UPDATE public_procurement.bid_notice_documents d SET parse_status='processing', "
-                "parse_attempts=parse_attempts+1, updated_at=now() FROM candidates c "
+                "parse_attempts=CASE WHEN c.parser_version_changed THEN 1 "
+                "ELSE d.parse_attempts+1 END, updated_at=now() FROM candidates c "
                 "WHERE d.document_id=c.document_id RETURNING d.document_id, d.notice_number, "
                 "d.notice_order, d.file_name, d.media_type, d.checksum, d.object_key",
-                (max_attempts, parser_version, limit),
+                (parser_version, max_attempts, parser_version, limit),
             ).fetchall()
         keys = ("document_id", "notice_number", "notice_order", "file_name", "media_type", "checksum", "object_key")
         return [dict(zip(keys, row, strict=True)) for row in rows]
@@ -503,8 +507,15 @@ class PostgresStore:
                 "OR (d.status='stored' AND (d.parse_status IN ('pending','processing') "
                 "OR (d.parse_status='failed' AND d.parse_attempts < %s))))) "
                 + key_filter +
-                "ORDER BY CASE WHEN n.work_type='service' THEN 0 ELSE 1 END, "
-                "n.notice_published_at DESC LIMIT %s", parameters
+                "AND n.notice_kind_name IS DISTINCT FROM '취소공고' AND NOT EXISTS (SELECT 1 "
+                "FROM public_procurement.bid_notices newer WHERE newer.notice_number=n.notice_number "
+                "AND (COALESCE(CASE WHEN newer.notice_order ~ '^[0-9]+$' "
+                "THEN newer.notice_order::numeric END,-1), newer.notice_order, "
+                "COALESCE(newer.notice_published_at,'-infinity'::timestamptz)) > "
+                "(COALESCE(CASE WHEN n.notice_order ~ '^[0-9]+$' THEN n.notice_order::numeric END,-1), "
+                "n.notice_order, COALESCE(n.notice_published_at,'-infinity'::timestamptz))) "
+                "ORDER BY n.notice_published_at DESC NULLS LAST, n.notice_number, n.notice_order DESC "
+                "LIMIT %s", parameters
             ).fetchall()
             result = []
             for (number, order, notice_hash, deadline, consortium_method,
@@ -615,9 +626,30 @@ class PostgresStore:
         with psycopg.connect(self.database_url) as connection:
             rows = connection.execute(
                 "SELECT input_fingerprint FROM public_procurement.bid_eligibility_extractions "
-                "WHERE status='completed' OR (status='failed' AND finished_at>now()-interval '1 hour')"
+                "WHERE status='completed' OR (status='failed' AND finished_at>now()-interval '1 hour') "
+                "OR (status='processing' AND started_at>now()-interval '1 hour')"
             ).fetchall()
         return {row[0] for row in rows}
+
+    def claim_eligibility_extraction(self, notice: dict[str, Any], fingerprint: str,
+                                     skill_version: str) -> bool:
+        """Atomically lease one extraction fingerprint for one hour."""
+        with psycopg.connect(self.database_url) as connection:
+            claimed = connection.execute(
+                "INSERT INTO public_procurement.bid_eligibility_extractions "
+                "(extraction_id,notice_number,notice_order,input_fingerprint,schema_version,"
+                "skill_version,status,started_at) VALUES (%s,%s,%s,%s,'1.1.0',%s,'processing',now()) "
+                "ON CONFLICT (notice_number,notice_order,input_fingerprint) DO UPDATE SET "
+                "status='processing',skill_version=EXCLUDED.skill_version,started_at=now(),"
+                "finished_at=NULL,error_code=NULL WHERE "
+                "(bid_eligibility_extractions.status='failed' AND "
+                "bid_eligibility_extractions.finished_at<=now()-interval '1 hour') OR "
+                "(bid_eligibility_extractions.status='processing' AND "
+                "bid_eligibility_extractions.started_at<=now()-interval '1 hour') RETURNING 1",
+                (uuid4(), notice["notice_number"], notice["notice_order"], fingerprint,
+                 skill_version),
+            ).fetchone()
+        return claimed is not None
 
     def save_eligibility_failure(self, notice: dict[str, Any], fingerprint: str,
                                  error_code: str, raw_output_object_key: str | None,

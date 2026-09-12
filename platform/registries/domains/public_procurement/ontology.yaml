@@ -1,5 +1,5 @@
 registry:
-  version: 1.3.0
+  version: 1.4.1
   registered_at: "2026-08-08"
 
 ontology:
@@ -23,7 +23,8 @@ ontology:
         - {id: bid_begin_at, name: 입찰시작시각, description: 입찰서 접수가 시작되는 시각, data_type: datetime}
         - {id: bid_deadline_at, name: 입찰마감시각, description: 입찰서 접수가 마감되는 시각, data_type: datetime}
         - {id: opening_at, name: 개찰시각, description: 입찰 개찰 예정 시각, data_type: datetime}
-        - {id: bid_status, name: 입찰상태, description: 시작 및 마감시각을 기준으로 정규화한 scheduled·open·closed·unknown 상태, data_type: string}
+        - {id: bid_status, name: 입찰상태, description: 시작·마감시각과 마감시각이 없을 때의 개찰시각을 기준으로 정규화한 scheduled·open·closed·unknown 상태, data_type: string}
+        - {id: notice_status, name: 공고 생명주기 상태, description: 동일 공고번호의 최신 차수와 공고종류를 기준으로 정규화한 active·cancelled·superseded 상태, data_type: string}
         - {id: notice_organization_code, name: 공고기관코드, description: 입찰공고를 게시한 기관의 코드, data_type: string}
         - {id: notice_organization_name, name: 공고기관명, description: 입찰공고를 게시한 기관의 명칭, data_type: string}
         - {id: demand_organization_code, name: 수요기관코드, description: 입찰 대상 사업의 수요기관 코드, data_type: string}

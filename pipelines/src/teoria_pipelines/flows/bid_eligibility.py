@@ -18,8 +18,8 @@ async def parse_pps_bid_documents(batch_size: int = 100, concurrency: int = 4) -
     return await parse_bid_documents(documents, concurrency)
 
 
-@flow(name="입찰공고 참가자격 추출", task_runner=ThreadPoolTaskRunner(max_workers=2))
-async def extract_pps_bid_eligibility(batch_size: int = 10) -> LoadSummary:
+@flow(name="입찰공고 참가자격 추출", task_runner=ThreadPoolTaskRunner(max_workers=4))
+async def extract_pps_bid_eligibility(batch_size: int = 20) -> LoadSummary:
     notices = select_notices_for_extraction(batch_size)
     if not notices:
         return LoadSummary()

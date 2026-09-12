@@ -43,7 +43,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert assessment["kind"] == "compute"
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.08.13.2"
+    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.09.12.2"
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -52,7 +52,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.08.13.2"
+    assert response.json()["registry"]["version"] == "2026.09.12.2"
     assert runner.call[0] == "search_public_procurement_contracts"
     assert runner.call[1]["concluded_date_from"].isoformat() == "2026-01-01"
 
@@ -87,6 +87,18 @@ def test_bid_notice_search_discovery_exposes_pagination_and_sort_contract() -> N
 
     assert properties["sort"]["enum"] == ["published_desc", "deadline_asc"]
     assert properties["sort"]["default"] == "published_desc"
+    assert properties["notice_status"]["enum"] == [
+        "active", "cancelled", "superseded",
+    ]
+    assert properties["notice_status"]["default"] == "active"
+    assert properties["bid_statuses"] == {
+        "type": "array",
+        "items": {
+            "type": "string",
+            "description": "시작·마감시각과 마감시각이 없을 때의 개찰시각을 기준으로 정규화한 scheduled·open·closed·unknown 상태",
+            "enum": ["scheduled", "open", "closed", "unknown"],
+        },
+    }
     assert properties["page"] == {"type": "integer", "default": 1, "minimum": 1}
     assert properties["page_size"]["maximum"] == 100
 

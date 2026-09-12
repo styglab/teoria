@@ -10,7 +10,11 @@ from teoria.registry.loader import RegistryLoader
 from teoria.runtime.assessment.expression import aggregate_expression
 from teoria.runtime.assessment.evaluators import evaluate_requirement
 from teoria.runtime.assessment.models import CompanyEvidenceSnapshot
-from teoria.runtime.assessment.processor import execute_bid_eligibility_assessment
+from teoria.runtime.assessment.processor import (
+    clear_assessment_cache,
+    execute_bid_eligibility_assessment,
+    execute_bid_eligibility_assessments,
+)
 from teoria.runtime.capability.runner import CapabilityResult
 from teoria.runtime.capability.presentation import serialize_capability_result
 from teoria.runtime.mapping.materializer import MaterializedObject
@@ -38,6 +42,11 @@ def _object(ontology: str, object_type: str, object_id: str, **properties) -> Ma
         provenance=[provenance],
         property_provenance={key: [provenance] for key in properties},
     )
+
+
+@pytest.fixture(autouse=True)
+def _clear_runtime_assessment_cache() -> None:
+    clear_assessment_cache()
 
 
 class AssessmentFixtureRunner:
@@ -136,6 +145,29 @@ async def test_computes_bid_eligibility_as_ontology_objects_with_evidence() -> N
     limited = serialize_capability_result(result, max_objects=7)
     assert sum(item["type"] == "requirement_assessment" for item in limited["objects"]) == 3
     assert any(item["type"] == "evidence" for item in limited["objects"])
+
+
+@pytest.mark.asyncio
+async def test_batch_assessment_returns_list_summaries_and_reuses_cache() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    runner = AssessmentFixtureRunner()
+    inputs = {
+        "business_registration_number": "1234567890",
+        "bid_notice_ids": ["R26TEST:00"],
+    }
+
+    first = await execute_bid_eligibility_assessments(
+        runner, catalog, "assess_company_bid_eligibilities", inputs,
+    )
+    second = await execute_bid_eligibility_assessments(
+        runner, catalog, "assess_company_bid_eligibilities", inputs,
+    )
+
+    assert first.outcome == second.outcome
+    assert first.outcome["items"][0]["outcome"] == "needs_review"
+    assert first.outcome["items"][0]["satisfied_count"] == 2
+    assert first.outcome["items"][0]["needs_review_count"] == 1
+    assert len(first.outcome["items"][0]["issues"]) == 1
 
 
 def test_expression_uses_three_state_logic() -> None:

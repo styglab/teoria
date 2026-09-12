@@ -1,5 +1,5 @@
 registry:
-  version: 1.1.0
+  version: 1.2.0
   registered_at: "2026-08-07"
 
 source:
@@ -132,6 +132,7 @@ source:
         - {id: bid_deadline_at, name: 입찰마감시각, data_type: datetime}
         - {id: opening_at, name: 개찰시각, data_type: datetime}
         - {id: bid_status, name: 입찰상태, data_type: string}
+        - {id: notice_status, name: 공고 생명주기 상태, data_type: string}
         - {id: notice_organization_code, name: 공고기관코드, data_type: string}
         - {id: notice_organization_name, name: 공고기관명, data_type: string}
         - {id: demand_organization_code, name: 수요기관코드, data_type: string}

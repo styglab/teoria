@@ -74,7 +74,10 @@ async def run(args: argparse.Namespace) -> int:
             case.update({
                 "status": "not_extraction_ready",
                 "error_class": (
-                    "acquisition" if metadata.get("unavailable_count", 0) else "parsing"
+                    "acquisition"
+                    if (metadata.get("unavailable_count", 0)
+                        or not metadata.get("document_count", 0))
+                    else "parsing"
                 ),
                 "document_count": metadata.get("document_count"),
                 "unavailable_count": metadata.get("unavailable_count"),

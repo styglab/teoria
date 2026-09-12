@@ -15,7 +15,7 @@ class CapabilityInput(RegistryModel):
     property: str | None = None
     data_type: str | None = None
     field: str | None = None
-    operator: Literal["eq", "gte", "lte"] = "eq"
+    operator: Literal["eq", "in", "gte", "lte"] = "eq"
     fields: dict[str, "CapabilityInput"] = Field(default_factory=dict)
     collection: Literal["scalar", "list"] = "scalar"
     required: bool = False
@@ -33,6 +33,8 @@ class CapabilityInput(RegistryModel):
             raise ValueError("direct field binding is only valid for a data_type input")
         if self.operator != "eq" and not (self.field or self.property):
             raise ValueError("non-equality operator requires a field or property binding")
+        if self.operator == "in" and self.collection != "list":
+            raise ValueError("in operator requires a list input")
         if self.required and self.default is not None:
             raise ValueError("required input cannot declare a default")
         if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:

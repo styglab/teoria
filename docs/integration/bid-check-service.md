@@ -43,7 +43,8 @@ POST /v1/capabilities/search_bid_notices:execute
     "notice_published_at_to": "2026-08-13T23:59:59+09:00",
     "query": "정보시스템 운영",
     "work_type": "service",
-    "bid_status": "open",
+    "bid_statuses": ["scheduled", "open", "unknown"],
+    "notice_status": "active",
     "bid_deadline_at_from": "2026-08-14T00:00:00+09:00",
     "bid_deadline_at_to": "2026-08-31T23:59:59+09:00",
     "contract_method_name": "제한경쟁",
@@ -64,6 +65,11 @@ POST /v1/capabilities/search_bid_notices:execute
 부분 일치로 검색한다. `work_type`에는 `goods`, `service`, `construction`, `foreign`, `other` 중
 하나를 지정할 수 있다. `sort`는 게시일 최신순인 `published_desc`가 기본이고 마감 임박순은
 `deadline_asc`이다. 마감일이 없는 공고는 마감 임박순의 마지막에 배치된다.
+
+여러 시간 상태를 함께 표시할 때는 `bid_status`를 상태별로 반복 호출해 서비스에서 병합하지
+말고 `bid_statuses`에 `scheduled`, `open`, `unknown`을 전달한다. Runtime이 합쳐진 집합에 대해
+정렬·전체 건수·페이지를 한 번만 계산한다. 활성 공고만 사용하는 서비스는 Runtime 기본값에만
+의존하지 말고 `notice_status: active`를 명시한다.
 
 `page`는 1부터 시작하고 기본값은 1이다. `page_size`는 기본 20, 최대 100이다. 응답의
 `pagination.total_items`와 `pagination.total_pages`는 연결된 기관 객체가 아닌 고유한
@@ -173,6 +179,36 @@ POST /v1/capabilities/assess_company_bid_eligibility:execute
 | `needs_review` | 확인 필요 | 근거 부족, 지원하지 않는 규칙, 모호성 또는 원문 검토 필요 |
 
 `needs_review`를 `unsatisfied`로 간주하거나 “입찰 불가”로 단정하면 안 된다. 최종 법적 판단이 아니라 공식 데이터와 추출된 공고요건을 바탕으로 한 의사결정 지원 결과로 표시한다.
+
+### 4. 목록 공고 일괄 평가
+
+목록의 공고를 단건 평가 Capability로 반복 호출하지 않고 현재 페이지의 공고 ID를 한 번에
+전달한다. 한 요청에는 중복을 제거한 공고를 최대 100개까지 전달할 수 있다.
+
+```http
+POST /v1/capabilities/assess_company_bid_eligibilities:execute
+```
+
+```json
+{
+  "inputs": {
+    "business_registration_number": "1234567890",
+    "bid_notice_ids": ["R25BK00934251:000", "R26BK01725727:000"],
+    "participation_mode": "single"
+  },
+  "options": {"max_objects": 100}
+}
+```
+
+목록용 결과는 응답의 `outcome.items`에 입력 공고 순서대로 들어간다. 성공 항목은 `outcome`,
+`satisfied_count`, `unsatisfied_count`, `needs_review_count`와 `issues` 최대 2개를 포함한다.
+요건 추출 전 공고처럼 개별 평가가 불가능한 경우 전체 요청을 실패시키지 않고 해당 항목에
+`status: error`와 `error_code`를 반환한다.
+
+Runtime은 동일한 회사·공고·기준일·참여방식·Registry·평가 규칙 조합의 단건 평가를 프로세스별로
+5분간 캐시하며 최대 2,048건을 보관한다. 이는 짧은 시간의 페이지 왕복과 재시도를 줄이는 캐시다.
+다중 인스턴스 공유 또는 회사 근거 변경 이벤트 기반 즉시 무효화가 필요하면 입찰체크 DB/Redis에
+별도 캐시를 두되 `assessment_fingerprint`를 결과 버전으로 보관하고 짧은 TTL을 함께 적용한다.
 
 ## 공통 응답 형태
 

@@ -44,6 +44,7 @@ def test_loads_current_registries() -> None:
         "pps_user",
     }
     assert set(catalog.capabilities) == {
+        "assess_company_bid_eligibilities",
         "assess_company_bid_eligibility",
         "get_business_registration_status",
         "get_company_financials",
