@@ -222,6 +222,16 @@ POST /v1/capabilities/assess_company_bid_eligibilities:execute
 요건 추출 전 공고처럼 개별 평가가 불가능한 경우 전체 요청을 실패시키지 않고 해당 항목에
 `status: error`와 `error_code`를 반환한다.
 
+`key_outcomes`에는 지역, 업종·면허, 사업자 상태, 나라장터 등록, 기업 확인·인증, 기업규모,
+직접생산확인, 공급물품, 제재, 공동수급, 실적, 기타 요건의 분류별 판정이 들어간다. 입찰체크는
+`issues` 문자열에서 상태를 추정하지 않고 이 값을 직접 사용한다. `applicability`는 추출된 관련
+요건이 있으면 `applicable`, 추출이 완전하고 관련 요건이 없으면 `not_applicable`, 추출이 불완전해
+존재 여부를 확정할 수 없으면 `unknown`이다. `unknown`의 `outcome`은 `needs_review`이고,
+`not_applicable`의 `outcome`은 `null`이다.
+공고 전체의 `requires_review`는 분류별 판정을 덮어쓰지 않는다. 관련 요건의 판정이 모두 충족되고
+분류 내부 조건식이 충족되면 해당 분류는 `satisfied`이며, 공고 전체 결과만 다른 미확정 요건 때문에
+`needs_review`일 수 있다.
+
 Runtime은 목록 평가 시 공고와 요건을 각각 한 번의 DB 조회로 가져오고, 회사의 공통 근거는 요청당
 한 번만 조회한다. 기준일에 따라 달라지는 기업자격과 직접생산확인은 서로 다른 기준일별로 조회한다.
 목록에서는 상세 Evidence 객체를 생성하지 않는다.

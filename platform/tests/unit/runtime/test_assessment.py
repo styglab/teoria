@@ -9,8 +9,9 @@ import pytest
 from teoria.registry.loader import RegistryLoader
 from teoria.runtime.assessment.expression import aggregate_expression
 from teoria.runtime.assessment.evaluators import evaluate_requirement
-from teoria.runtime.assessment.models import CompanyEvidenceSnapshot
+from teoria.runtime.assessment.models import CompanyEvidenceSnapshot, EvaluationDecision, RequirementEvaluation
 from teoria.runtime.assessment.processor import (
+    _key_outcomes,
     clear_assessment_cache,
     execute_bid_eligibility_assessment,
     execute_bid_eligibility_assessments,
@@ -181,6 +182,12 @@ async def test_batch_assessment_returns_list_summaries_and_reuses_cache() -> Non
     assert first.outcome["items"][0]["satisfied_count"] == 2
     assert first.outcome["items"][0]["needs_review_count"] == 1
     assert len(first.outcome["items"][0]["issues"]) == 1
+    key_outcomes = first.outcome["items"][0]["key_outcomes"]
+    assert key_outcomes["business_status"]["outcome"] == "satisfied"
+    assert key_outcomes["direct_production"]["outcome"] == "satisfied"
+    assert key_outcomes["past_performance"]["outcome"] == "needs_review"
+    assert key_outcomes["participation_region"]["applicability"] == "not_applicable"
+    assert key_outcomes["industry_license"]["outcome"] is None
     assert runner.calls.count("get_bid_notices_by_ids") == 2
     assert runner.calls.count("get_bid_requirements_by_notice_ids") == 2
     assert runner.calls.count("get_business_registration_status") == 1
@@ -190,6 +197,62 @@ async def test_batch_assessment_returns_list_summaries_and_reuses_cache() -> Non
     assert "get_bid_requirements" not in runner.calls
 
 
+def test_key_outcomes_preserve_category_expression_and_ignore_notice_review_flag() -> None:
+    notice = _object(
+        "public_procurement", "bid_notice", "review-required-notice",
+        extraction_completeness="complete", requires_review=True,
+        requirement_expression=json.dumps({
+            "operator": "any", "requirement_id": None, "conditions": [
+                {"operator": "leaf", "requirement_id": "license-a", "conditions": []},
+                {"operator": "leaf", "requirement_id": "license-b", "conditions": []},
+            ],
+        }),
+    )
+    evaluations = [
+        RequirementEvaluation(
+            requirement=_object(
+                "public_procurement", "bid_requirement", "license-a-object",
+                requirement_id="license-a-id", local_id="license-a",
+                requirement_type="industry_license", standard_rule_id="has_registered_industry",
+            ),
+            decision=EvaluationDecision("unsatisfied", "industry_not_matched", "", []),
+        ),
+        RequirementEvaluation(
+            requirement=_object(
+                "public_procurement", "bid_requirement", "license-b-object",
+                requirement_id="license-b-id", local_id="license-b",
+                requirement_type="industry_license", standard_rule_id="has_registered_industry",
+            ),
+            decision=EvaluationDecision("satisfied", "industry_matched", "", []),
+        ),
+    ]
+
+    outcomes = _key_outcomes(notice, evaluations)
+
+    assert outcomes["industry_license"]["applicability"] == "applicable"
+    assert outcomes["industry_license"]["outcome"] == "satisfied"
+    assert outcomes["industry_license"]["satisfied_count"] == 1
+    assert outcomes["industry_license"]["unsatisfied_count"] == 1
+    assert outcomes["participation_region"] == {
+        "applicability": "not_applicable",
+        "outcome": None,
+        "satisfied_count": 0,
+        "unsatisfied_count": 0,
+        "needs_review_count": 0,
+        "requirement_ids": [],
+    }
+
+
+def test_key_outcomes_mark_absent_categories_unknown_only_for_incomplete_extraction() -> None:
+    notice = _object(
+        "public_procurement", "bid_notice", "incomplete-notice",
+        extraction_completeness="partial", requires_review=False,
+    )
+
+    outcomes = _key_outcomes(notice, [])
+
+    assert outcomes["industry_license"]["applicability"] == "unknown"
+    assert outcomes["industry_license"]["outcome"] == "needs_review"
 @pytest.mark.asyncio
 async def test_batch_assessment_loads_static_company_evidence_once_for_multiple_notices() -> None:
     catalog = RegistryLoader(REGISTRIES).load()

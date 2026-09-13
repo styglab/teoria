@@ -26,6 +26,45 @@ BATCH_PROCESSOR_ID = "assessment.evaluate_bid_eligibilities"
 RULESET_VERSION = "1.0.0"
 CACHE_TTL_SECONDS = 300.0
 CACHE_MAX_ENTRIES = 2048
+KEY_OUTCOME_CATEGORIES = (
+    "participation_region",
+    "industry_license",
+    "business_status",
+    "procurement_registration",
+    "company_qualification",
+    "company_scale",
+    "direct_production",
+    "supply_product",
+    "sanction",
+    "consortium",
+    "past_performance",
+    "custom",
+)
+RULE_OUTCOME_CATEGORIES = {
+    "satisfies_participation_region": "participation_region",
+    "has_registered_industry": "industry_license",
+    "is_active_business": "business_status",
+    "is_registered_procurement_supplier": "procurement_registration",
+    "is_valid_women_owned_business": "company_qualification",
+    "is_valid_disabled_owned_business": "company_qualification",
+    "holds_valid_company_qualification": "company_qualification",
+    "has_company_scale_qualification": "company_scale",
+    "holds_valid_direct_production_confirmation": "direct_production",
+    "has_registered_supply_product": "supply_product",
+    "has_no_active_procurement_sanction": "sanction",
+    "is_consortium_allowed": "consortium",
+}
+TYPE_OUTCOME_CATEGORIES = {
+    "participation_region": "participation_region",
+    "industry_license": "industry_license",
+    "business_status": "business_status",
+    "procurement_registration": "procurement_registration",
+    "company_scale": "company_scale",
+    "product_registration": "supply_product",
+    "sanction": "sanction",
+    "consortium": "consortium",
+    "past_performance": "past_performance",
+}
 _assessment_cache: OrderedDict[str, tuple[float, CapabilityResult]] = OrderedDict()
 _batch_summary_cache: OrderedDict[str, tuple[float, dict[str, Any], MaterializedObject]] = OrderedDict()
 _company_evidence_cache: OrderedDict[str, tuple[float, CompanyEvidenceSnapshot]] = OrderedDict()
@@ -447,6 +486,7 @@ def _materialize_batch_summary(
         "satisfied_count": counts["satisfied"],
         "unsatisfied_count": counts["unsatisfied"],
         "needs_review_count": counts["needs_review"],
+        "key_outcomes": _key_outcomes(notice, evaluations),
         "issues": [{
             "requirement_id": item.requirement.properties.get("requirement_id"),
             "outcome": item.decision.outcome,
@@ -454,6 +494,90 @@ def _materialize_batch_summary(
         } for item in problems],
     }
     return assessment, summary
+
+
+def _key_outcomes(
+    notice: MaterializedObject,
+    evaluations: list[RequirementEvaluation],
+) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, list[RequirementEvaluation]] = {
+        category: [] for category in KEY_OUTCOME_CATEGORIES
+    }
+    for evaluation in evaluations:
+        grouped[_requirement_outcome_category(evaluation.requirement)].append(evaluation)
+
+    extraction_incomplete = notice.properties.get("extraction_completeness") in {
+        "partial", "api_only",
+    }
+    expression = _parse_expression(notice.properties.get("requirement_expression"))
+    result: dict[str, dict[str, Any]] = {}
+    for category, category_evaluations in grouped.items():
+        if not category_evaluations:
+            result[category] = {
+                "applicability": "unknown" if extraction_incomplete else "not_applicable",
+                "outcome": "needs_review" if extraction_incomplete else None,
+                "satisfied_count": 0,
+                "unsatisfied_count": 0,
+                "needs_review_count": 0,
+                "requirement_ids": [],
+            }
+            continue
+        category_outcomes = {
+            str(item.requirement.properties.get("local_id")): item.decision.outcome
+            for item in category_evaluations
+        }
+        projected = _project_expression(expression, set(category_outcomes))
+        if projected is None:
+            mandatory_outcomes = {
+                str(item.requirement.properties.get("local_id")): item.decision.outcome
+                for item in category_evaluations
+                if item.requirement.properties.get("mandatory", True)
+            }
+            outcome = aggregate_expression(None, mandatory_outcomes or category_outcomes)
+        else:
+            outcome = aggregate_expression(projected, category_outcomes)
+        result[category] = {
+            "applicability": "applicable",
+            "outcome": outcome,
+            "satisfied_count": sum(item.decision.outcome == "satisfied" for item in category_evaluations),
+            "unsatisfied_count": sum(item.decision.outcome == "unsatisfied" for item in category_evaluations),
+            "needs_review_count": sum(item.decision.outcome == "needs_review" for item in category_evaluations),
+            "requirement_ids": [
+                item.requirement.properties.get("requirement_id")
+                for item in category_evaluations
+            ],
+        }
+    return result
+
+
+def _requirement_outcome_category(requirement: MaterializedObject) -> str:
+    rule_id = str(requirement.properties.get("standard_rule_id") or "")
+    if rule_id in RULE_OUTCOME_CATEGORIES:
+        return RULE_OUTCOME_CATEGORIES[rule_id]
+    requirement_type = str(requirement.properties.get("requirement_type") or "")
+    return TYPE_OUTCOME_CATEGORIES.get(requirement_type, "custom")
+
+
+def _project_expression(expression: Any, requirement_ids: set[str]) -> dict[str, Any] | None:
+    if not isinstance(expression, dict):
+        return None
+    operator = expression.get("operator")
+    if operator == "leaf":
+        return expression if str(expression.get("requirement_id")) in requirement_ids else None
+    children = [
+        projected
+        for item in expression.get("conditions", [])
+        if (projected := _project_expression(item, requirement_ids)) is not None
+    ]
+    if not children:
+        return None
+    if operator == "not":
+        return {"operator": "not", "requirement_id": None, "conditions": children[:1]}
+    if operator not in {"all", "any"}:
+        return None
+    if len(children) == 1:
+        return children[0]
+    return {"operator": operator, "requirement_id": None, "conditions": children}
 
 
 def _aggregate_assessment(
