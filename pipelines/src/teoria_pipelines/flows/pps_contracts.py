@@ -103,6 +103,7 @@ async def sync_pps_contracts(start_date: date | None = None,
 async def sync_pps_contract_incremental(
     pipeline_root: str = "/app/pipelines",
     lookback_days: int = 3,
+    pipeline_id: str = INCREMENTAL_PIPELINE_ID,
 ) -> list[LoadSummary]:
     """Refresh recent contracts independently of historical backfill progress."""
 
@@ -114,7 +115,7 @@ async def sync_pps_contract_incremental(
                 window,
                 pipeline_root,
                 collection_window,
-                INCREMENTAL_PIPELINE_ID,
+                pipeline_id,
                 window.end,
             )
         )
@@ -129,9 +130,11 @@ async def sync_pps_contract_backfill(
     pipeline_root: str = "/app/pipelines",
     batch_days: int = 30,
 ) -> list[LoadSummary]:
-    """Move forward through an independently checkpointed historical range."""
+    """Move from the latest date backward through an independent historical range."""
 
-    windows = determine_backfill_windows(checkpoint_id, start_date, end_date, batch_days)
+    windows = determine_backfill_windows(
+        checkpoint_id, start_date, end_date, batch_days, reverse=True
+    )
     summaries: list[LoadSummary] = []
     for window in windows:
         summaries.append(

@@ -475,8 +475,9 @@ def _materialize_batch_summary(
         "started_at": now,
         "completed_at": now,
     }, provenance)
+    participation_evaluations = _participation_evaluations(evaluations)
     problems = sorted(
-        (item for item in evaluations if item.decision.outcome in {"unsatisfied", "needs_review"}),
+        (item for item in participation_evaluations if item.decision.outcome in {"unsatisfied", "needs_review"}),
         key=lambda item: 0 if item.decision.outcome == "unsatisfied" else 1,
     )[:2]
     summary = {
@@ -500,6 +501,7 @@ def _key_outcomes(
     notice: MaterializedObject,
     evaluations: list[RequirementEvaluation],
 ) -> dict[str, dict[str, Any]]:
+    evaluations = _participation_evaluations(evaluations)
     grouped: dict[str, list[RequirementEvaluation]] = {
         category: [] for category in KEY_OUTCOME_CATEGORIES
     }
@@ -584,12 +586,17 @@ def _aggregate_assessment(
     notice: MaterializedObject,
     evaluations: list[RequirementEvaluation],
 ) -> tuple[str, dict[str, int]]:
+    evaluations = _participation_evaluations(evaluations)
     outcomes = {
         str(item.requirement.properties.get("local_id")): item.decision.outcome
         for item in evaluations
     }
-    expression = _parse_expression(notice.properties.get("requirement_expression"))
-    if expression is None:
+    expression = _project_expression(
+        _parse_expression(notice.properties.get("requirement_expression")), set(outcomes),
+    )
+    if not evaluations:
+        overall = "satisfied"
+    elif expression is None:
         mandatory_outcomes = {
             str(item.requirement.properties.get("local_id")): item.decision.outcome
             for item in evaluations
@@ -598,10 +605,9 @@ def _aggregate_assessment(
         overall = aggregate_expression(None, mandatory_outcomes)
     else:
         overall = aggregate_expression(expression, outcomes)
-    incomplete_coverage = (
-        notice.properties.get("extraction_completeness") in {"partial", "api_only"}
-        or notice.properties.get("requires_review") is True
-    )
+    incomplete_coverage = notice.properties.get("extraction_completeness") in {
+        "partial", "api_only",
+    }
     if incomplete_coverage and overall == "satisfied":
         overall = "needs_review"
     counts = {
@@ -609,6 +615,15 @@ def _aggregate_assessment(
         for value in ("satisfied", "unsatisfied", "needs_review")
     }
     return overall, counts
+
+
+def _participation_evaluations(
+    evaluations: list[RequirementEvaluation],
+) -> list[RequirementEvaluation]:
+    return [
+        item for item in evaluations
+        if (item.requirement.properties.get("assessment_stage") or "bid_entry") == "bid_entry"
+    ]
 
 
 def _materialize_result(
@@ -691,6 +706,7 @@ def _materialize_result(
                 "assessment_id": assessment.object_id,
                 "requirement_id": requirement.properties.get("requirement_id"),
                 "business_registration_number": business_number,
+                "assessment_stage": requirement.properties.get("assessment_stage") or "bid_entry",
                 "outcome": decision.outcome,
                 "reason_code": decision.reason_code,
                 "required_value_text": requirement.properties.get("value_text") or "",

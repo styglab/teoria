@@ -14,6 +14,7 @@ def test_pipeline_retry_defaults_make_one_retry_after_sixty_seconds(
 
     assert settings.source_max_attempts == 2
     assert settings.source_retry_backoff_seconds == 60
+    assert settings.bid_eligibility_input_max_chars == 30_000
 
 
 def test_pipeline_settings_use_pipeline_prefix(tmp_path: Path, monkeypatch) -> None:

@@ -1,5 +1,5 @@
 registry:
-  version: 1.4.1
+  version: 1.5.0
   registered_at: "2026-08-08"
 
 ontology:
@@ -245,6 +245,58 @@ ontology:
         - {id: period_days, name: 제재기간일수, description: 제재기간의 추가 일수, data_type: integer}
         - {id: status_name, name: 제재상태명, description: 조회 시점에 원천이 제공한 제재 최종 상태명, data_type: string}
 
+    - id: bid_award
+      name: 입찰 최종낙찰 결과
+      description: 공고·차수·입찰분류·재입찰 단위로 확정된 최종 낙찰업체와 금액 정보
+      primary_key: award_id
+      properties:
+        - {id: award_id, name: 최종낙찰 식별자, description: 공고번호·차수·입찰분류번호·재입찰번호를 결합한 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, description: 공고번호와 차수를 결합한 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, description: 나라장터 입찰공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, description: 동일 공고번호의 공고 차수, data_type: string}
+        - {id: bid_classification_number, name: 입찰분류번호, description: 동일 공고 안의 입찰 집행 분류번호, data_type: string}
+        - {id: rebid_number, name: 재입찰번호, description: 동일 입찰 집행의 재입찰 번호, data_type: string}
+        - {id: work_type, name: 업무유형, description: 물품·공사·용역·외자 업무유형, data_type: string}
+        - {id: notice_division_code, name: 공고구분코드, description: 원천 공고구분코드, data_type: string}
+        - {id: notice_name, name: 공고명, description: 입찰공고 명칭, data_type: string}
+        - {id: participant_count, name: 참가업체수, description: 해당 입찰에 참가한 업체 수, data_type: integer}
+        - {id: winner_business_registration_number, name: 낙찰업체 사업자등록번호, description: 최종낙찰업체 사업자등록번호, data_type: business_registration_number}
+        - {id: winner_name, name: 최종낙찰업체명, description: 최종낙찰업체 명칭, data_type: string}
+        - {id: winner_representative_name, name: 낙찰업체 대표자명, description: 최종낙찰업체 대표자명, data_type: string}
+        - {id: winning_amount, name: 최종낙찰금액, description: 최종낙찰된 원화 금액, data_type: monetary_amount}
+        - {id: winning_rate, name: 최종낙찰률, description: 예정가격 대비 최종낙찰금액 비율, data_type: number}
+        - {id: opening_at, name: 실개찰시각, description: 실제 개찰이 이루어진 시각, data_type: datetime}
+        - {id: final_award_date, name: 최종낙찰일, description: 최종 낙찰이 확정된 날짜, data_type: date}
+        - {id: demand_organization_code, name: 수요기관코드, description: 입찰 대상의 수요기관 코드, data_type: string}
+        - {id: demand_organization_name, name: 수요기관명, description: 입찰 대상의 수요기관 명칭, data_type: string}
+        - {id: source_registered_at, name: 원천 등록시각, description: 낙찰정보가 나라장터에 등록된 시각, data_type: datetime}
+
+    - id: bid_opening_participation
+      name: 입찰 개찰 참여
+      description: 사업자가 특정 입찰에 투찰하여 개찰 순위와 평가 결과를 받은 참여 사실
+      primary_key: participation_id
+      properties:
+        - {id: participation_id, name: 개찰참여 식별자, description: 최종낙찰 식별자와 사업자등록번호를 결합한 식별자, data_type: string}
+        - {id: award_id, name: 최종낙찰 식별자, description: 참여가 속한 입찰 집행의 최종낙찰 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, description: 참여가 속한 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, description: 나라장터 입찰공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, description: 동일 공고번호의 공고 차수, data_type: string}
+        - {id: bid_classification_number, name: 입찰분류번호, description: 동일 공고 안의 입찰 집행 분류번호, data_type: string}
+        - {id: rebid_number, name: 재입찰번호, description: 동일 입찰 집행의 재입찰 번호, data_type: string}
+        - {id: business_registration_number, name: 사업자등록번호, description: 투찰업체 사업자등록번호, data_type: business_registration_number}
+        - {id: participant_name, name: 투찰업체명, description: 개찰결과에 기록된 투찰업체 명칭, data_type: string}
+        - {id: representative_name, name: 대표자명, description: 투찰업체 대표자명, data_type: string}
+        - {id: opening_result_type_name, name: 개찰결과구분명, description: 개찰완료 등 원천 개찰결과 구분명, data_type: string}
+        - {id: opening_rank, name: 개찰순위, description: 투찰 또는 협상 평가에 따른 개찰순위, data_type: integer}
+        - {id: bid_amount, name: 투찰금액, description: 업체가 제출한 원화 투찰금액, data_type: monetary_amount}
+        - {id: bid_rate, name: 투찰률, description: 예정가격 대비 투찰금액 비율, data_type: number}
+        - {id: remark, name: 비고, description: 개찰결과 원천 비고, data_type: string}
+        - {id: bid_at, name: 투찰시각, description: 업체의 투찰 시각, data_type: datetime}
+        - {id: bid_price_evaluation_score, name: 입찰가격점수, description: 협상계약의 입찰가격 평가점수, data_type: number}
+        - {id: technical_evaluation_raw_score, name: 기술평가원점수, description: 차등점수 적용 전 기술평가 원점수, data_type: number}
+        - {id: technical_evaluation_score, name: 기술평가점수, description: 기술능력 평가점수, data_type: number}
+        - {id: total_evaluation_score, name: 종합평가점수, description: 기술평가와 가격평가를 합산한 점수, data_type: number}
+
     - id: contract
       name: 공공조달계약
       description: 공공기관과 하나 이상의 업체 사이에 체결되어 나라장터 통합계약번호로 식별되는 조달계약
@@ -301,6 +353,30 @@ ontology:
         - {id: participation_share_rate, name: 참여 지분율, description: 공동계약에서 해당 업체가 차지하는 참여 지분율, data_type: number}
 
   link_types:
+    - id: bid_notice_has_award
+      description: 입찰공고가 특정 입찰분류·재입찰 단위의 최종낙찰 결과를 가짐을 나타낸다.
+      source: bid_notice
+      target: bid_award
+    - id: business_registration_wins_bid_award
+      description: 사업자등록으로 식별되는 업체가 최종낙찰 결과의 낙찰업체임을 나타낸다.
+      source: company.business_registration
+      target: bid_award
+    - id: bid_opening_participation_is_for_award
+      description: 개찰 참여 사실이 특정 최종낙찰 집행 단위에 속함을 나타낸다.
+      source: bid_opening_participation
+      target: bid_award
+    - id: business_registration_has_bid_opening_participation
+      description: 사업자등록으로 식별되는 업체가 특정 입찰의 개찰 참여 주체임을 나타낸다.
+      source: company.business_registration
+      target: bid_opening_participation
+    - id: public_organization_demands_bid_award
+      description: 공공기관이 최종낙찰 결과가 발생한 입찰의 수요기관임을 나타낸다.
+      source: public_organization
+      target: bid_award
+    - id: bid_award_results_in_contract
+      description: 최종낙찰 결과가 후속 공공조달계약으로 이어졌음을 나타낸다.
+      source: bid_award
+      target: contract
     - id: bid_notice_has_participation_finding
       description: 입찰공고를 참가자가 알아야 할 참여정보와 연결한다.
       source: bid_notice

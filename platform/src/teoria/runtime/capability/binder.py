@@ -93,6 +93,8 @@ class CapabilityBinder:
                 "page_size": resolved(definition.pagination.page_size_input),
                 "root_field": definition.pagination.root_field,
             }
+            if not definition.pagination.count_distinct:
+                query["pagination"]["count_distinct"] = False
         return query
 
     def _request_binding(self, catalog: RegistryCatalog, call: str, definition: CapabilityInput) -> tuple[str | None, str | None]:

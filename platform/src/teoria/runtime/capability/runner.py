@@ -65,6 +65,7 @@ class CapabilityResult(BaseModel):
     responses: list[ExecutionResponse] | None = None
     outcome: dict[str, Any] | None = None
     pagination: dict[str, int] | None = None
+    pagination_by_step: dict[str, dict[str, int]] | None = None
 
 
 class CapabilityRunner:
@@ -142,6 +143,7 @@ class CapabilityRunner:
         observed_at = datetime.now(timezone.utc)
         outcome_matched = False
         result_pagination = None
+        pagination_by_step: dict[str, dict[str, int]] = {}
 
         for step in capability.steps:
             source_id, operation_id = step.call.split(".", 1)
@@ -168,6 +170,7 @@ class CapabilityRunner:
                     rows = database_result.rows
                     if database_result.pagination is not None:
                         result_pagination = database_result.pagination
+                        pagination_by_step[step.id or operation_id] = database_result.pagination
                 else:
                     rows = database_result
                 fragments.extend(self.decoder.decode_database_rows(
@@ -266,7 +269,8 @@ class CapabilityRunner:
             links=links,
             responses=raw_responses if include_raw_responses else None,
             outcome=outcome_result,
-            pagination=result_pagination,
+            pagination=result_pagination if len(pagination_by_step) <= 1 else None,
+            pagination_by_step=pagination_by_step if len(pagination_by_step) > 1 else None,
         )
 
     @staticmethod

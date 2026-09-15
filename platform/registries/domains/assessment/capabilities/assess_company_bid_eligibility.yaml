@@ -1,11 +1,11 @@
 registry:
-  version: 1.1.0
+  version: 1.2.0
   registered_at: "2026-08-08"
 
 capability:
   id: assess_company_bid_eligibility
   name: 기업 입찰 참가자격 평가
-  description: 입찰공고의 최신 참가요건과 기준일의 기업·조달·자격 근거를 비교하여 요건별 평가와 종합 결과를 생성한다.
+  description: 입찰공고의 최신 bid_entry 참가요건과 기업 근거를 비교해 종합 결과를 만들고 다른 단계 요건의 개별 판단도 상세 정보로 보존한다.
   kind: compute
   processor: assessment.evaluate_bid_eligibility
   effects:

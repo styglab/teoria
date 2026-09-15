@@ -18,6 +18,8 @@ from teoria_pipelines.tasks.pps_contracts import extract_contract_operation
 from teoria_pipelines.flows.pps_bid_notices import (
     purge_expired_pps_bid_documents,
     sync_pps_bid_documents,
+    sync_pps_bid_notice_backfill,
+    sync_pps_bid_notice_window,
     sync_pps_bid_notices,
 )
 from teoria_pipelines.tasks.bid_eligibility import _ensure_codex_authenticated
@@ -48,6 +50,7 @@ from teoria_pipelines.tasks.bid_eligibility import (
     _runtime_extraction_instructions,
     _is_transient_codex_failure,
     _input_fingerprint,
+    _allocate_document_char_budgets,
     _structured_api_result,
     _deterministic_document_facts,
     _structured_license_candidates,
@@ -59,6 +62,28 @@ from teoria_pipelines.tasks.bid_eligibility import (
     extract_bid_eligibility_notice,
     normalize_structured_bid_eligibility_notice,
 )
+
+
+def test_document_budget_reuses_capacity_left_by_short_documents() -> None:
+    documents = [
+        {"content": {"blocks": [{"text": "가" * 2_000}]}},
+        {"content": {"blocks": [{"text": "나" * 11_000}]}},
+        {"content": {"blocks": [{"text": "다" * 10_000}]}},
+    ]
+
+    assert _allocate_document_char_budgets(documents, 30_000) == [2_000, 11_000, 10_000]
+
+
+def test_document_budget_stays_within_notice_cap_for_large_documents() -> None:
+    documents = [
+        {"content": {"blocks": [{"text": "가" * 50_000}]}},
+        {"content": {"blocks": [{"text": "나" * 10_000}]}},
+    ]
+
+    budgets = _allocate_document_char_budgets(documents, 30_000)
+
+    assert sum(budgets) <= 30_000
+    assert budgets[0] > budgets[1]
 
 
 def test_citation_normalization_tolerates_null_model_excerpt() -> None:
@@ -307,9 +332,9 @@ def test_backfill_deployment_has_a_fixed_historical_range() -> None:
     )
 
     assert deployment["parameters"] == {
-        "checkpoint_id": "pps_contract_backfill_2020_2025",
-        "start_date": "2020-01-01",
-        "end_date": "2025-12-31",
+        "checkpoint_id": "pps_contract_backfill_2021_2026",
+        "start_date": "2021-01-01",
+        "end_date": "2026-09-13",
         "pipeline_root": "/app/pipelines",
         "batch_days": 30,
     }
@@ -2907,19 +2932,47 @@ async def test_api_only_extraction_skips_codex_and_uses_structured_compiler() ->
     assert result["expression"]["operator"] == "all"
 
 
-def test_bid_notice_deployments_are_hourly_and_staggered() -> None:
+def test_bid_notice_deployments_are_frequent_and_staggered() -> None:
     prefect = yaml.safe_load((PIPELINES / "prefect.yaml").read_text(encoding="utf-8"))
     notices = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-notice-ingestion")
+    backfill = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-notice-backfill")
+    reconciliation = next(
+        item for item in prefect["deployments"]
+        if item["name"] == "pps-bid-notice-reconciliation-3d"
+    )
     documents = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-document-processing")
     parsing = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-document-parsing")
     extraction = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-eligibility-extraction")
     retention = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-document-retention")
 
-    assert notices["schedules"][0]["cron"] == "0 * * * *"
+    assert notices["schedules"][0]["cron"] == "*/10 * * * *"
+    assert notices["parameters"] == {
+        "pipeline_root": "/app/pipelines",
+        "lookback_days": 1,
+    }
+    assert reconciliation["schedules"][0] == {
+        "cron": "10 1 * * *", "timezone": "Asia/Seoul", "active": True,
+    }
+    assert reconciliation["parameters"]["lookback_days"] == 3
+    assert backfill["schedules"][0] == {
+        "cron": "50 * * * *", "timezone": "Asia/Seoul", "active": True,
+    }
+    assert backfill["parameters"] == {
+        "checkpoint_id": "pps_bid_notice_backfill_2021_2026",
+        "start_date": "2021-01-01",
+        "end_date": "2026-09-13",
+        "pipeline_root": "/app/pipelines",
+        "batch_days": 30,
+    }
+    assert backfill["concurrency_limit"] == {
+        "limit": 1, "collision_strategy": "CANCEL_NEW",
+    }
     assert documents["schedules"][0]["cron"] == "15 * * * *"
+    assert documents["schedules"][0]["active"] is False
     assert parsing["schedules"][0]["cron"] == "*/10 * * * *"
+    assert parsing["schedules"][0]["active"] is False
     assert extraction["schedules"][0]["cron"] == "5-55/10 * * * *"
-    assert extraction["schedules"][0]["active"] is True
+    assert extraction["schedules"][0]["active"] is False
     assert extraction["parameters"] == {"batch_size": 20}
     assert retention["schedules"][0] == {
         "cron": "45 3 * * *",
@@ -2933,8 +2986,26 @@ def test_bid_notice_deployments_are_hourly_and_staggered() -> None:
     assert parsing["work_pool"]["name"] == "teoria-ai-extraction"
     assert extraction["work_pool"]["name"] == "teoria-ai-extraction"
     assert sync_pps_bid_notices.name == "나라장터 입찰공고·참가제한 수집"
+    assert sync_pps_bid_notice_window.name == "나라장터 입찰공고 일별 구간 수집"
+    assert sync_pps_bid_notice_backfill.name == "나라장터 입찰공고 Backfill"
     assert sync_pps_bid_documents.name == "나라장터 입찰공고 첨부파일 수집"
     assert purge_expired_pps_bid_documents.name == "나라장터 입찰공고 첨부파일 보존기간 삭제"
+
+
+def test_contract_and_bid_result_reconciliation_schedules_are_layered() -> None:
+    deployments = {
+        item["name"]: item
+        for item in yaml.safe_load(
+            (PIPELINES / "prefect.yaml").read_text(encoding="utf-8")
+        )["deployments"]
+    }
+
+    assert deployments["pps-contract-incremental"]["parameters"]["lookback_days"] == 3
+    assert deployments["pps-bid-result-incremental"]["parameters"]["lookback_days"] == 3
+    assert deployments["pps-contract-reconciliation-30d"]["schedules"][0]["cron"] == "0 2 * * *"
+    assert deployments["pps-contract-reconciliation-90d"]["schedules"][0]["cron"] == "0 3 * * 0"
+    assert deployments["pps-bid-result-reconciliation-30d"]["schedules"][0]["cron"] == "30 2 * * *"
+    assert deployments["pps-bid-result-reconciliation-90d"]["schedules"][0]["cron"] == "30 3 * * 0"
 from datetime import date
 
 from teoria_pipelines.models import CollectionWindow

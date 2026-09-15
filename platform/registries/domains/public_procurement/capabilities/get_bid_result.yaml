@@ -1,0 +1,29 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-14"
+
+capability:
+  id: get_bid_result
+  name: 입찰 낙찰·개찰 결과 조회
+  description: 공고번호와 차수로 최종낙찰 결과와 참여업체별 개찰순위·투찰금액·평가점수를 조회한다.
+  inputs:
+    notice_number:
+      property: public_procurement.bid_award.notice_number
+      required: true
+    notice_order:
+      property: public_procurement.bid_award.notice_order
+      required: true
+  steps:
+    - call: teoria_public_procurement.bid_awards
+    - call: teoria_public_procurement.bid_opening_participants
+  returns:
+    - public_procurement.bid_notice
+    - public_procurement.bid_award
+    - public_procurement.bid_opening_participation
+    - company.business_registration
+    - public_procurement.public_organization
+    - public_procurement.bid_notice_has_award
+    - public_procurement.business_registration_wins_bid_award
+    - public_procurement.bid_opening_participation_is_for_award
+    - public_procurement.business_registration_has_bid_opening_participation
+    - public_procurement.public_organization_demands_bid_award

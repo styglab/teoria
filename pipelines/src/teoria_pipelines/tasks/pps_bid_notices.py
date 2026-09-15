@@ -16,7 +16,7 @@ from prefect import task
 from teoria_provider.executor import ProviderExecutor
 from teoria_provider.secrets import EnvironmentSecretProvider
 
-from teoria_pipelines.checkpoints import resolve_incremental_window
+from teoria_pipelines.checkpoints import resolve_backfill_windows, resolve_incremental_window
 from teoria_pipelines.connectors import PPSBidNoticeClient
 from teoria_pipelines.models import (
     BidNoticeKey,
@@ -31,6 +31,7 @@ from teoria_pipelines.settings import bootstrap_pipeline_settings
 
 
 PIPELINE_ID = "pps_bid_notice_ingestion"
+BACKFILL_PIPELINE_ID = "pps_bid_notice_backfill_2021_2026"
 NOTICE_OPERATIONS = [
     "list_construction_bid_notices", "list_service_bid_notices",
     "list_foreign_bid_notices", "list_goods_bid_notices", "list_other_bid_notices",
@@ -94,6 +95,24 @@ def determine_bid_notice_window(lookback_days: int = 1) -> CollectionWindow:
     return resolve_incremental_window(lookback_days=lookback_days, today=today)
 
 
+@task(name="입찰공고 Backfill 구간 결정", viz_return_value=[VIZ_WINDOW])
+def determine_bid_notice_backfill_windows(
+    checkpoint_id: str,
+    start_date: date,
+    end_date: date,
+    batch_days: int = 30,
+) -> list[CollectionWindow]:
+    checkpoint = _store().get_checkpoint(checkpoint_id)
+    return resolve_backfill_windows(
+        start_date=start_date,
+        end_date=end_date,
+        checkpoint=checkpoint,
+        batch_days=batch_days,
+        today=datetime.now(SEOUL_TIMEZONE).date(),
+        reverse=True,
+    )
+
+
 @task(name="입찰공고 Operation 수집", retries=2, retry_delay_seconds=60,
       viz_return_value=VIZ_EXTRACTED)
 async def extract_bid_notice_operation(execution_id: UUID, window: CollectionWindow,
@@ -107,6 +126,14 @@ async def extract_bid_notice_operation(execution_id: UUID, window: CollectionWin
 def normalize_bid_notices(batch: ExtractedBatch, raw_count: int) -> NormalizedBidNoticeBatch:
     del raw_count
     return normalize_bid_notice_batch(batch)
+
+
+@task(name="과거 공고 첨부파일 수집 제외", viz_return_value=VIZ_NORMALIZED)
+def omit_historical_bid_documents(
+    batch: NormalizedBidNoticeBatch,
+) -> NormalizedBidNoticeBatch:
+    batch.documents = []
+    return batch
 
 
 @task(name="입찰공고 Upsert", retries=2, retry_delay_seconds=5,
@@ -154,8 +181,9 @@ def combine_bid_notice_summary(raw_notice_count: int, raw_enrichment_count: int,
 
 @task(name="입찰공고 Checkpoint 갱신", viz_return_value=VIZ_SUMMARY)
 def update_bid_notice_checkpoint(execution_id: UUID, cursor_date: date,
-                                 summary: LoadSummary) -> LoadSummary:
-    _store().update_checkpoint(PIPELINE_ID, cursor_date, execution_id)
+                                 summary: LoadSummary,
+                                 pipeline_id: str = PIPELINE_ID) -> LoadSummary:
+    _store().update_checkpoint(pipeline_id, cursor_date, execution_id)
     return summary
 
 

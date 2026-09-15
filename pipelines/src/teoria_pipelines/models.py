@@ -56,6 +56,8 @@ class LoadSummary:
     participation_regions: int = 0
     documents: int = 0
     industries: int = 0
+    awards: int = 0
+    opening_participants: int = 0
 
 
 @dataclass(slots=True)
@@ -64,6 +66,12 @@ class NormalizedBidNoticeBatch:
     license_restrictions: list[dict[str, Any]] = field(default_factory=list)
     participation_regions: list[dict[str, Any]] = field(default_factory=list)
     documents: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class NormalizedBidResultBatch:
+    awards: list[dict[str, Any]] = field(default_factory=list)
+    opening_participants: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

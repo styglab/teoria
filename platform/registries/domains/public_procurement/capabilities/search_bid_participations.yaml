@@ -1,0 +1,87 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-15"
+
+capability:
+  id: search_bid_participations
+  name: 입찰 개찰 참여업체 검색
+  description: 실개찰 기간, 자유어와 선택적인 업체·공고·업무유형·수요기관·순위·투찰금액 조건으로 참여업체 결과를 페이지 단위 검색한다.
+  inputs:
+    query:
+      data_type: string
+    opening_at_from:
+      data_type: datetime
+      field: teoria_public_procurement.bid_opening_participants.opening_at
+      operator: gte
+      required: true
+    opening_at_to:
+      data_type: datetime
+      field: teoria_public_procurement.bid_opening_participants.opening_at
+      operator: lte
+      required: true
+    business_registration_number:
+      property: public_procurement.bid_opening_participation.business_registration_number
+    notice_number:
+      property: public_procurement.bid_opening_participation.notice_number
+    work_type:
+      data_type: string
+      field: teoria_public_procurement.bid_opening_participants.work_type
+      enum: [goods, construction, service, foreign]
+    demand_organization_code:
+      data_type: string
+      field: teoria_public_procurement.bid_opening_participants.demand_organization_code
+    opening_rank_min:
+      property: public_procurement.bid_opening_participation.opening_rank
+      operator: gte
+    opening_rank_max:
+      property: public_procurement.bid_opening_participation.opening_rank
+      operator: lte
+    bid_amount_min:
+      property: public_procurement.bid_opening_participation.bid_amount
+      operator: gte
+    bid_amount_max:
+      property: public_procurement.bid_opening_participation.bid_amount
+      operator: lte
+    sort:
+      data_type: string
+      enum: [opening_desc, rank_asc, amount_desc]
+      default: opening_desc
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
+  steps:
+    - call: teoria_public_procurement.bid_opening_participants
+      database_query:
+        search:
+          input: query
+          fields: [notice_name, notice_number, participant_name, demand_organization_name, remark]
+        sort:
+          input: sort
+          choices:
+            opening_desc:
+              - {field: opening_at, direction: desc, nulls: last}
+              - {field: participation_id, direction: desc}
+            rank_asc:
+              - {field: opening_rank, direction: asc, nulls: last}
+              - {field: opening_at, direction: desc, nulls: last}
+              - {field: participation_id, direction: desc}
+            amount_desc:
+              - {field: bid_amount, direction: desc, nulls: last}
+              - {field: participation_id, direction: desc}
+        pagination:
+          page_input: page
+          page_size_input: page_size
+          root_field: participation_id
+          count_distinct: false
+  returns:
+    - public_procurement.bid_award
+    - public_procurement.bid_opening_participation
+    - company.business_registration
+    - public_procurement.bid_opening_participation_is_for_award
+    - public_procurement.business_registration_has_bid_opening_participation

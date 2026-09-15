@@ -112,6 +112,7 @@ class AssessmentFixtureRunner:
                     local_id="r3", requirement_type="past_performance",
                     operator="greater_than_or_equal", value_text='{"number":100000000}',
                     original_text="최근 3년 유사실적 1억원 이상", mandatory=True,
+                    assessment_stage="qualification_review",
                     evidence_summary="공고문 5쪽 | 유사실적",
                 ),
             ]]
@@ -144,15 +145,18 @@ async def test_computes_bid_eligibility_as_ontology_objects_with_evidence() -> N
 
     assessment = next(item for item in result.objects if item.object_type == "bid_eligibility_assessment")
     assert assessment.properties["reference_date"] == date(2026, 8, 20)
-    assert assessment.properties["outcome"] == "needs_review"
+    assert assessment.properties["outcome"] == "satisfied"
     assert assessment.properties["satisfied_count"] == 2
-    assert assessment.properties["needs_review_count"] == 1
+    assert assessment.properties["needs_review_count"] == 0
     details = [item for item in result.objects if item.object_type == "requirement_assessment"]
     assert {item.properties["reason_code"] for item in details} == {
         "business_active",
         "direct_production_matched",
         "unsupported_standard_rule",
     }
+    assert next(
+        item for item in details if item.properties["reason_code"] == "unsupported_standard_rule"
+    ).properties["assessment_stage"] == "qualification_review"
     assert sum(item.object_type == "evidence" for item in result.objects) >= 5
     assert any(item.link_type == "requirement_assessment_supported_by_evidence" for item in result.links)
     assert any(item.link_type == "evidence_derived_from_direct_production_confirmation" for item in result.links)
@@ -178,14 +182,14 @@ async def test_batch_assessment_returns_list_summaries_and_reuses_cache() -> Non
     )
 
     assert first.outcome == second.outcome
-    assert first.outcome["items"][0]["outcome"] == "needs_review"
+    assert first.outcome["items"][0]["outcome"] == "satisfied"
     assert first.outcome["items"][0]["satisfied_count"] == 2
-    assert first.outcome["items"][0]["needs_review_count"] == 1
-    assert len(first.outcome["items"][0]["issues"]) == 1
+    assert first.outcome["items"][0]["needs_review_count"] == 0
+    assert len(first.outcome["items"][0]["issues"]) == 0
     key_outcomes = first.outcome["items"][0]["key_outcomes"]
     assert key_outcomes["business_status"]["outcome"] == "satisfied"
     assert key_outcomes["direct_production"]["outcome"] == "satisfied"
-    assert key_outcomes["past_performance"]["outcome"] == "needs_review"
+    assert key_outcomes["past_performance"]["applicability"] == "not_applicable"
     assert key_outcomes["participation_region"]["applicability"] == "not_applicable"
     assert key_outcomes["industry_license"]["outcome"] is None
     assert runner.calls.count("get_bid_notices_by_ids") == 2

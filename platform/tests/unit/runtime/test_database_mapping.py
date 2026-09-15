@@ -85,6 +85,64 @@ def test_materializes_contract_participation_from_database_relation() -> None:
     assert contract_link.target_object_id == contract.object_id
 
 
+def test_materializes_bid_award_and_opening_participation_relationships() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    award_id = "R26BK00000001:000:0:000"
+    award_fragments = MappingDecoder().decode_database_rows(
+        catalog, "teoria_public_procurement", "bid_awards", [{
+            "award_id": award_id,
+            "bid_notice_id": "R26BK00000001:000",
+            "notice_number": "R26BK00000001",
+            "notice_order": "000",
+            "bid_classification_number": "0",
+            "rebid_number": "000",
+            "work_type": "service",
+            "notice_name": "테스트 용역",
+            "winner_business_registration_number": "1234567890",
+            "winner_name": "낙찰기업",
+            "winning_amount": 100000000,
+            "demand_organization_code": "B000001",
+            "demand_organization_name": "테스트기관",
+        }],
+    )
+    participant_fragments = MappingDecoder().decode_database_rows(
+        catalog, "teoria_public_procurement", "bid_opening_participants", [{
+            "participation_id": f"{award_id}:1234567890",
+            "award_id": award_id,
+            "bid_notice_id": "R26BK00000001:000",
+            "notice_number": "R26BK00000001",
+            "notice_order": "000",
+            "bid_classification_number": "0",
+            "rebid_number": "000",
+            "business_registration_number": "1234567890",
+            "participant_name": "낙찰기업",
+            "opening_rank": 1,
+            "bid_amount": 100000000,
+        }],
+    )
+
+    objects, links = OntologyMaterializer().materialize(
+        catalog, [*award_fragments, *participant_fragments], datetime.now(timezone.utc),
+        {"bid_notice", "bid_award", "bid_opening_participation",
+         "business_registration", "public_organization"},
+        {"bid_notice_has_award", "business_registration_wins_bid_award",
+         "public_organization_demands_bid_award",
+         "bid_opening_participation_is_for_award",
+         "business_registration_has_bid_opening_participation"},
+    )
+
+    assert {item.object_type for item in objects} == {
+        "bid_notice", "bid_award", "bid_opening_participation",
+        "business_registration", "public_organization",
+    }
+    assert {item.link_type for item in links} == {
+        "bid_notice_has_award", "business_registration_wins_bid_award",
+        "public_organization_demands_bid_award",
+        "bid_opening_participation_is_for_award",
+        "business_registration_has_bid_opening_participation",
+    }
+
+
 @pytest.mark.asyncio
 async def test_capability_runner_queries_database_and_materializes_relationships() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
@@ -193,4 +251,54 @@ def test_bid_notice_search_uses_declared_query_defaults() -> None:
     }
     assert query["filters"][-1] == {
         "field": "notice_status", "operator": "eq", "value": "active",
+    }
+
+
+def test_company_bid_history_binds_business_number_to_each_relation() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    capability = catalog.capabilities["get_company_bid_history"]
+
+    award_query = CapabilityBinder().bind(
+        catalog, capability, capability.steps[0],
+        {"business_registration_number": "1234567890"},
+    )
+    participation_query = CapabilityBinder().bind(
+        catalog, capability, capability.steps[1],
+        {"business_registration_number": "1234567890"},
+    )
+
+    assert award_query["filters"] == [{
+        "field": "winner_business_registration_number",
+        "operator": "eq",
+        "value": "1234567890",
+    }]
+    assert participation_query["filters"] == [{
+        "field": "business_registration_number",
+        "operator": "eq",
+        "value": "1234567890",
+    }]
+    assert award_query["pagination"]["root_field"] == "award_id"
+    assert participation_query["pagination"]["root_field"] == "participation_id"
+    assert award_query["pagination"]["count_distinct"] is False
+    assert participation_query["pagination"]["count_distinct"] is False
+
+
+def test_bid_participation_search_binds_joined_award_filters() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    capability = catalog.capabilities["search_bid_participations"]
+    query = CapabilityBinder().bind(
+        catalog, capability, capability.steps[0], {
+            "opening_at_from": datetime(2026, 1, 1, tzinfo=timezone.utc),
+            "opening_at_to": datetime(2026, 12, 31, tzinfo=timezone.utc),
+            "work_type": "service",
+            "demand_organization_code": "B000001",
+        },
+    )
+
+    assert [item["field"] for item in query["filters"]] == [
+        "opening_at", "opening_at", "work_type", "demand_organization_code",
+    ]
+    assert query["pagination"] == {
+        "page": 1, "page_size": 20, "root_field": "participation_id",
+        "count_distinct": False,
     }

@@ -99,7 +99,7 @@ def test_raw_normalized_and_checkpoint_writes_are_idempotent() -> None:
 
     with psycopg.connect(DATABASE_URL) as connection:
         raw_count = connection.execute(
-            "SELECT count(*) FROM ingestion.raw_provider_records WHERE execution_id=%s",
+            "SELECT count(*) FROM ingestion.raw_provider_observations WHERE execution_id=%s",
             (execution_id,),
         ).fetchone()[0]
         contract_count = connection.execute(
@@ -116,7 +116,7 @@ def test_raw_normalized_and_checkpoint_writes_are_idempotent() -> None:
     assert checkpoint == window.end
 
 
-def test_same_raw_record_is_preserved_across_pipeline_executions() -> None:
+def test_same_raw_payload_is_deduplicated_across_pipeline_executions() -> None:
     store = PostgresStore(DATABASE_URL or "")
     first_execution_id = uuid4()
     second_execution_id = uuid4()
@@ -138,10 +138,16 @@ def test_same_raw_record_is_preserved_across_pipeline_executions() -> None:
         assert store.save_raw_records([record]) == 1
 
     with psycopg.connect(DATABASE_URL) as connection:
-        raw_count = connection.execute(
-            "SELECT count(*) FROM ingestion.raw_provider_records "
+        payload_count = connection.execute(
+            "SELECT count(*) FROM ingestion.raw_provider_payloads "
+            "WHERE connector_id=%s AND operation_id=%s AND source_record_hash=%s",
+            ("pps_contract_api", "list_goods_contracts", source_record_hash),
+        ).fetchone()[0]
+        observation_count = connection.execute(
+            "SELECT count(*) FROM ingestion.raw_provider_observations "
             "WHERE connector_id=%s AND operation_id=%s AND source_record_hash=%s",
             ("pps_contract_api", "list_goods_contracts", source_record_hash),
         ).fetchone()[0]
 
-    assert raw_count == 2
+    assert payload_count == 1
+    assert observation_count == 2

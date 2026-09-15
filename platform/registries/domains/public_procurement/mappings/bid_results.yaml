@@ -1,0 +1,120 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-14"
+
+mapping:
+  id: bid_results
+  name: 입찰 낙찰·개찰 결과 매핑
+  description: 정규화된 최종낙찰과 개찰 참여업체 결과를 입찰공고·업체·수요기관에 연결한다.
+  ontology: public_procurement
+  bindings:
+    bid_notice.bid_notice_id:
+      - {field: teoria_public_procurement.bid_awards.bid_notice_id, role: award_notice}
+    bid_notice.notice_number:
+      - {field: teoria_public_procurement.bid_awards.notice_number, role: award_notice}
+    bid_notice.notice_order:
+      - {field: teoria_public_procurement.bid_awards.notice_order, role: award_notice}
+    bid_notice.notice_name:
+      - {field: teoria_public_procurement.bid_awards.notice_name, role: award_notice}
+    bid_notice.work_type:
+      - {field: teoria_public_procurement.bid_awards.work_type, role: award_notice}
+
+    bid_award.award_id:
+      - {field: teoria_public_procurement.bid_awards.award_id}
+      - {field: teoria_public_procurement.bid_opening_participants.award_id, role: participation_award}
+    bid_award.bid_notice_id:
+      - {field: teoria_public_procurement.bid_awards.bid_notice_id}
+      - {field: teoria_public_procurement.bid_opening_participants.bid_notice_id, role: participation_award}
+    bid_award.notice_number:
+      - {field: teoria_public_procurement.bid_awards.notice_number}
+      - {field: teoria_public_procurement.bid_opening_participants.notice_number, role: participation_award}
+    bid_award.notice_order:
+      - {field: teoria_public_procurement.bid_awards.notice_order}
+      - {field: teoria_public_procurement.bid_opening_participants.notice_order, role: participation_award}
+    bid_award.bid_classification_number:
+      - {field: teoria_public_procurement.bid_awards.bid_classification_number}
+      - {field: teoria_public_procurement.bid_opening_participants.bid_classification_number, role: participation_award}
+    bid_award.rebid_number:
+      - {field: teoria_public_procurement.bid_awards.rebid_number}
+      - {field: teoria_public_procurement.bid_opening_participants.rebid_number, role: participation_award}
+    bid_award.work_type: [{field: teoria_public_procurement.bid_awards.work_type}]
+    bid_award.notice_division_code: [{field: teoria_public_procurement.bid_awards.notice_division_code}]
+    bid_award.notice_name: [{field: teoria_public_procurement.bid_awards.notice_name}]
+    bid_award.participant_count: [{field: teoria_public_procurement.bid_awards.participant_count}]
+    bid_award.winner_business_registration_number: [{field: teoria_public_procurement.bid_awards.winner_business_registration_number}]
+    bid_award.winner_name: [{field: teoria_public_procurement.bid_awards.winner_name}]
+    bid_award.winner_representative_name: [{field: teoria_public_procurement.bid_awards.winner_representative_name}]
+    bid_award.winning_amount: [{field: teoria_public_procurement.bid_awards.winning_amount}]
+    bid_award.winning_rate: [{field: teoria_public_procurement.bid_awards.winning_rate}]
+    bid_award.opening_at: [{field: teoria_public_procurement.bid_awards.opening_at}]
+    bid_award.final_award_date: [{field: teoria_public_procurement.bid_awards.final_award_date}]
+    bid_award.demand_organization_code: [{field: teoria_public_procurement.bid_awards.demand_organization_code}]
+    bid_award.demand_organization_name: [{field: teoria_public_procurement.bid_awards.demand_organization_name}]
+    bid_award.source_registered_at: [{field: teoria_public_procurement.bid_awards.source_registered_at}]
+
+    bid_opening_participation.participation_id: [{field: teoria_public_procurement.bid_opening_participants.participation_id}]
+    bid_opening_participation.award_id: [{field: teoria_public_procurement.bid_opening_participants.award_id}]
+    bid_opening_participation.bid_notice_id: [{field: teoria_public_procurement.bid_opening_participants.bid_notice_id}]
+    bid_opening_participation.notice_number: [{field: teoria_public_procurement.bid_opening_participants.notice_number}]
+    bid_opening_participation.notice_order: [{field: teoria_public_procurement.bid_opening_participants.notice_order}]
+    bid_opening_participation.bid_classification_number: [{field: teoria_public_procurement.bid_opening_participants.bid_classification_number}]
+    bid_opening_participation.rebid_number: [{field: teoria_public_procurement.bid_opening_participants.rebid_number}]
+    bid_opening_participation.business_registration_number: [{field: teoria_public_procurement.bid_opening_participants.business_registration_number}]
+    bid_opening_participation.participant_name: [{field: teoria_public_procurement.bid_opening_participants.participant_name}]
+    bid_opening_participation.representative_name: [{field: teoria_public_procurement.bid_opening_participants.representative_name}]
+    bid_opening_participation.opening_result_type_name: [{field: teoria_public_procurement.bid_opening_participants.opening_result_type_name}]
+    bid_opening_participation.opening_rank: [{field: teoria_public_procurement.bid_opening_participants.opening_rank}]
+    bid_opening_participation.bid_amount: [{field: teoria_public_procurement.bid_opening_participants.bid_amount}]
+    bid_opening_participation.bid_rate: [{field: teoria_public_procurement.bid_opening_participants.bid_rate}]
+    bid_opening_participation.remark: [{field: teoria_public_procurement.bid_opening_participants.remark}]
+    bid_opening_participation.bid_at: [{field: teoria_public_procurement.bid_opening_participants.bid_at}]
+    bid_opening_participation.bid_price_evaluation_score: [{field: teoria_public_procurement.bid_opening_participants.bid_price_evaluation_score}]
+    bid_opening_participation.technical_evaluation_raw_score: [{field: teoria_public_procurement.bid_opening_participants.technical_evaluation_raw_score}]
+    bid_opening_participation.technical_evaluation_score: [{field: teoria_public_procurement.bid_opening_participants.technical_evaluation_score}]
+    bid_opening_participation.total_evaluation_score: [{field: teoria_public_procurement.bid_opening_participants.total_evaluation_score}]
+
+    company.business_registration.business_registration_number:
+      - {field: teoria_public_procurement.bid_awards.winner_business_registration_number, role: winning_business}
+      - {field: teoria_public_procurement.bid_opening_participants.business_registration_number, role: participating_business}
+    company.business_registration.business_name:
+      - {field: teoria_public_procurement.bid_awards.winner_name, role: winning_business}
+      - {field: teoria_public_procurement.bid_opening_participants.participant_name, role: participating_business}
+    public_organization.organization_code:
+      - {field: teoria_public_procurement.bid_awards.demand_organization_code, role: award_demand_organization}
+    public_organization.name:
+      - {field: teoria_public_procurement.bid_awards.demand_organization_name, role: award_demand_organization}
+
+  materializations:
+    teoria_public_procurement.bid_awards:
+      objects:
+        award_notice:
+          type: bid_notice
+          identity: [bid_notice_id]
+        bid_award:
+          type: bid_award
+          identity: [award_id]
+        winning_business:
+          type: company.business_registration
+          identity: [business_registration_number]
+        award_demand_organization:
+          type: public_organization
+          identity: [organization_code]
+      links:
+        - {type: bid_notice_has_award, source: award_notice, target: bid_award}
+        - {type: business_registration_wins_bid_award, source: winning_business, target: bid_award}
+        - {type: public_organization_demands_bid_award, source: award_demand_organization, target: bid_award}
+
+    teoria_public_procurement.bid_opening_participants:
+      objects:
+        participation_award:
+          type: bid_award
+          identity: [award_id]
+        bid_opening_participation:
+          type: bid_opening_participation
+          identity: [participation_id]
+        participating_business:
+          type: company.business_registration
+          identity: [business_registration_number]
+      links:
+        - {type: bid_opening_participation_is_for_award, source: bid_opening_participation, target: participation_award}
+        - {type: business_registration_has_bid_opening_participation, source: participating_business, target: bid_opening_participation}

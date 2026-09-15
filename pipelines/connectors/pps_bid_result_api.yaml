@@ -1,0 +1,266 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-14"
+
+connector:
+  id: pps_bid_result_api
+  name: 조달청 나라장터 낙찰정보서비스
+  provider:
+    organization: 조달청
+    distribution: 공공데이터포털
+  type: api
+  specification:
+    format: manual
+    version: "1.1"
+    api_version: "1.5"
+    source_document: 조달청_OpenAPI참고자료_나라장터_낙찰정보서비스_1.1_extracted.docx
+  access:
+    base_url: http://apis.data.go.kr/1230000/as/ScsbidInfoService
+    authentication:
+      type: api_key
+      in: query
+      name: ServiceKey
+      credential_env: TEORIA_CONNECTOR_PPS_BID_RESULT_API_KEY
+
+  components:
+    objects:
+      - id: completed_opening_result
+        name: 개찰완료 업체별 결과
+        fields:
+          - {id: opengRsltDivNm, name: 개찰결과구분명, data_type: string}
+          - {id: bidNtceNo, name: 입찰공고번호, data_type: string}
+          - {id: bidNtceOrd, name: 입찰공고차수, data_type: string}
+          - {id: bidClsfcNo, name: 입찰분류번호, data_type: string}
+          - {id: rbidNo, name: 재입찰번호, data_type: string}
+          - {id: opengRank, name: 개찰순위, data_type: string}
+          - {id: prcbdrBizno, name: 투찰업체사업자등록번호, data_type: string}
+          - {id: prcbdrNm, name: 투찰업체명, data_type: string}
+          - {id: prcbdrCeoNm, name: 투찰업체대표자명, data_type: string}
+          - {id: bidprcAmt, name: 투찰금액, data_type: string}
+          - {id: bidprcrt, name: 투찰률, data_type: string}
+          - {id: rmrk, name: 비고, data_type: string}
+          - {id: cnsttyAccotBidAmtUrl, name: 공종별입찰금액URL, data_type: string}
+          - {id: drwtNo1, name: 추첨번호1, data_type: string}
+          - {id: drwtNo2, name: 추첨번호2, data_type: string}
+          - {id: bidprcDt, name: 투찰일시, data_type: string}
+          - {id: bidPrceEvlVal, name: 입찰가격점수, data_type: string}
+          - {id: techEvlNaturVal, name: 기술평가원점수, data_type: string}
+          - {id: techEvlVal, name: 기술평가점수, data_type: string}
+          - {id: totalEvlAmtVal, name: 종합평가점수, data_type: string}
+      - id: bid_award
+        name: 최종낙찰 결과
+        fields:
+          - {id: bidNtceNo, name: 입찰공고번호, data_type: string}
+          - {id: bidNtceOrd, name: 입찰공고차수, data_type: string}
+          - {id: bidClsfcNo, name: 입찰분류번호, data_type: string}
+          - {id: rbidNo, name: 재입찰번호, data_type: string}
+          - {id: ntceDivCd, name: 공고구분코드, data_type: string}
+          - {id: bidNtceNm, name: 입찰공고명, data_type: string}
+          - {id: prtcptCnum, name: 참가업체수, data_type: string}
+          - {id: bidwinnrNm, name: 최종낙찰업체명, data_type: string}
+          - {id: bidwinnrBizno, name: 최종낙찰업체사업자등록번호, data_type: string}
+          - {id: bidwinnrCeoNm, name: 최종낙찰업체대표자명, data_type: string}
+          - {id: bidwinnrAdrs, name: 최종낙찰업체주소, data_type: string}
+          - {id: bidwinnrTelNo, name: 최종낙찰업체전화번호, data_type: string}
+          - {id: sucsfbidAmt, name: 최종낙찰금액, data_type: string}
+          - {id: sucsfbidRate, name: 최종낙찰률, data_type: string}
+          - {id: rlOpengDt, name: 실개찰일시, data_type: string}
+          - {id: dminsttCd, name: 수요기관코드, data_type: string}
+          - {id: dminsttNm, name: 수요기관명, data_type: string}
+          - {id: rgstDt, name: 등록일시, data_type: string}
+          - {id: fnlSucsfDate, name: 최종낙찰일자, data_type: string}
+          - {id: fnlSucsfCorpOfcl, name: 최종낙찰업체담당자, data_type: string}
+      - id: foreign_bid_award
+        name: 외자 최종낙찰 결과
+        fields:
+          - {id: bidNtceNo, name: 입찰공고번호, data_type: string}
+          - {id: bidNtceOrd, name: 입찰공고차수, data_type: string}
+          - {id: bidClsfcNo, name: 입찰분류번호, data_type: string}
+          - {id: rbidNo, name: 재입찰번호, data_type: string}
+          - {id: ntceDivCd, name: 공고구분코드, data_type: string}
+          - {id: bidNtceNm, name: 입찰공고명, data_type: string}
+          - {id: prtcptCnum, name: 참가업체수, data_type: string}
+          - {id: bidwinnrNm, name: 최종낙찰업체명, data_type: string}
+          - {id: bidwinnrBizno, name: 최종낙찰업체사업자등록번호, data_type: string}
+          - {id: bidwinnrCeoNm, name: 최종낙찰업체대표자명, data_type: string}
+          - {id: bidwinnrAdrs, name: 최종낙찰업체주소, data_type: string}
+          - {id: bidwinnrTelNo, name: 최종낙찰업체전화번호, data_type: string}
+          - {id: sucsfbidAmt, name: 최종낙찰금액, data_type: string}
+          - {id: sucsfbidRate, name: 최종낙찰률, data_type: string}
+          - {id: rlOpengDt, name: 실개찰일시, data_type: string}
+          - {id: dminsttCd, name: 수요기관코드, data_type: string}
+          - {id: dminsttNm, name: 수요기관명, data_type: string}
+          - {id: rgstDt, name: 등록일시, data_type: string}
+          - {id: FnlSucsfDate, name: 최종낙찰일자, data_type: string}
+          - {id: fnlSucsfCorpOfcl, name: 최종낙찰업체담당자, data_type: string}
+
+  operations:
+    - id: list_goods_bid_awards
+      name: 나라장터 검색조건에 의한 낙찰된 목록 현황 물품조회
+      method: GET
+      idempotent: true
+      path: /getScsbidListSttusThngPPSSrch
+      description: 나라장터 검색조건으로 물품 최종낙찰자 목록을 조회한다.
+      pagination: &award_pagination
+        type: page_number
+        page: {request: query.pageNo}
+        page_size: {request: query.numOfRows}
+        total_count: response.body.totalCount
+      request: &award_request
+        query:
+          fields:
+            - {id: numOfRows, name: 한 페이지 결과 수, data_type: integer}
+            - {id: pageNo, name: 페이지 번호, data_type: integer}
+            - id: type
+              name: 타입
+              data_type: string
+              default: json
+              values: [{value: json}, {value: xml}]
+            - id: inqryDiv
+              name: 조회구분
+              data_type: string
+              values:
+                - {value: "1", label: 공고게시일시}
+                - {value: "2", label: 개찰일시}
+                - {value: "3", label: 입찰공고번호}
+            - {id: inqryBgnDt, name: 조회시작일시, data_type: string}
+            - {id: inqryEndDt, name: 조회종료일시, data_type: string}
+            - {id: bidNtceNo, name: 입찰공고번호, data_type: string}
+            - {id: bidNtceNm, name: 입찰공고명, data_type: string}
+            - {id: ntceInsttCd, name: 공고기관코드, data_type: string}
+            - {id: ntceInsttNm, name: 공고기관명, data_type: string}
+            - {id: dminsttCd, name: 수요기관코드, data_type: string}
+            - {id: dminsttNm, name: 수요기관명, data_type: string}
+            - {id: refNo, name: 참조번호, data_type: string}
+            - id: prtcptLmtRgnCd
+              name: 참가제한지역코드
+              data_type: string
+              values:
+                - {value: "11", label: 서울특별시}
+                - {value: "26", label: 부산광역시}
+                - {value: "27", label: 대구광역시}
+                - {value: "28", label: 인천광역시}
+                - {value: "29", label: 광주광역시}
+                - {value: "30", label: 대전광역시}
+                - {value: "31", label: 울산광역시}
+                - {value: "36", label: 세종특별자치시}
+                - {value: "41", label: 경기도}
+                - {value: "42", label: 강원도}
+                - {value: "43", label: 충청북도}
+                - {value: "44", label: 충청남도}
+                - {value: "45", label: 전라북도}
+                - {value: "46", label: 전라남도}
+                - {value: "47", label: 경상북도}
+                - {value: "48", label: 경상남도}
+                - {value: "50", label: 제주도}
+                - {value: "51", label: 강원특별자치도}
+                - {value: "52", label: 전북특별자치도}
+                - {value: "99", label: 기타}
+                - {value: "00", label: 전국}
+            - {id: prtcptLmtRgnNm, name: 참가제한지역명, data_type: string}
+            - {id: indstrytyCd, name: 업종코드, data_type: string}
+            - {id: indstrytyNm, name: 업종명, data_type: string}
+            - {id: presmptPrceBgn, name: 추정가격시작, data_type: string}
+            - {id: presmptPrceEnd, name: 추정가격종료, data_type: string}
+            - {id: dtilPrdctClsfcNo, name: 세부품명번호, data_type: string}
+            - {id: masYn, name: 다수공급경쟁자여부, data_type: string}
+            - {id: prcrmntReqNo, name: 조달요청번호, data_type: string}
+            - id: intrntnlDivCd
+              name: 국제구분코드
+              data_type: string
+              values: [{value: "1", label: 국내}, {value: "2", label: 국제}]
+            - {id: bizno, name: 사업자번호, data_type: string}
+          required: [numOfRows, pageNo, inqryDiv]
+      response: &award_response
+        content_type: application/json
+        http_status: 200
+        control: &award_control
+          record_path: response.header
+          success: {field: resultCode, equals: "00"}
+          fields:
+            - {id: resultCode, name: 결과코드, data_type: string}
+            - {id: resultMsg, name: 결과메세지, data_type: string}
+        data:
+          record_path: response.body.items[]
+          ref: bid_award
+
+    - id: list_construction_bid_awards
+      name: 나라장터 검색조건에 의한 낙찰된 목록 현황 공사조회
+      method: GET
+      idempotent: true
+      path: /getScsbidListSttusCnstwkPPSSrch
+      description: 나라장터 검색조건으로 공사 최종낙찰자 목록을 조회한다.
+      pagination: *award_pagination
+      request: *award_request
+      response: *award_response
+
+    - id: list_service_bid_awards
+      name: 나라장터 검색조건에 의한 낙찰된 목록 현황 용역조회
+      method: GET
+      idempotent: true
+      path: /getScsbidListSttusServcPPSSrch
+      description: 나라장터 검색조건으로 용역 최종낙찰자 목록을 조회한다.
+      pagination: *award_pagination
+      request: *award_request
+      response: *award_response
+
+    - id: list_foreign_bid_awards
+      name: 나라장터 검색조건에 의한 낙찰된 목록 현황 외자조회
+      method: GET
+      idempotent: true
+      path: /getScsbidListSttusFrgcptPPSSrch
+      description: 나라장터 검색조건으로 외자 최종낙찰자 목록을 조회한다.
+      pagination: *award_pagination
+      request: *award_request
+      response:
+        content_type: application/json
+        http_status: 200
+        control: *award_control
+        data:
+          record_path: response.body.items[]
+          ref: foreign_bid_award
+
+    - id: list_completed_opening_results
+      name: 개찰결과 개찰완료 목록 조회
+      method: GET
+      idempotent: true
+      path: /getOpengResultListInfoOpengCompt
+      description: 입찰공고번호로 물품·공사·용역·외자 개찰완료 건의 투찰업체별 개찰순위와 결과를 조회한다.
+      pagination:
+        type: page_number
+        page: {request: query.pageNo}
+        page_size: {request: query.numOfRows}
+        total_count: response.body.totalCount
+      request:
+        query:
+          fields:
+            - {id: numOfRows, name: 한 페이지 결과 수, data_type: integer}
+            - {id: pageNo, name: 페이지 번호, data_type: integer}
+            - id: type
+              name: 타입
+              data_type: string
+              default: json
+              values:
+                - {value: json}
+                - {value: xml}
+            - {id: bidNtceNo, name: 입찰공고번호, data_type: string}
+            - {id: bidNtceOrd, name: 입찰공고차수, data_type: string}
+            - {id: bidClsfcNo, name: 입찰분류번호, data_type: string}
+            - {id: rbidNo, name: 재입찰번호, data_type: string}
+          required: [numOfRows, pageNo, bidNtceNo]
+      response:
+        content_type: application/json
+        http_status: 200
+        control:
+          record_path: response.header
+          success: {field: resultCode, equals: "00"}
+          fields:
+            - id: resultCode
+              name: 결과코드
+              data_type: string
+              values:
+                - {value: "00", label: 정상}
+            - {id: resultMsg, name: 결과메세지, data_type: string}
+        data:
+          record_path: response.body.items[]
+          ref: completed_opening_result

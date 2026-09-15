@@ -21,7 +21,7 @@ from teoria_pipelines.settings import bootstrap_pipeline_settings
 
 PIPELINE_ID = "pps_contract_ingestion"
 INCREMENTAL_PIPELINE_ID = "pps_contract_incremental"
-BACKFILL_PIPELINE_ID = "pps_contract_backfill_2026"
+BACKFILL_PIPELINE_ID = "pps_contract_backfill_2021_2026"
 OPERATIONS = [
     "list_goods_contracts",
     "list_construction_contracts",
@@ -60,13 +60,15 @@ def determine_incremental_window(lookback_days: int = 3) -> CollectionWindow:
 @task(name="Backfill 구간 결정", viz_return_value=[VIZ_WINDOW])
 def determine_backfill_windows(checkpoint_id: str, start_date: date,
                                end_date: date,
-                               batch_days: int = 30) -> list[CollectionWindow]:
+                               batch_days: int = 30,
+                               reverse: bool = False) -> list[CollectionWindow]:
     checkpoint = _store().get_checkpoint(checkpoint_id)
     return resolve_backfill_windows(
         start_date=start_date,
         end_date=end_date,
         checkpoint=checkpoint,
         batch_days=batch_days,
+        reverse=reverse,
     )
 
 
@@ -142,6 +144,8 @@ def update_checkpoint(execution_id: UUID, pipeline_id: str, cursor_date: date,
         participation_regions=load_summary.participation_regions,
         documents=load_summary.documents,
         industries=load_summary.industries,
+        awards=load_summary.awards,
+        opening_participants=load_summary.opening_participants,
     )
 
 

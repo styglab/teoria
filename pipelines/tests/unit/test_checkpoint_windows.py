@@ -80,6 +80,32 @@ def test_completed_backfill_does_not_repeat_the_finished_range() -> None:
     ) == []
 
 
+def test_reverse_backfill_moves_from_latest_to_oldest() -> None:
+    assert resolve_backfill_windows(
+        start_date=date(2025, 1, 1),
+        end_date=date(2026, 7, 31),
+        checkpoint=None,
+        batch_days=3,
+        today=date(2026, 8, 1),
+        reverse=True,
+    ) == [
+        CollectionWindow(date(2026, 7, 31), date(2026, 7, 31)),
+        CollectionWindow(date(2026, 7, 30), date(2026, 7, 30)),
+        CollectionWindow(date(2026, 7, 29), date(2026, 7, 29)),
+    ]
+    assert resolve_backfill_windows(
+        start_date=date(2025, 1, 1),
+        end_date=date(2026, 7, 31),
+        checkpoint=date(2026, 7, 29),
+        batch_days=2,
+        today=date(2026, 8, 1),
+        reverse=True,
+    ) == [
+        CollectionWindow(date(2026, 7, 28), date(2026, 7, 28)),
+        CollectionWindow(date(2026, 7, 27), date(2026, 7, 27)),
+    ]
+
+
 def test_backfill_rejects_a_non_historical_end_date() -> None:
     with pytest.raises(ValueError, match="end_date"):
         resolve_backfill_windows(

@@ -1,4 +1,5 @@
 from teoria_pipelines.tasks.bid_eligibility import (
+    _apply_bid_entry_fast_scope,
     _prune_out_of_scope_participation_findings,
     _repair_requirement_semantics,
 )
@@ -75,3 +76,19 @@ def test_named_manufacturer_support_condition_is_retained() -> None:
     _prune_out_of_scope_participation_findings(result)
 
     assert result["participation_findings"] == [finding]
+
+
+def test_fast_scope_keeps_only_bid_entry_requirements_and_no_findings() -> None:
+    result = {
+        "requirements": [
+            {"id": "entry", "assessment_stage": "bid_entry"},
+            {"id": "review", "assessment_stage": "qualification_review"},
+            {"id": "legacy"},
+        ],
+        "participation_findings": [{"id": "procedure"}],
+    }
+
+    _apply_bid_entry_fast_scope(result)
+
+    assert [item["id"] for item in result["requirements"]] == ["entry", "legacy"]
+    assert result["participation_findings"] == []

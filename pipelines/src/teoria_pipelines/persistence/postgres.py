@@ -15,6 +15,7 @@ from teoria_pipelines.models import (
     CollectionWindow,
     LoadSummary,
     NormalizedBatch,
+    NormalizedBidResultBatch,
     NormalizedBidNoticeBatch,
     RawProviderRecord,
 )
@@ -138,10 +139,11 @@ class PostgresStore:
         with psycopg.connect(self.database_url) as connection:
             connection.execute(
                 "UPDATE ingestion.pipeline_runs SET status='completed', finished_at=now(), "
-                "raw_record_count=%s, contract_count=%s, notice_count=%s, document_count=%s "
+                "raw_record_count=%s, contract_count=%s, notice_count=%s, document_count=%s, "
+                "award_count=%s, opening_participant_count=%s "
                 "WHERE execution_id=%s",
                 (summary.raw_records, summary.contracts, summary.notices,
-                 summary.documents, execution_id),
+                 summary.documents, summary.awards, summary.opening_participants, execution_id),
             )
 
     def fail_run(self, execution_id: UUID, error_code: str) -> None:
@@ -159,15 +161,31 @@ class PostgresStore:
         with psycopg.connect(self.database_url) as connection:
             with connection.cursor() as cursor:
                 cursor.executemany(
-                    "INSERT INTO ingestion.raw_provider_records "
-                    "(raw_record_id, execution_id, connector_id, operation_id, window_start, window_end, "
-                    "fetched_at, source_record_hash, payload) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                    "ON CONFLICT (execution_id, connector_id, operation_id, source_record_hash) DO NOTHING",
+                    "INSERT INTO ingestion.raw_provider_payloads "
+                    "(connector_id, operation_id, source_record_hash, payload, "
+                    "first_seen_at, last_seen_at) VALUES (%s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (connector_id, operation_id, source_record_hash) DO UPDATE "
+                    "SET last_seen_at=GREATEST(raw_provider_payloads.last_seen_at, "
+                    "EXCLUDED.last_seen_at)",
                     [
-                        (record.raw_record_id, record.execution_id, record.connector_id,
-                         record.operation_id, record.window.start, record.window.end,
-                         record.fetched_at, record.source_record_hash, Jsonb(record.payload))
+                        (record.connector_id, record.operation_id,
+                         record.source_record_hash, Jsonb(record.payload),
+                         record.fetched_at, record.fetched_at)
+                        for record in values
+                    ],
+                )
+                cursor.executemany(
+                    "INSERT INTO ingestion.raw_provider_observations "
+                    "(observation_id, execution_id, connector_id, operation_id, "
+                    "source_record_hash, window_start, window_end, fetched_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (execution_id, connector_id, operation_id, "
+                    "source_record_hash) DO NOTHING",
+                    [
+                        (record.raw_record_id, record.execution_id,
+                         record.connector_id, record.operation_id,
+                         record.source_record_hash, record.window.start,
+                         record.window.end, record.fetched_at)
                         for record in values
                     ],
                 )
@@ -191,6 +209,114 @@ class PostgresStore:
             organizations=len(batch.organizations),
             demand_organizations=len(batch.demand_organizations),
         )
+
+    def upsert_bid_results(self, batch: NormalizedBidResultBatch) -> LoadSummary:
+        with psycopg.connect(self.database_url) as connection:
+            self._upsert_many(
+                connection,
+                "public_procurement.bid_awards",
+                batch.awards,
+                ("notice_number", "notice_order", "bid_classification_number", "rebid_number"),
+            )
+            self._upsert_many(
+                connection,
+                "public_procurement.bid_opening_participants",
+                batch.opening_participants,
+                (
+                    "notice_number", "notice_order", "bid_classification_number",
+                    "rebid_number", "business_registration_number",
+                ),
+            )
+        return LoadSummary(
+            awards=len(batch.awards),
+            opening_participants=len(batch.opening_participants),
+        )
+
+    def select_bid_awards_for_opening(
+        self, records: Iterable[RawProviderRecord]
+    ) -> list[RawProviderRecord]:
+        awards: dict[tuple[str, str, str, str], RawProviderRecord] = {}
+        for record in records:
+            if not record.operation_id.startswith("list_") or record.operation_id == "list_completed_opening_results":
+                continue
+            key = tuple(str(record.payload.get(name) or "").strip() for name in (
+                "bidNtceNo", "bidNtceOrd", "bidClsfcNo", "rbidNo"
+            ))
+            if key[0]:
+                awards[key] = record
+        if not awards:
+            return []
+        keys = list(awards)
+        with psycopg.connect(self.database_url) as connection:
+            rows = connection.execute(
+                "SELECT notice_number,notice_order,bid_classification_number,rebid_number,"
+                "award_source_record_hash FROM ingestion.bid_opening_collection_status "
+                "WHERE (notice_number,notice_order,bid_classification_number,rebid_number) IN "
+                "(SELECT * FROM unnest(%s::text[],%s::text[],%s::text[],%s::text[]))",
+                tuple([key[index] for key in keys] for index in range(4)),
+            ).fetchall()
+        checked = {(row[0], row[1], row[2], row[3]): row[4] for row in rows}
+        return [record for key, record in awards.items()
+                if checked.get(key) != record.source_record_hash]
+
+    def mark_bid_openings_checked(
+        self, awards: Iterable[RawProviderRecord], participants: Iterable[RawProviderRecord],
+        execution_id: UUID,
+    ) -> int:
+        counts: dict[tuple[str, str, str, str], int] = {}
+        for record in participants:
+            key = tuple(str(record.payload.get(name) or "").strip() for name in (
+                "bidNtceNo", "bidNtceOrd", "bidClsfcNo", "rbidNo"
+            ))
+            counts[key] = counts.get(key, 0) + 1
+        values = []
+        for record in awards:
+            key = tuple(str(record.payload.get(name) or "").strip() for name in (
+                "bidNtceNo", "bidNtceOrd", "bidClsfcNo", "rbidNo"
+            ))
+            values.append((*key, record.source_record_hash, counts.get(key, 0), execution_id))
+        if not values:
+            return 0
+        with psycopg.connect(self.database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    "INSERT INTO ingestion.bid_opening_collection_status "
+                    "(notice_number,notice_order,bid_classification_number,rebid_number,"
+                    "award_source_record_hash,participant_count,execution_id) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT "
+                    "(notice_number,notice_order,bid_classification_number,rebid_number) "
+                    "DO UPDATE SET award_source_record_hash=EXCLUDED.award_source_record_hash,"
+                    "participant_count=EXCLUDED.participant_count,execution_id=EXCLUDED.execution_id,"
+                    "checked_at=now()",
+                    values,
+                )
+        return len(values)
+
+    def replace_bid_opening_participants(
+        self, awards: Iterable[RawProviderRecord], batch: NormalizedBidResultBatch
+    ) -> LoadSummary:
+        keys = [tuple(str(record.payload.get(name) or "").strip() for name in (
+            "bidNtceNo", "bidNtceOrd", "bidClsfcNo", "rbidNo"
+        )) for record in awards]
+        with psycopg.connect(self.database_url) as connection:
+            if keys:
+                with connection.cursor() as cursor:
+                    cursor.executemany(
+                        "DELETE FROM public_procurement.bid_opening_participants "
+                        "WHERE notice_number=%s AND notice_order=%s "
+                        "AND bid_classification_number=%s AND rebid_number=%s",
+                        keys,
+                    )
+            self._upsert_many(
+                connection,
+                "public_procurement.bid_opening_participants",
+                batch.opening_participants,
+                (
+                    "notice_number", "notice_order", "bid_classification_number",
+                    "rebid_number", "business_registration_number",
+                ),
+            )
+        return LoadSummary(opening_participants=len(batch.opening_participants))
 
     def replace_procurement_industries(self, rows: list[dict[str, Any]]) -> int:
         snapshot_at = datetime.now(timezone.utc)

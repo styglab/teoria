@@ -6,7 +6,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 
-SELECTION_VERSION = "1.5.0"
+SELECTION_VERSION = "1.6.0"
 DEFAULT_DOCUMENT_CHAR_BUDGET = 40_000
 
 _FULL_DOCUMENT_NAME = re.compile(r"입찰\s*공고|공고문|표준\s*공고", re.IGNORECASE)
@@ -58,6 +58,7 @@ _NEXT_HEADING = re.compile(r"^\s*(?:제?\s*\d+\s*[장조절]|\d+(?:\.\d+)*[.)])\
 def select_eligibility_blocks(
     document: dict[str, Any], semantic_block_ids: set[str] | None = None,
     max_chars: int = DEFAULT_DOCUMENT_CHAR_BUDGET,
+    *, include_participation_information: bool = True,
 ) -> dict[str, Any]:
     """Select likely eligibility blocks under a hard per-document character budget."""
     blocks = _refine_blocks(document.get("content", {}).get("blocks", []))
@@ -70,14 +71,17 @@ def select_eligibility_blocks(
     ):
         return _with_selection(
             document, blocks, "full_document", len(blocks), [], original_chars, max_chars,
+            scope=("full" if include_participation_information else "bid_entry"),
         )
 
-    selected = set(range(min(50, len(blocks))))
+    leading_block_count = 50 if include_participation_information else 20
+    selected = set(range(min(leading_block_count, len(blocks))))
     passes: list[str] = ["leading_blocks"]
 
     page_hits = {
         index for index, block in enumerate(blocks)
-        if isinstance(block.get("page"), int) and block["page"] <= 10
+        if (isinstance(block.get("page"), int)
+            and block["page"] <= (10 if include_participation_information else 5))
     }
     if page_hits:
         selected.update(page_hits)
@@ -110,10 +114,11 @@ def select_eligibility_blocks(
         _add_context(selected, outcome_hits, len(blocks), radius=3)
         passes.append("eligibility_outcome")
 
-    participation_hits = _matching_indexes(blocks, _PARTICIPATION_INFORMATION)
-    if participation_hits:
-        _add_context(selected, participation_hits, len(blocks), radius=2)
-        passes.append("participation_information")
+    if include_participation_information:
+        participation_hits = _matching_indexes(blocks, _PARTICIPATION_INFORMATION)
+        if participation_hits:
+            _add_context(selected, participation_hits, len(blocks), radius=2)
+            passes.append("participation_information")
 
     # Optional dense-retrieval results are unioned with exact-term retrieval. The
     # selector remains deterministic when no embedding service is configured.
@@ -130,7 +135,9 @@ def select_eligibility_blocks(
         if (_PRIMARY_REQUIREMENT.search(str(blocks[index].get("text") or ""))
             or _OMISSION_GUARD.search(str(blocks[index].get("text") or ""))
             or _ELIGIBILITY_OUTCOME.search(str(blocks[index].get("text") or ""))
-            or _PARTICIPATION_INFORMATION.search(str(blocks[index].get("text") or "")))
+            or (include_participation_information
+                and _PARTICIPATION_INFORMATION.search(
+                    str(blocks[index].get("text") or ""))))
     }
     selected = _fit_indexes_to_budget(blocks, selected, max_chars)
     chosen = [block for index, block in enumerate(blocks) if index in selected]
@@ -138,6 +145,7 @@ def select_eligibility_blocks(
         document, chosen, "focused_with_omission_guard", len(blocks), passes,
         original_chars, max_chars, signal_block_count=len(signal_indexes),
         omitted_signal_block_count=len(signal_indexes - selected),
+        scope=("full" if include_participation_information else "bid_entry"),
     )
 
 
@@ -325,12 +333,14 @@ def _with_selection(document: dict[str, Any], blocks: list[dict[str, Any]],
                     strategy: str, original_count: int, passes: list[str],
                     original_chars: int, max_chars: int,
                     signal_block_count: int = 0,
-                    omitted_signal_block_count: int = 0) -> dict[str, Any]:
+                    omitted_signal_block_count: int = 0,
+                    scope: str = "full") -> dict[str, Any]:
     return {
         **document,
         "content": {**document.get("content", {}), "blocks": blocks},
         "selection": {
             "version": SELECTION_VERSION,
+            "scope": scope,
             "strategy": strategy,
             "original_block_count": original_count,
             "selected_block_count": len(blocks),

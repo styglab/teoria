@@ -1,5 +1,5 @@
 registry:
-  version: 1.2.0
+  version: 1.3.1
   registered_at: "2026-08-07"
 
 source:
@@ -112,6 +112,76 @@ source:
         - {id: department_name, name: 담당부서명, data_type: string}
         - {id: manager_name, name: 담당자명, data_type: string}
         - {id: telephone_number, name: 담당자전화번호, data_type: string}
+        - {id: created_at, name: DB 생성일시, data_type: datetime}
+        - {id: updated_at, name: DB 수정일시, data_type: datetime}
+
+    - id: bid_awards
+      name: 입찰 최종낙찰 결과
+      relation: public_procurement.bid_awards
+      primary_key: [notice_number, notice_order, bid_classification_number, rebid_number]
+      fields:
+        - {id: award_id, name: 최종낙찰 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, data_type: string}
+        - {id: bid_classification_number, name: 입찰분류번호, data_type: string}
+        - {id: rebid_number, name: 재입찰번호, data_type: string}
+        - {id: work_type, name: 업무유형, data_type: string}
+        - {id: notice_division_code, name: 공고구분코드, data_type: string}
+        - {id: notice_name, name: 공고명, data_type: string}
+        - {id: participant_count, name: 참가업체수, data_type: integer}
+        - {id: winner_name, name: 최종낙찰업체명, data_type: string}
+        - {id: winner_business_registration_number, name: 최종낙찰업체 사업자등록번호, data_type: business_registration_number}
+        - {id: winner_representative_name, name: 최종낙찰업체 대표자명, data_type: string}
+        - {id: winner_address, name: 최종낙찰업체 주소, data_type: string}
+        - {id: winner_telephone_number, name: 최종낙찰업체 전화번호, data_type: string}
+        - {id: winning_amount, name: 최종낙찰금액, data_type: number}
+        - {id: winning_rate, name: 최종낙찰률, data_type: number}
+        - {id: opening_at, name: 실개찰시각, data_type: datetime}
+        - {id: demand_organization_code, name: 수요기관코드, data_type: string}
+        - {id: demand_organization_name, name: 수요기관명, data_type: string}
+        - {id: source_registered_at, name: 원천 등록시각, data_type: datetime}
+        - {id: final_award_date, name: 최종낙찰일, data_type: date}
+        - {id: winner_manager_name, name: 최종낙찰업체 담당자명, data_type: string}
+        - {id: source_record_hash, name: 원천 레코드 해시, data_type: string}
+        - {id: created_at, name: DB 생성일시, data_type: datetime}
+        - {id: updated_at, name: DB 수정일시, data_type: datetime}
+
+    - id: bid_opening_participants
+      name: 입찰 개찰 참여업체 결과
+      relation: public_procurement.runtime_bid_opening_participants
+      primary_key: [notice_number, notice_order, bid_classification_number, rebid_number, business_registration_number]
+      fields:
+        - {id: participation_id, name: 개찰참여 식별자, data_type: string}
+        - {id: award_id, name: 최종낙찰 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, data_type: string}
+        - {id: bid_classification_number, name: 입찰분류번호, data_type: string}
+        - {id: rebid_number, name: 재입찰번호, data_type: string}
+        - {id: business_registration_number, name: 투찰업체 사업자등록번호, data_type: business_registration_number}
+        - {id: opening_result_type_name, name: 개찰결과구분명, data_type: string}
+        - {id: opening_rank, name: 개찰순위, data_type: integer}
+        - {id: participant_name, name: 투찰업체명, data_type: string}
+        - {id: representative_name, name: 투찰업체 대표자명, data_type: string}
+        - {id: bid_amount, name: 투찰금액, data_type: number}
+        - {id: bid_rate, name: 투찰률, data_type: number}
+        - {id: remark, name: 비고, data_type: string}
+        - {id: trade_bid_amount_url, name: 공종별 입찰금액 URL, data_type: string}
+        - {id: draw_number_1, name: 추첨번호1, data_type: string}
+        - {id: draw_number_2, name: 추첨번호2, data_type: string}
+        - {id: bid_at, name: 투찰시각, data_type: datetime}
+        - {id: bid_price_evaluation_score, name: 입찰가격점수, data_type: number}
+        - {id: technical_evaluation_raw_score, name: 기술평가원점수, data_type: number}
+        - {id: technical_evaluation_score, name: 기술평가점수, data_type: number}
+        - {id: total_evaluation_score, name: 종합평가점수, data_type: number}
+        - {id: work_type, name: 업무유형, data_type: string}
+        - {id: notice_name, name: 공고명, data_type: string}
+        - {id: opening_at, name: 실개찰시각, data_type: datetime}
+        - {id: final_award_date, name: 최종낙찰일, data_type: date}
+        - {id: demand_organization_code, name: 수요기관코드, data_type: string}
+        - {id: demand_organization_name, name: 수요기관명, data_type: string}
+        - {id: source_record_hash, name: 원천 레코드 해시, data_type: string}
         - {id: created_at, name: DB 생성일시, data_type: datetime}
         - {id: updated_at, name: DB 수정일시, data_type: datetime}
 

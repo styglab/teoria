@@ -124,6 +124,41 @@ async def test_provider_executor_honors_retry_after(monkeypatch) -> None:
     assert delays == [2.0]
 
 
+@pytest.mark.asyncio
+async def test_provider_executor_reuses_client_inside_context() -> None:
+    class ReusableClient:
+        def __init__(self):
+            self.entries = 0
+            self.exits = 0
+            self.calls = 0
+
+        async def __aenter__(self):
+            self.entries += 1
+            return self
+
+        async def __aexit__(self, *args):
+            self.exits += 1
+
+        async def request(self, *args, **kwargs):
+            self.calls += 1
+            request = httpx.Request("GET", "https://example.test/records")
+            response = httpx.Response(200, json={"items": []}, request=request)
+            response.elapsed = timedelta(milliseconds=1)
+            return response
+
+    client = ReusableClient()
+    request = PreparedRequest(
+        source_id="provider", operation_id="list_records", method="GET",
+        url="https://example.test/records", idempotent=True,
+    )
+    executor = ProviderExecutor(client_factory=lambda **kwargs: client)
+    async with executor:
+        await executor.execute(request)
+        await executor.execute(request)
+
+    assert (client.entries, client.exits, client.calls) == (1, 1, 2)
+
+
 def test_provider_executor_parses_xml_response() -> None:
     request = httpx.Request("GET", "https://example.test/records")
     response = httpx.Response(

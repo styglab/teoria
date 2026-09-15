@@ -96,8 +96,10 @@ AI 입력은 공고별 checksum으로 중복 문서를 제거한다. 모델 원�
 파싱됐으면 `complete`다. 이후 파서 개선으로 누락 문서가 파싱되면 입력 fingerprint가 변경되어
 같은 공고도 다시 추출된다.
 
-운영 스케줄은 첨부문서 파싱을 10분마다 최대 100건, 참가자격 추출을 파싱과 5분 엇갈려
-10분마다 최대 10개 공고 처리한다. 두 Deployment 모두 동시 실행 한도 1과 `CANCEL_NEW` 정책을 사용한다.
+첨부파일 저장은 매시 15분 최대 500건·동시 8개, 첨부문서 파싱은 10분마다 최대 100건,
+참가자격 추출은 한 번에 최대 20개 공고를 처리하도록 정의되어 있다. 현재 세 Deployment의
+자동 스케줄은 모두 비활성 상태다. 각 Deployment는 동시 실행 한도 1과 `CANCEL_NEW`
+정책을 사용한다.
 추출은 파싱 완료 또는 미지원 확정 문서만 사용하며, 미지원 문서가 있으면 결과를 `partial`로
 표시해 Runtime Assessment가 전체 충족을 확정하지 않도록 한다.
 
@@ -121,15 +123,61 @@ docker compose --env-file .env -f deploy/compose.yaml exec \
 
 Compose 배포 시 UI는 nginx의 `http://localhost:8081/prefect/`로 접근한다. Prefect Server의 4200 포트는 Compose 내부에서만 사용한다. Worker에는 `.env` 전체가 아니라 Compose에 선언한 Pipeline 변수만 전달한다.
 
+## 최신 데이터 수집·보정 주기
+
+모든 시각은 `Asia/Seoul` 기준이다. 빠른 수집과 보정 수집은 같은 정규 테이블에
+idempotent하게 upsert하며, 동일 Deployment의 이전 실행이 끝나지 않았으면
+`CANCEL_NEW` 정책으로 다음 실행을 중복 수행하지 않는다.
+
+Provider 원문은 `source_record_hash`가 동일한 JSON payload를
+`ingestion.raw_provider_payloads`에 한 번만 저장한다. 수집 실행·조회 구간·관찰 시각은
+작은 `ingestion.raw_provider_observations` 행으로 분리해 감사 가능성을 유지한다.
+
+| 데이터 | 빠른 수집 | 일일 보정 | 주간 보정 |
+|---|---|---|---|
+| 입찰공고 | 당일 공고, 10분마다 | 최근 3일, 매일 01:10 | 없음 |
+| 계약 | 최근 3일, 4시간마다 | 최근 30일, 매일 02:00 | 최근 90일, 매주 일요일 03:00 |
+| 낙찰 | 최근 3일, 4시간마다 | 최근 30일, 매일 02:30 | 최근 90일, 매주 일요일 03:30 |
+
+입찰공고는 공고게시일시, 계약은 계약체결일자, 낙찰은 개찰일시를 조회 기준으로 사용한다.
+공고 API의 목록 Operation은 공고번호 단건 조회를 지원하지 않으므로 최근 3일 보정으로
+지연 반영과 정정을 보완한다. 낙찰은 개찰 후 최종낙찰 확정이 늦어질 수 있어 30일·90일
+보정을 별도로 실행한다. 이 주기와 2021년 이후 과거 데이터를 채우는 Backfill은 서로
+독립적이다.
+
 ## 계약정보 Deployment
 
 | Deployment | 주기 | 역할 |
 |---|---|---|
 | `pps-contract-incremental` | 4시간마다 | 오늘을 포함한 최근 3일을 재조회하여 신규·변경 계약을 반영 |
-| `pps-contract-backfill` | 매시 20분 | `2020-01-01`부터 `2025-12-31`까지 정방향으로 실행당 최대 30일 적재 |
+| `pps-contract-reconciliation-30d` | 매일 02:00 | 최근 30일 지연 등록·정정 보정 |
+| `pps-contract-reconciliation-90d` | 매주 일요일 03:00 | 최근 90일 장기 지연·정정 보정 |
+| `pps-contract-backfill` | 매시 20분 | `2026-09-13`부터 `2021-01-01`까지 최신 날짜 우선으로 실행당 최대 30일 적재 |
 
-두 Deployment는 독립 checkpoint를 사용한다. 기본 Backfill checkpoint는
-`pps_contract_backfill_2020_2025`이고 `2020-01-01`부터 `2025-12-31`까지 정방향으로 진행한다. 범위를 완료하면
+## 입찰공고 Deployment
+
+| Deployment | 주기 | 역할 |
+|---|---|---|
+| `pps-bid-notice-ingestion` | 10분마다 | 당일 신규·변경 공고와 참가제한을 갱신 |
+| `pps-bid-notice-reconciliation-3d` | 매일 01:10 | 최근 3일 공고를 다시 조회하여 지연·정정 보정 |
+| `pps-bid-notice-backfill` | 매시 50분 | `2026-09-13`부터 `2021-01-01`까지 최신 날짜 우선으로 실행당 최대 30일 적재 |
+
+입찰공고 Backfill은 `pps_bid_notice_backfill_2021_2026` checkpoint를 사용한다.
+공고 목록 원본, 정규 공고, 면허제한과 참가가능지역이 모두 저장된 뒤에만 날짜를 과거로
+이동한다. 과거 공고의 첨부파일은 등록하거나 다운로드하지 않으므로 첨부파일 파싱과 AI
+참가요건 추출 작업량에는 포함되지 않는다.
+
+## 낙찰정보 Deployment
+
+| Deployment | 주기 | 역할 |
+|---|---|---|
+| `pps-bid-result-incremental` | 4시간마다 30분 | 최근 3일 최종낙찰과 개찰 참여업체 결과 반영 |
+| `pps-bid-result-reconciliation-30d` | 매일 02:30 | 최근 30일 지연 낙찰 확정 보정 |
+| `pps-bid-result-reconciliation-90d` | 매주 일요일 03:30 | 최근 90일 장기 지연 낙찰 확정 보정 |
+| `pps-bid-result-backfill` | 매시 40분 | `2026-09-13`부터 `2021-01-01`까지 개찰일시 기준 역방향 적재 |
+
+증분 수집과 Backfill은 독립 checkpoint를 사용한다. 기본 계약 Backfill checkpoint는
+`pps_contract_backfill_2021_2026`이고 `2026-09-13`부터 `2021-01-01`까지 역방향으로 진행한다. 범위를 완료하면
 이후 예약 실행은 API를 호출하지 않는다.
 
 별도 범위를 적재할 때는 UI에서 같은 Flow의 Custom Run이나 Schedule 파라미터에 고유한
@@ -147,9 +195,9 @@ docker compose --env-file .env \
   -f deploy/compose.yaml \
   run --rm prefect-deploy \
   prefect deployment run '나라장터 계약정보 Backfill/pps-contract-backfill' \
-  --param checkpoint_id=pps_contract_backfill_2020_2025 \
-  --param start_date=2020-01-01 \
-  --param end_date=2025-12-31 \
+  --param checkpoint_id=pps_contract_backfill_2021_2026 \
+  --param start_date=2021-01-01 \
+  --param end_date=2026-09-13 \
   --param batch_days=30
 ```
 

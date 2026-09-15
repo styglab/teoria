@@ -1,0 +1,16 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-14"
+
+mapping:
+  id: bid_result_business_registrations
+  name: 낙찰·개찰 참여업체 사업자등록 매핑
+  description: 최종낙찰업체와 개찰 참여업체를 기업정보 온톨로지의 사업자등록으로 연결한다.
+  ontology: company
+  bindings:
+    business_registration.business_registration_number:
+      - {field: teoria_public_procurement.bid_awards.winner_business_registration_number}
+      - {field: teoria_public_procurement.bid_opening_participants.business_registration_number}
+    business_registration.business_name:
+      - {field: teoria_public_procurement.bid_awards.winner_name}
+      - {field: teoria_public_procurement.bid_opening_participants.participant_name}

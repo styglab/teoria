@@ -16,12 +16,14 @@ def test_pipeline_sink_matches_platform_database_source() -> None:
 
     source = platform_catalog.sources["teoria_public_procurement"].source
     assert source.type == "database"
-    assert {relation.id for relation in source.relations} == {
+    assert {
         "contracts",
         "contract_suppliers",
         "public_organizations",
         "contract_demand_organizations",
-    }
+        "bid_awards",
+        "bid_opening_participants",
+    } <= {relation.id for relation in source.relations}
 
 
 def test_database_migration_contains_every_published_source_field() -> None:

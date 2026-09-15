@@ -80,6 +80,23 @@ def test_large_rfp_keeps_late_participation_and_competition_information() -> Non
     assert "participation_information" in selected["selection"]["passes"]
 
 
+def test_fast_eligibility_scope_excludes_participation_only_blocks() -> None:
+    texts = [f"일반 과업 설명 {index}" for index in range(300)]
+    texts[210] = "낙찰자는 출국 10일 전까지 보험증권을 제출하여야 한다."
+    texts[270] = "정보통신공사업 등록 업체만 입찰에 참가할 수 있다."
+
+    selected = select_eligibility_blocks(
+        _document("제안요청서.hwpx", texts),
+        include_participation_information=False,
+    )
+    chosen_ids = {block["block_id"] for block in selected["content"]["blocks"]}
+
+    assert "b270" in chosen_ids
+    assert "b210" not in chosen_ids
+    assert "participation_information" not in selected["selection"]["passes"]
+    assert selected["selection"]["scope"] == "bid_entry"
+
+
 def test_unknown_document_type_defaults_to_full_for_safety() -> None:
     document = _document("기타첨부.dat", [f"내용 {index}" for index in range(200)])
 

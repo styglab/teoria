@@ -1,7 +1,12 @@
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from teoria_pipelines.models import CollectionWindow, ExtractedBatch, RawProviderRecord
+from teoria_pipelines.models import (
+    CollectionWindow,
+    ExtractedBatch,
+    NormalizedBidNoticeBatch,
+    RawProviderRecord,
+)
 from teoria_pipelines.normalization.pps_bid_notices import (
     normalize_bid_notice_batch,
     parse_industry_main_field_groups,
@@ -10,6 +15,7 @@ from teoria_pipelines.normalization.pps_bid_notices import (
 )
 from teoria_pipelines.tasks.pps_bid_notices import (
     determine_bid_notice_window,
+    omit_historical_bid_documents,
     safe_object_file_name,
 )
 
@@ -119,3 +125,15 @@ def test_bid_notice_window_uses_seoul_calendar_date(monkeypatch) -> None:
     assert determine_bid_notice_window.fn(lookback_days=1) == CollectionWindow(
         date(2026, 8, 13), date(2026, 8, 13)
     )
+
+
+def test_historical_backfill_omits_document_queue_records() -> None:
+    batch = NormalizedBidNoticeBatch(
+        notices=[{"notice_number": "R26BK00000001"}],
+        documents=[{"document_id": uuid4(), "source_url": "https://example.test/a.hwp"}],
+    )
+
+    result = omit_historical_bid_documents.fn(batch)
+
+    assert result.notices == [{"notice_number": "R26BK00000001"}]
+    assert result.documents == []

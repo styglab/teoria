@@ -1,0 +1,76 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-15"
+
+capability:
+  id: search_bid_awards
+  name: 입찰 최종낙찰 결과 검색
+  description: 실개찰 기간, 자유어와 선택적인 업무유형·수요기관·낙찰업체·낙찰금액 조건으로 최종낙찰 결과를 페이지 단위 검색한다.
+  inputs:
+    query:
+      data_type: string
+    opening_at_from:
+      property: public_procurement.bid_award.opening_at
+      operator: gte
+      required: true
+    opening_at_to:
+      property: public_procurement.bid_award.opening_at
+      operator: lte
+      required: true
+    work_type:
+      property: public_procurement.bid_award.work_type
+      enum: [goods, construction, service, foreign]
+    demand_organization_code:
+      property: public_procurement.bid_award.demand_organization_code
+    winner_business_registration_number:
+      property: public_procurement.bid_award.winner_business_registration_number
+    winning_amount_min:
+      property: public_procurement.bid_award.winning_amount
+      operator: gte
+    winning_amount_max:
+      property: public_procurement.bid_award.winning_amount
+      operator: lte
+    sort:
+      data_type: string
+      enum: [opening_desc, award_desc, amount_desc]
+      default: opening_desc
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
+  steps:
+    - call: teoria_public_procurement.bid_awards
+      database_query:
+        search:
+          input: query
+          fields: [notice_name, notice_number, winner_name, demand_organization_name]
+        sort:
+          input: sort
+          choices:
+            opening_desc:
+              - {field: opening_at, direction: desc, nulls: last}
+              - {field: award_id, direction: desc}
+            award_desc:
+              - {field: final_award_date, direction: desc, nulls: last}
+              - {field: award_id, direction: desc}
+            amount_desc:
+              - {field: winning_amount, direction: desc, nulls: last}
+              - {field: award_id, direction: desc}
+        pagination:
+          page_input: page
+          page_size_input: page_size
+          root_field: award_id
+          count_distinct: false
+  returns:
+    - public_procurement.bid_notice
+    - public_procurement.bid_award
+    - company.business_registration
+    - public_procurement.public_organization
+    - public_procurement.bid_notice_has_award
+    - public_procurement.business_registration_wins_bid_award
+    - public_procurement.public_organization_demands_bid_award

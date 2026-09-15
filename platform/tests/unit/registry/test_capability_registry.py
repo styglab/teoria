@@ -35,6 +35,21 @@ def test_capabilities_load_and_references_are_valid() -> None:
         "teoria_public_procurement.bid_participation_findings",
         "teoria_public_procurement.bid_participation_finding_evidence",
     ]
+    bid_result = catalog.capabilities["get_bid_result"]
+    assert [step.call for step in bid_result.steps] == [
+        "teoria_public_procurement.bid_awards",
+        "teoria_public_procurement.bid_opening_participants",
+    ]
+    assert "public_procurement.bid_award" in bid_result.returns
+    assert "public_procurement.bid_opening_participation" in bid_result.returns
+    company_history = catalog.capabilities["get_company_bid_history"]
+    assert [step.id for step in company_history.steps] == ["awards", "participations"]
+    assert catalog.capabilities["search_bid_awards"].steps[0].call == (
+        "teoria_public_procurement.bid_awards"
+    )
+    assert catalog.capabilities["search_bid_participations"].steps[0].call == (
+        "teoria_public_procurement.bid_opening_participants"
+    )
 
 
 def test_capability_inputs_are_semantic_ontology_references() -> None:

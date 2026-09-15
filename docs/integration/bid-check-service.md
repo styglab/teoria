@@ -222,6 +222,11 @@ POST /v1/capabilities/assess_company_bid_eligibilities:execute
 요건 추출 전 공고처럼 개별 평가가 불가능한 경우 전체 요청을 실패시키지 않고 해당 항목에
 `status: error`와 `error_code`를 반환한다.
 
+상위 `outcome`과 세 가지 count, `key_outcomes`, `issues`는 실제 입찰 참가 가능성을 뜻하는
+`assessment_stage=bid_entry` 요건만 집계한다. `qualification_review`와 `contracting` 요건은 상세
+응답에 보존되지만 참가 가능 종합 결과에는 영향을 주지 않는다. 상세 `requirement_assessment`의
+`assessment_stage`를 사용해 적격심사·협상 조건과 계약 조건을 별도 영역으로 표시한다.
+
 `key_outcomes`에는 지역, 업종·면허, 사업자 상태, 나라장터 등록, 기업 확인·인증, 기업규모,
 직접생산확인, 공급물품, 제재, 공동수급, 실적, 기타 요건의 분류별 판정이 들어간다. 입찰체크는
 `issues` 문자열에서 상태를 추정하지 않고 이 값을 직접 사용한다. `applicability`는 추출된 관련

@@ -132,8 +132,13 @@ class DatabaseSourceExecutor:
                 )
             page = int(pagination["page"])
             page_size = int(pagination["page_size"])
-            count_statement = sql.SQL("SELECT COUNT(DISTINCT {}) FROM {}.{}").format(
-                sql.Identifier(root_field), sql.Identifier(schema_name), sql.Identifier(table_name)
+            count_expression = (
+                sql.SQL("COUNT(DISTINCT {})").format(sql.Identifier(root_field))
+                if pagination.get("count_distinct", True)
+                else sql.SQL("COUNT(*)")
+            )
+            count_statement = sql.SQL("SELECT {} FROM {}.{}").format(
+                count_expression, sql.Identifier(schema_name), sql.Identifier(table_name)
             )
             if conditions:
                 count_statement += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)

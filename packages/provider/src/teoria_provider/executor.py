@@ -36,6 +36,23 @@ class ProviderExecutor:
         self.max_attempts = max_attempts
         self.backoff_seconds = backoff_seconds
         self.client_factory = client_factory
+        self._client_context: Any | None = None
+        self._client: Any | None = None
+
+    async def __aenter__(self) -> "ProviderExecutor":
+        if self._client is not None:
+            raise RuntimeError("ProviderExecutor context is already active")
+        self._client_context = self.client_factory(
+            timeout=self.timeout_seconds, follow_redirects=False
+        )
+        self._client = await self._client_context.__aenter__()
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        context, self._client_context = self._client_context, None
+        self._client = None
+        if context is not None:
+            await context.__aexit__(exc_type, exc, traceback)
 
     def credential(self, request: PreparedRequest) -> str | None:
         if request.authentication is None:
@@ -46,36 +63,45 @@ class ProviderExecutor:
         raise MissingCredentialError(request)
 
     async def execute(self, request: PreparedRequest) -> ExecutionResponse:
+        if self._client is not None:
+            return await self._execute_with_client(request, self._client)
+        async with self.client_factory(
+            timeout=self.timeout_seconds, follow_redirects=False
+        ) as client:
+            return await self._execute_with_client(request, client)
+
+    async def _execute_with_client(
+        self, request: PreparedRequest, client: Any
+    ) -> ExecutionResponse:
         query, headers = dict(request.query), dict(request.headers)
         if request.authentication:
             target = query if request.authentication.location == "query" else headers
             target[request.authentication.name] = self.credential(request)
         attempts = self.max_attempts if request.idempotent else 1
-        async with self.client_factory(timeout=self.timeout_seconds, follow_redirects=False) as client:
-            for attempt in range(1, attempts + 1):
-                try:
-                    response = await client.request(request.method, request.url, params=query, headers=headers, json=request.body)
-                except (httpx.TimeoutException, httpx.NetworkError) as exc:
-                    if attempt == attempts:
-                        code = "source_timeout" if isinstance(exc, httpx.TimeoutException) else "source_network_error"
-                        message = (f"source request timed out after {attempts} attempt(s)" if code == "source_timeout"
-                                   else f"source network request failed after {attempts} attempt(s)")
-                        raise ProviderExecutionError(code, message,
-                            source_id=request.source_id, operation_id=request.operation_id,
-                            attempts=attempts, retryable=request.idempotent) from exc
-                    await asyncio.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
-                    continue
-                if response.status_code not in self.RETRYABLE_STATUS_CODES:
-                    return self._execution_response(response, request.response_extraction)
+        for attempt in range(1, attempts + 1):
+            try:
+                response = await client.request(request.method, request.url, params=query, headers=headers, json=request.body)
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 if attempt == attempts:
-                    code = "source_rate_limited" if response.status_code == 429 else "source_unavailable"
-                    raise ProviderExecutionError(code, f"source returned HTTP {response.status_code} after {attempts} attempt(s)",
-                        source_id=request.source_id, operation_id=request.operation_id, attempts=attempts,
-                        retryable=request.idempotent, http_status=response.status_code)
-                delay = self.backoff_seconds * (2 ** (attempt - 1))
-                if response.status_code == 429:
-                    delay = max(delay, self._retry_after_seconds(response.headers.get("retry-after")))
-                await asyncio.sleep(delay)
+                    code = "source_timeout" if isinstance(exc, httpx.TimeoutException) else "source_network_error"
+                    message = (f"source request timed out after {attempts} attempt(s)" if code == "source_timeout"
+                               else f"source network request failed after {attempts} attempt(s)")
+                    raise ProviderExecutionError(code, message,
+                        source_id=request.source_id, operation_id=request.operation_id,
+                        attempts=attempts, retryable=request.idempotent) from exc
+                await asyncio.sleep(self.backoff_seconds * (2 ** (attempt - 1)))
+                continue
+            if response.status_code not in self.RETRYABLE_STATUS_CODES:
+                return self._execution_response(response, request.response_extraction)
+            if attempt == attempts:
+                code = "source_rate_limited" if response.status_code == 429 else "source_unavailable"
+                raise ProviderExecutionError(code, f"source returned HTTP {response.status_code} after {attempts} attempt(s)",
+                    source_id=request.source_id, operation_id=request.operation_id, attempts=attempts,
+                    retryable=request.idempotent, http_status=response.status_code)
+            delay = self.backoff_seconds * (2 ** (attempt - 1))
+            if response.status_code == 429:
+                delay = max(delay, self._retry_after_seconds(response.headers.get("retry-after")))
+            await asyncio.sleep(delay)
         raise RuntimeError("provider execution exhausted without a response")
 
     @staticmethod

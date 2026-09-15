@@ -1,0 +1,65 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-15"
+
+capability:
+  id: get_company_bid_history
+  name: 기업 입찰·낙찰 이력 조회
+  description: 사업자등록번호로 기업의 최종낙찰 이력과 개찰 참여 이력을 각각 최신순 페이지로 함께 조회한다.
+  inputs:
+    business_registration_number:
+      property: company.business_registration.business_registration_number
+      required: true
+    sort:
+      data_type: string
+      enum: [recent]
+      default: recent
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
+  steps:
+    - id: awards
+      call: teoria_public_procurement.bid_awards
+      database_query:
+        sort:
+          input: sort
+          choices:
+            recent:
+              - {field: opening_at, direction: desc, nulls: last}
+              - {field: award_id, direction: desc}
+        pagination:
+          page_input: page
+          page_size_input: page_size
+          root_field: award_id
+          count_distinct: false
+    - id: participations
+      call: teoria_public_procurement.bid_opening_participants
+      database_query:
+        sort:
+          input: sort
+          choices:
+            recent:
+              - {field: opening_at, direction: desc, nulls: last}
+              - {field: participation_id, direction: desc}
+        pagination:
+          page_input: page
+          page_size_input: page_size
+          root_field: participation_id
+          count_distinct: false
+  returns:
+    - public_procurement.bid_notice
+    - public_procurement.bid_award
+    - public_procurement.bid_opening_participation
+    - company.business_registration
+    - public_procurement.public_organization
+    - public_procurement.bid_notice_has_award
+    - public_procurement.business_registration_wins_bid_award
+    - public_procurement.public_organization_demands_bid_award
+    - public_procurement.bid_opening_participation_is_for_award
+    - public_procurement.business_registration_has_bid_opening_participation

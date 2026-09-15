@@ -1,11 +1,11 @@
 registry:
-  version: 1.1.0
+  version: 1.2.0
   registered_at: "2026-09-12"
 
 capability:
   id: assess_company_bid_eligibilities
   name: 기업 입찰 참가자격 일괄 평가
-  description: 한 기업과 최대 100개 입찰공고를 평가하여 목록 표시용 종합 결과, 대표 요건 분류별 판정, 결과별 개수와 주요 문제 요건을 공고별로 반환한다.
+  description: 한 기업과 최대 100개 입찰공고의 bid_entry 참가요건을 평가하여 목록 표시용 종합 결과, 대표 요건 분류별 판정, 결과별 개수와 주요 문제 요건을 공고별로 반환한다.
   kind: compute
   processor: assessment.evaluate_bid_eligibilities
   effects:

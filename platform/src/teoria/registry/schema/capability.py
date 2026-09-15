@@ -69,6 +69,7 @@ class DatabasePaginationDefinition(RegistryModel):
     page_input: str
     page_size_input: str
     root_field: str
+    count_distinct: bool = True
 
 
 class DatabaseQueryDefinition(RegistryModel):

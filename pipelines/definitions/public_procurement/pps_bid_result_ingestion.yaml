@@ -1,0 +1,26 @@
+pipeline:
+  id: pps_bid_result_ingestion
+  description: 조달청 나라장터 최종낙찰 및 개찰 참여업체 결과를 수집·정규화하여 저장한다.
+  connector: pps_bid_result_api
+  operations:
+    - list_goods_bid_awards
+    - list_construction_bid_awards
+    - list_service_bid_awards
+    - list_foreign_bid_awards
+    - list_completed_opening_results
+  cursor:
+    field: opening_at
+    window_days: 1
+    overlap_days: 30
+  sink:
+    source: teoria_public_procurement
+    relations:
+      - bid_awards
+      - bid_opening_participants
+  provenance:
+    retain_raw_records: true
+    fields:
+      - connector
+      - operation
+      - fetched_at
+      - source_record_hash

@@ -41,14 +41,21 @@ def resolve_incremental_window(*, lookback_days: int,
 
 def resolve_backfill_windows(*, start_date: date, checkpoint: date | None,
                              end_date: date, batch_days: int,
-                             today: date | None = None) -> list[CollectionWindow]:
-    """Return the next batch of daily windows in chronological order."""
+                             today: date | None = None,
+                             reverse: bool = False) -> list[CollectionWindow]:
+    """Return the next bounded batch of daily windows."""
 
     if batch_days < 1:
         raise ValueError("batch_days must be at least 1")
     current = today or date.today()
     if end_date >= current:
         raise ValueError("backfill end_date must precede today")
+    if reverse:
+        upper = end_date if checkpoint is None else min(end_date, checkpoint - timedelta(days=1))
+        if upper < start_date:
+            return []
+        lower = max(start_date, upper - timedelta(days=batch_days - 1))
+        return list(reversed(split_windows(CollectionWindow(lower, upper), 1)))
     target_end = end_date
     lower = start_date if checkpoint is None else max(start_date, checkpoint + timedelta(days=1))
     if lower > target_end:
