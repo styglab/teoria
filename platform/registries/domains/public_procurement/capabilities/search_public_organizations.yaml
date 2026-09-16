@@ -1,0 +1,50 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-15"
+
+capability:
+  id: search_public_organizations
+  name: 공공기관 검색
+  description: 기관명·기관코드 자유어와 선택적인 정확한 기관코드·소관구분으로 수집된 공공기관을 페이지 단위 검색한다.
+  inputs:
+    query:
+      data_type: string
+    organization_code:
+      property: public_procurement.public_organization.organization_code
+    jurisdiction_type:
+      property: public_procurement.public_organization.jurisdiction_type
+    sort:
+      data_type: string
+      enum: [name_asc, code_asc]
+      default: name_asc
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
+  steps:
+    - call: teoria_public_procurement.public_organizations
+      database_query:
+        search:
+          input: query
+          fields:
+            - organization_name
+            - organization_code
+        sort:
+          input: sort
+          choices:
+            name_asc:
+              - {field: organization_name, direction: asc, nulls: last}
+              - {field: organization_code, direction: asc}
+            code_asc:
+              - {field: organization_code, direction: asc}
+        pagination:
+          page_input: page
+          page_size_input: page_size
+          root_field: organization_code
+  returns:
+    - public_procurement.public_organization

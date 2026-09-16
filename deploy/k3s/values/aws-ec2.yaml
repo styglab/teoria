@@ -1,0 +1,14 @@
+global:
+  # Set this to the ECR registry hostname at deployment time.
+  imageRegistry: ""
+
+ingress:
+  enabled: true
+  className: traefik
+  host: teoria.example.com
+  tls:
+    enabled: true
+    secretName: teoria-tls
+
+# EC2 runs k3s workloads. Images should be pulled from ECR, object data should
+# use S3, and database URLs should be supplied through pre-created Secrets.

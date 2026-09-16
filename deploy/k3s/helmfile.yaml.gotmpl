@@ -1,0 +1,22 @@
+# Helmfile v1 requires the .gotmpl suffix for templated state files.
+environments:
+  default:
+    values:
+      - deploymentValues: values/on-prem.yaml
+  on-prem:
+    values:
+      - deploymentValues: values/on-prem.yaml
+  aws-ec2:
+    values:
+      - deploymentValues: values/aws-ec2.yaml
+
+---
+
+releases:
+  - name: teoria
+    namespace: teoria
+    createNamespace: true
+    chart: ./charts/teoria
+    missingFileHandler: Error
+    values:
+      - {{ .Values.deploymentValues | quote }}

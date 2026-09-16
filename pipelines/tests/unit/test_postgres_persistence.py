@@ -36,7 +36,7 @@ def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
         payload={"id": "contract"},
     )
 
-    with patch("teoria_pipelines.persistence.postgres.psycopg.connect",
+    with patch("teoria_pipelines.persistence.postgres_store.base.psycopg.connect",
                return_value=connection):
         assert PostgresStore("postgresql://unused").save_raw_records([record]) == 1
 
@@ -52,7 +52,7 @@ def test_parser_claim_reclaims_expired_processing_lease() -> None:
     connection.__enter__.return_value = connection
     connection.execute.return_value.fetchall.return_value = []
 
-    with patch("teoria_pipelines.persistence.postgres.psycopg.connect",
+    with patch("teoria_pipelines.persistence.postgres_store.documents.psycopg.connect",
                return_value=connection):
         PostgresStore("postgresql://unused").claim_documents_for_parsing(
             10, "2.1.1", max_attempts=3,
@@ -73,7 +73,7 @@ def test_extraction_selection_prioritizes_latest_active_notice_revision() -> Non
     connection.__enter__.return_value = connection
     connection.execute.return_value.fetchall.return_value = []
 
-    with patch("teoria_pipelines.persistence.postgres.psycopg.connect",
+    with patch("teoria_pipelines.persistence.postgres_store.eligibility.psycopg.connect",
                return_value=connection):
         PostgresStore("postgresql://unused").list_notices_for_eligibility_extraction(10)
 
@@ -91,7 +91,7 @@ def test_eligibility_claim_uses_one_hour_lease() -> None:
     connection.__enter__.return_value = connection
     connection.execute.return_value.fetchone.return_value = (1,)
 
-    with patch("teoria_pipelines.persistence.postgres.psycopg.connect",
+    with patch("teoria_pipelines.persistence.postgres_store.eligibility.psycopg.connect",
                return_value=connection):
         claimed = PostgresStore("postgresql://unused").claim_eligibility_extraction(
             {"notice_number": "R1", "notice_order": "000"}, "fingerprint", "2.3.15"

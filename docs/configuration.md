@@ -1,7 +1,8 @@
 # Configuration
 
 ```bash
-cp .env.example .env
+cp deploy/compose/.env.example deploy/compose/.env
+export TEORIA_ENV_FILE=deploy/compose/.env
 uv sync --locked --all-packages --all-groups
 ```
 
@@ -31,8 +32,10 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_MCP_RUNTIME_API_TOKEN` | 없음 | MCP가 사용하는 Runtime API token |
 | `TEORIA_MCP_RUNTIME_TIMEOUT_SECONDS` | `150` | Runtime API 호출 timeout |
 
-로컬 Compose 암호 변수는 `.env.example`을 따른다. 공유·운영 환경에서는 managed secret으로 덮어쓴다.
+로컬 Compose 암호 변수는 `deploy/compose/.env.example`을 따른다. 공유·운영 환경에서는 managed secret으로 덮어쓴다.
 `TEORIA_RUNTIME_API_TOKEN`과 `TEORIA_LOCAL_RUNTIME_DB_PASSWORD`에는 기본값이 없으며 Compose 실행 전에 반드시 설정한다.
+Platform, Pipeline 또는 MCP를 Compose 밖에서 직접 실행할 때는
+`TEORIA_ENV_FILE=deploy/compose/.env`를 명시한다.
 
 ## Secret 규칙
 

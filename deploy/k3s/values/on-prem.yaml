@@ -1,0 +1,12 @@
+global:
+  imageRegistry: ""
+
+ingress:
+  enabled: true
+  className: traefik
+  host: teoria.example.internal
+  tls:
+    enabled: false
+
+# Database, object-storage and application credentials are supplied through
+# pre-created Kubernetes Secrets named by the chart defaults.

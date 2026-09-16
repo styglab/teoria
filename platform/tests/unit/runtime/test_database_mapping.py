@@ -172,6 +172,10 @@ class PaginatedBidNoticeExecutor:
                 {"field": "notice_published_at", "operator": "lte",
                  "value": datetime(2026, 8, 31, tzinfo=timezone.utc)},
                 {"field": "work_type", "operator": "eq", "value": "service"},
+                {"field": "notice_organization_code", "operator": "eq",
+                 "value": "B000001"},
+                {"field": "demand_organization_code", "operator": "eq",
+                 "value": "B000002"},
                 {"field": "bid_status", "operator": "in",
                  "value": ["scheduled", "open", "unknown"]},
                 {"field": "notice_status", "operator": "eq", "value": "active"},
@@ -210,6 +214,8 @@ async def test_search_bid_notices_returns_root_object_pagination() -> None:
             "notice_published_at_to": datetime(2026, 8, 31, tzinfo=timezone.utc),
             "query": "정보시스템",
             "work_type": "service",
+            "notice_organization_code": "B000001",
+            "demand_organization_code": "B000002",
             "bid_statuses": ["scheduled", "open", "unknown"],
             "sort": "deadline_asc",
             "page": 2,
@@ -251,6 +257,62 @@ def test_bid_notice_search_uses_declared_query_defaults() -> None:
     }
     assert query["filters"][-1] == {
         "field": "notice_status", "operator": "eq", "value": "active",
+    }
+
+
+def test_bid_notice_search_binds_organization_code_filters() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    capability = catalog.capabilities["search_bid_notices"]
+
+    query = CapabilityBinder().bind(
+        catalog,
+        capability,
+        capability.steps[0],
+        {
+            "notice_published_at_from": datetime(2026, 8, 1, tzinfo=timezone.utc),
+            "notice_published_at_to": datetime(2026, 8, 31, tzinfo=timezone.utc),
+            "notice_organization_code": "B000001",
+            "demand_organization_code": "B000002",
+        },
+    )
+
+    assert query["filters"][2:4] == [
+        {"field": "notice_organization_code", "operator": "eq", "value": "B000001"},
+        {"field": "demand_organization_code", "operator": "eq", "value": "B000002"},
+    ]
+
+
+def test_public_organization_search_binds_filters_sort_and_pagination() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    capability = catalog.capabilities["search_public_organizations"]
+
+    query = CapabilityBinder().bind(
+        catalog,
+        capability,
+        capability.steps[0],
+        {
+            "query": "서울",
+            "organization_code": "B000001",
+            "jurisdiction_type": "지방자치단체",
+            "page": 2,
+            "page_size": 50,
+        },
+    )
+
+    assert query == {
+        "filters": [
+            {"field": "organization_code", "operator": "eq", "value": "B000001"},
+            {"field": "jurisdiction_type", "operator": "eq", "value": "지방자치단체"},
+        ],
+        "search": {
+            "fields": ["organization_name", "organization_code"],
+            "value": "서울",
+        },
+        "order_by": [
+            {"field": "organization_name", "direction": "asc", "nulls": "last"},
+            {"field": "organization_code", "direction": "asc", "nulls": None},
+        ],
+        "pagination": {"page": 2, "page_size": 50, "root_field": "organization_code"},
     }
 
 

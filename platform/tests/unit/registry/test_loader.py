@@ -60,6 +60,7 @@ def test_loads_current_registries() -> None:
         "search_bid_awards",
         "search_bid_participations",
         "search_public_procurement_contracts",
+        "search_public_organizations",
         "get_company_public_procurement_contracts",
         "search_companies_by_name",
         "search_bid_notices",

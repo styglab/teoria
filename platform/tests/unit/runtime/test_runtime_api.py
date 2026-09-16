@@ -43,7 +43,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert assessment["kind"] == "compute"
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.09.15.2"
+    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.09.15.4"
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -52,7 +52,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.09.15.2"
+    assert response.json()["registry"]["version"] == "2026.09.15.4"
     assert runner.call[0] == "search_public_procurement_contracts"
     assert runner.call[1]["concluded_date_from"].isoformat() == "2026-01-01"
 
@@ -91,6 +91,8 @@ def test_bid_notice_search_discovery_exposes_pagination_and_sort_contract() -> N
         "active", "cancelled", "superseded",
     ]
     assert properties["notice_status"]["default"] == "active"
+    assert properties["notice_organization_code"]["type"] == "string"
+    assert properties["demand_organization_code"]["type"] == "string"
     assert properties["bid_statuses"] == {
         "type": "array",
         "items": {
@@ -137,6 +139,32 @@ def test_contract_capabilities_expose_root_contract_pagination() -> None:
     assert contract_search["page_size"]["maximum"] == 100
     assert company_history["sort"]["enum"] == ["contract_desc"]
     assert company_history["page"]["default"] == 1
+
+
+def test_public_organization_search_discovery_contract() -> None:
+    app = create_runtime_app(
+        settings=Settings(runtime_api_token="test-token"),
+        catalog=RegistryLoader(REGISTRIES).load(),
+        runner=CapturingRunner(),
+    )
+    capabilities = TestClient(app).get(
+        "/v1/capabilities",
+        headers={"Authorization": "Bearer test-token"},
+    ).json()["capabilities"]
+
+    properties = next(
+        item for item in capabilities if item["id"] == "search_public_organizations"
+    )["input_schema"]["properties"]
+
+    assert properties["query"]["type"] == "string"
+    assert properties["organization_code"]["type"] == "string"
+    assert properties["jurisdiction_type"]["type"] == "string"
+    assert properties["sort"] == {
+        "type": "string",
+        "enum": ["name_asc", "code_asc"],
+        "default": "name_asc",
+    }
+    assert properties["page_size"]["maximum"] == 100
 
 
 def test_runtime_api_can_require_a_published_registry() -> None:

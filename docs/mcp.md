@@ -32,5 +32,5 @@ Tool은 Ontology Object·Link와 provenance를 반환한다. `_options.include_p
 Docker 실행:
 
 ```bash
-docker compose -f deploy/compose.yaml --profile mcp run --rm mcp
+docker compose -f deploy/compose/compose.yaml --profile mcp run --rm mcp
 ```

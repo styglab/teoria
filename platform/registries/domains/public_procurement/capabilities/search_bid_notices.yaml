@@ -1,5 +1,5 @@
 registry:
-  version: 1.3.0
+  version: 1.4.0
   registered_at: "2026-08-07"
 
 capability:
@@ -22,6 +22,10 @@ capability:
     work_type:
       property: public_procurement.bid_notice.work_type
       enum: [goods, service, construction, foreign, other]
+    notice_organization_code:
+      property: public_procurement.bid_notice.notice_organization_code
+    demand_organization_code:
+      property: public_procurement.bid_notice.demand_organization_code
     bid_status:
       property: public_procurement.bid_notice.bid_status
       enum: [scheduled, open, closed, unknown]

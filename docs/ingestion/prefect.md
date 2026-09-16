@@ -34,8 +34,8 @@ HTTP이므로 인터넷에 무제한 공개하지 않고 내부망, VPN 또는 �
 UI의 API 주소는 동일 출처의 `/api`를 사용하므로 localhost와 외부 서버 IP 접속에 같은 구성을 사용한다.
 
 ```bash
-docker compose --env-file .env \
-  -f deploy/compose.yaml \
+docker compose --env-file deploy/compose/.env \
+  -f deploy/compose/compose.yaml \
   up --build -d
 ```
 
@@ -110,9 +110,9 @@ AI 입력은 공고별 checksum으로 중복 문서를 제거한다. 모델 원�
 최초 한 번 다음 명령으로 device code 로그인을 완료하고 상태를 확인한다.
 
 ```bash
-docker compose --env-file .env -f deploy/compose.yaml exec \
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml exec \
   prefect-ai-worker codex login --device-auth
-docker compose --env-file .env -f deploy/compose.yaml exec \
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml exec \
   prefect-ai-worker codex login status
 ```
 
@@ -191,8 +191,8 @@ Incremental은 지연 반영을 고려해 최근 3일을 중복 조회하며 정
 ## 수동 실행
 
 ```bash
-docker compose --env-file .env \
-  -f deploy/compose.yaml \
+docker compose --env-file deploy/compose/.env \
+  -f deploy/compose/compose.yaml \
   run --rm prefect-deploy \
   prefect deployment run '나라장터 계약정보 Backfill/pps-contract-backfill' \
   --param checkpoint_id=pps_contract_backfill_2021_2026 \
@@ -211,8 +211,8 @@ UI의 일별 하위 Flow에서 상품→공사→용역→외자→Raw 저장→
 - 다음 실행은 Checkpoint에서 이틀을 겹쳐 지연 반영을 다시 읽는다.
 
 ```bash
-docker compose --env-file .env \
-  -f deploy/compose.yaml \
+docker compose --env-file deploy/compose/.env \
+  -f deploy/compose/compose.yaml \
   down
 ```
 

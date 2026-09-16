@@ -79,7 +79,8 @@ def _ensure_codex_authenticated() -> None:
     if process.returncode:
         raise RuntimeError(
             "Codex ChatGPT login is required. Run "
-            "`docker compose --env-file .env -f deploy/compose.yaml exec "
+            "`docker compose --env-file deploy/compose/.env "
+            "-f deploy/compose/compose.yaml exec "
             "prefect-ai-worker codex login --device-auth`."
         )
 

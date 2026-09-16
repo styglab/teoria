@@ -3,7 +3,7 @@ name: teoria
 x-pipeline-runner: &pipeline-runner
   image: teoria-pipelines:latest
   build:
-    context: ..
+    context: ../..
     dockerfile: pipelines/Dockerfile
     target: worker
 
@@ -20,8 +20,8 @@ services:
   nginx:
     image: teoria-nginx:latest
     build:
-      context: ..
-      dockerfile: deploy/nginx/Dockerfile
+      context: ../..
+      dockerfile: deploy/compose/nginx/Dockerfile
     restart: unless-stopped
     depends_on:
       prefect-server:
@@ -217,7 +217,7 @@ services:
   prefect-ai-worker:
     image: teoria-pipelines-ai:latest
     build:
-      context: ..
+      context: ../..
       dockerfile: pipelines/Dockerfile
       target: ai-worker
     restart: unless-stopped
@@ -250,17 +250,17 @@ services:
     profiles: ["tools"]
     image: teoria-platform-runtime:latest
     build:
-      context: ..
+      context: ../..
       dockerfile: platform/Dockerfile
     command: ["teoria", "validate", "/app/platform/registries"]
     volumes:
-      - ../platform/registries:/app/platform/registries:ro
-      - ../platform/references:/app/platform/references:ro
+      - ../../platform/registries:/app/platform/registries:ro
+      - ../../platform/references:/app/platform/references:ro
 
   runtime-api:
     image: teoria-platform-runtime:latest
     build:
-      context: ..
+      context: ../..
       dockerfile: platform/Dockerfile
     restart: unless-stopped
     command: ["teoria-runtime-api"]
@@ -290,7 +290,7 @@ services:
   admin-api:
     image: teoria-platform-runtime:latest
     build:
-      context: ..
+      context: ../..
       dockerfile: platform/Dockerfile
     restart: unless-stopped
     command: ["teoria-admin-api"]
@@ -310,7 +310,7 @@ services:
   admin-ui:
     image: teoria-platform-admin-ui:latest
     build:
-      context: ..
+      context: ../..
       dockerfile: platform/admin-ui/Dockerfile
     restart: unless-stopped
     depends_on:
@@ -322,23 +322,23 @@ services:
   pipelines-check:
     profiles: ["tools"]
     build:
-      context: ..
+      context: ../..
       dockerfile: pipelines/Dockerfile
       target: check
     command: ["teoria-pipelines", "validate-integration", "/app/pipelines", "--platform-registries", "/app/platform/registries"]
     volumes:
-      - ../pipelines/connectors:/app/pipelines/connectors:ro
-      - ../pipelines/definitions:/app/pipelines/definitions:ro
-      - ../pipelines/verification_cases:/app/pipelines/verification_cases:ro
-      - ../pipelines/references:/app/pipelines/references:ro
-      - ../platform/registries:/app/platform/registries:ro
-      - ../platform/references:/app/platform/references:ro
+      - ../../pipelines/connectors:/app/pipelines/connectors:ro
+      - ../../pipelines/definitions:/app/pipelines/definitions:ro
+      - ../../pipelines/verification_cases:/app/pipelines/verification_cases:ro
+      - ../../pipelines/references:/app/pipelines/references:ro
+      - ../../platform/registries:/app/platform/registries:ro
+      - ../../platform/references:/app/platform/references:ro
 
   mcp:
     profiles: ["mcp"]
     image: teoria-mcp:latest
     build:
-      context: ..
+      context: ../..
       dockerfile: mcp/Dockerfile
     command: ["teoria-mcp"]
     stdin_open: true

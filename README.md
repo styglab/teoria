@@ -17,7 +17,7 @@ AI Client ──MCP──▶ MCP Gateway ──HTTP─────────�
 | `pipelines/` | Connector, Prefect Flow, raw·정규 적재, DB migration |
 | `mcp/` | Capability를 MCP Tool로 제공 |
 | `packages/provider/` | 공통 API 요청·응답 계약과 HTTP 실행 |
-| `deploy/` | 로컬 검증·실행용 Compose |
+| `deploy/` | 로컬 Compose와 온프레미스·AWS EC2 k3s 배포 정의 |
 | `docs/` | 아키텍처와 작성·운영 규칙 |
 | `archive/` | 시점별 검증 결과와 과거 산출물 |
 
@@ -26,7 +26,8 @@ AI Client ──MCP──▶ MCP Gateway ──HTTP─────────�
 ## 시작
 
 ```bash
-cp .env.example .env
+cp deploy/compose/.env.example deploy/compose/.env
+export TEORIA_ENV_FILE=deploy/compose/.env
 uv sync --locked --all-packages --all-groups
 ```
 
@@ -54,8 +55,8 @@ uv run --locked --package teoria-mcp teoria-mcp
 Prefect와 Data DB:
 
 ```bash
-docker compose --env-file .env \
-  -f deploy/compose.yaml \
+docker compose --env-file deploy/compose/.env \
+  -f deploy/compose/compose.yaml \
   up --build -d
 ```
 

@@ -19,7 +19,7 @@ platform  ──▶ teoria-provider ◀── pipelines
 ```
 
 - Pipeline 실행 코드는 Platform Runtime을 import하지 않는다.
-- MCP의 embedded import는 Runtime API 구현 전까지만 허용한다.
+- MCP는 Runtime API만 호출하며 Platform Runtime을 embedded import하지 않는다.
 - `teoria-provider`는 Platform이나 Pipelines를 역으로 import하지 않는다.
 - `common`, `shared`, `utils` 패키지는 만들지 않는다. 안정된 공통 계약만 이름 있는 패키지로 추출한다.
 - 예외적으로 Pipeline 통합 검증 진입점은 Platform Registry를 지연 import할 수 있다.

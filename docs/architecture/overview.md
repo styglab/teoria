@@ -4,7 +4,7 @@ Teoria는 세 배포 프로젝트와 하나의 공유 라이브러리로 구성�
 
 ```text
 pipelines ──SQL write──▶ Teoria Data DB ◀──SQL read── platform
-mcp ──Runtime HTTP API(target)────────────────────────▶ platform
+mcp ──Runtime HTTP API────────────────────────────────▶ platform
 
 platform ──▶ teoria-provider ◀── pipelines
 ```
@@ -25,4 +25,6 @@ platform ──▶ teoria-provider ◀── pipelines
 - `packages/provider`는 라이브러리이며 서비스·DB·Registry를 갖지 않는다.
 - 하나의 `uv.lock`을 공유하되 프로젝트별 `pyproject.toml`과 Dockerfile로 독립 배포한다.
 
-현재 MCP STDIO는 Runtime API 구현 전까지 embedded Runtime을 사용하는 개발 호환 모드다. 세부 소유권은 [Repository Structure](repository-structure.md)를 따른다.
+MCP STDIO는 `TEORIA_MCP_RUNTIME_MODE=remote`만 지원하며 Runtime API를 HTTP로 호출한다.
+MCP는 Platform을 embedded import하지 않고 Source 인증정보나 Data DB 권한도 갖지 않는다.
+세부 소유권은 [Repository Structure](repository-structure.md)를 따른다.

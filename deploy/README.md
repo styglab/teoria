@@ -1,13 +1,20 @@
-# Docker Compose
+# Deployment
 
-`deploy/compose.yaml`이 전체 로컬 Teoria 스택과 선택적 검증 작업의 단일 진입점이다.
+`deploy/compose/compose.yaml` is the local development and integration entry
+point. Shared on-premises and AWS EC2 k3s deployment scaffolding lives under
+`deploy/k3s/`; see [`k3s/README.md`](k3s/README.md).
+
+## Docker Compose
+
+`deploy/compose/compose.yaml`이 전체 로컬 Teoria 스택과 선택적 검증 작업의 단일 진입점이다.
 
 ```text
 deploy/
-├── compose.yaml       전체 스택 + 선택 profile
-├── nginx/             공개 HTTP nginx 이미지와 설정
-│   ├── Dockerfile
-│   └── nginx.conf
+├── compose/           로컬 전체 스택 + 선택 profile
+│   ├── compose.yaml
+│   ├── .env.example
+│   └── nginx/         공개 HTTP nginx 이미지와 설정
+├── k3s/               온프레미스·AWS EC2 공통 Helm 배포 구조
 └── README.md
 ```
 
@@ -24,7 +31,8 @@ teoria_data-db # 기존 데이터를 보존하기 위해 유지하는 물리 vol
 
 ## 기본 스택
 
-루트 `.env`에 Prefect Basic Auth 계정을 설정한다.
+`deploy/compose/.env`에 Prefect Basic Auth 계정을 설정한다. Platform, Pipeline 또는 MCP를
+Compose 밖에서 직접 실행할 때는 `TEORIA_ENV_FILE=deploy/compose/.env`를 명시한다.
 
 ```env
 TEORIA_PREFECT_USERNAME=admin
@@ -61,8 +69,8 @@ TEORIA_RUNTIME_DATA_DATABASE_URL=postgresql://teoria_runtime:비밀번호@db.exa
 시 남은 로컬 MinIO container는 orphan으로 표시될 수 있으며, 데이터 검증을 마친 뒤에만 제거한다.
 
 ```bash
-docker compose --env-file .env \
-  -f deploy/compose.yaml \
+docker compose --env-file deploy/compose/.env \
+  -f deploy/compose/compose.yaml \
   up --build -d
 ```
 
@@ -79,7 +87,7 @@ Redis ──────┴→ Background Services
 다음 명령으로 전용 `codex-auth` volume에 로그인 세션을 만든다.
 
 ```bash
-docker compose --env-file .env -f deploy/compose.yaml exec \
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml exec \
   prefect-ai-worker codex login --device-auth
 ```
 
@@ -105,25 +113,25 @@ docker compose --env-file .env -f deploy/compose.yaml exec \
 | `mcp` | `mcp` | STDIO 실행 |
 
 ```bash
-docker compose -f deploy/compose.yaml --profile tools run --build --rm platform-check
-docker compose -f deploy/compose.yaml --profile tools run --build --rm pipelines-check
-docker compose -f deploy/compose.yaml --profile mcp run --rm mcp
+docker compose -f deploy/compose/compose.yaml --profile tools run --build --rm platform-check
+docker compose -f deploy/compose/compose.yaml --profile tools run --build --rm pipelines-check
+docker compose -f deploy/compose/compose.yaml --profile mcp run --rm mcp
 ```
 
 검증 서비스는 로컬 Registry와 Reference를 read-only로 mount한다.
 
 ```bash
 docker compose \
-  -f deploy/compose.yaml \
+  -f deploy/compose/compose.yaml \
   --profile tools run --rm platform-check
 ```
 
 ## 상태와 종료
 
 ```bash
-docker compose -f deploy/compose.yaml ps
-docker compose -f deploy/compose.yaml logs -f prefect-worker
-docker compose -f deploy/compose.yaml down
+docker compose -f deploy/compose/compose.yaml ps
+docker compose -f deploy/compose/compose.yaml logs -f prefect-worker
+docker compose -f deploy/compose/compose.yaml down
 ```
 
 `down -v`는 수집 데이터와 Prefect 이력을 삭제하므로 데이터를 폐기할 때만 사용한다. Worker에는 `.env` 전체가 아니라 Compose에 선언한 Pipeline 변수만 전달한다.

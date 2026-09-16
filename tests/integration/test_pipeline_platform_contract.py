@@ -38,3 +38,23 @@ def test_database_migration_contains_every_published_source_field() -> None:
         assert relation.relation in migration
         for field in relation.fields:
             assert field.id in migration
+
+
+def test_bid_notice_organization_history_has_supporting_indexes() -> None:
+    migration = (
+        ROOT / "pipelines" / "database" / "migrations"
+        / "038_bid_notice_organization_search.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "notice_organization_code, notice_published_at DESC" in migration
+    assert "demand_organization_code, notice_published_at DESC" in migration
+
+
+def test_public_organization_name_search_has_trigram_index() -> None:
+    migration = (
+        ROOT / "pipelines" / "database" / "migrations"
+        / "039_public_organization_name_search.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "CREATE EXTENSION IF NOT EXISTS pg_trgm" in migration
+    assert "organization_name gin_trgm_ops" in migration

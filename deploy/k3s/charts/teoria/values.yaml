@@ -1,0 +1,30 @@
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+ingress:
+  enabled: false
+  className: traefik
+  host: ""
+  tls:
+    enabled: false
+    secretName: ""
+
+database:
+  pipeline:
+    existingSecret: teoria-pipeline-database
+  runtime:
+    existingSecret: teoria-runtime-database
+
+objectStorage:
+  existingSecret: teoria-object-storage
+
+runtime:
+  existingSecret: teoria-runtime
+
+prefect:
+  existingSecret: teoria-prefect
+
+aiWorker:
+  codexAuth:
+    existingClaim: ""

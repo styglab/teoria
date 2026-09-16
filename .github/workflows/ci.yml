@@ -49,8 +49,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+      - name: Initialize database roles
+        run: |
+          uv run --locked --package teoria-pipelines python - <<'PY'
+          import os
+          import psycopg
+
+          with psycopg.connect(os.environ["TEORIA_TEST_DATA_DATABASE_URL"], autocommit=True) as connection:
+              connection.execute("CREATE ROLE teoria_pipeline")
+              connection.execute("CREATE ROLE teoria_runtime")
+          PY
       - run: uv run --locked --package teoria-pipelines --group validation pytest tests/integration
       - run: uv run --locked --package teoria-pipelines --group validation teoria-pipelines validate-integration pipelines --platform-registries platform/registries
+
+  deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Docker Compose
+        env:
+          TEORIA_LOCAL_RUNTIME_DB_PASSWORD: validation
+          TEORIA_OBJECT_STORAGE_ACCESS_KEY: validation
+          TEORIA_OBJECT_STORAGE_ENDPOINT: http://object-storage.invalid
+          TEORIA_OBJECT_STORAGE_SECRET_KEY: validation
+          TEORIA_PREFECT_PASSWORD: validation
+          TEORIA_PREFECT_USERNAME: validation
+          TEORIA_RUNTIME_API_TOKEN: validation
+        run: docker compose -f deploy/compose/compose.yaml config --quiet
+      - name: Validate Helm and Helmfile environments
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work \
+            ghcr.io/helmfile/helmfile:v1.7.1 \
+            helm lint deploy/k3s/charts/teoria
+          docker run --rm -v "$PWD:/work" -w /work \
+            ghcr.io/helmfile/helmfile:v1.7.1 \
+            helmfile -f deploy/k3s/helmfile.yaml.gotmpl -e on-prem template
+          docker run --rm -v "$PWD:/work" -w /work \
+            ghcr.io/helmfile/helmfile:v1.7.1 \
+            helmfile -f deploy/k3s/helmfile.yaml.gotmpl -e aws-ec2 template
 
   mcp:
     runs-on: ubuntu-latest

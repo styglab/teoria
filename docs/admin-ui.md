@@ -14,7 +14,7 @@ MCP      → Runtime API → Capability Runner
 전체 Compose 실행 후 nginx를 통해 `http://localhost:8081/`로 접속한다.
 
 ```bash
-docker compose --env-file .env -f deploy/compose.yaml up -d --build admin-ui
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml up -d --build admin-ui
 ```
 
 프론트엔드만 개발할 때는 Admin API를 먼저 실행한다.

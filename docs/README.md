@@ -23,6 +23,7 @@
 - [Prefect 운영](ingestion/prefect.md)
 - [MCP Gateway](mcp.md)
 - [입찰체크 서비스 연동 가이드](integration/bid-check-service.md)
+- [공공조달 Capability 현황](integration/public-procurement-capabilities.md)
 - [Platform Admin UI](admin-ui.md)
 - [Registry lifecycle](architecture/registry-lifecycle.md)
 - [Source 작성 Skill](skills/source-registry-author.md)
