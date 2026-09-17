@@ -66,6 +66,9 @@ POST /v1/capabilities/search_bid_notices:execute
 하나를 지정할 수 있다. `sort`는 게시일 최신순인 `published_desc`가 기본이고 마감 임박순은
 `deadline_asc`이다. 마감일이 없는 공고는 마감 임박순의 마지막에 배치된다.
 
+공고번호를 알고 있으면 `query` 대신 `notice_number`를 사용한다. 이 입력은 공고번호를 정확히
+일치시키며 공고번호 인덱스를 사용하므로 범용 부분검색보다 빠르다.
+
 여러 시간 상태를 함께 표시할 때는 `bid_status`를 상태별로 반복 호출해 서비스에서 병합하지
 말고 `bid_statuses`에 `scheduled`, `open`, `unknown`을 전달한다. Runtime이 합쳐진 집합에 대해
 정렬·전체 건수·페이지를 한 번만 계산한다. 활성 공고만 사용하는 서비스는 Runtime 기본값에만

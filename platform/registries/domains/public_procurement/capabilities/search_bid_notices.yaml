@@ -1,6 +1,6 @@
 registry:
-  version: 1.4.0
-  registered_at: "2026-08-07"
+  version: 1.5.0
+  registered_at: "2026-09-17"
 
 capability:
   id: search_bid_notices
@@ -9,6 +9,9 @@ capability:
   inputs:
     query:
       data_type: string
+    notice_number:
+      data_type: string
+      field: teoria_public_procurement.bid_notices.notice_number
     notice_published_at_from:
       data_type: datetime
       field: teoria_public_procurement.bid_notices.notice_published_at
@@ -88,6 +91,7 @@ capability:
           page_input: page
           page_size_input: page_size
           root_field: bid_notice_id
+          count_distinct: false
   returns:
     - public_procurement.bid_notice
     - public_procurement.public_organization

@@ -189,7 +189,10 @@ class PaginatedBidNoticeExecutor:
                 {"field": "bid_deadline_at", "direction": "asc", "nulls": "last"},
                 {"field": "bid_notice_id", "direction": "asc", "nulls": None},
             ],
-            "pagination": {"page": 2, "page_size": 20, "root_field": "bid_notice_id"},
+            "pagination": {
+                "page": 2, "page_size": 20, "root_field": "bid_notice_id",
+                "count_distinct": False,
+            },
         }
         return DatabaseQueryResult([{
             "bid_notice_id": "R26TEST:000",
@@ -254,6 +257,7 @@ def test_bid_notice_search_uses_declared_query_defaults() -> None:
     ]
     assert query["pagination"] == {
         "page": 1, "page_size": 20, "root_field": "bid_notice_id",
+        "count_distinct": False,
     }
     assert query["filters"][-1] == {
         "field": "notice_status", "operator": "eq", "value": "active",
@@ -280,6 +284,27 @@ def test_bid_notice_search_binds_organization_code_filters() -> None:
         {"field": "notice_organization_code", "operator": "eq", "value": "B000001"},
         {"field": "demand_organization_code", "operator": "eq", "value": "B000002"},
     ]
+
+
+def test_bid_notice_search_binds_exact_notice_number() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    capability = catalog.capabilities["search_bid_notices"]
+
+    query = CapabilityBinder().bind(
+        catalog,
+        capability,
+        capability.steps[0],
+        {
+            "notice_number": "R26BK01735611",
+            "notice_published_at_from": datetime(2026, 8, 1, tzinfo=timezone.utc),
+            "notice_published_at_to": datetime(2026, 9, 30, tzinfo=timezone.utc),
+        },
+    )
+
+    assert query["filters"][0] == {
+        "field": "notice_number", "operator": "eq", "value": "R26BK01735611",
+    }
+    assert query["pagination"]["count_distinct"] is False
 
 
 def test_public_organization_search_binds_filters_sort_and_pagination() -> None:
