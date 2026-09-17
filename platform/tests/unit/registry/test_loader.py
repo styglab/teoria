@@ -55,6 +55,7 @@ def test_loads_current_registries() -> None:
         "verify_mainbiz_company",
         "verify_venture_company",
         "get_public_procurement_contract",
+        "get_bid_notice_contracts",
         "get_bid_result",
         "get_company_bid_history",
         "search_bid_awards",

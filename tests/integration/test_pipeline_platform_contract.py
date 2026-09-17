@@ -58,3 +58,12 @@ def test_public_organization_name_search_has_trigram_index() -> None:
 
     assert "CREATE EXTENSION IF NOT EXISTS pg_trgm" in migration
     assert "organization_name gin_trgm_ops" in migration
+
+
+def test_bid_notice_contract_lookup_has_supporting_index() -> None:
+    migration = (
+        ROOT / "pipelines" / "database" / "migrations"
+        / "040_bid_notice_contract_lookup.sql"
+    ).read_text(encoding="utf-8")
+
+    assert "notice_number, concluded_date DESC, unified_contract_number DESC" in migration

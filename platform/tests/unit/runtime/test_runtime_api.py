@@ -43,7 +43,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert assessment["kind"] == "compute"
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.09.15.4"
+    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.09.17.1"
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -52,7 +52,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.09.15.4"
+    assert response.json()["registry"]["version"] == "2026.09.17.1"
     assert runner.call[0] == "search_public_procurement_contracts"
     assert runner.call[1]["concluded_date_from"].isoformat() == "2026-01-01"
 
@@ -165,6 +165,33 @@ def test_public_organization_search_discovery_contract() -> None:
         "default": "name_asc",
     }
     assert properties["page_size"]["maximum"] == 100
+
+
+def test_bid_notice_contracts_discovery_requires_notice_number() -> None:
+    app = create_runtime_app(
+        settings=Settings(runtime_api_token="test-token"),
+        catalog=RegistryLoader(REGISTRIES).load(),
+        runner=CapturingRunner(),
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer test-token"}
+    capabilities = client.get("/v1/capabilities", headers=headers).json()["capabilities"]
+
+    schema = next(
+        item for item in capabilities if item["id"] == "get_bid_notice_contracts"
+    )["input_schema"]
+
+    assert schema["required"] == ["notice_number"]
+    assert schema["properties"]["notice_number"]["type"] == "string"
+    assert schema["properties"]["page_size"]["maximum"] == 100
+
+    response = client.post(
+        "/v1/capabilities/get_bid_notice_contracts:execute",
+        headers=headers,
+        json={"inputs": {"notice_number": "R26BK00000001"}},
+    )
+    assert response.status_code == 200
+    assert response.json()["capability"] == "get_bid_notice_contracts"
 
 
 def test_runtime_api_can_require_a_published_registry() -> None:

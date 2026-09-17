@@ -316,6 +316,31 @@ def test_public_organization_search_binds_filters_sort_and_pagination() -> None:
     }
 
 
+def test_bid_notice_contracts_binds_exact_notice_number_and_pagination() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    capability = catalog.capabilities["get_bid_notice_contracts"]
+
+    query = CapabilityBinder().bind(
+        catalog,
+        capability,
+        capability.steps[0],
+        {"notice_number": "R26BK00000001", "page": 2, "page_size": 50},
+    )
+
+    assert query == {
+        "filters": [{
+            "field": "notice_number",
+            "operator": "eq",
+            "value": "R26BK00000001",
+        }],
+        "order_by": [
+            {"field": "concluded_date", "direction": "desc", "nulls": "last"},
+            {"field": "unified_contract_number", "direction": "desc", "nulls": None},
+        ],
+        "pagination": {"page": 2, "page_size": 50, "root_field": "unified_contract_number"},
+    }
+
+
 def test_company_bid_history_binds_business_number_to_each_relation() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
     capability = catalog.capabilities["get_company_bid_history"]

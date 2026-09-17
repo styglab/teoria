@@ -51,7 +51,7 @@
 | 전체 첨부파일 목록 | 부분 지원 | 위 근거 조회 Capability | 요건이나 참여정보의 근거가 된 첨부는 확인할 수 있지만 공고에 속한 모든 첨부파일을 독립적으로 나열하는 Capability는 없다. |
 | 참여업체 | 직접 지원 | `get_bid_result`, `search_bid_participations` | 공고별 개찰 참여업체와 사업자등록번호를 조회한다. |
 | 개찰·낙찰 | 직접 지원 | `get_bid_result` | 개찰순위, 투찰가격·투찰률, 평가점수, 최종 낙찰업체와 낙찰금액을 조회한다. |
-| 계약 연결 | 조합 지원 | `get_bid_result`, `search_public_procurement_contracts`, `get_public_procurement_contract` | 계약 객체에 저장된 공고번호로 연결할 수 있다. 공고번호를 직접 입력받아 연결 계약을 반환하는 전용 Capability는 없다. |
+| 계약 연결 | 직접 지원 | `get_bid_notice_contracts`, `get_public_procurement_contract` | 정확한 공고번호로 연결 계약 목록을 조회하고 통합계약번호로 계약 상세를 조회한다. |
 
 목록 화면에서 여러 공고를 처리할 때는 `get_bid_notices_by_ids`와
 `get_bid_requirements_by_notice_ids`를 사용해 최대 100개 공고를 한 번에 조회할 수 있다.

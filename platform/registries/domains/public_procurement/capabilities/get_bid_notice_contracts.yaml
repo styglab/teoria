@@ -1,0 +1,42 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-17"
+
+capability:
+  id: get_bid_notice_contracts
+  name: 입찰공고 계약 조회
+  description: 나라장터 공고번호로 연결된 공공조달 계약과 계약기관 관계를 계약체결일 최신순으로 조회한다.
+  inputs:
+    notice_number:
+      property: public_procurement.contract.notice_number
+      required: true
+    sort:
+      data_type: string
+      enum: [concluded_desc]
+      default: concluded_desc
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
+  steps:
+    - call: teoria_public_procurement.contracts
+      database_query:
+        sort:
+          input: sort
+          choices:
+            concluded_desc:
+              - {field: concluded_date, direction: desc, nulls: last}
+              - {field: unified_contract_number, direction: desc}
+        pagination:
+          page_input: page
+          page_size_input: page_size
+          root_field: unified_contract_number
+  returns:
+    - public_procurement.contract
+    - public_procurement.public_organization
+    - public_procurement.public_organization_awards_contract

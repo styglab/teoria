@@ -442,6 +442,27 @@ POST /v1/capabilities/search_public_procurement_contracts:execute
 }
 ```
 
+공고 상세에서 연결 계약을 조회할 때는 공고명 자유어 검색을 사용하지 않고 다음 Capability에
+정확한 나라장터 공고번호를 전달한다. 날짜 범위는 필요하지 않으며 계약체결일 최신순으로 반환한다.
+
+```http
+POST /v1/capabilities/get_bid_notice_contracts:execute
+```
+
+```json
+{
+  "inputs": {
+    "notice_number": "R26BK00000001",
+    "page": 1,
+    "page_size": 20
+  }
+}
+```
+
+연결 계약이 없으면 성공 응답의 `objects`가 비어 있으며, 공고명을 이용한 대체 검색을 수행하지
+않는다. 계약 상세가 필요하면 반환된 `unified_contract_number`로
+`get_public_procurement_contract`를 호출한다.
+
 ### 법인 기본정보와 재무정보
 
 법인등록번호를 확보한 경우 다음 Capability를 사용할 수 있다.
