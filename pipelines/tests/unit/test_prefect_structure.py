@@ -2945,17 +2945,18 @@ def test_bid_notice_deployments_are_frequent_and_staggered() -> None:
     extraction = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-eligibility-extraction")
     retention = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-document-retention")
 
-    assert notices["schedules"][0]["cron"] == "*/10 * * * *"
+    assert notices["schedules"][0]["cron"] == "0 * * * *"
     assert notices["parameters"] == {
         "pipeline_root": "/app/pipelines",
         "lookback_days": 1,
+        "enrichment_batch_size": 20,
     }
     assert reconciliation["schedules"][0] == {
-        "cron": "10 1 * * *", "timezone": "Asia/Seoul", "active": True,
+        "cron": "10 1 * * *", "timezone": "Asia/Seoul", "active": False,
     }
     assert reconciliation["parameters"]["lookback_days"] == 3
     assert backfill["schedules"][0] == {
-        "cron": "50 * * * *", "timezone": "Asia/Seoul", "active": True,
+        "cron": "50 * * * *", "timezone": "Asia/Seoul", "active": False,
     }
     assert backfill["parameters"] == {
         "checkpoint_id": "pps_bid_notice_backfill_2021_2026",
@@ -2963,6 +2964,7 @@ def test_bid_notice_deployments_are_frequent_and_staggered() -> None:
         "end_date": "2026-09-13",
         "pipeline_root": "/app/pipelines",
         "batch_days": 30,
+        "enrichment_batch_size": 20,
     }
     assert backfill["concurrency_limit"] == {
         "limit": 1, "collision_strategy": "CANCEL_NEW",

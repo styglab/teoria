@@ -1,7 +1,12 @@
+import asyncio
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
+import pytest
+
+from teoria_pipelines.connectors.pps_bid_notices import PPSBidNoticeClient
 from teoria_pipelines.models import (
+    BidNoticeKey,
     CollectionWindow,
     ExtractedBatch,
     NormalizedBidNoticeBatch,
@@ -27,6 +32,38 @@ def raw(operation_id: str, payload: dict) -> RawProviderRecord:
         fetched_at=datetime.now(timezone.utc), source_record_hash=f"hash-{operation_id}",
         payload=payload,
     )
+
+
+@pytest.mark.asyncio
+async def test_enrichment_requests_are_fully_sequential() -> None:
+    client = object.__new__(PPSBidNoticeClient)
+    active = 0
+    maximum_active = 0
+
+    async def wait_for_slot() -> None:
+        return None
+
+    async def fetch_pages(execution_id, window, operation_id, query):
+        nonlocal active, maximum_active
+        active += 1
+        maximum_active = max(maximum_active, active)
+        await asyncio.sleep(0)
+        active -= 1
+        return ExtractedBatch(execution_id=execution_id, window=window)
+
+    client._wait_for_enrichment_slot = wait_for_slot
+    client._fetch_pages = fetch_pages
+    execution_id = uuid4()
+    window = CollectionWindow(date(2026, 9, 17), date(2026, 9, 17))
+
+    result = await client.fetch_enrichment(
+        execution_id,
+        window,
+        [BidNoticeKey("R26BK00000001", "000"), BidNoticeKey("R26BK00000002", "000")],
+    )
+
+    assert maximum_active == 1
+    assert result.execution_id == execution_id
 
 
 def test_normalizes_notice_and_discovers_documents() -> None:

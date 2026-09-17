@@ -72,6 +72,9 @@ def _client(pipeline_root: str) -> PPSBidNoticeClient:
             backoff_seconds=settings.source_retry_backoff_seconds,
             secret_provider=EnvironmentSecretProvider(),
         ),
+        enrichment_requests_per_second=(
+            settings.bid_notice_enrichment_requests_per_second
+        ),
     )
 
 
@@ -142,7 +145,7 @@ def upsert_bid_notices(batch: NormalizedBidNoticeBatch) -> tuple[LoadSummary, li
     return _store().upsert_bid_notices(batch)
 
 
-@task(name="공고번호별 면허·지역 수집", retries=2, retry_delay_seconds=60,
+@task(name="공고번호별 면허·지역 수집",
       viz_return_value=VIZ_EXTRACTED)
 async def extract_bid_notice_enrichment(execution_id: UUID, window: CollectionWindow,
                                         notices: list[BidNoticeKey], pipeline_root: str,
@@ -166,16 +169,20 @@ def upsert_bid_notice_enrichment(batch: NormalizedBidNoticeBatch,
 
 
 @task(name="입찰공고 적재결과 결합", viz_return_value=VIZ_SUMMARY)
-def combine_bid_notice_summary(raw_notice_count: int, raw_enrichment_count: int,
+def combine_bid_notice_summary(raw_notice_count: int, raw_enrichment_counts: list[int],
                                notice_load: tuple[LoadSummary, list[BidNoticeKey]],
-                               enrichment_load: LoadSummary) -> LoadSummary:
+                               enrichment_loads: list[LoadSummary]) -> LoadSummary:
     notices, _ = notice_load
     return LoadSummary(
-        raw_records=raw_notice_count + raw_enrichment_count,
+        raw_records=raw_notice_count + sum(raw_enrichment_counts),
         notices=notices.notices,
         documents=notices.documents,
-        license_restrictions=enrichment_load.license_restrictions,
-        participation_regions=enrichment_load.participation_regions,
+        license_restrictions=sum(
+            item.license_restrictions for item in enrichment_loads
+        ),
+        participation_regions=sum(
+            item.participation_regions for item in enrichment_loads
+        ),
     )
 
 

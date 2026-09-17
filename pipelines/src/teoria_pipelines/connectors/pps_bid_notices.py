@@ -66,11 +66,10 @@ class PPSBidNoticeClient:
                 "bidNtceOrd": key.notice_order,
             })
 
-        batches = await asyncio.gather(*(
-            fetch(key, operation_id)
-            for key in notices
-            for operation_id in ENRICHMENT_OPERATIONS
-        ))
+        batches = []
+        for key in notices:
+            for operation_id in ENRICHMENT_OPERATIONS:
+                batches.append(await fetch(key, operation_id))
         return ExtractedBatch(
             execution_id=execution_id, window=window,
             records=[record for batch in batches for record in batch.records],

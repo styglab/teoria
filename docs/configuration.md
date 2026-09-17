@@ -24,7 +24,9 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_ADMIN_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Admin API 앞에 붙이는 URL 경로 |
 | `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | checksum이 일치하는 Published Registry만 Runtime에서 허용 |
 | `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
-| `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `3` | Connector 요청 횟수 |
+| `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `5` | Connector의 멱등 요청 최대 시도 횟수 |
+| `TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS` | `60` | Connector 재시도 지수 backoff의 최초 대기시간 |
+| `TEORIA_PIPELINE_BID_NOTICE_ENRICHMENT_REQUESTS_PER_SECOND` | `1` | 공고별 면허·지역 보강 요청의 프로세스당 초당 최대 시작 횟수 |
 | `TEORIA_RUNTIME_DATA_DATABASE_URL` | Compose 내부 DB | Runtime 읽기 DB URL; 외부 DB 사용 시 read-only role URL |
 | `TEORIA_PIPELINE_DATA_DATABASE_URL` | Compose 내부 DB | Pipeline migration·적재용 writer DB URL |
 | `TEORIA_MCP_RUNTIME_MODE` | `remote` | MCP 실행 모드 |

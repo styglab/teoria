@@ -54,7 +54,10 @@ async def sync_pps_bid_notice_window(
     pipeline_id: str = PIPELINE_ID,
     checkpoint_cursor: date | None = None,
     include_documents: bool = True,
+    enrichment_batch_size: int = 20,
 ) -> LoadSummary:
+    if enrichment_batch_size < 1:
+        raise ValueError("enrichment_batch_size must be positive")
     prefect_run_id = flow_run.get_id()
     execution_id = UUID(prefect_run_id) if prefect_run_id else uuid4()
     started_execution_id = start_pipeline_run(execution_id, pipeline_id, window)
@@ -74,18 +77,28 @@ async def sync_pps_bid_notice_window(
         notice_load = upsert_bid_notices(normalized_notices)
         changed_notices = notice_load[1]
 
-        enrichment = await extract_bid_notice_enrichment(
-            execution_id, window, changed_notices, pipeline_root, notice_load
-        )
-        raw_enrichment_count = save_raw_records(enrichment)
-        normalized_enrichment = normalize_bid_notice_enrichment(
-            enrichment, raw_enrichment_count
-        )
-        enrichment_load = upsert_bid_notice_enrichment(
-            normalized_enrichment, changed_notices
-        )
+        raw_enrichment_counts = []
+        enrichment_loads = []
+        for start in range(0, len(changed_notices), enrichment_batch_size):
+            notice_chunk = changed_notices[start:start + enrichment_batch_size]
+            enrichment = await extract_bid_notice_enrichment.with_options(
+                name=(
+                    "공고번호별 면허·지역 수집 "
+                    f"{start // enrichment_batch_size + 1}/"
+                    f"{(len(changed_notices) + enrichment_batch_size - 1) // enrichment_batch_size}"
+                )
+            )(execution_id, window, notice_chunk, pipeline_root, notice_load)
+            raw_enrichment_count = save_raw_records(enrichment)
+            normalized_enrichment = normalize_bid_notice_enrichment(
+                enrichment, raw_enrichment_count
+            )
+            enrichment_load = upsert_bid_notice_enrichment(
+                normalized_enrichment, notice_chunk
+            )
+            raw_enrichment_counts.append(raw_enrichment_count)
+            enrichment_loads.append(enrichment_load)
         summary = combine_bid_notice_summary(
-            raw_notice_count, raw_enrichment_count, notice_load, enrichment_load
+            raw_notice_count, raw_enrichment_counts, notice_load, enrichment_loads
         )
         checkpointed = update_bid_notice_checkpoint(
             execution_id, checkpoint_cursor or window.end, summary, pipeline_id
@@ -101,10 +114,12 @@ async def sync_pps_bid_notices(
     pipeline_root: str = "/app/pipelines",
     lookback_days: int = 1,
     pipeline_id: str = PIPELINE_ID,
+    enrichment_batch_size: int = 20,
 ) -> LoadSummary:
     window = determine_bid_notice_window(lookback_days)
     return await sync_pps_bid_notice_window(
-        window, pipeline_root, pipeline_id
+        window, pipeline_root, pipeline_id,
+        enrichment_batch_size=enrichment_batch_size,
     )
 
 
@@ -115,6 +130,7 @@ async def sync_pps_bid_notice_backfill(
     end_date: date,
     pipeline_root: str = "/app/pipelines",
     batch_days: int = 30,
+    enrichment_batch_size: int = 20,
 ) -> list[LoadSummary]:
     windows = determine_bid_notice_backfill_windows(
         checkpoint_id, start_date, end_date, batch_days
@@ -125,7 +141,8 @@ async def sync_pps_bid_notice_backfill(
             pipeline_root,
             checkpoint_id,
             window.end,
-            False,
+            include_documents=False,
+            enrichment_batch_size=enrichment_batch_size,
         )
         for window in windows
     ]

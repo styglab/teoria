@@ -15,7 +15,15 @@ TEORIA_OBJECT_STORAGE_ENDPOINT=https://minio.example.com
 TEORIA_OBJECT_STORAGE_ACCESS_KEY=외부-MinIO-access-key
 TEORIA_OBJECT_STORAGE_SECRET_KEY=외부-MinIO-secret-key
 TEORIA_OBJECT_STORAGE_BUCKET=teoria
+TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS=5
+TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS=60
+TEORIA_PIPELINE_BID_NOTICE_ENRICHMENT_REQUESTS_PER_SECOND=1
 ```
+
+공고별 면허·지역 보강은 기본 1 RPS의 완전 순차 호출로 제한하고 공고 20개 단위로 Raw 저장과 정규 적재를
+완료한다. 일부 청크가 429로 실패해도 완료된 공고의 `enrichment_checked_at`은 보존되므로 다음
+증분 실행은 미완료 공고만 재개한다. 요청 제한이 안정될 때까지 공고 증분은 시간당 한 번만
+실행하고 공고 backfill과 3일 보정 Deployment의 schedule은 비활성 상태로 유지한다.
 
 입찰 첨부파일은 기본적으로 입찰 마감 후 90일 동안 보존한다. 매일 03:45(Asia/Seoul)에
 `pps-bid-document-retention`이 원본 첨부파일, 파싱 산출물과 AI 원본 출력만 삭제한다.
