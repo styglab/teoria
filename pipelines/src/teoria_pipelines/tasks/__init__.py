@@ -1,11 +1,16 @@
 """Observable Prefect task boundaries for pipeline side effects."""
 from teoria_pipelines.tasks.pps_contracts import (
+    complete_operation,
+    claim_backfill_gaps,
     complete_pipeline_run,
     combine_extracted_batches,
     determine_collection_window,
     extract_contract_operation,
     fail_pipeline_run,
+    get_completed_operation,
     normalize_contracts,
+    record_backfill_gap,
+    resolve_backfill_gap,
     save_raw_records,
     start_pipeline_run,
     update_checkpoint,
@@ -39,12 +44,17 @@ from teoria_pipelines.tasks.pps_bid_results import (
 )
 
 __all__ = [
+    "complete_operation",
+    "claim_backfill_gaps",
     "complete_pipeline_run",
     "combine_extracted_batches",
     "determine_collection_window",
     "extract_contract_operation",
     "fail_pipeline_run",
+    "get_completed_operation",
     "normalize_contracts",
+    "record_backfill_gap",
+    "resolve_backfill_gap",
     "save_raw_records",
     "start_pipeline_run",
     "update_checkpoint",

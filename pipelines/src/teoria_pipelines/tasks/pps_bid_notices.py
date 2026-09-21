@@ -32,6 +32,7 @@ from teoria_pipelines.settings import bootstrap_pipeline_settings
 
 PIPELINE_ID = "pps_bid_notice_ingestion"
 BACKFILL_PIPELINE_ID = "pps_bid_notice_backfill_2021_2026"
+ENRICHMENT_BACKFILL_PIPELINE_ID = "pps_bid_notice_enrichment_backfill"
 NOTICE_OPERATIONS = [
     "list_construction_bid_notices", "list_service_bid_notices",
     "list_foreign_bid_notices", "list_goods_bid_notices", "list_other_bid_notices",
@@ -145,11 +146,22 @@ def upsert_bid_notices(batch: NormalizedBidNoticeBatch) -> tuple[LoadSummary, li
     return _store().upsert_bid_notices(batch)
 
 
+@task(name="보강 미처리 입찰공고 선점", viz_return_value=[])
+def claim_pending_bid_notice_enrichment(
+    batch_size: int = 20, minimum_age_days: int = 7, lease_minutes: int = 60,
+) -> list[dict]:
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    return _store().claim_pending_bid_notice_enrichment(
+        batch_size, minimum_age_days, lease_minutes
+    )
+
+
 @task(name="공고번호별 면허·지역 수집",
       viz_return_value=VIZ_EXTRACTED)
 async def extract_bid_notice_enrichment(execution_id: UUID, window: CollectionWindow,
                                         notices: list[BidNoticeKey], pipeline_root: str,
-                                        notice_load: tuple[LoadSummary, list[BidNoticeKey]]) -> ExtractedBatch:
+                                        notice_load: tuple[LoadSummary, list[BidNoticeKey]] | None = None) -> ExtractedBatch:
     del notice_load
     if not notices:
         return ExtractedBatch(execution_id=execution_id, window=window)

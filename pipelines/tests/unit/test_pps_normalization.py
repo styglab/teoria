@@ -66,3 +66,22 @@ def test_preserves_brackets_inside_supplier_name() -> None:
     assert suppliers[0]["supplier_name"] == "베리즈 코퍼레이션[Verys corp.]"
     assert suppliers[0]["creditor_name"] == "베리즈 코퍼레이션[Verys corp.]"
     assert suppliers[0]["business_registration_number"] == "1470901465"
+
+
+def test_discards_implausible_contract_dates_but_preserves_record() -> None:
+    record = RawProviderRecord(
+        raw_record_id=uuid4(), execution_id=uuid4(), connector_id="pps_contract_api",
+        operation_id="list_goods_contracts",
+        window=CollectionWindow(date(2026, 1, 1), date(2026, 1, 1)),
+        fetched_at=datetime.now(timezone.utc), source_record_hash="future-date",
+        payload={
+            "untyCntrctNo": "future-date-contract",
+            "cntrctDate": "22221014",
+            "cntrctCnclsDate": "50050518",
+        },
+    )
+
+    contract, *_ = normalize_contract_record(record)
+
+    assert contract["contract_date"] is None
+    assert contract["concluded_date"] is None

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -142,7 +142,8 @@ def _date(value: Any) -> date | None:
         return None
     for pattern in ("%Y-%m-%d", "%Y%m%d"):
         try:
-            return datetime.strptime(text, pattern).date()
+            parsed = datetime.strptime(text, pattern).date()
+            return parsed if date(1900, 1, 1) <= parsed <= date.today() + timedelta(days=366) else None
         except ValueError:
             continue
     raise BidResultNormalizationError(f"invalid date value {value!r}")
@@ -154,7 +155,8 @@ def _kst_datetime(value: Any) -> datetime | None:
         return None
     for pattern in ("%Y-%m-%d %H:%M:%S", "%Y%m%d%H%M%S", "%Y-%m-%dT%H:%M:%S"):
         try:
-            return datetime.strptime(text, pattern).replace(tzinfo=KST)
+            parsed = datetime.strptime(text, pattern).replace(tzinfo=KST)
+            return parsed if date(1900, 1, 1) <= parsed.date() <= date.today() + timedelta(days=366) else None
         except ValueError:
             continue
     raise BidResultNormalizationError(f"invalid datetime value {value!r}")

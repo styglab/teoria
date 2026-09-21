@@ -33,6 +33,18 @@ def test_bid_notice_search_migration_materializes_latest_version_and_trigrams() 
     assert "row_number() OVER" not in migration
 
 
+def test_contract_operation_progress_migration_cleans_stale_runs_and_dates() -> None:
+    migration = (
+        Path(__file__).parents[2] / "database" / "migrations"
+        / "043_pipeline_operation_progress.sql"
+    ).read_text()
+
+    assert "CREATE TABLE ingestion.pipeline_operation_progress" in migration
+    assert "StalePipelineRun" in migration
+    assert "contract_date = NULL" in migration
+    assert "opening_at = NULL" in migration
+
+
 def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
     connection = MagicMock()
     connection.__enter__.return_value = connection

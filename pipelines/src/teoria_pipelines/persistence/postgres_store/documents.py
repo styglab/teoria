@@ -43,7 +43,15 @@ class DocumentStoreMixin:
                     f"VALUES ({', '.join('%(' + column + ')s' for column in columns)}) "
                     "ON CONFLICT (notice_number, notice_order) DO UPDATE SET "
                     + ", ".join(f"{column}=EXCLUDED.{column}" for column in assignments)
-                    + ", updated_at=now() "
+                    + ", enrichment_checked_at=CASE WHEN "
+                    "public_procurement.bid_notices.source_record_hash "
+                    "IS DISTINCT FROM EXCLUDED.source_record_hash THEN NULL "
+                    "ELSE public_procurement.bid_notices.enrichment_checked_at END, "
+                    "enrichment_claimed_at=CASE WHEN "
+                    "public_procurement.bid_notices.source_record_hash "
+                    "IS DISTINCT FROM EXCLUDED.source_record_hash THEN NULL "
+                    "ELSE public_procurement.bid_notices.enrichment_claimed_at END, "
+                    "updated_at=now() "
                     "WHERE public_procurement.bid_notices.source_record_hash "
                     "IS DISTINCT FROM EXCLUDED.source_record_hash "
                     "OR public_procurement.bid_notices.enrichment_checked_at IS NULL "
@@ -57,6 +65,32 @@ class DocumentStoreMixin:
                 ("document_id",),
             )
         return LoadSummary(notices=len(batch.notices), documents=len(batch.documents)), changed
+
+    def claim_pending_bid_notice_enrichment(
+        self, limit: int, minimum_age_days: int = 7, lease_minutes: int = 60,
+    ) -> list[dict[str, Any]]:
+        with psycopg.connect(self.database_url) as connection:
+            rows = connection.execute(
+                "WITH candidates AS ("
+                " SELECT notice_number,notice_order"
+                " FROM public_procurement.bid_notices"
+                " WHERE enrichment_checked_at IS NULL"
+                " AND notice_published_at < now()-(%s * interval '1 day')"
+                " AND (enrichment_claimed_at IS NULL OR enrichment_claimed_at"
+                " < now()-(%s * interval '1 minute'))"
+                " ORDER BY notice_published_at DESC,notice_number,notice_order"
+                " FOR UPDATE SKIP LOCKED LIMIT %s"
+                ") UPDATE public_procurement.bid_notices n"
+                " SET enrichment_claimed_at=now(),updated_at=now()"
+                " FROM candidates c WHERE n.notice_number=c.notice_number"
+                " AND n.notice_order=c.notice_order"
+                " RETURNING n.notice_number,n.notice_order,n.notice_published_at::date",
+                (minimum_age_days, lease_minutes, limit),
+            ).fetchall()
+        return [
+            {"notice_number": row[0], "notice_order": row[1], "published_date": row[2]}
+            for row in rows
+        ]
 
     def upsert_bid_notice_enrichment(self, batch: NormalizedBidNoticeBatch,
                                      notices: list[BidNoticeKey]) -> LoadSummary:
@@ -75,7 +109,8 @@ class DocumentStoreMixin:
                 with connection.cursor() as cursor:
                     cursor.executemany(
                         "UPDATE public_procurement.bid_notices "
-                        "SET enrichment_checked_at=now(), updated_at=now() "
+                        "SET enrichment_checked_at=now(), enrichment_claimed_at=NULL, "
+                        "updated_at=now() "
                         "WHERE notice_number=%s AND notice_order=%s",
                         [(item.notice_number, item.notice_order) for item in notices],
                     )
@@ -251,4 +286,3 @@ class DocumentStoreMixin:
                 "WHERE document_id=%s",
                 ("unsupported" if unsupported else "failed", error_code, parser_version, document_id),
             )
-

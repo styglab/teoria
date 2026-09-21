@@ -20,10 +20,16 @@ TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS=60
 TEORIA_PIPELINE_BID_NOTICE_ENRICHMENT_REQUESTS_PER_SECOND=1
 ```
 
-공고별 면허·지역 보강은 기본 1 RPS의 완전 순차 호출로 제한하고 공고 20개 단위로 Raw 저장과 정규 적재를
-완료한다. 일부 청크가 429로 실패해도 완료된 공고의 `enrichment_checked_at`은 보존되므로 다음
-증분 실행은 미완료 공고만 재개한다. 요청 제한이 안정될 때까지 공고 증분은 시간당 한 번만
-실행하고 공고 backfill과 3일 보정 Deployment의 schedule은 비활성 상태로 유지한다.
+공고별 면허·지역 보강은 기본 1 RPS의 완전 순차 호출로 제한한다. 최신 공고 증분 수집은 변경 공고를
+즉시 보강하지만, 과거 공고 Backfill은 기본 공고만 적재하고 체크포인트를 독립적으로 갱신한다.
+과거 참가제한은 `pps-bid-notice-enrichment-backfill`이 7일 이상 지난 미처리 공고를 매시 20건씩
+선점하고 5건 단위로 Raw 저장과 정규 적재를 완료한다. 일부 청크가 429로 실패해도 완료된 공고의
+`enrichment_checked_at`은 보존되며, 실패한 선점은 60분 뒤 다시 처리할 수 있다.
+
+계약 Backfill은 날짜별 Operation 완료 상태를 보존한다. 제공기관 오류가 반복되는 날짜·Operation은
+`ingestion.pipeline_backfill_gaps`에 기록하고 다음 날짜로 계속 진행한다. 매일 05:20의
+`pps-contract-backfill-gap-retry`가 결손을 페이지 크기 20, 10, 1 순서로 재시도하며 성공한 결손은
+해결 시각을 기록한다. 따라서 단일 제공기관 오류가 전체 역사 수집 체크포인트를 막지 않는다.
 
 입찰 첨부파일은 기본적으로 입찰 마감 후 90일 동안 보존한다. 매일 03:45(Asia/Seoul)에
 `pps-bid-document-retention`이 원본 첨부파일, 파싱 산출물과 AI 원본 출력만 삭제한다.
@@ -160,7 +166,7 @@ Provider 원문은 `source_record_hash`가 동일한 JSON payload를
 | `pps-contract-incremental` | 4시간마다 | 오늘을 포함한 최근 3일을 재조회하여 신규·변경 계약을 반영 |
 | `pps-contract-reconciliation-30d` | 매일 02:00 | 최근 30일 지연 등록·정정 보정 |
 | `pps-contract-reconciliation-90d` | 매주 일요일 03:00 | 최근 90일 장기 지연·정정 보정 |
-| `pps-contract-backfill` | 매시 20분 | `2026-09-13`부터 `2021-01-01`까지 최신 날짜 우선으로 실행당 최대 30일 적재 |
+| `pps-contract-backfill` | 매일 04:20 | `2026-09-13`부터 `2021-01-01`까지 최신 날짜 우선으로 하루씩 적재한다. |
 
 ## 입찰공고 Deployment
 
@@ -206,10 +212,16 @@ docker compose --env-file deploy/compose/.env \
   --param checkpoint_id=pps_contract_backfill_2021_2026 \
   --param start_date=2021-01-01 \
   --param end_date=2026-09-13 \
-  --param batch_days=30
+  --param batch_days=1
 ```
 
-UI의 일별 하위 Flow에서 상품→공사→용역→외자→Raw 저장→정규화→Upsert→Checkpoint 순서와 재시도를 확인할 수 있다.
+UI의 일별 하위 Flow에서 각 Operation별 API 조회→Raw 저장→정규화→Upsert→완료 기록 순서와
+재시도를 확인할 수 있다. Backfill 재실행은 같은 날짜 구간에서 완료 기록이 있는 Operation을
+건너뛰며, 모든 Operation이 완료된 뒤에만 날짜 Checkpoint를 갱신한다.
+
+계약 API 페이지 요청은 기본 초당 0.5회로 제한한다. 제공기관이 HTTP 200 응답 내부에
+`resultCode: 99` 또는 호출 제한 코드 `22`를 반환하면 같은 페이지를 점증 대기 후 재시도한다.
+속도는 `TEORIA_PIPELINE_CONTRACT_REQUESTS_PER_SECOND`로 조정한다.
 
 ## 실패와 종료
 

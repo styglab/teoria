@@ -197,8 +197,8 @@ deployments:
       work_queue_name: default
 
   - name: pps-contract-backfill
-    version: 1.1.0
-    description: 2026-09-13부터 2021-01-01까지 최신 연도 우선으로 나라장터 계약정보를 Backfill한다.
+    version: 1.4.0
+    description: 계약정보를 역순 Backfill하며 실패한 날짜·Operation은 결손 큐로 격리해 전체 진행을 계속한다.
     entrypoint: teoria_pipelines.flows.pps_contracts.sync_pps_contract_backfill
     concurrency_limit:
       limit: 1
@@ -208,9 +208,29 @@ deployments:
       start_date: "2021-01-01"
       end_date: "2026-09-13"
       pipeline_root: /app/pipelines
-      batch_days: 30
+      batch_days: 1
     schedules:
-      - cron: "20 * * * *"
+      - cron: "20 4 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-contract-backfill-gap-retry
+    version: 1.0.0
+    description: 계약 Backfill 결손 Operation을 작은 페이지 크기로 매일 재시도한다.
+    entrypoint: teoria_pipelines.flows.pps_contracts.retry_pps_contract_backfill_gaps
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      source_pipeline_id: pps_contract_backfill_2021_2026
+      batch_size: 1
+      retry_days: 1
+    schedules:
+      - cron: "20 5 * * *"
         timezone: Asia/Seoul
         active: true
     work_pool:
@@ -218,8 +238,8 @@ deployments:
       work_queue_name: default
 
   - name: pps-bid-notice-backfill
-    version: 1.0.0
-    description: 2026-09-13부터 2021-01-01까지 최신 날짜 우선으로 첨부파일을 제외한 나라장터 입찰공고와 참가제한 정보를 Backfill한다.
+    version: 1.1.0
+    description: 2026-09-13부터 2021-01-01까지 최신 날짜 우선으로 첨부파일과 참가제한 보강을 제외한 기본 입찰공고를 Backfill한다.
     entrypoint: teoria_pipelines.flows.pps_bid_notices.sync_pps_bid_notice_backfill
     concurrency_limit:
       limit: 1
@@ -229,12 +249,32 @@ deployments:
       start_date: "2021-01-01"
       end_date: "2026-09-13"
       pipeline_root: /app/pipelines
-      batch_days: 30
-      enrichment_batch_size: 20
+      batch_days: 7
     schedules:
       - cron: "50 * * * *"
         timezone: Asia/Seoul
-        active: false
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-notice-enrichment-backfill
+    version: 1.0.0
+    description: 기본 공고와 독립적으로 7일 이상 지난 미처리 공고의 면허제한과 참가가능지역을 제한된 호출량으로 보강한다.
+    entrypoint: teoria_pipelines.flows.pps_bid_notices.sync_pps_bid_notice_enrichment_backfill
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 20
+      chunk_size: 5
+      minimum_age_days: 7
+      lease_minutes: 60
+    schedules:
+      - cron: "25 * * * *"
+        timezone: Asia/Seoul
+        active: true
     work_pool:
       name: teoria-ingestion
       work_queue_name: default

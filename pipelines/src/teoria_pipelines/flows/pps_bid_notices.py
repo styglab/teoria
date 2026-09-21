@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from prefect import flow
 from prefect.runtime import flow_run
 
-from teoria_pipelines.models import CollectionWindow, LoadSummary
+from teoria_pipelines.models import BidNoticeKey, CollectionWindow, LoadSummary
 from teoria_pipelines.tasks import (
     combine_extracted_batches,
     complete_pipeline_run,
@@ -17,8 +17,10 @@ from teoria_pipelines.tasks import (
 from teoria_pipelines.tasks.pps_bid_notices import (
     NOTICE_OPERATIONS,
     BACKFILL_PIPELINE_ID,
+    ENRICHMENT_BACKFILL_PIPELINE_ID,
     PIPELINE_ID,
     claim_bid_documents,
+    claim_pending_bid_notice_enrichment,
     combine_bid_notice_summary,
     determine_bid_notice_window,
     determine_bid_notice_backfill_windows,
@@ -55,6 +57,7 @@ async def sync_pps_bid_notice_window(
     checkpoint_cursor: date | None = None,
     include_documents: bool = True,
     enrichment_batch_size: int = 20,
+    include_enrichment: bool = True,
 ) -> LoadSummary:
     if enrichment_batch_size < 1:
         raise ValueError("enrichment_batch_size must be positive")
@@ -75,7 +78,7 @@ async def sync_pps_bid_notice_window(
         if not include_documents:
             normalized_notices = omit_historical_bid_documents(normalized_notices)
         notice_load = upsert_bid_notices(normalized_notices)
-        changed_notices = notice_load[1]
+        changed_notices = notice_load[1] if include_enrichment else []
 
         raw_enrichment_counts = []
         enrichment_loads = []
@@ -130,7 +133,6 @@ async def sync_pps_bid_notice_backfill(
     end_date: date,
     pipeline_root: str = "/app/pipelines",
     batch_days: int = 30,
-    enrichment_batch_size: int = 20,
 ) -> list[LoadSummary]:
     windows = determine_bid_notice_backfill_windows(
         checkpoint_id, start_date, end_date, batch_days
@@ -142,10 +144,59 @@ async def sync_pps_bid_notice_backfill(
             checkpoint_id,
             window.end,
             include_documents=False,
-            enrichment_batch_size=enrichment_batch_size,
+            include_enrichment=False,
         )
         for window in windows
     ]
+
+
+@flow(name="나라장터 입찰공고 참가제한 Backfill")
+async def sync_pps_bid_notice_enrichment_backfill(
+    pipeline_root: str = "/app/pipelines",
+    batch_size: int = 20,
+    chunk_size: int = 5,
+    minimum_age_days: int = 7,
+    lease_minutes: int = 60,
+    pipeline_id: str = ENRICHMENT_BACKFILL_PIPELINE_ID,
+) -> LoadSummary:
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be positive")
+    pending = claim_pending_bid_notice_enrichment(
+        batch_size, minimum_age_days, lease_minutes
+    )
+    if not pending:
+        return LoadSummary()
+
+    published_dates = [item["published_date"] for item in pending]
+    window = CollectionWindow(min(published_dates), max(published_dates))
+    prefect_run_id = flow_run.get_id()
+    execution_id = UUID(prefect_run_id) if prefect_run_id else uuid4()
+    started_execution_id = start_pipeline_run(execution_id, pipeline_id, window)
+    raw_counts: list[int] = []
+    loads: list[LoadSummary] = []
+    try:
+        for start in range(0, len(pending), chunk_size):
+            selected = pending[start:start + chunk_size]
+            keys = [
+                BidNoticeKey(item["notice_number"], item["notice_order"])
+                for item in selected
+            ]
+            enrichment = await extract_bid_notice_enrichment.with_options(
+                name=f"과거 공고 참가제한 수집 {start // chunk_size + 1}"
+            )(started_execution_id, window, keys, pipeline_root)
+            raw_count = save_raw_records(enrichment)
+            normalized = normalize_bid_notice_enrichment(enrichment, raw_count)
+            loads.append(upsert_bid_notice_enrichment(normalized, keys))
+            raw_counts.append(raw_count)
+        summary = LoadSummary(
+            raw_records=sum(raw_counts),
+            license_restrictions=sum(item.license_restrictions for item in loads),
+            participation_regions=sum(item.participation_regions for item in loads),
+        )
+        return complete_pipeline_run(execution_id, summary)
+    except BaseException as exc:
+        fail_pipeline_run(execution_id, type(exc).__name__)
+        raise
 
 
 @flow(name="나라장터 입찰공고 첨부파일 수집")

@@ -9,6 +9,7 @@ import pytest
 
 from teoria_pipelines.bid_eligibility_expression import compile_eligibility_facts
 from teoria_pipelines.flows.pps_contracts import (
+    retry_pps_contract_backfill_gaps,
     sync_pps_contract_backfill,
     sync_pps_contract_incremental,
     sync_pps_contract_window,
@@ -19,6 +20,7 @@ from teoria_pipelines.flows.pps_bid_notices import (
     purge_expired_pps_bid_documents,
     sync_pps_bid_documents,
     sync_pps_bid_notice_backfill,
+    sync_pps_bid_notice_enrichment_backfill,
     sync_pps_bid_notice_window,
     sync_pps_bid_notices,
 )
@@ -318,10 +320,10 @@ def test_daily_flow_mermaid_graph_exposes_execution_order() -> None:
 
     assert "수집_실행_시작_0 --> 상품_계약_API_수집_0" in graph
     assert "상품_계약_API_수집_0 --> 공사_계약_API_수집_0" in graph
-    assert "외자_계약_API_수집_0 --> Operation_응답_결합_0" in graph
-    assert "Operation_응답_결합_0 --> Raw_응답_저장_0" in graph
+    assert "상품_계약_API_수집_0 --> Raw_응답_저장_0" in graph
     assert "Raw_응답_저장_0 --> 계약정보_정규화_0" in graph
-    assert "정규_테이블_Upsert_0 --> Checkpoint_갱신_0" in graph
+    assert "정규_테이블_Upsert_0 --> Operation_완료_기록_0" in graph
+    assert "외자_계약_API_수집_0 --> Raw_응답_저장_3" in graph
     assert "Checkpoint_갱신_0 --> 수집_실행_완료_0" in graph
 
 
@@ -336,7 +338,10 @@ def test_backfill_deployment_has_a_fixed_historical_range() -> None:
         "start_date": "2021-01-01",
         "end_date": "2026-09-13",
         "pipeline_root": "/app/pipelines",
-        "batch_days": 30,
+        "batch_days": 1,
+    }
+    assert deployment["schedules"][0] == {
+        "cron": "20 4 * * *", "timezone": "Asia/Seoul", "active": True,
     }
     assert deployment["concurrency_limit"] == {
         "limit": 1,
@@ -348,6 +353,21 @@ def test_backfill_deployment_has_a_fixed_historical_range() -> None:
         parameters[name].default is Parameter.empty
         for name in ("checkpoint_id", "start_date", "end_date")
     )
+
+    gap_retry = next(
+        item for item in prefect["deployments"]
+        if item["name"] == "pps-contract-backfill-gap-retry"
+    )
+    assert gap_retry["parameters"] == {
+        "pipeline_root": "/app/pipelines",
+        "source_pipeline_id": "pps_contract_backfill_2021_2026",
+        "batch_size": 1,
+        "retry_days": 1,
+    }
+    assert gap_retry["schedules"][0] == {
+        "cron": "20 5 * * *", "timezone": "Asia/Seoul", "active": True,
+    }
+    assert retry_pps_contract_backfill_gaps.name == "나라장터 계약정보 Backfill 결손 재처리"
 
 
 def test_incremental_deployment_prevents_overlapping_runs() -> None:
@@ -2936,6 +2956,10 @@ def test_bid_notice_deployments_are_frequent_and_staggered() -> None:
     prefect = yaml.safe_load((PIPELINES / "prefect.yaml").read_text(encoding="utf-8"))
     notices = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-notice-ingestion")
     backfill = next(item for item in prefect["deployments"] if item["name"] == "pps-bid-notice-backfill")
+    enrichment_backfill = next(
+        item for item in prefect["deployments"]
+        if item["name"] == "pps-bid-notice-enrichment-backfill"
+    )
     reconciliation = next(
         item for item in prefect["deployments"]
         if item["name"] == "pps-bid-notice-reconciliation-3d"
@@ -2956,18 +2980,27 @@ def test_bid_notice_deployments_are_frequent_and_staggered() -> None:
     }
     assert reconciliation["parameters"]["lookback_days"] == 3
     assert backfill["schedules"][0] == {
-        "cron": "50 * * * *", "timezone": "Asia/Seoul", "active": False,
+        "cron": "50 * * * *", "timezone": "Asia/Seoul", "active": True,
     }
     assert backfill["parameters"] == {
         "checkpoint_id": "pps_bid_notice_backfill_2021_2026",
         "start_date": "2021-01-01",
         "end_date": "2026-09-13",
         "pipeline_root": "/app/pipelines",
-        "batch_days": 30,
-        "enrichment_batch_size": 20,
+        "batch_days": 7,
     }
     assert backfill["concurrency_limit"] == {
         "limit": 1, "collision_strategy": "CANCEL_NEW",
+    }
+    assert enrichment_backfill["schedules"][0] == {
+        "cron": "25 * * * *", "timezone": "Asia/Seoul", "active": True,
+    }
+    assert enrichment_backfill["parameters"] == {
+        "pipeline_root": "/app/pipelines",
+        "batch_size": 20,
+        "chunk_size": 5,
+        "minimum_age_days": 7,
+        "lease_minutes": 60,
     }
     assert documents["schedules"][0]["cron"] == "15 * * * *"
     assert documents["schedules"][0]["active"] is False
@@ -2990,6 +3023,7 @@ def test_bid_notice_deployments_are_frequent_and_staggered() -> None:
     assert sync_pps_bid_notices.name == "나라장터 입찰공고·참가제한 수집"
     assert sync_pps_bid_notice_window.name == "나라장터 입찰공고 일별 구간 수집"
     assert sync_pps_bid_notice_backfill.name == "나라장터 입찰공고 Backfill"
+    assert sync_pps_bid_notice_enrichment_backfill.name == "나라장터 입찰공고 참가제한 Backfill"
     assert sync_pps_bid_documents.name == "나라장터 입찰공고 첨부파일 수집"
     assert purge_expired_pps_bid_documents.name == "나라장터 입찰공고 첨부파일 보존기간 삭제"
 

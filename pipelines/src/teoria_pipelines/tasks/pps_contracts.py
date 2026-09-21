@@ -13,7 +13,7 @@ from teoria_pipelines.checkpoints import (
     resolve_collection_window,
     resolve_incremental_window,
 )
-from teoria_pipelines.connectors import PPSContractClient
+from teoria_pipelines.connectors.pps_contracts import ConnectorResponseError, PPSContractClient
 from teoria_pipelines.models import CollectionWindow, ExtractedBatch, LoadSummary, NormalizedBatch
 from teoria_pipelines.normalization import normalize_contract_batch
 from teoria_pipelines.persistence import PostgresStore
@@ -84,19 +84,54 @@ def start_pipeline_run(execution_id: UUID, pipeline_id: str,
 async def extract_contract_operation(execution_id: UUID, window: CollectionWindow,
                                      operation_id: str,
                                      pipeline_root: str = "/app/pipelines",
-                                     previous_operation: ExtractedBatch | None = None) -> ExtractedBatch:
+                                     previous_operation: ExtractedBatch | None = None,
+                                     page_sizes: tuple[int, ...] = (100,),
+                                     provider_error_max_attempts: int | None = None) -> ExtractedBatch:
     del previous_operation  # makes the provider-safe sequential order visible in Prefect
     settings = bootstrap_pipeline_settings()
-    client = PPSContractClient.from_pipeline_root(
-        Path(pipeline_root),
-        executor=ProviderExecutor(
-            timeout_seconds=settings.source_timeout_seconds,
-            max_attempts=settings.source_max_attempts,
-            backoff_seconds=settings.source_retry_backoff_seconds,
-            secret_provider=EnvironmentSecretProvider(),
-        ),
-    )
-    return await client.fetch_operation(execution_id, window, operation_id)
+    last_error: ConnectorResponseError | None = None
+    for page_size in page_sizes:
+        client = PPSContractClient.from_pipeline_root(
+            Path(pipeline_root),
+            executor=ProviderExecutor(
+                timeout_seconds=settings.source_timeout_seconds,
+                max_attempts=settings.source_max_attempts,
+                backoff_seconds=settings.source_retry_backoff_seconds,
+                secret_provider=EnvironmentSecretProvider(),
+            ),
+            page_size=page_size,
+            requests_per_second=settings.contract_requests_per_second,
+            provider_error_max_attempts=(
+                provider_error_max_attempts or settings.source_max_attempts
+            ),
+            provider_error_backoff_seconds=settings.source_retry_backoff_seconds,
+        )
+        try:
+            return await client.fetch_operation(execution_id, window, operation_id)
+        except ConnectorResponseError as exc:
+            last_error = exc
+            if "provider_error code=99" not in str(exc):
+                raise
+    assert last_error is not None
+    raise last_error
+
+
+@task(name="Backfill 결손 기록", viz_return_value=None)
+def record_backfill_gap(pipeline_id: str, window: CollectionWindow,
+                        operation_id: str, error_code: str) -> None:
+    _store().record_backfill_gap(pipeline_id, window, operation_id, error_code)
+
+
+@task(name="Backfill 결손 재시도 대상 선택", viz_return_value=[])
+def claim_backfill_gaps(pipeline_id: str, batch_size: int = 1,
+                        retry_days: int = 1) -> list[dict]:
+    return _store().claim_backfill_gaps(pipeline_id, batch_size, retry_days)
+
+
+@task(name="Backfill 결손 해결", viz_return_value=None)
+def resolve_backfill_gap(pipeline_id: str, window: CollectionWindow,
+                         operation_id: str) -> None:
+    _store().resolve_backfill_gap(pipeline_id, window, operation_id)
 
 
 @task(name="Operation 응답 결합", viz_return_value=VIZ_EXTRACTED)
@@ -127,6 +162,27 @@ def normalize_contracts(batch: ExtractedBatch, raw_record_count: int) -> Normali
       viz_return_value=VIZ_SUMMARY)
 def upsert_contracts(batch: NormalizedBatch) -> LoadSummary:
     return _store().upsert_normalized(batch)
+
+
+@task(name="완료 Operation 확인", viz_return_value=None)
+def get_completed_operation(pipeline_id: str, window: CollectionWindow,
+                            operation_id: str) -> LoadSummary | None:
+    return _store().get_completed_operation(pipeline_id, window, operation_id)
+
+
+@task(name="Operation 완료 기록", viz_return_value=VIZ_SUMMARY)
+def complete_operation(pipeline_id: str, window: CollectionWindow, operation_id: str,
+                       execution_id: UUID, raw_record_count: int,
+                       load_summary: LoadSummary) -> LoadSummary:
+    summary = LoadSummary(
+        raw_records=raw_record_count,
+        contracts=load_summary.contracts,
+        suppliers=load_summary.suppliers,
+        organizations=load_summary.organizations,
+        demand_organizations=load_summary.demand_organizations,
+    )
+    _store().complete_operation(pipeline_id, window, operation_id, execution_id, summary)
+    return summary
 
 
 @task(name="Checkpoint 갱신", viz_return_value=VIZ_SUMMARY)

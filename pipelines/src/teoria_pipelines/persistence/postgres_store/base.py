@@ -88,6 +88,79 @@ class BasePostgresStore:
                 (error_code, execution_id),
             )
 
+    def get_completed_operation(self, pipeline_id: str, window: CollectionWindow,
+                                operation_id: str) -> LoadSummary | None:
+        with psycopg.connect(self.database_url) as connection:
+            row = connection.execute(
+                "SELECT raw_record_count,contract_count,supplier_count,organization_count,"
+                "demand_organization_count FROM ingestion.pipeline_operation_progress "
+                "WHERE pipeline_id=%s AND window_start=%s AND window_end=%s AND operation_id=%s",
+                (pipeline_id, window.start, window.end, operation_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return LoadSummary(
+            raw_records=row[0], contracts=row[1], suppliers=row[2],
+            organizations=row[3], demand_organizations=row[4],
+        )
+
+    def complete_operation(self, pipeline_id: str, window: CollectionWindow,
+                           operation_id: str, execution_id: UUID,
+                           summary: LoadSummary) -> None:
+        with psycopg.connect(self.database_url) as connection:
+            connection.execute(
+                "INSERT INTO ingestion.pipeline_operation_progress "
+                "(pipeline_id,window_start,window_end,operation_id,execution_id,"
+                "raw_record_count,contract_count,supplier_count,organization_count,"
+                "demand_organization_count) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                "ON CONFLICT (pipeline_id,window_start,window_end,operation_id) DO UPDATE SET "
+                "execution_id=EXCLUDED.execution_id,raw_record_count=EXCLUDED.raw_record_count,"
+                "contract_count=EXCLUDED.contract_count,supplier_count=EXCLUDED.supplier_count,"
+                "organization_count=EXCLUDED.organization_count,"
+                "demand_organization_count=EXCLUDED.demand_organization_count,completed_at=now()",
+                (pipeline_id, window.start, window.end, operation_id, execution_id,
+                 summary.raw_records, summary.contracts, summary.suppliers,
+                 summary.organizations, summary.demand_organizations),
+            )
+
+    def record_backfill_gap(self, pipeline_id: str, window: CollectionWindow,
+                            operation_id: str, error_code: str) -> None:
+        with psycopg.connect(self.database_url) as connection:
+            connection.execute(
+                "INSERT INTO ingestion.pipeline_backfill_gaps "
+                "(pipeline_id,window_start,window_end,operation_id,error_code) "
+                "VALUES (%s,%s,%s,%s,%s) ON CONFLICT "
+                "(pipeline_id,window_start,window_end,operation_id) DO UPDATE SET "
+                "error_code=EXCLUDED.error_code,next_retry_at=now(),resolved_at=NULL,updated_at=now()",
+                (pipeline_id, window.start, window.end, operation_id, error_code[:500]),
+            )
+
+    def claim_backfill_gaps(self, pipeline_id: str, limit: int,
+                            retry_days: int = 1) -> list[dict[str, Any]]:
+        with psycopg.connect(self.database_url) as connection:
+            rows = connection.execute(
+                "WITH candidates AS (SELECT pipeline_id,window_start,window_end,operation_id "
+                "FROM ingestion.pipeline_backfill_gaps WHERE pipeline_id=%s "
+                "AND resolved_at IS NULL AND next_retry_at<=now() ORDER BY window_start DESC "
+                "FOR UPDATE SKIP LOCKED LIMIT %s) UPDATE ingestion.pipeline_backfill_gaps g "
+                "SET attempts=g.attempts+1,next_retry_at=now()+(%s * interval '1 day'),updated_at=now() "
+                "FROM candidates c WHERE g.pipeline_id=c.pipeline_id AND g.window_start=c.window_start "
+                "AND g.window_end=c.window_end AND g.operation_id=c.operation_id "
+                "RETURNING g.pipeline_id,g.window_start,g.window_end,g.operation_id,g.attempts",
+                (pipeline_id, limit, retry_days),
+            ).fetchall()
+        keys = ("pipeline_id", "window_start", "window_end", "operation_id", "attempts")
+        return [dict(zip(keys, row, strict=True)) for row in rows]
+
+    def resolve_backfill_gap(self, pipeline_id: str, window: CollectionWindow,
+                             operation_id: str) -> None:
+        with psycopg.connect(self.database_url) as connection:
+            connection.execute(
+                "UPDATE ingestion.pipeline_backfill_gaps SET resolved_at=now(),updated_at=now() "
+                "WHERE pipeline_id=%s AND window_start=%s AND window_end=%s AND operation_id=%s",
+                (pipeline_id, window.start, window.end, operation_id),
+            )
+
     def save_raw_records(self, records: Iterable[RawProviderRecord]) -> int:
         values = list(records)
         if not values:
