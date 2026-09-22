@@ -46,6 +46,7 @@ def test_loads_current_registries() -> None:
     assert set(catalog.capabilities) == {
         "assess_company_bid_eligibilities",
         "assess_company_bid_eligibility",
+        "find_bid_relevant_companies",
         "get_business_registration_status",
         "get_company_financials",
         "get_company_profile",

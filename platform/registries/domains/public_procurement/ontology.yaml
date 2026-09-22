@@ -1,5 +1,5 @@
 registry:
-  version: 1.5.0
+  version: 2.1.0
   registered_at: "2026-08-08"
 
 ontology:
@@ -7,6 +7,29 @@ ontology:
   name: 대한민국 공공조달
   description: 대한민국 공공기관의 입찰공고, 참가요건, 조달계약, 기관과 계약업체의 참여 관계를 표현한다.
   object_types:
+    - id: bid_relevant_company
+      name: 입찰 관련업체
+      description: 입력된 유사 공고의 참여·낙찰·계약 이력으로 선별하고 현재 수요기관 관계와 지역 적합성을 보강한 업체
+      primary_key: relevant_company_id
+      properties:
+        - {id: relevant_company_id, name: 관련업체 식별자, description: 기준 공고와 사업자등록번호를 결합한 식별자, data_type: string}
+        - {id: bid_notice_id, name: 기준 입찰공고 식별자, description: 관련업체를 찾는 현재 입찰공고 식별자, data_type: string}
+        - {id: company_number, name: 사업자등록번호, description: 관련업체의 사업자등록번호, data_type: business_registration_number}
+        - {id: company_name, name: 업체명, description: 유사 공고 또는 기관 이력에서 확인한 업체명, data_type: string}
+        - {id: similar_participation_count, name: 유사 공고 참여 수, description: 입력된 유사 공고 중 업체가 참여한 고유 공고 수, data_type: integer}
+        - {id: similar_award_count, name: 유사 공고 낙찰 수, description: 입력된 유사 공고에서 업체가 낙찰한 고유 결과 수, data_type: integer}
+        - {id: similar_contract_count, name: 유사 공고 계약 수, description: 입력된 유사 공고번호와 연결된 업체의 고유 계약 수, data_type: integer}
+        - {id: organization_participation_count, name: 기관 참여 공고 수, description: 현재 수요기관 공고에 참여한 고유 공고 수, data_type: integer}
+        - {id: organization_award_count, name: 기관 낙찰 수, description: 현재 수요기관에서 확인된 고유 낙찰 수, data_type: integer}
+        - {id: organization_contract_count, name: 기관 계약 수, description: 현재 수요기관과 체결한 고유 계약 수, data_type: integer}
+        - {id: organization_contract_amount, name: 기관 귀속 계약금액, description: 지분율이 있거나 단독 계약일 때 업체에 귀속한 계약금액 합계, data_type: monetary_amount}
+        - {id: first_activity_date, name: 기관 최초 관찰 활동일, description: 현재 수요기관과의 최초 참여·낙찰·계약 활동일, data_type: date}
+        - {id: latest_activity_date, name: 기관 최근 활동일, description: 현재 수요기관과의 최근 참여·낙찰·계약 활동일, data_type: date}
+        - {id: region_status, name: 지역 적합성, description: 현재 공고 지역 제한과 조달업체 소재지의 satisfied·unsatisfied·unknown·not_applicable 판정, data_type: string}
+        - {id: industry_license_status, name: 업종·면허 적합성, description: 현재 공고의 구조화된 업종·면허 요건과 조달업체 등록업종의 satisfied·unsatisfied·unknown·needs_review·not_applicable 판정, data_type: string}
+        - {id: relevance_profile, name: 관련성 프로파일, description: 후보군을 결정한 버전 있는 관련성 기준, data_type: string}
+        - {id: ranking_profile, name: 정렬 프로파일, description: 관련업체 표시 순서를 결정한 버전 있는 기준, data_type: string}
+
     - id: bid_notice
       name: 입찰공고
       description: 나라장터 공고번호와 차수로 식별되는 공공조달 입찰공고

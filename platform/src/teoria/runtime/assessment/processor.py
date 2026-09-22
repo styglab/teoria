@@ -552,6 +552,30 @@ def _key_outcomes(
     return result
 
 
+def evaluate_requirement_category(
+    notice: MaterializedObject,
+    requirements: list[MaterializedObject],
+    snapshot: CompanyEvidenceSnapshot,
+    reference_date: date,
+    catalog: RegistryCatalog,
+    category: str,
+) -> tuple[dict[str, Any], list[RequirementEvaluation]]:
+    """Evaluate one requirement category with the canonical eligibility rules."""
+    selected = [
+        requirement for requirement in requirements
+        if _requirement_outcome_category(requirement) == category
+        and (requirement.properties.get("assessment_stage") or "bid_entry") == "bid_entry"
+    ]
+    evaluations = [
+        RequirementEvaluation(
+            requirement=requirement,
+            decision=evaluate_requirement(requirement, snapshot, reference_date, catalog),
+        )
+        for requirement in selected
+    ]
+    return _key_outcomes(notice, evaluations)[category], evaluations
+
+
 def _requirement_outcome_category(requirement: MaterializedObject) -> str:
     rule_id = str(requirement.properties.get("standard_rule_id") or "")
     if rule_id in RULE_OUTCOME_CATEGORIES:

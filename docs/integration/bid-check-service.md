@@ -252,6 +252,98 @@ Runtime은 목록 평가 시 공고와 요건을 각각 한 번의 DB 조회로 
 다중 인스턴스 공유 또는 회사 근거 변경 이벤트 기반 즉시 무효화가 필요하면 입찰체크 DB/Redis에
 별도 캐시를 두되 `assessment_fingerprint`를 결과 버전으로 보관하고 짧은 TTL을 함께 적용한다.
 
+### 5. 관련업체 조회
+
+입찰체크가 선별한 유사 공고의 참여·낙찰·계약 업체만 후보로 사용하고, 현재 수요기관 관계와
+구조화된 지역 제한 적합성을 결합한다. 같은 업무유형 전체를 후보로 사용하지 않는다.
+
+```http
+POST /v1/capabilities/find_bid_relevant_companies:execute
+Authorization: Bearer <runtime-token>
+Content-Type: application/json
+
+{
+  "inputs": {
+    "bid_notice_id": "R26BK01710487:000",
+    "similar_bid_notice_ids": [
+      "R25BK01234567:000",
+      "R24BK07654321:001"
+    ],
+    "limit": 20
+  }
+}
+```
+
+응답의 `outcome.items`에는 후보별 `similar_history`, `organization_relationship`,
+`region_eligibility`, `industry_license_eligibility`, `reason_codes`, `selection_evidence`가 포함된다. 후보군은
+`similar_bid_notice_ids`에서 관찰된 업체로 제한한다. `organization_relationship`은 후보를 새로
+추가하지 않고 기존 후보의 우선순위와 설명에만 사용한다. 기관은 공고기관이나 계약대행기관이 아닌
+현재 공고의 `demand_organization_code`를 기준으로 한다.
+
+참여 수는 고유 `bid_notice_id`, 낙찰 수는 고유 `award_id`, 계약 수는 고유
+`unified_contract_number`를 센다. 공동계약 금액은 업체 지분율이 있거나 단독 계약일 때만 업체에
+귀속한다. `contract_amount_complete=false`이면 하나 이상의 공동계약에서 업체 귀속금액을 확정할
+수 없다는 뜻이므로 표시된 금액을 전체 계약 실적으로 해석하지 않는다.
+
+```json
+{
+  "company_number": "1234567890",
+  "company_name": "스마트이앤씨",
+  "similar_history": {
+    "participation_count": 7,
+    "award_count": 3,
+    "contract_count": 2,
+    "award_amount": 980000000,
+    "first_activity_date": "2023-01-17",
+    "latest_activity_date": "2026-09-22"
+  },
+  "region_eligibility": {
+    "status": "satisfied",
+    "required_regions": [{"code": "11", "name": "서울특별시"}],
+    "company_locations": [{
+      "location_type": "본사",
+      "region_code": "11",
+      "region_name": "서울특별시",
+      "source": "pps_procurement_supplier"
+    }],
+    "reason_code": "region_matched"
+  },
+  "organization_relationship": {
+    "organization_code": "1234567",
+    "organization_name": "예시기관",
+    "participation_count": 7,
+    "award_count": 2,
+    "contract_count": 2,
+    "contract_amount": 640000000,
+    "contract_amount_basis": "supplier_attributed",
+    "contract_amount_complete": true,
+    "first_activity_date": "2022-04-11",
+    "latest_activity_date": "2026-06-18"
+  },
+  "reason_codes": [
+    "similar_bid_award_history",
+    "demand_organization_contract_history",
+    "recent_organization_activity"
+  ],
+  "policy": {
+    "relevance_profile": "provided_similar_bid_notices_v1",
+    "ranking_profile": "organization_relationship_first_v1",
+    "signal_policy_version": "1.0.0"
+  }
+}
+```
+
+지역 제한이 없으면 `not_applicable`, 업체 소재지 조회가 불가능하면 `unknown`을 반환한다.
+`organization_relationship_first_v1`은 현재 수요기관 관계가 있는 후보를 먼저 배치한 뒤 유사 공고의
+낙찰·계약·참여 이력으로 정렬한다. 후보의 적격성이나 실제 입찰 가능성을 뜻하지 않는다.
+
+`industry_license_eligibility`는 공고의 구조화된 업종·면허 요건을 나라장터 업체 등록업종과
+기존 참가자격 평가 규칙으로 비교한다. `satisfied`, `unsatisfied`, `not_applicable` 외에 업체 업종
+원천 조회 실패는 `unknown`, 코드화되지 않은 면허나 불완전하게 추출된 요건은 `needs_review`를
+반환한다. `required_industries`, `required_licenses`, `matched_industries`, `matched_licenses`,
+`unmatched_requirements`, `reason_codes`, `reference_date`를 함께 확인한다. 관련업체 후보 자체는
+지역 또는 업종·면허 판정으로 제거하지 않으므로, 입찰체크가 필요한 상태 조합을 명시적으로 필터링한다.
+
 ## 공통 응답 형태
 
 ```json
