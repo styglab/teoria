@@ -25,6 +25,7 @@ def test_capabilities_load_and_references_are_valid() -> None:
     assert search.effects.reads == []
     requirements = catalog.capabilities["get_bid_requirements"]
     assert [step.call for step in requirements.steps] == [
+        "teoria_public_procurement.bid_requirement_sets",
         "teoria_public_procurement.bid_requirements",
         "teoria_public_procurement.bid_requirement_evidence",
     ]

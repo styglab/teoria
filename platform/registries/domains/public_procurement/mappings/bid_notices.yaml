@@ -62,6 +62,14 @@ mapping:
       - {field: teoria_public_procurement.bid_notices.extraction_completeness}
     bid_notice.requires_review:
       - {field: teoria_public_procurement.bid_notices.requires_review}
+    bid_notice.region_requirement_status:
+      - {field: teoria_public_procurement.bid_notices.region_requirement_status}
+    bid_notice.industry_license_requirement_status:
+      - {field: teoria_public_procurement.bid_notices.industry_license_requirement_status}
+    bid_notice.requirement_extraction_status:
+      - {field: teoria_public_procurement.bid_notices.requirement_extraction_status}
+    bid_notice.requirement_categories:
+      - {field: teoria_public_procurement.bid_notices.requirement_categories}
     public_organization.organization_code:
       - {field: teoria_public_procurement.bid_notices.notice_organization_code, role: publishing_organization}
     public_organization.name:

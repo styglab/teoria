@@ -148,7 +148,7 @@ source:
         - {id: updated_at, name: DB 수정일시, data_type: datetime}
 
     - id: bid_opening_participants
-      name: 입찰 개찰 참여업체 결과
+      name: 입찰 개찰 경쟁 참여업체 결과 (상위 10위 및 낙찰업체)
       relation: public_procurement.runtime_bid_opening_participants
       primary_key: [notice_number, notice_order, bid_classification_number, rebid_number, business_registration_number]
       fields:
@@ -217,6 +217,26 @@ source:
         - {id: requirement_expression, name: 참가요건 조건식, data_type: string}
         - {id: extraction_completeness, name: 요건추출 완전성, data_type: string}
         - {id: requires_review, name: 검토필요 여부, data_type: boolean}
+        - {id: region_requirement_status, name: 지역제한 적용상태, data_type: string}
+        - {id: industry_license_requirement_status, name: 업종·면허 적용상태, data_type: string}
+        - {id: requirement_extraction_status, name: 요건확인 상태, data_type: string}
+        - {id: requirement_categories, name: 항목별 요건 상태, data_type: string}
+
+    - id: bid_requirement_sets
+      name: 입찰공고 요건 집합과 항목별 확인상태
+      relation: public_procurement.runtime_bid_requirement_sets
+      primary_key: [requirement_set_id]
+      fields:
+        - {id: requirement_set_id, name: 참가요건 집합 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, data_type: string}
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, data_type: string}
+        - {id: requirement_expression, name: 참가요건 조건식, data_type: string}
+        - {id: requirement_categories, name: 항목별 적용·완전성 상태, data_type: string}
+        - {id: region_requirement_status, name: 지역제한 적용상태, data_type: string}
+        - {id: industry_license_requirement_status, name: 업종·면허 적용상태, data_type: string}
+        - {id: requirement_extraction_status, name: 전체 요건확인 상태, data_type: string}
+        - {id: requires_review, name: 검토필요 여부, data_type: boolean}
 
     - id: bid_requirements
       name: 입찰 참가요건
@@ -250,6 +270,10 @@ source:
         - {id: standard_rule_id, name: 표준 판정 규칙, data_type: string}
         - {id: standard_rule_version, name: 표준 판정 규칙 버전, data_type: string}
         - {id: rule_arguments_text, name: 판정 규칙 인수, data_type: string}
+        - {id: title, name: 요건명, data_type: string}
+        - {id: industry_code, name: 업종코드, data_type: string}
+        - {id: applicability, name: 적용상태, data_type: string}
+        - {id: source_kind, name: 요건 원천, data_type: string}
 
     - id: bid_requirement_evidence
       name: 입찰 참가요건 근거

@@ -39,6 +39,7 @@ from teoria_pipelines.tasks.pps_bid_results import (
     normalize_bid_results,
     replace_opening_participants,
     select_pending_opening_awards,
+    select_competitive_opening_participants,
     split_opening_award_chunks,
     upsert_bid_results,
 )
@@ -79,6 +80,7 @@ __all__ = [
     "normalize_bid_results",
     "replace_opening_participants",
     "select_pending_opening_awards",
+    "select_competitive_opening_participants",
     "split_opening_award_chunks",
     "upsert_bid_results",
 ]

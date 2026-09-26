@@ -12,6 +12,7 @@ from psycopg.types.json import Jsonb
 from teoria_pipelines.models import (
     BidNoticeKey,
     CollectionWindow,
+    ExtractedBatch,
     LoadSummary,
     NormalizedBatch,
     NormalizedBidResultBatch,
@@ -118,6 +119,83 @@ class DocumentStoreMixin:
             license_restrictions=len(batch.license_restrictions),
             participation_regions=len(batch.participation_regions),
         )
+
+    def begin_bid_notice_requirement_collection(
+        self, notices: list[BidNoticeKey], execution_id: UUID,
+    ) -> None:
+        values = [
+            (item.notice_number, item.notice_order, category, execution_id)
+            for item in notices
+            for category in ("industry_license", "region")
+        ]
+        if not values:
+            return
+        with psycopg.connect(self.database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    "INSERT INTO ingestion.bid_notice_requirement_collection_status "
+                    "(notice_number,notice_order,category,status,record_count,execution_id,"
+                    "error_code,checked_at) VALUES (%s,%s,%s,'pending',NULL,%s,NULL,NULL) "
+                    "ON CONFLICT (notice_number,notice_order,category) DO UPDATE SET "
+                    "status='pending',record_count=NULL,execution_id=EXCLUDED.execution_id,"
+                    "error_code=NULL,checked_at=NULL,updated_at=now()",
+                    values,
+                )
+
+    def complete_bid_notice_requirement_collection(
+        self, notices: list[BidNoticeKey], batch: ExtractedBatch, execution_id: UUID,
+    ) -> None:
+        operation_categories = {
+            "list_license_restrictions": "industry_license",
+            "list_participation_regions": "region",
+        }
+        counts = {
+            (item.notice_number, item.notice_order, category): 0
+            for item in notices for category in operation_categories.values()
+        }
+        for record in batch.records:
+            category = operation_categories.get(record.operation_id)
+            if category is None:
+                continue
+            key = (
+                str(record.payload.get("bidNtceNo") or "").strip(),
+                str(record.payload.get("bidNtceOrd") or "").strip(),
+                category,
+            )
+            if key in counts:
+                counts[key] += 1
+        with psycopg.connect(self.database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    "UPDATE ingestion.bid_notice_requirement_collection_status SET "
+                    "status='completed',record_count=%s,execution_id=%s,error_code=NULL,"
+                    "checked_at=now(),updated_at=now() WHERE notice_number=%s "
+                    "AND notice_order=%s AND category=%s",
+                    [
+                        (count, execution_id, number, order, category)
+                        for (number, order, category), count in counts.items()
+                    ],
+                )
+
+    def fail_bid_notice_requirement_collection(
+        self, notices: list[BidNoticeKey], execution_id: UUID, error_code: str,
+    ) -> None:
+        values = [
+            (execution_id, error_code, item.notice_number, item.notice_order, category)
+            for item in notices
+            for category in ("industry_license", "region")
+        ]
+        if not values:
+            return
+        with psycopg.connect(self.database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    "UPDATE ingestion.bid_notice_requirement_collection_status SET "
+                    "status='failed',record_count=NULL,execution_id=%s,error_code=%s,"
+                    "checked_at=now(),updated_at=now() WHERE notice_number=%s "
+                    "AND notice_order=%s AND category=%s",
+                    values,
+                )
 
     def claim_pending_documents(self, limit: int, max_attempts: int = 3) -> list[dict[str, Any]]:
         with psycopg.connect(self.database_url) as connection:

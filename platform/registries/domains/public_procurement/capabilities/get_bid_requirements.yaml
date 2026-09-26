@@ -14,11 +14,14 @@ capability:
       property: public_procurement.bid_requirement.notice_order
       required: true
   steps:
+    - call: teoria_public_procurement.bid_requirement_sets
     - call: teoria_public_procurement.bid_requirements
     - call: teoria_public_procurement.bid_requirement_evidence
   returns:
     - public_procurement.bid_notice
+    - public_procurement.bid_requirement_set
     - public_procurement.bid_requirement
     - public_procurement.bid_requirement_evidence
+    - public_procurement.bid_notice_has_bid_requirement_set
     - public_procurement.bid_notice_requires_bid_requirement
     - public_procurement.bid_requirement_supported_by_evidence

@@ -5,7 +5,7 @@ registry:
 capability:
   id: search_bid_participations
   name: 입찰 개찰 참여업체 검색
-  description: 실개찰 기간, 자유어와 선택적인 업체·공고·업무유형·수요기관·순위·투찰금액 조건으로 참여업체 결과를 페이지 단위 검색한다.
+  description: 실개찰 기간, 자유어와 선택적인 업체·공고·업무유형·수요기관·순위·투찰금액 조건으로 상위 10위 및 낙찰 참여업체 결과를 페이지 단위 검색한다.
   inputs:
     query:
       data_type: string

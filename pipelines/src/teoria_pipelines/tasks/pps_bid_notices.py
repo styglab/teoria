@@ -165,7 +165,16 @@ async def extract_bid_notice_enrichment(execution_id: UUID, window: CollectionWi
     del notice_load
     if not notices:
         return ExtractedBatch(execution_id=execution_id, window=window)
-    return await _client(pipeline_root).fetch_enrichment(execution_id, window, notices)
+    store = _store()
+    store.begin_bid_notice_requirement_collection(notices, execution_id)
+    try:
+        result = await _client(pipeline_root).fetch_enrichment(execution_id, window, notices)
+    except BaseException as exc:
+        store.fail_bid_notice_requirement_collection(
+            notices, execution_id, type(exc).__name__
+        )
+        raise
+    return result
 
 
 @task(name="면허·지역 정규화", viz_return_value=VIZ_NORMALIZED)
@@ -175,9 +184,17 @@ def normalize_bid_notice_enrichment(batch: ExtractedBatch, raw_count: int) -> No
 
 
 @task(name="면허·지역 Upsert", retries=2, retry_delay_seconds=5, viz_return_value=VIZ_SUMMARY)
-def upsert_bid_notice_enrichment(batch: NormalizedBidNoticeBatch,
-                                 notices: list[BidNoticeKey]) -> LoadSummary:
-    return _store().upsert_bid_notice_enrichment(batch, notices)
+def upsert_bid_notice_enrichment(
+    batch: NormalizedBidNoticeBatch,
+    notices: list[BidNoticeKey],
+    extracted: ExtractedBatch,
+) -> LoadSummary:
+    store = _store()
+    result = store.upsert_bid_notice_enrichment(batch, notices)
+    store.complete_bid_notice_requirement_collection(
+        notices, extracted, extracted.execution_id
+    )
+    return result
 
 
 @task(name="입찰공고 적재결과 결합", viz_return_value=VIZ_SUMMARY)

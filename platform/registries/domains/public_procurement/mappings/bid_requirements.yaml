@@ -68,6 +68,14 @@ mapping:
       - {field: teoria_public_procurement.bid_requirements.standard_rule_version}
     bid_requirement.rule_arguments_text:
       - {field: teoria_public_procurement.bid_requirements.rule_arguments_text}
+    bid_requirement.title:
+      - {field: teoria_public_procurement.bid_requirements.title}
+    bid_requirement.industry_code:
+      - {field: teoria_public_procurement.bid_requirements.industry_code}
+    bid_requirement.applicability:
+      - {field: teoria_public_procurement.bid_requirements.applicability}
+    bid_requirement.source_kind:
+      - {field: teoria_public_procurement.bid_requirements.source_kind}
   materializations:
     teoria_public_procurement.bid_requirements:
       objects:

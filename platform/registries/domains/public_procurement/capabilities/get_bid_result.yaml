@@ -5,7 +5,7 @@ registry:
 capability:
   id: get_bid_result
   name: 입찰 낙찰·개찰 결과 조회
-  description: 공고번호와 차수로 최종낙찰 결과와 참여업체별 개찰순위·투찰금액·평가점수를 조회한다.
+  description: 공고번호와 차수로 최종낙찰 결과와 상위 10위 및 낙찰 참여업체의 개찰순위·투찰금액·평가점수를 조회한다.
   inputs:
     notice_number:
       property: public_procurement.bid_award.notice_number

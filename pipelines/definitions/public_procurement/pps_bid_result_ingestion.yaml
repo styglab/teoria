@@ -1,6 +1,6 @@
 pipeline:
   id: pps_bid_result_ingestion
-  description: 조달청 나라장터 최종낙찰 및 개찰 참여업체 결과를 수집·정규화하여 저장한다.
+  description: 조달청 나라장터 최종낙찰과 개찰 상위 10위 및 낙찰업체 결과를 수집·정규화하여 저장한다.
   connector: pps_bid_result_api
   operations:
     - list_goods_bid_awards
@@ -18,7 +18,7 @@ pipeline:
       - bid_awards
       - bid_opening_participants
   provenance:
-    retain_raw_records: true
+    retain_raw_records: false
     fields:
       - connector
       - operation

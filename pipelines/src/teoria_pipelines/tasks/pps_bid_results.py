@@ -104,6 +104,50 @@ def split_opening_award_chunks(
     ]
 
 
+@task(name="상위 경쟁 참여업체 선별", viz_return_value=VIZ_EXTRACTED)
+def select_competitive_opening_participants(
+    awards: ExtractedBatch, openings: ExtractedBatch, maximum_rank: int = 10
+) -> ExtractedBatch:
+    """Retain only top-ranked participants and the recorded winner.
+
+    Mere participation is intentionally not treated as a relationship signal.
+    Rank-less records are retained only when their business number matches the
+    final award record.
+    """
+    if maximum_rank < 1:
+        raise ValueError("maximum_rank must be positive")
+
+    def key(payload: dict) -> tuple[str, str, str, str]:
+        return tuple(str(payload.get(name) or "").strip() for name in (
+            "bidNtceNo", "bidNtceOrd", "bidClsfcNo", "rbidNo"
+        ))  # type: ignore[return-value]
+
+    def business_number(value: object) -> str:
+        return "".join(character for character in str(value or "") if character.isdigit())
+
+    winners = {
+        key(record.payload): business_number(record.payload.get("bidwinnrBizno"))
+        for record in awards.records
+    }
+    selected = []
+    for record in openings.records:
+        rank_text = str(record.payload.get("opengRank") or "").strip().replace(",", "")
+        try:
+            rank = int(rank_text) if rank_text else None
+        except ValueError:
+            rank = None
+        participant = business_number(record.payload.get("prcbdrBizno"))
+        is_winner = bool(participant and participant == winners.get(key(record.payload)))
+        if is_winner or (rank is not None and 1 <= rank <= maximum_rank):
+            selected.append(record)
+    return ExtractedBatch(
+        execution_id=openings.execution_id,
+        window=openings.window,
+        records=selected,
+        pages=openings.pages,
+    )
+
+
 @task(name="낙찰정보 정규화", viz_return_value=VIZ_NORMALIZED)
 def normalize_bid_results(batch: ExtractedBatch, raw_record_count: int) -> NormalizedBidResultBatch:
     del raw_record_count

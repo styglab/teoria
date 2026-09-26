@@ -13,7 +13,10 @@ from teoria_pipelines.normalization import (
     normalize_bid_award_record,
     normalize_opening_participant_record,
 )
-from teoria_pipelines.tasks.pps_bid_results import split_opening_award_chunks
+from teoria_pipelines.tasks.pps_bid_results import (
+    select_competitive_opening_participants,
+    split_opening_award_chunks,
+)
 from teoria_pipelines.validator import PipelineValidator
 from teoria_pipelines.verification import verify_connector
 
@@ -71,6 +74,30 @@ def test_normalizes_award_times_as_korean_source_time() -> None:
     assert result["winning_amount"] == Decimal("1200000")
     assert result["opening_at"].utcoffset().total_seconds() == 9 * 3600
     assert result["final_award_date"] == date(2026, 9, 1)
+
+
+def test_normalizes_provider_numeric_hash_placeholder_as_unavailable() -> None:
+    record = _record("list_service_bid_awards", {
+        "bidNtceNo": "R24BK00000001", "bidNtceOrd": "000",
+        "bidClsfcNo": "0", "rbidNo": "000", "prtcptCnum": "2",
+        "sucsfbidAmt": "1000000", "sucsfbidRate": "########",
+        "rlOpengDt": "2024-12-26 10:00:00",
+    })
+
+    result = normalize_bid_award_record(record)
+
+    assert result["winning_rate"] is None
+    assert record.payload["sucsfbidRate"] == "########"
+
+
+def test_rejects_unknown_non_numeric_decimal_values() -> None:
+    with pytest.raises(ValueError, match="invalid decimal value"):
+        normalize_bid_award_record(_record("list_service_bid_awards", {
+            "bidNtceNo": "R24BK00000001", "bidNtceOrd": "000",
+            "bidClsfcNo": "0", "rbidNo": "000", "prtcptCnum": "2",
+            "sucsfbidAmt": "1000000", "sucsfbidRate": "not-a-number",
+            "rlOpengDt": "2024-12-26 10:00:00",
+        }))
 
 
 def test_normalizes_opening_participant_scores() -> None:
@@ -155,3 +182,44 @@ def test_opening_awards_are_split_into_restartable_chunks() -> None:
     batch = ExtractedBatch(records[0].execution_id, records[0].window, records)
     chunks = split_opening_award_chunks.fn(batch, 100)
     assert [len(chunk.records) for chunk in chunks] == [100, 100, 5]
+
+
+def test_selects_top_ten_and_rankless_winner_only() -> None:
+    from teoria_pipelines.models import ExtractedBatch
+
+    award = _record("list_goods_bid_awards", {
+        "bidNtceNo": "R26BK00000001", "bidNtceOrd": "000",
+        "bidClsfcNo": "0", "rbidNo": "000", "bidwinnrBizno": "123-45-67890",
+    })
+    openings = [
+        _record("list_completed_opening_results", {
+            "bidNtceNo": "R26BK00000001", "bidNtceOrd": "000",
+            "bidClsfcNo": "0", "rbidNo": "000", "prcbdrBizno": business,
+            "opengRank": rank,
+        })
+        for business, rank in [
+            ("1111111111", "1"),
+            ("2222222222", "10"),
+            ("3333333333", "11"),
+            ("1234567890", ""),
+            ("4444444444", ""),
+        ]
+    ]
+
+    selected = select_competitive_opening_participants.fn(
+        ExtractedBatch(award.execution_id, award.window, [award]),
+        ExtractedBatch(award.execution_id, award.window, openings, pages=2),
+    )
+
+    assert [item.payload["prcbdrBizno"] for item in selected.records] == [
+        "1111111111", "2222222222", "1234567890",
+    ]
+    assert selected.pages == 2
+
+
+def test_rejects_non_positive_competitive_rank_limit() -> None:
+    from teoria_pipelines.models import ExtractedBatch
+
+    empty = ExtractedBatch(uuid4(), CollectionWindow(date(2026, 9, 1), date(2026, 9, 1)))
+    with pytest.raises(ValueError, match="maximum_rank must be positive"):
+        select_competitive_opening_participants.fn(empty, empty, 0)

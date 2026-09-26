@@ -16,6 +16,7 @@ AWARD_TYPES = {
     "list_foreign_bid_awards": "foreign",
 }
 KST = ZoneInfo("Asia/Seoul")
+NUMERIC_PLACEHOLDER_PATTERN = re.compile(r"#+")
 
 
 class BidResultNormalizationError(ValueError):
@@ -129,6 +130,11 @@ def _integer(value: Any) -> int | None:
 def _decimal(value: Any) -> Decimal | None:
     text = _text(value)
     if text is None:
+        return None
+    # The provider returns hash placeholders when a numeric value cannot be
+    # represented or disclosed. Preserve the original payload in raw storage
+    # and treat only this documented wire anomaly as an unavailable value.
+    if NUMERIC_PLACEHOLDER_PATTERN.fullmatch(text):
         return None
     try:
         return Decimal(text.replace(",", ""))

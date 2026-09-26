@@ -96,7 +96,7 @@ async def sync_pps_bid_notice_window(
                 enrichment, raw_enrichment_count
             )
             enrichment_load = upsert_bid_notice_enrichment(
-                normalized_enrichment, notice_chunk
+                normalized_enrichment, notice_chunk, enrichment
             )
             raw_enrichment_counts.append(raw_enrichment_count)
             enrichment_loads.append(enrichment_load)
@@ -186,7 +186,7 @@ async def sync_pps_bid_notice_enrichment_backfill(
             )(started_execution_id, window, keys, pipeline_root)
             raw_count = save_raw_records(enrichment)
             normalized = normalize_bid_notice_enrichment(enrichment, raw_count)
-            loads.append(upsert_bid_notice_enrichment(normalized, keys))
+            loads.append(upsert_bid_notice_enrichment(normalized, keys, enrichment))
             raw_counts.append(raw_count)
         summary = LoadSummary(
             raw_records=sum(raw_counts),

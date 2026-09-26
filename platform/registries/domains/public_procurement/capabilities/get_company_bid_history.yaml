@@ -5,7 +5,7 @@ registry:
 capability:
   id: get_company_bid_history
   name: 기업 입찰·낙찰 이력 조회
-  description: 사업자등록번호로 기업의 최종낙찰 이력과 개찰 참여 이력을 각각 최신순 페이지로 함께 조회한다.
+  description: 사업자등록번호로 기업의 최종낙찰 이력과 상위 10위 또는 낙찰업체로 선별된 개찰 경쟁 이력을 각각 최신순 페이지로 함께 조회한다.
   inputs:
     business_registration_number:
       property: company.business_registration.business_registration_number

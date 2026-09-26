@@ -1,0 +1,53 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-26"
+
+mapping:
+  id: bid_requirement_sets
+  name: 입찰 참가요건 집합 매핑
+  description: 공고별 canonical 조건식과 지역·업종면허 항목별 상태를 반환한다.
+  ontology: public_procurement
+  bindings:
+    bid_notice.bid_notice_id:
+      - {field: teoria_public_procurement.bid_requirement_sets.bid_notice_id, role: requirement_set_notice}
+    bid_notice.notice_number:
+      - {field: teoria_public_procurement.bid_requirement_sets.notice_number, role: requirement_set_notice}
+    bid_notice.notice_order:
+      - {field: teoria_public_procurement.bid_requirement_sets.notice_order, role: requirement_set_notice}
+    bid_requirement.bid_notice_id:
+      - {field: teoria_public_procurement.bid_requirement_sets.bid_notice_id}
+    bid_requirement.notice_number:
+      - {field: teoria_public_procurement.bid_requirement_sets.notice_number}
+    bid_requirement.notice_order:
+      - {field: teoria_public_procurement.bid_requirement_sets.notice_order}
+    bid_requirement_set.requirement_set_id:
+      - {field: teoria_public_procurement.bid_requirement_sets.requirement_set_id}
+    bid_requirement_set.bid_notice_id:
+      - {field: teoria_public_procurement.bid_requirement_sets.bid_notice_id}
+    bid_requirement_set.notice_number:
+      - {field: teoria_public_procurement.bid_requirement_sets.notice_number}
+    bid_requirement_set.notice_order:
+      - {field: teoria_public_procurement.bid_requirement_sets.notice_order}
+    bid_requirement_set.requirement_expression:
+      - {field: teoria_public_procurement.bid_requirement_sets.requirement_expression}
+    bid_requirement_set.requirement_categories:
+      - {field: teoria_public_procurement.bid_requirement_sets.requirement_categories}
+    bid_requirement_set.region_requirement_status:
+      - {field: teoria_public_procurement.bid_requirement_sets.region_requirement_status}
+    bid_requirement_set.industry_license_requirement_status:
+      - {field: teoria_public_procurement.bid_requirement_sets.industry_license_requirement_status}
+    bid_requirement_set.requirement_extraction_status:
+      - {field: teoria_public_procurement.bid_requirement_sets.requirement_extraction_status}
+    bid_requirement_set.requires_review:
+      - {field: teoria_public_procurement.bid_requirement_sets.requires_review}
+  materializations:
+    teoria_public_procurement.bid_requirement_sets:
+      objects:
+        requirement_set_notice:
+          type: bid_notice
+          identity: [bid_notice_id]
+        bid_requirement_set:
+          type: bid_requirement_set
+          identity: [requirement_set_id]
+      links:
+        - {type: bid_notice_has_bid_requirement_set, source: requirement_set_notice, target: bid_requirement_set}

@@ -118,6 +118,10 @@ POST /v1/capabilities/get_bid_notice:execute
 - `requirement_expression`: `all`, `any`, `leaf`로 구성된 참가요건 조건식
 - `extraction_completeness`: 첨부문서 기반 요건 추출 완전성
 - `requires_review`: 사람의 원문 검토가 필요한지 여부
+- `region_requirement_status`: 구조화 지역 제한의 `applicable`, `not_applicable`, `unknown`
+- `industry_license_requirement_status`: 구조화 업종·면허 제한의 동일 상태
+- `requirement_extraction_status`: 구조화 API와 문서 추출을 합친 `complete`, `partial`, `unknown`
+- `requirement_categories`: 지역과 업종·면허별 `applicability`, `completeness` JSON 문자열
 
 개별 요건과 문서 근거가 필요하면 다음 Capability를 호출한다.
 
@@ -138,7 +142,13 @@ POST /v1/capabilities/get_bid_requirements:execute
 }
 ```
 
-`bid_requirement` 객체는 요건 유형·연산자·요구값, 원문, 적용 주체, 기준일, 필수 여부, 추출 신뢰도와 표준 판정 규칙을 제공한다. 근거는 `bid_requirement_supported_by_evidence` 관계의 `bid_requirement_evidence` 객체를 사용한다. `requirement_id`별로 근거를 묶어 `source_document`, `source_page`, `source_clause`, `source_excerpt`, `source_url`을 표시한다. `evidence_summary`는 기존 호환 필드이므로 신규 입찰체크 화면에서는 파싱하거나 사용하지 않는다.
+응답의 `bid_requirement_set`은 공고별 `requirement_expression`과 `requirement_categories`를
+제공한다. 두 필드는 현재 JSON 문자열이므로 클라이언트에서 한 번 역직렬화한다. 같은
+`restriction_group_number`의 업종은 `all`, 서로 다른 그룹은 `any`로 결합한다. 구조화 API의
+업종·면허는 `bid_requirement`으로 반환하며 `assessment_stage=bid_entry`,
+`requirement_type=industry_license`, `title`, `industry_code`, `applicability=applicable`을 포함한다.
+
+`bid_requirement` 객체는 요건 유형·연산자·요구값, 원문, 적용 주체, 기준일, 필수 여부, 추출 신뢰도와 표준 판정 규칙을 제공한다. 근거는 `bid_requirement_supported_by_evidence` 관계의 `bid_requirement_evidence` 객체를 사용한다. `requirement_id`별로 근거를 묶어 `source_document`, `source_page`, `source_clause`, `source_excerpt`, `source_url`을 표시한다. 구조화 API 요건은 `source_kind=pps_structured_api`와 `evidence_summary`에 원천 operation을 남기며, 첨부문서 원문 근거가 있는 요건만 Evidence 객체를 연결한다. `evidence_summary`는 기존 호환 필드이므로 신규 입찰체크 화면에서는 파싱하거나 사용하지 않는다.
 
 참가자격 외에 입찰 전에 확인할 제출·절차, 낙찰 후 수행 의무, 경쟁 제한 검토 신호는 별도 Capability로 조회한다.
 
@@ -252,7 +262,75 @@ Runtime은 목록 평가 시 공고와 요건을 각각 한 번의 DB 조회로 
 다중 인스턴스 공유 또는 회사 근거 변경 이벤트 기반 즉시 무효화가 필요하면 입찰체크 DB/Redis에
 별도 캐시를 두되 `assessment_fingerprint`를 결과 버전으로 보관하고 짧은 TTL을 함께 적용한다.
 
-### 5. 관련업체 조회
+### 5. 유사 공고 조회
+
+입찰체크가 공고명을 분리해 여러 번 검색하지 않고 Teoria가 최근 낙찰·계약 공고를 한 번에
+비교한다. `bid_comparison_v1`은 동일 업무구분을 전제로 제목 검색 후보와 동일 수요기관 후보를
+독립적으로 탐색한 뒤 업종·면허, 사업 분야, 사업유형, 금액대, 계약방법, 최근성과 제목을
+종합 평가한다.
+
+```http
+POST /v1/capabilities/find_similar_bid_notices:execute
+Authorization: Bearer <runtime-token>
+Content-Type: application/json
+
+{
+  "inputs": {
+    "bid_notice_id": "R26BK01720491:000",
+    "period_years": 5,
+    "result_statuses": ["awarded", "contracted"],
+    "page": 1,
+    "page_size": 20
+  }
+}
+```
+
+응답 `outcome`은 `comparable_notices`, `organization_field_notices`, `title_search_results`를
+별도로 반환한다. 직접 비교 후보를 먼저 분류하고, 나머지 중 동일 수요기관·동일 분야 후보와
+제목 검색 후보를 차례로 분류하므로 같은 공고가 여러 배열에 중복되지 않는다. SW사업자 1468
+하나만 일치하고 분야 근거가 없는 경우에는 직접 비교나 동일 분야 근거로 사용하지 않는다.
+
+각 항목은 `relationship_type`, `comparison_score`, `comparison_quality`,
+`comparison_eligible`, `price_reference_eligible`, `matched_factors`, `different_factors`를
+제공한다. `comparison_eligible`은 분야와 사업유형까지 유사한 경우에만 참이고,
+`price_reference_eligible`은 여기에 비교 가능한 금액대까지 확인된 경우에만 참이다. 기존 제목
+점수와 세부값은 `similarity_score`, `similarity_level`, `matched_features`로 계속 제공한다.
+각 항목의 `notice_published_date`는 공고 게시일, `award_date`는 최종 낙찰일이며 둘 다
+`YYYY-MM-DD` 형식으로 반환한다. 낙찰일을 확인할 수 없으면 `award_date`는 `null`이다.
+
+### 6. 관련업체 조회
+
+공고 상세의 우선 업체군은 다음 Capability로 조회한다.
+
+```http
+POST /v1/capabilities/analyze_bid_organization_field_companies:execute
+```
+
+```json
+{
+  "inputs": {
+    "bid_notice_id": "R26BK01713978:000",
+    "period_years": 5,
+    "limit": 50
+  }
+}
+```
+
+응답은 `organization_field_companies`, `market_similar_companies`,
+`organization_other_companies`를 상호 배타적으로 반환한다. 단순 입찰 참여와 상위 10위 기록은
+기관 관계나 수주 경험의 근거로 사용하지 않고 실제 낙찰 또는 확정계약만 사용한다. 업체별로
+동일기관 낙찰·계약 수, 업체 귀속 계약금액과 완전성, 동일분야·사업유형·유사규모 수주 수,
+최근 수주일, 근거 요인과 대표 공고를 제공한다.
+
+`timings`에는 `current_notice_lookup_ms`, `organization_history_query_ms`,
+`market_similar_query_ms`, `contract_attribution_ms`, `company_aggregation_ms`, `total_ms`,
+`cache_hit`을 반환한다. 계약금액 귀속은 현재 기관 이력 집계 SQL에 결합되어 있으므로 독립 쿼리
+시간은 0이고 `policy.contract_attribution_timing`에 포함 단계를 명시한다. 서버는
+`bid_notice_id + period_years + limit + Registry version`을 키로 10분간 결과를 캐시한다.
+
+이 결과는 실제 입찰 참여 의사를 예측한 경쟁업체 목록이 아니라, 과거 수주 이력 때문에 먼저
+살펴볼 가치가 있는 업체 목록이다. 화면에는 점수 대신 `matched_factors`와 집계값을 Badge로
+표시한다.
 
 입찰체크가 선별한 유사 공고의 참여·낙찰·계약 업체만 후보로 사용하고, 현재 수요기관 관계와
 구조화된 지역 제한 적합성을 결합한다. 같은 업무유형 전체를 후보로 사용하지 않는다.
@@ -280,10 +358,27 @@ Content-Type: application/json
 추가하지 않고 기존 후보의 우선순위와 설명에만 사용한다. 기관은 공고기관이나 계약대행기관이 아닌
 현재 공고의 `demand_organization_code`를 기준으로 한다.
 
-참여 수는 고유 `bid_notice_id`, 낙찰 수는 고유 `award_id`, 계약 수는 고유
-`unified_contract_number`를 센다. 공동계약 금액은 업체 지분율이 있거나 단독 계약일 때만 업체에
-귀속한다. `contract_amount_complete=false`이면 하나 이상의 공동계약에서 업체 귀속금액을 확정할
-수 없다는 뜻이므로 표시된 금액을 전체 계약 실적으로 해석하지 않는다.
+참여 수는 고유 `bid_notice_id`, 낙찰 수는 고유 `award_id`를 센다. `contract_count`는
+`confirmed_contract_number`를 기준으로 하며 값이 없는 레코드만 `unified_contract_number`를
+대체 키로 사용한다. 원천 계약 레코드 수는 `unified_contract_count`로 별도 반환한다.
+`contract_amount`는 장기계속계약에만 의미가 있는 총계약금액이 아니라 금차계약금액을 기준으로,
+업체 지분율이 있거나 단독 계약일 때만 업체에 귀속한다. 같은 확정계약번호의 중복 원천 레코드는
+최대 귀속금액 한 번만 반영한다. 원화가 아니거나 업체 귀속금액을 확정할 수 있는 근거가 없으면
+합계에서 제외하고 `contract_amount_complete=false`를 반환한다.
+
+`similar_history.activities`에는 입력한 유사 공고별 업체 활동을 반환한다. 개찰 참여 데이터는
+전체 단순 참여가 아니라 상위 10위 및 낙찰업체만 보존한다. 개찰 참여에는
+`opening_rank`와 `awarded`, `not_awarded`, `participation_only` 결과를 제공하고 계약 활동은
+`opening_rank=null`, `result=contracted`로 제공한다. 같은 공고의 재입찰을 구분하려면
+`bid_classification_number`와 `rebid_number`를 함께 사용한다. 낙찰 결과만 있고 대응하는 개찰
+참여 레코드가 없으면 순위를 추측하지 않고 `opening_rank=null`로 반환한다.
+
+`organization_relationship.activities`에는 현재 수요기관에서 해당 업체가 상위 10위에 들거나 낙찰한
+공고 활동을 반환한다. `bid_notice_id`는 공고 차수를 포함하며, 같은 공고 안의 재입찰은
+`bid_classification_number`와 `rebid_number`로 구분한다. 계약은 공고 차수와 안정적으로 연결할 수
+없는 경우가 있으므로 이 배열에 추측하여 넣지 않고 `contract_count`와 `contract_amount` 집계로
+제공한다. 입찰체크는 세 식별값을 기준으로 `similar_history.activities`와 합친 뒤
+`is_similar_notice`, `is_same_organization`을 표시할 수 있다.
 
 ```json
 {
@@ -293,7 +388,10 @@ Content-Type: application/json
     "participation_count": 7,
     "award_count": 3,
     "contract_count": 2,
+    "unified_contract_count": 2,
     "award_amount": 980000000,
+    "contract_amount_basis": "current_contract_amount_supplier_attributed",
+    "contract_amount_complete": true,
     "first_activity_date": "2023-01-17",
     "latest_activity_date": "2026-09-22"
   },
@@ -314,11 +412,25 @@ Content-Type: application/json
     "participation_count": 7,
     "award_count": 2,
     "contract_count": 2,
+    "unified_contract_count": 3,
     "contract_amount": 640000000,
-    "contract_amount_basis": "supplier_attributed",
+    "contract_amount_basis": "current_contract_amount_supplier_attributed",
     "contract_amount_complete": true,
     "first_activity_date": "2022-04-11",
-    "latest_activity_date": "2026-06-18"
+    "latest_activity_date": "2026-06-18",
+    "activities": [
+      {
+        "bid_notice_id": "R26BK01344834:000",
+        "notice_name": "정보시스템 운영 사업",
+        "notice_published_date": "2026-02-20",
+        "bid_classification_number": "0",
+        "rebid_number": "0",
+        "opening_rank": 1,
+        "bid_amount": 32418000,
+        "result": "awarded",
+        "activity_date": "2026-03-10"
+      }
+    ]
   },
   "reason_codes": [
     "similar_bid_award_history",

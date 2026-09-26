@@ -11,7 +11,6 @@ from teoria_pipelines.models import CollectionWindow, ExtractedBatch, LoadSummar
 from teoria_pipelines.tasks import (
     complete_pipeline_run,
     fail_pipeline_run,
-    save_raw_records,
     start_pipeline_run,
     update_checkpoint,
 )
@@ -27,6 +26,7 @@ from teoria_pipelines.tasks.pps_bid_results import (
     mark_opening_awards_checked,
     normalize_bid_results,
     replace_opening_participants,
+    select_competitive_opening_participants,
     select_pending_opening_awards,
     split_opening_award_chunks,
     upsert_bid_results,
@@ -69,7 +69,10 @@ async def sync_pps_bid_result_window(
         awards = combine_bid_result_batches(
             execution_id, window, award_batches, ExtractedBatch(execution_id, window)
         )
-        award_raw_count = save_raw_records(awards)
+        # Successful bid-result payloads are normalized and then discarded.
+        # Pipeline-run counts and provider hashes on normalized rows retain the
+        # operational provenance without duplicating the wire payload.
+        award_raw_count = 0
         normalized_awards = normalize_bid_results(awards, award_raw_count)
         award_loaded = upsert_bid_results(normalized_awards)
 
@@ -83,12 +86,15 @@ async def sync_pps_bid_result_window(
             openings = await extract_opening_participants.with_options(
                 name=f"공고별 개찰 참여업체 수집 {suffix}"
             )(started_execution_id, window, award_chunk, pipeline_root)
-            opening_raw_count = save_raw_records.with_options(
-                name=f"개찰 Raw 응답 저장 {suffix}"
-            )(openings)
+            competitive_openings = select_competitive_opening_participants.with_options(
+                name=f"상위 경쟁 참여업체 선별 {suffix}"
+            )(award_chunk, openings)
+            # Successful opening-result payloads are deliberately not retained.
+            # The normalized top-10-plus-winner coverage is the durable contract.
+            opening_raw_count = 0
             normalized_openings = normalize_bid_results.with_options(
                 name=f"개찰정보 정규화 {suffix}"
-            )(openings, opening_raw_count)
+            )(competitive_openings, opening_raw_count)
             chunk_loaded = replace_opening_participants.with_options(
                 name=f"개찰 참여업체 교체 저장 {suffix}"
             )(award_chunk, normalized_openings)
