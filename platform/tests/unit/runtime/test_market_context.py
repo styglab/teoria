@@ -8,7 +8,12 @@ from teoria.registry.loader import RegistryLoader
 from teoria.runtime.capability.runner import CapabilityResult
 from teoria.runtime.mapping.materializer import MaterializedObject
 from teoria.runtime.market_context.processor import (
+    _organization_field_event_analysis,
     _industry_license_eligibility,
+    execute_bid_project_lineage,
+    execute_organization_company_field_relationship,
+    execute_organization_company_relationship,
+    execute_company_similar_project_experience,
     execute_organization_field_companies,
     execute_bid_relevant_companies,
     execute_similar_bid_notices,
@@ -135,10 +140,15 @@ class SimilarNoticeReader:
         notice = {
             "bid_notice_id": bid_notice_id,
             "notice_name": "정보시스템 구축 및 유지관리 사업",
+            "notice_published_date": date(2026, 9, 1),
             "work_type": "service", "contract_method_name": "일반경쟁",
             "estimated_price": Decimal("200000000"), "allocated_budget": None,
             "demand_organization_code": "ORG-1", "demand_organization_name": "기관",
             "industry_codes": ["1468", "0036"],
+            "industries": [
+                {"industry_code": "1468", "industry_name": "소프트웨어사업자"},
+                {"industry_code": "0036", "industry_name": "정보통신공사업"},
+            ],
             "as_of": datetime(2026, 9, 23, tzinfo=timezone.utc),
         }
         rows = [{
@@ -192,6 +202,38 @@ class OrganizationFieldCompanyReader:
                 "unified_contract_number": "R25TE01912869",
             }],
         }], [], [])
+
+
+class OrganizationFieldEventReader:
+    def find(self, catalog, *, organization_code, work_type, as_of):
+        return [{
+            "source_kind": "award", "notice_number": "R25EVENT",
+            "notice_order": "000", "bid_classification_number": "0",
+            "rebid_number": "0", "bid_notice_id": "R25EVENT:000",
+            "notice_name": "정보시스템 구축", "event_date": date(2025, 3, 1),
+            "notice_published_date": date(2025, 2, 20),
+            "event_amount": Decimal("200000000"),
+            "company_number": "1234567890", "company_name": "기관분야업체",
+        }]
+
+    def context(self, catalog, *, organization_code, business_registration_number,
+                reference_bid_notice_id):
+        return {
+            "organization": {
+                "organization_code": organization_code, "organization_name": "기관",
+            },
+            "company": {
+                "business_registration_number": business_registration_number,
+                "company_name": "기관분야업체",
+            },
+            "reference_notice": {
+                "bid_notice_id": reference_bid_notice_id,
+                "notice_name": "정보시스템 구축 및 유지관리 사업",
+                "work_type": "service", "estimated_price": Decimal("200000000"),
+                "allocated_budget": None, "industry_codes": ["1468", "0036"],
+                "as_of": datetime(2026, 9, 23, tzinfo=timezone.utc),
+            } if reference_bid_notice_id else None,
+        }
 
 
 @pytest.mark.asyncio
@@ -268,7 +310,7 @@ def test_industry_license_status_distinguishes_absence_incomplete_and_source_fai
 async def test_similar_bid_notices_returns_scored_explainable_results() -> None:
     result = await execute_similar_bid_notices(
         RegistryLoader(REGISTRIES).load(), "find_similar_bid_notices",
-        {"bid_notice_id": "R26TEST:000"}, reader=SimilarNoticeReader(),
+        {"bid_notice_id": "R26TEST:000", "period_years": 5}, reader=SimilarNoticeReader(),
     )
     item = result.outcome["items"][0]
     assert item["bid_notice_id"] == "R25SIMILAR:000"
@@ -293,10 +335,23 @@ async def test_similar_bid_notices_returns_scored_explainable_results() -> None:
 
 @pytest.mark.asyncio
 async def test_organization_field_companies_use_only_award_or_contract_evidence() -> None:
+    class SimilarExperienceReader:
+        def count_many(self, catalog, **kwargs):
+            return {"1234567890": {
+                "candidate_count": 9,
+                "event_count": 7,
+                "strong_event_count": 2,
+                "limited_event_count": 5,
+                "reference_only_event_count": 2,
+                "similar_amount_event_count": 3,
+            }}
+
     result = await execute_organization_field_companies(
         RegistryLoader(REGISTRIES).load(), "analyze_bid_organization_field_companies",
         {"bid_notice_id": "R26TEST:000"}, similar_reader=SimilarNoticeReader(),
         company_reader=OrganizationFieldCompanyReader(),
+        event_reader=OrganizationFieldEventReader(),
+        similar_experience_reader=SimilarExperienceReader(),
     )
     item = result.outcome["organization_field_companies"][0]
     assert item["company_name"] == "기관분야업체"
@@ -305,6 +360,43 @@ async def test_organization_field_companies_use_only_award_or_contract_evidence(
     assert item["same_field_contract_count"] == 1
     assert item["relationship_group"] == "organization_field"
     assert result.outcome["policy"]["participation_is_relationship_evidence"] is False
+    basis = result.outcome["analysis_basis"]
+    assert basis["period_years"] == 5
+    assert basis["organization_code"] == "ORG-1"
+    assert basis["work_type"] == "service"
+    assert basis["field"] == {"code": "information_system", "label": "정보시스템"}
+    assert basis["project_type"] == {"code": "build", "label": "정보시스템 구축"}
+    assert basis["project_types"] == [
+        "information_system_build", "information_system_maintenance",
+    ]
+    assert basis["similar_amount_range"]["amount_basis"] == "estimated_price"
+    assert basis["similar_amount_range"]["reference_amount"] == 200000000
+    assert basis["similar_amount_range"]["minimum_amount"] == 100000000
+    assert basis["similar_amount_range"]["maximum_amount"] == 400000000
+    assert basis["similar_amount_range"]["rule"] == "0.5x_to_2.0x"
+    assert result.outcome["market_structure"]["award_event_count"] == 1
+    assert item["organization_relationship"]["award_event_count"] == 1
+    assert item["organization_relationship"]["yearly_activity"][0]["year"] == 2025
+    assert item["organization_relationship"]["total_attributed_contract_amount"] == 0
+    assert item["organization_relationship"]["amount_completeness"] == "unknown"
+    assert item["similar_project_experience"] == {
+        "candidate_count": 9,
+        "event_count": 7,
+        "strong_event_count": 2,
+        "limited_event_count": 5,
+        "reference_only_event_count": 2,
+        "similar_amount_event_count": 3,
+    }
+    assert item["annual_activity"] == [{
+        "year": 2025,
+        "award_event_count": 1,
+        "attributed_contract_amount": 0,
+        "amount_completeness": "unknown",
+        "sole_count": 1,
+        "consortium_lead_count": 0,
+        "consortium_member_count": 0,
+    }]
+    assert result.outcome["market_entry"]["classification"] == "first_observed"
     assert result.outcome["timings"]["cache_hit"] is False
     assert "total_ms" in result.outcome["timings"]
     assert result.objects[0].object_type == "bid_organization_field_company"
@@ -312,5 +404,186 @@ async def test_organization_field_companies_use_only_award_or_contract_evidence(
         RegistryLoader(REGISTRIES).load(), "analyze_bid_organization_field_companies",
         {"bid_notice_id": "R26TEST:000"}, similar_reader=SimilarNoticeReader(),
         company_reader=OrganizationFieldCompanyReader(),
+        event_reader=OrganizationFieldEventReader(),
     )
     assert cached.outcome["timings"]["cache_hit"] is True
+
+
+@pytest.mark.asyncio
+async def test_organization_company_field_relationship_returns_event_distributions() -> None:
+    result = await execute_organization_company_field_relationship(
+        RegistryLoader(REGISTRIES).load(),
+        "get_organization_company_field_relationship",
+        {
+            "organization_code": "ORG-1",
+            "business_registration_number": "1234567890",
+            "field_code": "information_system",
+            "work_type": "service",
+            "reference_bid_notice_id": "R26TEST:000",
+            "period_years": 10,
+            "page": 1,
+            "page_size": 20,
+        },
+        reader=OrganizationFieldEventReader(),
+    )
+
+    assert result.outcome["summary"]["award_event_count"] == 1
+    assert result.outcome["summary"]["attributed_award_event_count"] == 1
+    assert sum(item["event_count"] for item in result.outcome["project_type_distribution"]) == 1
+    assert sum(item["event_count"] for item in result.outcome["amount_distribution"]) == 1
+    assert sum(item["event_count"] for item in result.outcome["yearly_activity"]) == 1
+    assert result.outcome["events"][0]["is_similar_amount"] is True
+    assert result.outcome["events"][0]["notice_published_date"] == date(2025, 2, 20)
+    assert result.outcome["events"][0]["award_date"] == date(2025, 3, 1)
+    assert result.outcome["events"][0]["contract_date"] is None
+    assert result.outcome["events"][0]["attributed_contract_amount_completeness"] == "unknown"
+    assert result.outcome["events"][0]["company_role"] == "sole"
+    assert result.outcome["summary"]["total_attributed_contract_amount"] == 0
+    assert result.outcome["summary"]["amount_completeness"] == "unknown"
+    assert result.outcome["pagination"]["total_items"] == 1
+
+
+@pytest.mark.asyncio
+async def test_organization_company_relationship_does_not_apply_field_filter() -> None:
+    result = await execute_organization_company_relationship(
+        RegistryLoader(REGISTRIES).load(),
+        "get_organization_company_relationship",
+        {
+            "organization_code": "ORG-1",
+            "business_registration_number": "1234567890",
+            "work_type": "service",
+            "period_years": 10,
+            "page": 1,
+            "page_size": 20,
+        },
+        reader=OrganizationFieldEventReader(),
+    )
+
+    assert result.outcome["relationship_type"] == "organization_history"
+    assert result.outcome["analysis_basis"]["field_filter_applied"] is False
+    assert result.outcome["analysis_basis"]["similarity_assessment_applied"] is False
+    assert result.outcome["events"][0]["organization_match"] is True
+    assert "field_match_reasons" not in result.outcome["events"][0]
+    assert result.objects[0].object_type == "organization_company_relationship"
+
+
+@pytest.mark.asyncio
+async def test_company_similar_project_experience_uses_any_industry_overlap() -> None:
+    class Reader:
+        def find(self, catalog, **kwargs):
+            return ({
+                "notice_name": "정보시스템 구축 및 운영 사업",
+                "work_type": "service",
+                "estimated_price": Decimal("200000000"),
+                "allocated_budget": None,
+                "industry_codes": ["0036", "1468"],
+                "industry_names": {"0036": "정보통신공사업", "1468": "소프트웨어사업자"},
+            }, [{
+                "bid_notice_id": "R25ONE:000",
+                "notice_name": "전산장비 운영 용역",
+                "notice_published_date": date(2025, 1, 1),
+                "demand_organization_code": "ORG-2",
+                "demand_organization_name": "다른기관",
+                "work_type": "service",
+                "estimated_price": Decimal("180000000"),
+                "allocated_budget": None,
+                "industry_codes": ["1468"],
+                "award_date": date(2025, 2, 1),
+                "winning_amount": Decimal("170000000"),
+                "contract_date": None,
+                "contract_amount": None,
+                "participation_share_rate": None,
+                "supplier_role_name": None,
+                "supplier_count": 0,
+            }])
+
+    result = await execute_company_similar_project_experience(
+        RegistryLoader(REGISTRIES).load(),
+        "get_company_similar_project_experience",
+        {
+            "reference_bid_notice_id": "R26TEST:000",
+            "business_registration_number": "1234567890",
+            "period_years": 10,
+            "page": 1,
+            "page_size": 20,
+        },
+        reader=Reader(),
+    )
+
+    assessment = result.outcome["experiences"][0]["industry_license_assessment"]
+    assert assessment["matched_codes"] == ["1468"]
+    assert assessment["coverage_ratio"] == 0.5
+    assert assessment["all_required_codes_included"] is False
+    assert result.outcome["analysis_basis"]["title_keyword_filter_applied"] is False
+    assert result.outcome["summary"]["candidate_count"] == 1
+    assert result.outcome["summary"]["event_count"] == 1
+    assert result.outcome["summary"]["limited_event_count"] == 1
+    assert result.objects[0].object_type == "company_similar_project_experience"
+
+
+def test_award_event_analysis_merges_contract_and_preserves_joint_members() -> None:
+    rows = [{
+        "source_kind": "award", "notice_number": "R25A", "notice_order": "000",
+        "bid_classification_number": "0", "rebid_number": "0",
+        "bid_notice_id": "R25A:000", "notice_name": "정보시스템 구축",
+        "event_date": date(2025, 3, 1), "event_amount": Decimal("200000000"),
+        "company_number": "1111111111", "company_name": "대표사",
+    }, {
+        "source_kind": "contract", "notice_number": "R25A",
+        "unified_contract_number": "C1-1", "original_contract_number": "C1",
+        "bid_notice_id": "R25A:000", "notice_name": "정보시스템 구축",
+        "event_date": date(2025, 3, 10), "event_amount": Decimal("200000000"),
+        "contract_amount": Decimal("200000000"), "contract_currency": "KRW",
+        "company_number": "1111111111", "company_name": "대표사",
+        "participation_share_rate": Decimal("60"), "supplier_role_name": "대표사",
+    }, {
+        "source_kind": "contract", "notice_number": "R25A",
+        "unified_contract_number": "C1-1", "original_contract_number": "C1",
+        "bid_notice_id": "R25A:000", "notice_name": "정보시스템 구축",
+        "event_date": date(2025, 3, 10), "event_amount": Decimal("200000000"),
+        "contract_amount": Decimal("200000000"), "contract_currency": "KRW",
+        "company_number": "2222222222", "company_name": "구성사",
+        "participation_share_rate": Decimal("40"), "supplier_role_name": "구성사",
+    }]
+    notice = {
+        "notice_name": "차세대 정보시스템 구축", "estimated_price": Decimal("200000000"),
+        "allocated_budget": None, "as_of": datetime(2026, 9, 1, tzinfo=timezone.utc),
+    }
+
+    result = _organization_field_event_analysis(rows, notice, 5)
+
+    assert result["event_deduplication"]["merged_award_contract_count"] == 1
+    assert result["market_structure"]["award_event_count"] == 1
+    assert result["market_structure"]["company_count"] == 2
+    assert result["market_structure"]["top_1_share"] == 0.6
+    assert result["company_metrics"]["1111111111"]["same_field_event_count"] == 1
+    assert result["company_metrics"]["2222222222"]["same_field_contract_amount"] == 80000000
+    assert result["company_metrics"]["1111111111"]["annual_activity"] == [{
+        "year": 2025,
+        "award_event_count": 1,
+        "attributed_contract_amount": 120000000,
+        "amount_completeness": "complete",
+        "sole_count": 0,
+        "consortium_lead_count": 1,
+        "consortium_member_count": 0,
+    }]
+    assert result["company_metrics"]["2222222222"]["annual_activity"][0][
+        "consortium_member_count"
+    ] == 1
+    event = result["events"][0]
+    assert event["award_date"] == date(2025, 3, 1)
+    assert event["contract_date"] == date(2025, 3, 10)
+
+
+@pytest.mark.asyncio
+async def test_project_lineage_keeps_structured_only_matches_as_candidates() -> None:
+    result = await execute_bid_project_lineage(
+        RegistryLoader(REGISTRIES).load(), "find_bid_project_lineage",
+        {"bid_notice_id": "R26TEST:000", "period_years": 5},
+        reader=SimilarNoticeReader(),
+    )
+
+    assert result.outcome["items"]
+    assert all(item["relationship_type"] == "related_candidate" for item in result.outcome["items"])
+    assert all(item["confirmation_status"] == "requires_source_evidence" for item in result.outcome["items"])
+    assert result.outcome["policy"]["title_similarity_alone_confirms_lineage"] is False

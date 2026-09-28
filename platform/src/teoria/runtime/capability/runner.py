@@ -143,6 +143,26 @@ class CapabilityRunner:
                 from teoria.runtime.market_context.processor import execute_organization_field_companies
 
                 return await execute_organization_field_companies(catalog, capability_id, inputs)
+            if capability.processor == "market_context.find_bid_project_lineage":
+                from teoria.runtime.market_context.processor import execute_bid_project_lineage
+
+                return await execute_bid_project_lineage(catalog, capability_id, inputs)
+            if capability.processor == "market_context.get_organization_company_relationship":
+                from teoria.runtime.market_context.processor import (
+                    execute_organization_company_relationship,
+                )
+
+                return await execute_organization_company_relationship(
+                    catalog, capability_id, inputs,
+                )
+            if capability.processor == "market_context.get_company_similar_project_experience":
+                from teoria.runtime.market_context.processor import (
+                    execute_company_similar_project_experience,
+                )
+
+                return await execute_company_similar_project_experience(
+                    catalog, capability_id, inputs,
+                )
             raise CapabilityExecutionError(
                 "unknown_capability_processor",
                 f"unknown capability processor '{capability.processor}'",

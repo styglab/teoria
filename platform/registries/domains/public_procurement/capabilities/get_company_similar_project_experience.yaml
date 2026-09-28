@@ -1,0 +1,40 @@
+registry:
+  version: 1.1.0
+  registered_at: "2026-09-28"
+
+capability:
+  id: get_company_similar_project_experience
+  name: 업체 구조화 조건 유사사업 경험
+  description: 현재 공고와 업무구분이 같고 필수 업종·면허 중 하나 이상이 일치하는 업체의 과거 수주 공고를 후보로 반환하고 자동 제목 토큰·문자 trigram·사업유형으로 유사사업 품질을 구분한다.
+  kind: compute
+  processor: market_context.get_company_similar_project_experience
+  effects:
+    reads:
+      - public_procurement.bid_notice
+      - public_procurement.bid_award
+      - public_procurement.contract
+    produces:
+      - public_procurement.company_similar_project_experience
+  inputs:
+    reference_bid_notice_id:
+      property: public_procurement.bid_notice.bid_notice_id
+      required: true
+    business_registration_number:
+      data_type: business_registration_number
+      required: true
+    period_years:
+      data_type: integer
+      default: 10
+      minimum: 1
+      maximum: 15
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
+  returns:
+    - public_procurement.company_similar_project_experience

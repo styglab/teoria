@@ -1,5 +1,5 @@
 registry:
-  version: 2.4.0
+  version: 2.8.0
   registered_at: "2026-08-08"
 
 ontology:
@@ -7,6 +7,46 @@ ontology:
   name: 대한민국 공공조달
   description: 대한민국 공공기관의 입찰공고, 참가요건, 조달계약, 기관과 계약업체의 참여 관계를 표현한다.
   object_types:
+    - id: company_similar_project_experience
+      name: 업체 구조화 조건 유사사업 경험
+      description: 기준 공고의 필수 업종·면허 중 하나 이상이 일치하고 업무구분이 같은 과거 수주 경험
+      primary_key: company_similar_project_experience_id
+      properties:
+        - {id: company_similar_project_experience_id, name: 업체 유사사업 경험 식별자, description: 기준 공고와 사업자등록번호를 결합한 값, data_type: string}
+        - {id: reference_bid_notice_id, name: 기준 공고 식별자, description: 업종·면허 조건을 제공한 현재 공고, data_type: string}
+        - {id: company_number, name: 사업자등록번호, description: 유사사업 수주 경험을 조회한 업체, data_type: business_registration_number}
+        - {id: experience_count, name: 구조화 조건 유사사업 수, description: 동일 업무구분이며 기준 공고 업종·면허 중 하나 이상이 일치한 수주 공고 수, data_type: integer}
+
+    - id: organization_company_relationship
+      name: 기관·업체 수주관계
+      description: 분야 유사성 판정과 무관하게 동일 기관과 업체 사이에서 관찰된 전체 고유 수주사건 관계
+      primary_key: organization_company_relationship_id
+      properties:
+        - {id: organization_company_relationship_id, name: 기관·업체 관계 식별자, description: 기관코드와 사업자등록번호를 결합한 값, data_type: string}
+        - {id: organization_code, name: 기관코드, description: 관계 대상 공공기관 코드, data_type: string}
+        - {id: company_number, name: 사업자등록번호, description: 관계 대상 업체 사업자등록번호, data_type: business_registration_number}
+        - {id: award_event_count, name: 기관 수주사건 수, description: 분야 필터 없이 낙찰과 원계약을 중복 제거한 기관·업체 고유 수주사건 수, data_type: integer}
+
+    - id: bid_project_lineage
+      name: 입찰사업 승계관계
+      description: 선행·후속 공고 사이의 구축·고도화·유지관리·차세대·단계사업 관계 후보와 근거
+      primary_key: project_lineage_id
+      properties:
+        - {id: project_lineage_id, name: 사업 승계관계 식별자, description: 선행·후속 공고 식별자를 결합한 값, data_type: string}
+        - {id: relationship_type, name: 관계 유형, description: 근거가 약한 경우 related_candidate로 제한한 관계 상태, data_type: string}
+        - {id: candidate_relationship_type, name: 후보 관계 세부유형, description: build_to_improvement·build_to_maintenance·existing_to_next_generation·phased_successor 등 후보 유형, data_type: string}
+        - {id: predecessor_bid_notice_id, name: 선행 공고, description: 선행 사업 후보 공고 식별자, data_type: string}
+        - {id: successor_bid_notice_id, name: 후속 공고, description: 후속 사업 후보 공고 식별자, data_type: string}
+        - {id: performing_company_number, name: 수행업체 사업자등록번호, description: 선행 공고의 낙찰업체 사업자등록번호, data_type: business_registration_number}
+        - {id: performing_company_name, name: 수행업체명, description: 선행 공고의 낙찰업체명, data_type: string}
+        - {id: contract_amount, name: 계약 또는 낙찰금액, description: 선행 공고에서 확인된 금액, data_type: monetary_amount}
+        - {id: confidence, name: 관계 신뢰도, description: 구조화된 관계 근거의 0부터 1 사이 신뢰도, data_type: number}
+        - id: reason_codes
+          name: 판정 근거 코드
+          description: 기관·분야·사업단계 등 후보 관계를 설명하는 근거 코드
+          data_type: string
+          collection: list
+
     - id: similar_bid_notice
       name: 유사 입찰공고
       description: 기준 공고와 정규화 제목을 비교해 설명 가능한 유사도 점수를 부여한 과거 공고
@@ -80,6 +120,18 @@ ontology:
         - {id: same_field_contract_count, name: 동일분야 계약 수, description: 동일 기관·분야 또는 타 기관 유사사업 후보에서 확인된 계약 수, data_type: integer}
         - {id: same_project_type_count, name: 동일사업유형 수주 수, description: 구축·개선·유지관리 등 현재 공고와 사업유형이 일치하는 수주 사례 수, data_type: integer}
         - {id: similar_amount_count, name: 유사규모 수주 수, description: 현재 공고 금액의 절반에서 두 배 범위인 수주 사례 수, data_type: integer}
+        - {id: same_field_event_count, name: 동일분야 수주사건 수, description: 낙찰과 계약을 중복 제거한 동일 기관·분야 수주 사건 수, data_type: integer}
+        - {id: same_project_type_event_count, name: 동일사업유형 수주사건 수, description: 동일분야 수주사건 중 현재 공고와 사업유형이 일치하는 사건 수, data_type: integer}
+        - {id: similar_amount_event_count, name: 유사금액 수주사건 수, description: 동일분야 수주사건 중 실제 분석 금액 범위에 포함되는 사건 수, data_type: integer}
+        - {id: first_award_date, name: 최초 관찰 수주일, description: 전체 관찰기간에서 확인된 최초 동일 기관·분야 수주일, data_type: date}
+        - {id: latest_award_date, name: 최근 수주일, description: 전체 관찰기간에서 확인된 최근 동일 기관·분야 수주일, data_type: date}
+        - id: active_years
+          name: 활동 연도
+          description: 동일 기관·분야 수주사건이 확인된 연도 목록
+          data_type: integer
+          collection: list
+        - {id: active_year_count, name: 활동 연도 수, description: 서로 다른 활동 연도의 수, data_type: integer}
+        - {id: consecutive_active_years, name: 연속 활동 연도 수, description: 가장 최근 활동연도부터 역산한 연속 수주 연도 수, data_type: integer}
         - {id: latest_activity_date, name: 최근 수주일, description: 해당 관계에서 확인된 가장 최근 낙찰 또는 계약 활동일, data_type: date}
         - id: matched_factors
           name: 관계 근거

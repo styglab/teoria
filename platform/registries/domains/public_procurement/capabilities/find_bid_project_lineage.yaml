@@ -1,0 +1,33 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-09-28"
+
+capability:
+  id: find_bid_project_lineage
+  name: 입찰사업 승계관계 탐색
+  description: 구축·고도화·유지관리·차세대·단계사업 후보를 탐색하되 구조화된 근거만으로 확정하지 않고 약한 관계는 related_candidate로 반환한다.
+  kind: compute
+  processor: market_context.find_bid_project_lineage
+  effects:
+    reads:
+      - public_procurement.bid_notice
+      - public_procurement.bid_award
+      - public_procurement.contract
+    produces:
+      - public_procurement.bid_project_lineage
+  inputs:
+    bid_notice_id:
+      property: public_procurement.bid_notice.bid_notice_id
+      required: true
+    period_years:
+      data_type: integer
+      default: 10
+      minimum: 1
+      maximum: 15
+    limit:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
+  returns:
+    - public_procurement.bid_project_lineage

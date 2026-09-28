@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
 
 import yaml
@@ -110,6 +111,11 @@ def main() -> int:
         type=Path,
     )
 
+    worker_parser = subparsers.add_parser(
+        "worker", help="recover orphaned ingestion runs, then start a Prefect process worker"
+    )
+    worker_parser.add_argument("--pool", required=True)
+
     verify_parser = subparsers.add_parser("verify", help="verify an ingestion Connector")
     verify_subparsers = verify_parser.add_subparsers(dest="target", required=True)
     connector_parser = verify_subparsers.add_parser("connector")
@@ -120,6 +126,22 @@ def main() -> int:
     connector_parser.add_argument("--operation")
     connector_parser.add_argument("--input", type=Path)
     args = parser.parse_args()
+
+    if args.command == "worker":
+        from teoria_pipelines.recovery import recover_orphaned_pipeline_runs
+
+        settings = bootstrap_pipeline_settings()
+        try:
+            recovered = asyncio.run(recover_orphaned_pipeline_runs(
+                PostgresStore(settings.data_database_url or "")
+            ))
+        except (OSError, ValueError, PostgresError) as exc:
+            print(f"ERROR orphan_recovery_failed: {exc}", file=sys.stderr)
+            return 1
+        for execution_id in recovered:
+            print(f"RECOVERED {execution_id}", flush=True)
+        os.execvp("prefect", ["prefect", "worker", "start", "--pool", args.pool])
+        return 0
 
     if args.command == "verify":
         return asyncio.run(_verify(args))

@@ -88,6 +88,24 @@ class BasePostgresStore:
                 (error_code, execution_id),
             )
 
+    def list_running_runs(self) -> list[dict[str, Any]]:
+        """Return durable runs that may have been orphaned with a worker process."""
+        with psycopg.connect(self.database_url) as connection:
+            rows = connection.execute(
+                "SELECT execution_id,pipeline_id,window_start,window_end,started_at "
+                "FROM ingestion.pipeline_runs WHERE status='running' ORDER BY started_at"
+            ).fetchall()
+        return [
+            {
+                "execution_id": row[0],
+                "pipeline_id": row[1],
+                "window_start": row[2],
+                "window_end": row[3],
+                "started_at": row[4],
+            }
+            for row in rows
+        ]
+
     def get_completed_operation(self, pipeline_id: str, window: CollectionWindow,
                                 operation_id: str) -> LoadSummary | None:
         with psycopg.connect(self.database_url) as connection:

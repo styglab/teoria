@@ -1,11 +1,11 @@
 registry:
-  version: 1.1.0
+  version: 1.6.0
   registered_at: "2026-09-26"
 
 capability:
   id: analyze_bid_organization_field_companies
   name: 기관·분야 수주업체 분석
-  description: 현재 공고를 기준으로 실제 낙찰·확정계약 이력이 있는 업체를 세 관계로 구분하고 설명 가능한 수주 근거, 단계별 실행시간과 Registry 버전 기반 캐시 상태를 반환한다.
+  description: 현재 공고를 기준으로 실제 낙찰·확정계약 이력이 있는 업체를 세 관계로 구분하고, 각 업체에 공개 Capability와 동일한 기관 전체 수주관계 및 업종·면허 OR 기준 유사사업 경험 지표를 반환한다.
   kind: compute
   processor: market_context.analyze_bid_organization_field_companies
   effects:

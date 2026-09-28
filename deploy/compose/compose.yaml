@@ -189,7 +189,7 @@ services:
   prefect-worker:
     <<: *pipeline-runner
     restart: unless-stopped
-    command: ["prefect", "worker", "start", "--pool", "teoria-ingestion"]
+    command: ["teoria-pipelines", "worker", "--pool", "teoria-ingestion"]
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}

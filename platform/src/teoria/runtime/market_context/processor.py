@@ -28,8 +28,10 @@ RELEVANCE_PROFILE = "provided_similar_bid_notices_v1"
 RELEVANCE_RANKING_PROFILE = "organization_relationship_first_v1"
 SIMILARITY_PROFILE = "bid_comparison_v1"
 SIMILARITY_CANDIDATE_LIMIT = 300
+TITLE_TRIGRAM_SIMILARITY_THRESHOLD = 0.08
 ORGANIZATION_FIELD_CACHE_TTL_SECONDS = 600
 _ORGANIZATION_FIELD_CACHE: dict[tuple[str, int, int, str], tuple[float, CapabilityResult]] = {}
+_ORGANIZATION_COMPANY_FIELD_CACHE: dict[tuple[Any, ...], tuple[float, CapabilityResult]] = {}
 
 
 class BidCompetitorCandidateReader:
@@ -211,7 +213,8 @@ class SimilarBidNoticeReader:
             notice = connection.execute(
                 """
                 SELECT notice_number || ':' || notice_order AS bid_notice_id,
-                       notice_name, work_type, contract_method_name,
+                       notice_name, notice_published_at::date AS notice_published_date,
+                       work_type, contract_method_name,
                        estimated_price, allocated_budget, demand_organization_code,
                        demand_organization_name,
                        LEAST(now(), COALESCE(bid_deadline_at, now())) AS as_of
@@ -224,10 +227,12 @@ class SimilarBidNoticeReader:
                 timings["current_notice_lookup_ms"] = (time.perf_counter() - started) * 1000
             if notice is None:
                 raise LookupError(f"bid notice '{bid_notice_id}' was not found")
-            notice["industry_codes"] = [str(row["industry_code"]) for row in connection.execute(
+            notice["industries"] = [dict(row) for row in connection.execute(
                 """
                 SELECT DISTINCT substring(license_restriction_name FROM '/([0-9]{4})$')
-                       AS industry_code
+                       AS industry_code,
+                       NULLIF(regexp_replace(license_restriction_name, '/[0-9]{4}$', ''), '')
+                       AS industry_name
                 FROM public_procurement.bid_notice_license_restrictions
                 WHERE notice_number=%s AND notice_order=%s
                   AND license_restriction_name ~ '/[0-9]{4}$'
@@ -235,6 +240,9 @@ class SimilarBidNoticeReader:
                 """,
                 tuple(str(notice["bid_notice_id"]).rsplit(":", 1)),
             ).fetchall()]
+            notice["industry_codes"] = [
+                str(item["industry_code"]) for item in notice["industries"]
+            ]
             started = time.perf_counter()
             rows = list(connection.execute(
                 _SIMILAR_NOTICE_CANDIDATES_QUERY,
@@ -254,6 +262,166 @@ class SimilarBidNoticeReader:
             if timings is not None:
                 timings["market_similar_query_ms"] = (time.perf_counter() - started) * 1000
         return dict(notice), [dict(row) for row in rows]
+
+
+class OrganizationFieldEventReader:
+    def __init__(self, environment: Mapping[str, str] | None = None) -> None:
+        self.environment = environment if environment is not None else os.environ
+
+    def find(
+        self, catalog: RegistryCatalog, *, organization_code: str,
+        work_type: str | None, as_of: datetime,
+    ) -> list[dict[str, Any]]:
+        source = catalog.sources["teoria_public_procurement"].source
+        database_url = self.environment.get(source.access.connection_env)
+        if not database_url:
+            raise RuntimeError(
+                f"missing database credential environment variable: {source.access.connection_env}"
+            )
+        with psycopg.connect(database_url, row_factory=dict_row) as connection:
+            return [dict(row) for row in connection.execute(
+                _ORGANIZATION_FIELD_EVENT_ROWS_QUERY,
+                {
+                    "organization_code": organization_code,
+                    "work_type": work_type,
+                    "as_of": as_of,
+                },
+            ).fetchall()]
+
+    def context(
+        self, catalog: RegistryCatalog, *, organization_code: str,
+        business_registration_number: str, reference_bid_notice_id: str | None,
+    ) -> dict[str, Any]:
+        source = catalog.sources["teoria_public_procurement"].source
+        database_url = self.environment.get(source.access.connection_env)
+        if not database_url:
+            raise RuntimeError(
+                f"missing database credential environment variable: {source.access.connection_env}"
+            )
+        reference_number = reference_order = None
+        if reference_bid_notice_id:
+            reference_number, separator, reference_order = reference_bid_notice_id.rpartition(":")
+            if not separator:
+                raise ValueError(f"invalid bid notice id '{reference_bid_notice_id}'")
+        with psycopg.connect(database_url, row_factory=dict_row) as connection:
+            organization = connection.execute(
+                "SELECT organization_code,organization_name FROM "
+                "public_procurement.public_organizations WHERE organization_code=%s",
+                (organization_code,),
+            ).fetchone()
+            company = connection.execute(
+                "SELECT %s::text AS business_registration_number,company_name FROM ("
+                "SELECT winner_name AS company_name,updated_at FROM public_procurement.bid_awards "
+                "WHERE winner_business_registration_number=%s UNION ALL "
+                "SELECT supplier_name,updated_at FROM public_procurement.contract_suppliers "
+                "WHERE business_registration_number=%s) names "
+                "WHERE company_name IS NOT NULL ORDER BY updated_at DESC LIMIT 1",
+                (business_registration_number, business_registration_number,
+                 business_registration_number),
+            ).fetchone()
+            reference = None
+            if reference_number and reference_order:
+                reference = connection.execute(
+                    "SELECT notice_number||':'||notice_order AS bid_notice_id,notice_name,work_type,"
+                    "estimated_price,allocated_budget,demand_organization_code,"
+                    "demand_organization_name,LEAST(now(),COALESCE(bid_deadline_at,now())) AS as_of "
+                    "FROM public_procurement.bid_notices WHERE notice_number=%s AND notice_order=%s",
+                    (reference_number, reference_order),
+                ).fetchone()
+                if reference is None:
+                    raise LookupError(f"bid notice '{reference_bid_notice_id}' was not found")
+                reference = dict(reference)
+                reference["industry_codes"] = [str(row["industry_code"]) for row in connection.execute(
+                    "SELECT DISTINCT substring(license_restriction_name FROM '/([0-9]{4})$') "
+                    "AS industry_code "
+                    "FROM public_procurement.bid_notice_license_restrictions "
+                    "WHERE notice_number=%s AND notice_order=%s "
+                    "AND license_restriction_name~'/[0-9]{4}$'",
+                    (reference_number, reference_order),
+                ).fetchall()]
+        return {
+            "organization": dict(organization) if organization else {
+                "organization_code": organization_code, "organization_name": None,
+            },
+            "company": dict(company) if company else {
+                "business_registration_number": business_registration_number,
+                "company_name": None,
+            },
+            "reference_notice": reference,
+        }
+
+
+class CompanySimilarProjectExperienceReader:
+    def __init__(self, environment: Mapping[str, str] | None = None) -> None:
+        self.environment = environment if environment is not None else os.environ
+
+    def find(
+        self, catalog: RegistryCatalog, *, reference_bid_notice_id: str,
+        business_registration_number: str, period_years: int,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        source = catalog.sources["teoria_public_procurement"].source
+        database_url = self.environment.get(source.access.connection_env)
+        if not database_url:
+            raise RuntimeError(
+                f"missing database credential environment variable: {source.access.connection_env}"
+            )
+        notice_number, separator, notice_order = reference_bid_notice_id.rpartition(":")
+        if not separator:
+            raise ValueError(f"invalid bid notice id '{reference_bid_notice_id}'")
+        with psycopg.connect(database_url, row_factory=dict_row) as connection:
+            reference = connection.execute(
+                _COMPANY_SIMILAR_PROJECT_REFERENCE_QUERY,
+                {"notice_number": notice_number, "notice_order": notice_order},
+            ).fetchone()
+            if reference is None:
+                raise LookupError(f"bid notice '{reference_bid_notice_id}' was not found")
+            reference = dict(reference)
+            rows = connection.execute(
+                _COMPANY_SIMILAR_PROJECT_EXPERIENCE_QUERY,
+                {
+                    "notice_number": notice_number,
+                    "notice_order": notice_order,
+                    "company_number": business_registration_number,
+                    "period_years": period_years,
+                },
+            ).fetchall()
+        return reference, [dict(row) for row in rows]
+
+    def count_many(
+        self, catalog: RegistryCatalog, *, reference_bid_notice_id: str,
+        business_registration_numbers: list[str], period_years: int,
+    ) -> dict[str, dict[str, int]]:
+        if not business_registration_numbers:
+            return {}
+        source = catalog.sources["teoria_public_procurement"].source
+        database_url = self.environment.get(source.access.connection_env)
+        if not database_url:
+            raise RuntimeError(
+                f"missing database credential environment variable: {source.access.connection_env}"
+            )
+        notice_number, separator, notice_order = reference_bid_notice_id.rpartition(":")
+        if not separator:
+            raise ValueError(f"invalid bid notice id '{reference_bid_notice_id}'")
+        with psycopg.connect(database_url, row_factory=dict_row) as connection:
+            rows = connection.execute(
+                _COMPANY_SIMILAR_PROJECT_METRICS_QUERY,
+                {
+                    "notice_number": notice_number,
+                    "notice_order": notice_order,
+                    "company_numbers": business_registration_numbers,
+                    "period_years": period_years,
+                },
+            ).fetchall()
+        return {
+            str(row["company_number"]): {
+                key: int(row[key]) for key in (
+                    "candidate_count", "event_count", "strong_event_count",
+                    "limited_event_count", "reference_only_event_count",
+                    "similar_amount_event_count",
+                )
+            }
+            for row in rows
+        }
 
 
 async def execute_similar_bid_notices(
@@ -493,6 +661,8 @@ async def execute_organization_field_companies(
     *,
     similar_reader: SimilarBidNoticeReader | None = None,
     company_reader: BidCompetitorCandidateReader | None = None,
+    event_reader: OrganizationFieldEventReader | None = None,
+    similar_experience_reader: CompanySimilarProjectExperienceReader | None = None,
 ) -> CapabilityResult:
     total_started = time.perf_counter()
     bid_notice_id = str(inputs["bid_notice_id"])
@@ -524,7 +694,7 @@ async def execute_organization_field_companies(
         }
         if similar_reader is None:
             similar_kwargs["timings"] = timings
-            similar_kwargs["candidate_limit"] = 200
+            similar_kwargs["candidate_limit"] = max(100, limit * 2)
             similar_kwargs["similarity_threshold"] = 0.15
         notice, candidate_rows = await asyncio.to_thread(
             resolved_similar_reader.find, catalog, bid_notice_id, **similar_kwargs,
@@ -548,7 +718,7 @@ async def execute_organization_field_companies(
         if not selected_ids:
             selected_ids = [bid_notice_id]
         resolved_company_reader = company_reader or BidCompetitorCandidateReader()
-        company_kwargs: dict[str, Any] = {"limit": max(limit * 10, 200)}
+        company_kwargs: dict[str, Any] = {"limit": max(limit * 6, 200)}
         if company_reader is None:
             company_kwargs["timings"] = timings
             company_kwargs["award_contract_only"] = True
@@ -556,6 +726,18 @@ async def execute_organization_field_companies(
             resolved_company_reader.find_relevant,
             catalog, bid_notice_id, selected_ids, **company_kwargs,
         )
+        event_rows: list[dict[str, Any]] = []
+        if event_reader is not None or (similar_reader is None and company_reader is None):
+            resolved_event_reader = event_reader or OrganizationFieldEventReader()
+            event_started = time.perf_counter()
+            event_rows = await asyncio.to_thread(
+                resolved_event_reader.find, catalog,
+                organization_code=str(notice["demand_organization_code"]),
+                work_type=str(notice["work_type"]), as_of=notice["as_of"],
+            )
+            timings["organization_field_event_query_ms"] = (
+                time.perf_counter() - event_started
+            ) * 1000
     except LookupError as exc:
         raise CapabilityExecutionError(
             "bid_notice_not_found", str(exc), capability_id=capability_id,
@@ -572,6 +754,10 @@ async def execute_organization_field_companies(
         "market_similar_companies": [],
         "organization_other_companies": [],
     }
+    event_analysis = _organization_field_event_analysis(event_rows, notice, period_years)
+    organization_metrics = _organization_relationship_metrics(
+        event_analysis["all_events"], notice.get("as_of"), period_years,
+    )
     for row in rows:
         won_activities = [
             activity for activity in row.get("similar_activities") or []
@@ -684,6 +870,53 @@ async def execute_organization_field_companies(
         }
         groups[group_key].append(item)
 
+    items_by_company = {
+        item["company_number"]: item
+        for values in groups.values() for item in values
+    }
+    for company_number, metrics in event_analysis["company_metrics"].items():
+        item = items_by_company.get(company_number)
+        if item is None and metrics["same_field_event_count"]:
+            event = next(
+                candidate for candidate in event_analysis["events"]
+                if company_number in candidate["members"]
+            )
+            member = event["members"][company_number]
+            item = {
+                "company_number": company_number,
+                "company_name": member.get("company_name"),
+                "relationship_group": "organization_field",
+                "same_organization_award_count": metrics["same_field_event_count"],
+                "same_organization_contract_count": 0,
+                "same_organization_contract_amount": metrics["same_field_contract_amount"],
+                "same_organization_contract_amount_complete": metrics[
+                    "same_field_contract_amount_complete"
+                ],
+                "same_field_award_count": metrics["same_field_event_count"],
+                "same_field_contract_count": 0,
+                "same_project_type_count": metrics["same_project_type_event_count"],
+                "similar_amount_count": metrics["similar_amount_event_count"],
+                "latest_activity_date": metrics["latest_award_date"],
+                "matched_factors": ["same_organization", "information_system"],
+                "sample_notice_ids": [
+                    value["notice_id"] for value in metrics["representative_notices"]
+                    if value.get("notice_id")
+                ],
+            }
+            groups["organization_field_companies"].append(item)
+            items_by_company[company_number] = item
+        if item is not None:
+            item.update(metrics)
+
+    legacy_relationship_candidates = []
+    current_field_companies = []
+    for item in groups["organization_field_companies"]:
+        if int(item.get("same_field_event_count") or 0) >= 1:
+            current_field_companies.append(item)
+        else:
+            legacy_relationship_candidates.append(item)
+    groups["organization_field_companies"] = current_field_companies
+
     def ranking(item: dict[str, Any]) -> tuple[Any, ...]:
         return (
             item["same_field_award_count"] + item["same_field_contract_count"],
@@ -692,14 +925,79 @@ async def execute_organization_field_companies(
             item["latest_activity_date"] or date.min,
         )
 
-    for values in groups.values():
+    for group_key, values in groups.items():
         values.sort(key=ranking, reverse=True)
-        del values[limit:]
+        if group_key != "organization_field_companies":
+            del values[limit:]
     all_items = [
         *groups["organization_field_companies"],
         *groups["market_similar_companies"],
         *groups["organization_other_companies"],
     ]
+    company_numbers = sorted({item["company_number"] for item in all_items})
+    experience_metrics: dict[str, dict[str, int]] = {}
+    if company_numbers and (
+        similar_experience_reader is not None
+        or (similar_reader is None and company_reader is None)
+    ):
+        resolved_experience_reader = (
+            similar_experience_reader or CompanySimilarProjectExperienceReader()
+        )
+        experience_started = time.perf_counter()
+        try:
+            experience_metrics = await asyncio.to_thread(
+                resolved_experience_reader.count_many,
+                catalog,
+                reference_bid_notice_id=bid_notice_id,
+                business_registration_numbers=company_numbers,
+                period_years=period_years,
+            )
+        except (ValueError, psycopg.Error, RuntimeError) as exc:
+            raise CapabilityExecutionError(
+                "database_source_error", str(exc), capability_id=capability_id,
+                source_id="teoria_public_procurement",
+                retryable=isinstance(exc, psycopg.Error),
+            ) from exc
+        timings["similar_project_experience_query_ms"] = (
+            time.perf_counter() - experience_started
+        ) * 1000
+    for item in all_items:
+        company_number = item["company_number"]
+        metrics = organization_metrics.get(company_number, {})
+        annual_activity = metrics.get("annual_activity", [])
+        annual_completeness = [
+            value["amount_completeness"] for value in annual_activity
+        ]
+        amount_completeness = (
+            "complete" if annual_completeness and all(
+                status == "complete" for status in annual_completeness
+            )
+            else "unknown" if not annual_completeness or all(
+                status == "unknown" for status in annual_completeness
+            )
+            else "partial"
+        )
+        item["organization_relationship"] = {
+            "award_event_count": int(metrics.get("same_field_event_count") or 0),
+            "yearly_activity": annual_activity,
+            "total_attributed_contract_amount": sum(
+                value["attributed_contract_amount"] for value in annual_activity
+            ),
+            "amount_completeness": amount_completeness,
+        }
+        similar_metrics = experience_metrics.get(company_number, {})
+        item["similar_project_experience"] = {
+            "candidate_count": int(similar_metrics.get("candidate_count") or 0),
+            "event_count": int(similar_metrics.get("event_count") or 0),
+            "strong_event_count": int(similar_metrics.get("strong_event_count") or 0),
+            "limited_event_count": int(similar_metrics.get("limited_event_count") or 0),
+            "reference_only_event_count": int(
+                similar_metrics.get("reference_only_event_count") or 0
+            ),
+            "similar_amount_event_count": int(
+                similar_metrics.get("similar_amount_event_count") or 0
+            ),
+        }
     observed_at = datetime.now(timezone.utc)
     provenance = Provenance(
         kind="execution", source="teoria_runtime",
@@ -724,6 +1022,7 @@ async def execute_organization_field_companies(
     timings.setdefault("current_notice_lookup_ms", 0.0)
     timings.setdefault("organization_history_query_ms", 0.0)
     timings.setdefault("market_similar_query_ms", 0.0)
+    timings.setdefault("organization_field_event_query_ms", 0.0)
     timings["contract_attribution_ms"] = 0.0
     timings["total_ms"] = (time.perf_counter() - total_started) * 1000
     timings = {key: round(value, 3) for key, value in timings.items()}
@@ -732,11 +1031,21 @@ async def execute_organization_field_companies(
         capability_id=capability_id, objects=objects,
         outcome={
             "bid_notice_id": bid_notice_id,
+            "analysis_basis": {
+                **_organization_field_analysis_basis(notice, period_years),
+                "organization_code": notice.get("demand_organization_code"),
+                "observation_started_at": event_analysis["market_entry"]["observation_started_at"],
+            },
             "organization": {
                 "code": relationship_notice["demand_organization_code"],
                 "name": relationship_notice["demand_organization_name"],
             },
             **groups,
+            "legacy_relationship_candidates": legacy_relationship_candidates,
+            "event_deduplication": event_analysis["event_deduplication"],
+            "market_structure": event_analysis["market_structure"],
+            "market_entry": event_analysis["market_entry"],
+            "data_completeness": event_analysis["data_completeness"],
             "policy": {
                 "profile": "organization_field_company_evidence_v1",
                 "period_years": period_years,
@@ -753,6 +1062,672 @@ async def execute_organization_field_companies(
         _ORGANIZATION_FIELD_CACHE.pop(oldest_key, None)
     _ORGANIZATION_FIELD_CACHE[cache_key] = (time.monotonic(), result.model_copy(deep=True))
     return result
+
+
+async def execute_bid_project_lineage(
+    catalog: RegistryCatalog,
+    capability_id: str,
+    inputs: dict[str, Any],
+    *,
+    reader: SimilarBidNoticeReader | None = None,
+) -> CapabilityResult:
+    bid_notice_id = str(inputs["bid_notice_id"])
+    period_years = int(inputs.get("period_years", 10))
+    try:
+        resolved_reader = reader or SimilarBidNoticeReader()
+        kwargs: dict[str, Any] = {
+            "period_years": period_years,
+            "result_statuses": ["awarded", "contracted"],
+        }
+        if reader is None:
+            kwargs.update(candidate_limit=200, similarity_threshold=0.10)
+        notice, rows = await asyncio.to_thread(
+            resolved_reader.find, catalog, bid_notice_id, **kwargs,
+        )
+    except LookupError as exc:
+        raise CapabilityExecutionError(
+            "bid_notice_not_found", str(exc), capability_id=capability_id,
+        ) from exc
+    except (ValueError, psycopg.Error, RuntimeError) as exc:
+        raise CapabilityExecutionError(
+            "database_source_error", str(exc), capability_id=capability_id,
+            source_id="teoria_public_procurement", retryable=isinstance(exc, psycopg.Error),
+        ) from exc
+
+    current_title = str(notice.get("notice_name") or "")
+    current_published = notice.get("notice_published_date")
+    current_projects = _project_types(current_title)
+    current_fields = _business_fields(current_title)
+    if "1468" in set(map(str, notice.get("industry_codes") or [])) and "시스템" in current_title:
+        current_fields.add("information_system")
+    items = []
+    for row in rows:
+        if current_published and row.get("notice_published_date") \
+                and row["notice_published_date"] >= current_published:
+            continue
+        previous_title = str(row.get("notice_name") or "")
+        previous_projects = _project_types(previous_title)
+        previous_fields = _business_fields(previous_title)
+        if "1468" in set(map(str, row.get("industry_codes") or [])) and "시스템" in previous_title:
+            previous_fields.add("information_system")
+        same_organization = bool(
+            notice.get("demand_organization_code")
+            and notice.get("demand_organization_code") == row.get("demand_organization_code")
+        )
+        field_overlap = sorted(current_fields & previous_fields)
+        candidate_type = None
+        if "build" in previous_projects and "improvement" in current_projects:
+            candidate_type = "build_to_improvement"
+        elif "build" in previous_projects and "maintenance" in current_projects:
+            candidate_type = "build_to_maintenance"
+        elif "차세대" in _compact(current_title) and field_overlap:
+            candidate_type = "existing_to_next_generation"
+        elif re.search(r"\b[1-9]\s*단계|\([1-9]차\)", current_title) and field_overlap:
+            candidate_type = "phased_successor"
+        elif same_organization and field_overlap:
+            candidate_type = "same_asset_or_field_candidate"
+        if candidate_type is None:
+            continue
+        reasons = []
+        if same_organization:
+            reasons.append("same_demand_organization")
+        reasons.extend(f"same_field_{value}" for value in field_overlap)
+        if previous_projects:
+            reasons.append("predecessor_project_type_" + "_".join(sorted(previous_projects)))
+        if current_projects:
+            reasons.append("successor_project_type_" + "_".join(sorted(current_projects)))
+        title_score = _jaccard(_title_tokens(current_title), _title_tokens(previous_title))
+        confidence = min(0.65, round(
+            0.20 + 0.20 * float(same_organization)
+            + 0.15 * float(bool(field_overlap)) + 0.10 * title_score,
+            4,
+        ))
+        items.append({
+            "relationship_type": "related_candidate",
+            "candidate_relationship_type": candidate_type,
+            "predecessor_bid_notice_id": row.get("bid_notice_id"),
+            "successor_bid_notice_id": bid_notice_id,
+            "project_stage": {
+                "predecessor": sorted(previous_projects),
+                "successor": sorted(current_projects),
+            },
+            "performing_company_number": row.get("winner_business_registration_number"),
+            "performing_company_name": row.get("winner_name"),
+            "contract_amount": _number(row.get("winning_amount")),
+            "performance_period": None,
+            "confidence": confidence,
+            "reason_codes": reasons,
+            "evidence_labels": [],
+            "evidence": [{
+                "source_type": "structured_notice_metadata",
+                "bid_notice_id": row.get("bid_notice_id"),
+                "original_text": previous_title,
+            }],
+            "confirmation_status": "requires_source_evidence",
+        })
+    items.sort(key=lambda item: item["confidence"], reverse=True)
+    limit = int(inputs.get("limit", 20))
+    items = items[:limit]
+    observed_at = datetime.now(timezone.utc)
+    provenance = Provenance(
+        kind="execution", source="teoria_runtime",
+        operation="market_context.find_bid_project_lineage",
+        mapping="public_procurement_market_context", observed_at=observed_at,
+        record_keys=[bid_notice_id],
+    )
+    objects = []
+    for item in items:
+        object_id = (
+            f"{item['predecessor_bid_notice_id']}:{item['successor_bid_notice_id']}"
+        )
+        properties = {"project_lineage_id": object_id, **item}
+        objects.append(MaterializedObject(
+            ontology="public_procurement", object_type="bid_project_lineage",
+            object_id=object_id, properties=properties, provenance=[provenance],
+            property_provenance={key: [provenance] for key in properties},
+        ))
+    confirmed_items = [
+        item for item in items if item["relationship_type"] in {"confirmed", "probable"}
+    ]
+    related_candidates = [
+        item for item in items if item["relationship_type"] == "related_candidate"
+    ]
+    return CapabilityResult(
+        capability_id=capability_id, objects=objects,
+        outcome={
+            "bid_notice_id": bid_notice_id,
+            "items": items,
+            "confirmed_items": confirmed_items,
+            "related_candidates": related_candidates,
+            "confirmed_count": len(confirmed_items),
+            "candidate_count": len(related_candidates),
+            "policy": {
+                "profile": "bid_project_lineage_v1",
+                "weak_evidence_relationship": "related_candidate",
+                "title_similarity_alone_confirms_lineage": False,
+            },
+        },
+    )
+
+
+async def execute_organization_company_field_relationship(
+    catalog: RegistryCatalog,
+    capability_id: str,
+    inputs: dict[str, Any],
+    *,
+    reader: OrganizationFieldEventReader | None = None,
+) -> CapabilityResult:
+    started = time.perf_counter()
+    organization_code = str(inputs["organization_code"])
+    company_number = "".join(
+        character for character in str(inputs["business_registration_number"])
+        if character.isdigit()
+    )
+    field_code = str(inputs["field_code"]) if inputs.get("field_code") else None
+    supported_fields = {
+        "information_system": ("정보시스템", "정보시스템 소프트웨어 전산"),
+        "security": ("정보보호·보안", "정보보호 보안 방화벽"),
+        "communication": ("정보통신·네트워크", "정보통신 통신망 네트워크"),
+    }
+    if field_code and field_code not in supported_fields:
+        raise CapabilityExecutionError(
+            "unsupported_field_code", f"unsupported field_code '{field_code}'",
+            capability_id=capability_id,
+        )
+    period_years = int(inputs.get("period_years", 10))
+    page = int(inputs.get("page", 1))
+    page_size = int(inputs.get("page_size", 20))
+    reference_bid_notice_id = (
+        str(inputs["reference_bid_notice_id"])
+        if inputs.get("reference_bid_notice_id") else None
+    )
+    work_type = str(inputs["work_type"]) if inputs.get("work_type") else None
+    registry_version = catalog.release.version if catalog.release else "unpublished"
+    cache_key = (
+        organization_code, company_number, field_code, period_years, page, page_size,
+        reference_bid_notice_id, work_type, registry_version,
+    )
+    cached = _ORGANIZATION_COMPANY_FIELD_CACHE.get(cache_key)
+    if cached and time.monotonic() - cached[0] < ORGANIZATION_FIELD_CACHE_TTL_SECONDS:
+        result = cached[1].model_copy(deep=True)
+        result.outcome["timings"] = {
+            "total_ms": round((time.perf_counter() - started) * 1000, 3),
+            "cache_hit": True,
+        }
+        return result
+
+    resolved_reader = reader or OrganizationFieldEventReader()
+    try:
+        context = await asyncio.to_thread(
+            resolved_reader.context, catalog, organization_code=organization_code,
+            business_registration_number=company_number,
+            reference_bid_notice_id=reference_bid_notice_id,
+        )
+        reference = context["reference_notice"]
+        as_of = reference.get("as_of") if reference else datetime.now(timezone.utc)
+        rows = await asyncio.to_thread(
+            resolved_reader.find, catalog, organization_code=organization_code,
+            work_type=work_type, as_of=as_of,
+        )
+    except LookupError as exc:
+        raise CapabilityExecutionError(
+            "bid_notice_not_found", str(exc), capability_id=capability_id,
+        ) from exc
+    except (ValueError, psycopg.Error, RuntimeError) as exc:
+        raise CapabilityExecutionError(
+            "database_source_error", str(exc), capability_id=capability_id,
+            source_id="teoria_public_procurement", retryable=isinstance(exc, psycopg.Error),
+        ) from exc
+
+    if reference:
+        analysis_notice = dict(reference)
+    else:
+        label, synthetic_title = supported_fields.get(field_code, (None, ""))
+        analysis_notice = {
+            "notice_name": synthetic_title,
+            "estimated_price": None, "allocated_budget": None,
+            "industry_codes": [], "as_of": as_of,
+        }
+        if field_code is None:
+            analysis_notice["include_all_fields"] = True
+    analysis = _organization_field_event_analysis(rows, analysis_notice, period_years)
+    events = [
+        event for event in analysis["events"] if company_number in event["members"]
+    ]
+    events.sort(key=lambda event: event.get("awarded_at") or date.min, reverse=True)
+
+    project_counts: dict[str, int] = {}
+    amount_counts = {"under_1b": 0, "1b_to_3b": 0, "3b_to_10b": 0, "over_10b": 0}
+    yearly: dict[int, dict[str, Any]] = {}
+    event_items = []
+    attributed_event_total = Decimal("0")
+    target_amount = analysis_notice.get("estimated_price") or analysis_notice.get("allocated_budget")
+    for event in events:
+        member = event["members"][company_number]
+        members = list(event["members"].values())
+        shares = [value.get("share_rate") for value in members]
+        share_total = sum(
+            (Decimal(str(value)) for value in shares if value is not None), Decimal("0")
+        )
+        if members and all(value is not None for value in shares) and share_total:
+            credit = Decimal(str(member["share_rate"])) / share_total
+            share_percent = _number(Decimal(str(member["share_rate"])))
+            share_source = "confirmed"
+        else:
+            credit = Decimal("1") / Decimal(str(len(members)))
+            share_percent = _number(credit * Decimal("100"))
+            share_source = "equal_split"
+        attributed_event_total += credit
+        project_type = _primary_project_type(str(event.get("notice_name") or ""))
+        project_counts[project_type] = project_counts.get(project_type, 0) + 1
+        amount = event.get("contract_amount") or event.get("award_amount")
+        amount_number = Decimal(str(amount)) if amount is not None else None
+        bucket = (
+            "under_1b" if amount_number is not None and amount_number < Decimal("1000000000") else
+            "1b_to_3b" if amount_number is not None and amount_number < Decimal("3000000000") else
+            "3b_to_10b" if amount_number is not None and amount_number < Decimal("10000000000") else
+            "over_10b"
+        )
+        amount_counts[bucket] += 1
+        year = event["awarded_at"].year
+        yearly_item = yearly.setdefault(year, {
+            "year": year, "event_count": 0,
+            "attributed_event_count": Decimal("0"),
+            "total_attributed_amount": Decimal("0"),
+        })
+        yearly_item["event_count"] += 1
+        yearly_item["attributed_event_count"] += credit
+        if member.get("attributed_amount") is not None:
+            yearly_item["total_attributed_amount"] += Decimal(str(member["attributed_amount"]))
+        is_similar = None if target_amount is None else (
+            _amount_similarity(target_amount, amount)[0] >= 0.5
+        )
+        event_items.append({
+            "award_event_id": event["event_id"],
+            "bid_notice_id": event.get("notice_id"),
+            "notice_name": event.get("notice_name"),
+            "notice_published_date": event.get("notice_published_date"),
+            "award_date": event.get("award_date"),
+            "contract_date": event.get("contract_date"),
+            "project_type": project_type,
+            "project_type_label": _project_type_label(project_type),
+            "award_amount": event.get("award_amount"),
+            "contract_amount": event.get("contract_amount"),
+            "attributed_contract_amount": member.get("attributed_amount"),
+            "attributed_contract_amount_completeness": (
+                "complete" if member.get("attributed_amount") is not None
+                else "partial" if "contract" in event["source_kinds"]
+                else "unknown"
+            ),
+            "joint_contract": len(members) > 1,
+            "company_role": (
+                "sole" if len(members) == 1
+                else "consortium_lead" if member.get("supplier_role_name") in {
+                    "대표사", "주계약자", "대표업체",
+                }
+                else "consortium_member"
+            ),
+            "share_percent": share_percent,
+            "share_source": share_source,
+            "field_match_reasons": [field_code] if field_code else [],
+            "is_similar_amount": is_similar,
+            "similar_amount_reason": (
+                None if target_amount is not None else "reference_amount_not_provided"
+            ),
+        })
+
+    total_items = len(event_items)
+    offset = (page - 1) * page_size
+    paged_events = event_items[offset:offset + page_size]
+    metrics = analysis["company_metrics"].get(company_number, {})
+    annual_activity = metrics.get("annual_activity", [])
+    annual_completeness = [item["amount_completeness"] for item in annual_activity]
+    relationship_amount_completeness = (
+        "complete" if annual_completeness and all(
+            status == "complete" for status in annual_completeness
+        )
+        else "unknown" if not annual_completeness or all(
+            status == "unknown" for status in annual_completeness
+        )
+        else "partial"
+    )
+    total_attributed_contract_amount = sum(
+        item["attributed_contract_amount"] for item in annual_activity
+    )
+    project_order = ["build", "improvement", "maintenance", "consulting", "unknown"]
+    project_distribution = [{
+        "project_type": kind, "label": _project_type_label(kind),
+        "event_count": project_counts.get(kind, 0),
+    } for kind in project_order]
+    amount_labels = {
+        "under_1b": "10억원 미만", "1b_to_3b": "10~30억원",
+        "3b_to_10b": "30~100억원", "over_10b": "100억원 이상",
+    }
+    amount_distribution = [{
+        "range": key, "label": amount_labels[key], "event_count": amount_counts[key],
+    } for key in amount_labels]
+    yearly_activity = [{
+        **item,
+        "attributed_event_count": _number(item["attributed_event_count"]),
+        "total_attributed_amount": _number(item["total_attributed_amount"]),
+    } for _, item in sorted(yearly.items(), reverse=True)]
+    observed_at = datetime.now(timezone.utc)
+    provenance = Provenance(
+        kind="execution", source="teoria_runtime",
+        operation="market_context.get_organization_company_field_relationship",
+        mapping="public_procurement_market_context", observed_at=observed_at,
+        record_keys=[organization_code, company_number],
+    )
+    properties = {
+        "organization_company_field_relationship_id": (
+            f"{organization_code}:{company_number}:{field_code or 'all'}"
+        ),
+        "organization_code": organization_code,
+        "company_number": company_number,
+        "field_code": field_code,
+        "award_event_count": total_items,
+    }
+    result = CapabilityResult(
+        capability_id=capability_id,
+        objects=[MaterializedObject(
+            ontology="public_procurement",
+            object_type="organization_company_field_relationship",
+            object_id=properties["organization_company_field_relationship_id"],
+            properties=properties, provenance=[provenance],
+            property_provenance={key: [provenance] for key in properties},
+        )],
+        outcome={
+            "organization": {
+                "code": organization_code,
+                "name": context["organization"].get("organization_name"),
+            },
+            "company": {
+                "business_registration_number": company_number,
+                "name": context["company"].get("company_name"),
+            },
+            "field": {
+                "code": field_code,
+                "label": supported_fields.get(field_code, (None, ""))[0],
+            },
+            "analysis_basis": {
+                "period_years": period_years,
+                "work_type": work_type,
+                "reference_bid_notice_id": reference_bid_notice_id,
+                "observation_started_at": analysis["market_entry"]["observation_started_at"],
+            },
+            "summary": {
+                "award_event_count": total_items,
+                "attributed_award_event_count": _number(attributed_event_total),
+                "first_award_date": metrics.get("first_award_date"),
+                "latest_award_date": metrics.get("latest_award_date"),
+                "active_years": metrics.get("active_years", []),
+                "active_year_count": metrics.get("active_year_count", 0),
+                "consecutive_active_years": metrics.get("consecutive_active_years", 0),
+                "similar_amount_event_count": sum(
+                    item["is_similar_amount"] is True for item in event_items
+                ) if target_amount is not None else None,
+                "total_attributed_contract_amount": total_attributed_contract_amount,
+                "amount_completeness": relationship_amount_completeness,
+            },
+            "project_type_distribution": project_distribution,
+            "amount_distribution": amount_distribution,
+            "yearly_activity": yearly_activity,
+            "annual_activity": annual_activity,
+            "events": paged_events,
+            "pagination": {
+                "page": page, "page_size": page_size, "total_items": total_items,
+                "total_pages": (total_items + page_size - 1) // page_size,
+            },
+            "data_completeness": analysis["data_completeness"],
+            "timings": {
+                "total_ms": round((time.perf_counter() - started) * 1000, 3),
+                "cache_hit": False,
+            },
+        },
+    )
+    _ORGANIZATION_COMPANY_FIELD_CACHE[cache_key] = (
+        time.monotonic(), result.model_copy(deep=True),
+    )
+    return result
+
+
+async def execute_organization_company_relationship(
+    catalog: RegistryCatalog,
+    capability_id: str,
+    inputs: dict[str, Any],
+    *,
+    reader: OrganizationFieldEventReader | None = None,
+) -> CapabilityResult:
+    """Return complete company×organization history without field filtering."""
+    history_inputs = {
+        "organization_code": inputs["organization_code"],
+        "business_registration_number": inputs["business_registration_number"],
+        "work_type": inputs.get("work_type"),
+        "period_years": inputs.get("period_years", 10),
+        "page": inputs.get("page", 1),
+        "page_size": inputs.get("page_size", 20),
+    }
+    result = await execute_organization_company_field_relationship(
+        catalog,
+        "get_organization_company_field_relationship",
+        history_inputs,
+        reader=reader,
+    )
+    result.capability_id = capability_id
+    result.outcome["relationship_type"] = "organization_history"
+    result.outcome["analysis_basis"].update({
+        "field_filter_applied": False,
+        "similarity_assessment_applied": False,
+    })
+    result.outcome.pop("field", None)
+    result.outcome["yearly_activity"] = result.outcome.pop("annual_activity")
+    for event in result.outcome["events"]:
+        event["organization_match"] = True
+        event.pop("field_match_reasons", None)
+    properties = {
+        "organization_company_relationship_id": (
+            f"{history_inputs['organization_code']}:"
+            f"{''.join(character for character in str(history_inputs['business_registration_number']) if character.isdigit())}"
+        ),
+        "organization_code": history_inputs["organization_code"],
+        "company_number": "".join(
+            character for character in str(history_inputs["business_registration_number"])
+            if character.isdigit()
+        ),
+        "award_event_count": result.outcome["summary"]["award_event_count"],
+    }
+    provenance = result.objects[0].provenance if result.objects else []
+    result.objects = [MaterializedObject(
+        ontology="public_procurement",
+        object_type="organization_company_relationship",
+        object_id=properties["organization_company_relationship_id"],
+        properties=properties,
+        provenance=provenance,
+        property_provenance={key: provenance for key in properties},
+    )]
+    return result
+
+
+async def execute_company_similar_project_experience(
+    catalog: RegistryCatalog,
+    capability_id: str,
+    inputs: dict[str, Any],
+    *,
+    reader: CompanySimilarProjectExperienceReader | None = None,
+) -> CapabilityResult:
+    """Find company experience sharing any current mandatory industry/license."""
+    started = time.perf_counter()
+    reference_bid_notice_id = str(inputs["reference_bid_notice_id"])
+    company_number = "".join(
+        character for character in str(inputs["business_registration_number"])
+        if character.isdigit()
+    )
+    period_years = int(inputs.get("period_years", 10))
+    page = int(inputs.get("page", 1))
+    page_size = int(inputs.get("page_size", 20))
+    resolved_reader = reader or CompanySimilarProjectExperienceReader()
+    try:
+        reference, rows = await asyncio.to_thread(
+            resolved_reader.find,
+            catalog,
+            reference_bid_notice_id=reference_bid_notice_id,
+            business_registration_number=company_number,
+            period_years=period_years,
+        )
+    except LookupError as exc:
+        raise CapabilityExecutionError(
+            "bid_notice_not_found", str(exc), capability_id=capability_id,
+        ) from exc
+    except (ValueError, psycopg.Error, RuntimeError) as exc:
+        raise CapabilityExecutionError(
+            "database_source_error", str(exc), capability_id=capability_id,
+            source_id="teoria_public_procurement", retryable=isinstance(exc, psycopg.Error),
+        ) from exc
+
+    required_codes = sorted(map(str, reference.get("industry_codes") or []))
+    if not required_codes:
+        raise CapabilityExecutionError(
+            "reference_industry_requirements_unavailable",
+            "the reference notice has no complete structured industry/license requirements",
+            capability_id=capability_id,
+        )
+    reference_amount = reference.get("estimated_price") or reference.get("allocated_budget")
+    experiences = []
+    for row in rows:
+        candidate_codes = sorted(map(str, row.get("industry_codes") or []))
+        matched_codes = sorted(set(required_codes) & set(candidate_codes))
+        amount = row.get("contract_amount") or row.get("winning_amount") \
+            or row.get("estimated_price") or row.get("allocated_budget")
+        amount_score, amount_reason = _amount_similarity(reference_amount, amount)
+        share = _number(row.get("participation_share_rate"))
+        supplier_count = int(row.get("supplier_count") or 0)
+        contract_amount = row.get("contract_amount")
+        attributed_amount = None
+        if contract_amount is not None:
+            if share is not None:
+                attributed_amount = _number(
+                    Decimal(str(contract_amount)) * Decimal(str(share)) / Decimal("100")
+                )
+            elif supplier_count == 1:
+                attributed_amount = _number(contract_amount)
+        comparison = _title_project_comparison(
+            str(reference.get("notice_name") or ""), str(row.get("notice_name") or ""),
+            trigram_score=(
+                float(row["title_trigram_score"])
+                if row.get("title_trigram_score") is not None else None
+            ),
+        )
+        experiences.append({
+            "bid_notice_id": row["bid_notice_id"],
+            "notice_name": row.get("notice_name"),
+            "notice_published_date": row.get("notice_published_date"),
+            "organization_code": row.get("demand_organization_code"),
+            "organization_name": row.get("demand_organization_name"),
+            "work_type": row.get("work_type"),
+            "industry_license_assessment": {
+                "required_codes": required_codes,
+                "candidate_codes": candidate_codes,
+                "matched_codes": matched_codes,
+                "matched_code_count": len(matched_codes),
+                "required_code_count": len(required_codes),
+                "coverage_ratio": round(len(matched_codes) / len(required_codes), 6),
+                "any_required_code_matched": True,
+                "all_required_codes_included": len(matched_codes) == len(required_codes),
+                "status": "matched",
+                "rule": "any_required_industry_code_overlap",
+            },
+            "award_date": row.get("award_date"),
+            "contract_date": row.get("contract_date"),
+            "winning_amount": _number(row.get("winning_amount")),
+            "contract_amount": _number(contract_amount),
+            "attributed_contract_amount": attributed_amount,
+            "attributed_contract_amount_completeness": (
+                "complete" if attributed_amount is not None
+                else "partial" if contract_amount is not None
+                else "unknown"
+            ),
+            "company_role": (
+                "sole" if supplier_count == 1
+                else "consortium_lead" if row.get("supplier_role_name") in {
+                    "대표사", "주계약자", "대표업체",
+                }
+                else "consortium_member" if supplier_count > 1
+                else "award_winner"
+            ),
+            "share_percent": share,
+            "project_type": _primary_project_type(str(row.get("notice_name") or "")),
+            "is_similar_amount": amount_score >= 0.5 if reference_amount and amount else None,
+            "similar_amount_reason": amount_reason,
+            **comparison,
+        })
+    experiences.sort(
+        key=lambda item: item.get("contract_date") or item.get("award_date")
+        or item.get("notice_published_date") or date.min,
+        reverse=True,
+    )
+    total_items = len(experiences)
+    eligible = [item for item in experiences if item["comparison_eligible"]]
+    quality_counts = {
+        quality: sum(item["comparison_quality"] == quality for item in experiences)
+        for quality in ("strong", "limited", "reference_only")
+    }
+    offset = (page - 1) * page_size
+    paged = experiences[offset:offset + page_size]
+    observed_at = datetime.now(timezone.utc)
+    provenance = Provenance(
+        kind="execution", source="teoria_runtime",
+        operation="market_context.get_company_similar_project_experience",
+        mapping="public_procurement_market_context", observed_at=observed_at,
+        record_keys=[reference_bid_notice_id, company_number],
+    )
+    properties = {
+        "company_similar_project_experience_id": f"{reference_bid_notice_id}:{company_number}",
+        "reference_bid_notice_id": reference_bid_notice_id,
+        "company_number": company_number,
+        "experience_count": total_items,
+    }
+    return CapabilityResult(
+        capability_id=capability_id,
+        objects=[MaterializedObject(
+            ontology="public_procurement", object_type="company_similar_project_experience",
+            object_id=properties["company_similar_project_experience_id"],
+            properties=properties, provenance=[provenance],
+            property_provenance={key: [provenance] for key in properties},
+        )],
+        outcome={
+            "reference_bid_notice_id": reference_bid_notice_id,
+            "company": {"business_registration_number": company_number},
+            "analysis_basis": {
+                "period_years": period_years,
+                "work_type": reference.get("work_type"),
+                "required_industries": [
+                    {"code": code, "name": (reference.get("industry_names") or {}).get(code)}
+                    for code in required_codes
+                ],
+                "matching_rule": "any_required_industry_code_overlap",
+                "title_keyword_filter_applied": False,
+                "semantic_similarity_applied": False,
+                "title_comparison_profile": "normalized_token_and_character_trigram_v1",
+                "title_trigram_similarity_threshold": TITLE_TRIGRAM_SIMILARITY_THRESHOLD,
+            },
+            "summary": {
+                "candidate_count": total_items,
+                "event_count": len(eligible),
+                "strong_event_count": quality_counts["strong"],
+                "limited_event_count": quality_counts["limited"],
+                "reference_only_event_count": quality_counts["reference_only"],
+                "similar_amount_event_count": sum(
+                    item["is_similar_amount"] is True for item in eligible
+                ),
+            },
+            "experiences": paged,
+            "pagination": {
+                "page": page, "page_size": page_size, "total_items": total_items,
+                "total_pages": (total_items + page_size - 1) // page_size,
+            },
+            "timings": {"total_ms": round((time.perf_counter() - started) * 1000, 3)},
+        },
+    )
 
 
 async def _load_company_evidence(
@@ -1049,6 +2024,46 @@ def _jaccard(left: set[str], right: set[str]) -> float:
     return len(left & right) / len(left | right) if left or right else 0.0
 
 
+def _character_trigrams(value: str) -> set[str]:
+    compact = _compact(_normalized_title(value))
+    return {compact[index:index + 3] for index in range(max(0, len(compact) - 2))}
+
+
+def _title_project_comparison(
+    reference_title: str, candidate_title: str, *, trigram_score: float | None = None,
+) -> dict[str, Any]:
+    reference_tokens = _title_tokens(reference_title)
+    candidate_tokens = _title_tokens(candidate_title)
+    token_score = _jaccard(reference_tokens, candidate_tokens)
+    reference_trigrams = _character_trigrams(reference_title)
+    candidate_trigrams = _character_trigrams(candidate_title)
+    if trigram_score is None:
+        trigram_score = _jaccard(reference_trigrams, candidate_trigrams)
+    matched_tokens = sorted(reference_tokens & candidate_tokens)
+    title_related = trigram_score >= TITLE_TRIGRAM_SIMILARITY_THRESHOLD
+    reference_projects = _project_types(reference_title)
+    candidate_projects = _project_types(candidate_title)
+    matched_projects = sorted(reference_projects & candidate_projects)
+    project_type_match = bool(matched_projects)
+    quality = (
+        "strong" if title_related and project_type_match
+        else "limited" if title_related or project_type_match
+        else "reference_only"
+    )
+    return {
+        "title_assessment": {
+            "token_score": round(token_score, 6),
+            "trigram_score": round(trigram_score, 6),
+            "matched_tokens": matched_tokens,
+            "title_related": title_related,
+        },
+        "project_type_match": project_type_match,
+        "matched_project_types": matched_projects,
+        "comparison_quality": quality,
+        "comparison_eligible": quality in {"strong", "limited"},
+    }
+
+
 def _project_types(value: str) -> set[str]:
     patterns = {
         "build": ("구축", "개발", "도입"),
@@ -1058,6 +2073,599 @@ def _project_types(value: str) -> set[str]:
     }
     compact = _compact(value)
     return {kind for kind, words in patterns.items() if any(word in compact for word in words)}
+
+
+def _primary_project_type(value: str) -> str:
+    compact = _compact(value)
+    candidates = {
+        "improvement": ("고도화", "개선", "재구축"),
+        "maintenance": ("유지보수", "유지관리", "운영"),
+        "build": ("구축", "개발", "도입"),
+        "consulting": ("컨설팅", "감리", "설계"),
+    }
+    positions = []
+    for kind, words in candidates.items():
+        found = [compact.find(word) for word in words if word in compact]
+        if found:
+            positions.append((min(found), kind))
+    return min(positions)[1] if positions else "unknown"
+
+
+def _project_type_label(value: str) -> str:
+    return {
+        "build": "구축", "improvement": "개선·고도화",
+        "maintenance": "유지관리", "consulting": "컨설팅·감리·설계",
+        "unknown": "미분류",
+    }[value]
+
+
+def _organization_field_analysis_basis(
+    notice: dict[str, Any], period_years: int,
+) -> dict[str, Any]:
+    """Expose the exact inputs and boundaries used by company relationship analysis."""
+    title = str(notice.get("notice_name") or "")
+    fields = _business_fields(title)
+    project_kinds = _project_types(title)
+    ordered_kinds = [
+        kind for kind in ("build", "improvement", "maintenance", "consulting")
+        if kind in project_kinds
+    ]
+    is_information_system = "information_system" in fields or (
+        "1468" in set(map(str, notice.get("industry_codes") or [])) and "시스템" in title
+    )
+    project_types = [
+        f"information_system_{kind}" if is_information_system else kind
+        for kind in ordered_kinds
+    ]
+    labels = {
+        "build": "구축",
+        "improvement": "고도화·개선",
+        "maintenance": "유지보수·운영",
+        "consulting": "컨설팅·감리·설계",
+    }
+    project_type_labels = [
+        f"정보시스템 {labels[kind]}" if is_information_system else labels[kind]
+        for kind in ordered_kinds
+    ]
+    reference_amount = notice.get("estimated_price") or notice.get("allocated_budget")
+    reference_number = _number(reference_amount)
+    amount_basis = "estimated_price" if notice.get("estimated_price") is not None else (
+        "allocated_budget" if notice.get("allocated_budget") is not None else None
+    )
+    similar_amount = {
+        "amount_basis": amount_basis,
+        "reference_amount": reference_number,
+        "minimum_amount": None,
+        "maximum_amount": None,
+        "rule": "0.5x_to_2.0x",
+        "comparison_rule": "min(reference,candidate)/max(reference,candidate) >= 0.5",
+    }
+    if reference_amount:
+        similar_amount["minimum_amount"] = _number(Decimal(str(reference_amount)) / Decimal("2"))
+        similar_amount["maximum_amount"] = _number(Decimal(str(reference_amount)) * Decimal("2"))
+
+    industries = notice.get("industries") or [
+        {"industry_code": code, "industry_name": None}
+        for code in notice.get("industry_codes") or []
+    ]
+    return {
+        "period_years": period_years,
+        "work_type": notice.get("work_type"),
+        "industries": [
+            {"code": str(item["industry_code"]), "name": item.get("industry_name")}
+            for item in industries
+        ],
+        "field": {
+            "code": "information_system" if is_information_system else (
+                sorted(fields)[0] if fields else None
+            ),
+            "label": "정보시스템" if is_information_system else None,
+        },
+        "project_type": {
+            "code": ordered_kinds[0] if ordered_kinds else None,
+            "label": project_type_labels[0] if project_type_labels else None,
+        },
+        "project_type_code": project_types[0] if project_types else None,
+        "project_type_label": project_type_labels[0] if project_type_labels else None,
+        "project_types": project_types,
+        "project_type_labels": project_type_labels,
+        "similar_amount": similar_amount,
+        "similar_amount_range": dict(similar_amount),
+    }
+
+
+def _canonical_contract_notice_number(value: Any) -> str:
+    number = str(value or "").strip()
+    if number.isdigit() and len(number) == 13 and number.endswith("00"):
+        return number[:-2]
+    return number
+
+
+def _organization_relationship_metrics(
+    events: list[dict[str, Any]], as_of: date | datetime | None, period_years: int,
+) -> dict[str, dict[str, Any]]:
+    """Derive field-free organization metrics from already merged award events."""
+    as_of_date = as_of.date() if isinstance(as_of, datetime) else as_of or date.today()
+    try:
+        period_start = as_of_date.replace(year=as_of_date.year - period_years)
+    except ValueError:
+        period_start = as_of_date.replace(month=2, day=28, year=as_of_date.year - period_years)
+    recent_events = [
+        event for event in events
+        if any(
+            period_start <= activity_date < as_of_date
+            for activity_date in event.get("activity_dates") or []
+        )
+    ]
+    by_company: dict[str, list[dict[str, Any]]] = {}
+    for event in recent_events:
+        for company_number in event["members"]:
+            by_company.setdefault(company_number, []).append(event)
+    metrics: dict[str, dict[str, Any]] = {}
+    for company_number, company_events in by_company.items():
+        annual: dict[int, dict[str, Any]] = {}
+        for event in company_events:
+            member = event["members"][company_number]
+            annualized_at = member.get("attributed_at") or event.get("awarded_at")
+            if annualized_at is None:
+                continue
+            member_count = len(event["members"])
+            year_item = annual.setdefault(annualized_at.year, {
+                "year": annualized_at.year,
+                "award_event_count": 0,
+                "attributed_contract_amount": Decimal("0"),
+                "known_amount_count": 0,
+                "sole_count": 0,
+                "consortium_lead_count": 0,
+                "consortium_member_count": 0,
+            })
+            year_item["award_event_count"] += 1
+            attributed_amount = member.get("attributed_amount")
+            if attributed_amount is not None:
+                year_item["attributed_contract_amount"] += Decimal(str(attributed_amount))
+                year_item["known_amount_count"] += 1
+            if member_count == 1:
+                year_item["sole_count"] += 1
+            elif member.get("supplier_role_name") in {"대표사", "주계약자", "대표업체"}:
+                year_item["consortium_lead_count"] += 1
+            else:
+                year_item["consortium_member_count"] += 1
+        annual_activity = []
+        for year in sorted(annual):
+            value = annual[year]
+            known_count = value.pop("known_amount_count")
+            event_count = value["award_event_count"]
+            annual_activity.append({
+                **value,
+                "attributed_contract_amount": _number(value["attributed_contract_amount"]),
+                "amount_completeness": (
+                    "complete" if known_count == event_count
+                    else "unknown" if known_count == 0
+                    else "partial"
+                ),
+            })
+        metrics[company_number] = {
+            "same_field_event_count": len(company_events),
+            "annual_activity": annual_activity,
+        }
+    return metrics
+
+
+def _organization_field_event_analysis(
+    rows: list[dict[str, Any]], notice: dict[str, Any], period_years: int,
+) -> dict[str, Any]:
+    """Unify award and contract rows, then derive explainable market metrics."""
+    awards: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    contracts: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        if row.get("source_kind") == "award":
+            key = tuple(str(row.get(name) or "") for name in (
+                "notice_number", "notice_order", "bid_classification_number", "rebid_number",
+            ))
+            event = awards.setdefault(key, {
+                "event_id": "award:" + ":".join(key),
+                "notice_id": row.get("bid_notice_id"),
+                "notice_name": row.get("notice_name"),
+                "notice_published_date": row.get("notice_published_date"),
+                "awarded_at": row.get("event_date"),
+                "award_date": row.get("event_date"),
+                "contract_date": None,
+                "activity_dates": [row.get("event_date")] if row.get("event_date") else [],
+                "amount": _number(row.get("event_amount")),
+                "award_amount": _number(row.get("event_amount")),
+                "contract_amount": None,
+                "project_types": sorted(_project_types(str(row.get("notice_name") or ""))),
+                "members": {}, "contract_ids": [], "source_kinds": {"award"},
+            })
+            event["members"][str(row["company_number"])] = {
+                "company_number": str(row["company_number"]),
+                "company_name": row.get("company_name"), "share_rate": None,
+                "supplier_role_name": "award_winner", "attributed_amount": None,
+                "attributed_at": None,
+            }
+        else:
+            notice_number = _canonical_contract_notice_number(row.get("notice_number"))
+            contract_key = (
+                f"notice:{notice_number}" if notice_number else str(
+                    row.get("original_contract_number") or row.get("unified_contract_number")
+                )
+            )
+            contracts.setdefault(contract_key, []).append(row)
+
+    award_keys_by_notice: dict[str, list[tuple[str, str, str, str]]] = {}
+    for key in awards:
+        award_keys_by_notice.setdefault(_canonical_contract_notice_number(key[0]), []).append(key)
+    merged_award_keys: set[tuple[str, str, str, str]] = set()
+    contract_only_count = 0
+    unattributed_contract_count = 0
+    for contract_key, contract_rows in contracts.items():
+        latest = max(contract_rows, key=lambda row: row.get("event_date") or date.min)
+        earliest = min(contract_rows, key=lambda row: row.get("event_date") or date.max)
+        first = latest
+        member_numbers = {str(row["company_number"]) for row in contract_rows}
+        candidates = award_keys_by_notice.get(
+            _canonical_contract_notice_number(first.get("notice_number")), [],
+        )
+        matching = [
+            key for key in candidates
+            if set(awards[key]["members"]) & member_numbers
+        ]
+        selected_key = matching[0] if len(matching) == 1 else (
+            candidates[0] if len(candidates) == 1 else None
+        )
+        if selected_key is not None:
+            event = awards[selected_key]
+            merged_award_keys.add(selected_key)
+        else:
+            event = {
+                "event_id": f"contract:{contract_key}",
+                "notice_id": first.get("bid_notice_id"),
+                "notice_name": first.get("notice_name"),
+                "notice_published_date": first.get("notice_published_date"),
+                "awarded_at": earliest.get("event_date"),
+                "award_date": None,
+                "contract_date": earliest.get("event_date"),
+                "activity_dates": sorted({
+                    row["event_date"] for row in contract_rows if row.get("event_date")
+                }),
+                "amount": _number(first.get("event_amount")),
+                "award_amount": None,
+                "contract_amount": _number(first.get("contract_amount")),
+                "project_types": sorted(_project_types(str(first.get("notice_name") or ""))),
+                "members": {}, "contract_ids": [], "source_kinds": set(),
+            }
+            awards[("contract", contract_key, "", "")] = event
+            contract_only_count += 1
+            if first.get("notice_number") and candidates:
+                unattributed_contract_count += 1
+        event["source_kinds"].add("contract")
+        event["contract_date"] = earliest.get("event_date")
+        if event.get("notice_published_date") is None:
+            event["notice_published_date"] = first.get("notice_published_date")
+        event["activity_dates"] = sorted(set(event.get("activity_dates") or []) | {
+            row["event_date"] for row in contract_rows if row.get("event_date")
+        })
+        event["contract_amount"] = _number(first.get("contract_amount"))
+        event["contract_ids"].extend(
+            str(row["unified_contract_number"]) for row in contract_rows
+            if row.get("unified_contract_number") not in event["contract_ids"]
+        )
+        event["amount"] = event.get("contract_amount") or event.get("award_amount")
+        for row in sorted(contract_rows, key=lambda value: value.get("event_date") or date.min):
+            share = _number(row.get("participation_share_rate"))
+            amount = row.get("contract_amount")
+            attributed = None
+            if row.get("contract_currency") == "KRW" and amount is not None:
+                if share is not None:
+                    attributed = _number(Decimal(str(amount)) * Decimal(str(share)) / Decimal("100"))
+                elif len(member_numbers) == 1:
+                    attributed = _number(amount)
+            member_number = str(row["company_number"])
+            existing_member = event["members"].get(member_number)
+            attributed_at = row.get("event_date")
+            if attributed_at is not None and existing_member is not None \
+                    and existing_member.get("attributed_at"):
+                attributed_at = min(existing_member["attributed_at"], attributed_at)
+            event["members"][member_number] = {
+                "company_number": str(row["company_number"]),
+                "company_name": row.get("company_name"), "share_rate": share,
+                "supplier_role_name": row.get("supplier_role_name"),
+                "attributed_amount": attributed,
+                # Attribute the final confirmed amount to the original contract
+                # year so amendments do not move one award event across years.
+                "attributed_at": attributed_at,
+            }
+
+    events = list(awards.values())
+    target_fields = _business_fields(str(notice.get("notice_name") or ""))
+    if "1468" in set(map(str, notice.get("industry_codes") or [])) \
+            and "시스템" in str(notice.get("notice_name") or ""):
+        target_fields.add("information_system")
+    target_projects = _project_types(str(notice.get("notice_name") or ""))
+    target_amount = notice.get("estimated_price") or notice.get("allocated_budget")
+    as_of = notice.get("as_of")
+    as_of_date = as_of.date() if isinstance(as_of, datetime) else as_of or date.today()
+    try:
+        period_start = as_of_date.replace(year=as_of_date.year - period_years)
+    except ValueError:
+        period_start = as_of_date.replace(month=2, day=28, year=as_of_date.year - period_years)
+
+    def is_field_event(event: dict[str, Any]) -> bool:
+        return bool(notice.get("include_all_fields")) or bool(
+            target_fields & _business_fields(str(event.get("notice_name") or ""))
+        )
+
+    field_events = [event for event in events if is_field_event(event)]
+    # A merged award event can have later confirmed-contract or amendment
+    # activity. Keep it in the requested operating-period population when any
+    # preserved activity falls in the window, while retaining the earliest
+    # award date for relationship history and first-award reporting.
+    recent_events = [
+        event for event in field_events
+        if any(
+            period_start <= activity_date < as_of_date
+            for activity_date in event.get("activity_dates") or []
+        )
+    ]
+    companies: dict[str, dict[str, Any]] = {}
+    for event in field_events:
+        event_projects = set(event["project_types"])
+        is_same_project = bool(target_projects & event_projects)
+        is_similar_amount = _amount_similarity(target_amount, event.get("amount"))[0] >= 0.5
+        for company_number, member in event["members"].items():
+            company = companies.setdefault(company_number, {
+                "company_number": company_number, "company_name": member.get("company_name"),
+                "events": [], "attributed_contract_amount": Decimal("0"),
+                "contract_amount_complete": True,
+            })
+            if member.get("company_name"):
+                company["company_name"] = member["company_name"]
+            company["events"].append((event, is_same_project, is_similar_amount))
+            if "contract" in event["source_kinds"]:
+                if member.get("attributed_amount") is None:
+                    company["contract_amount_complete"] = False
+                else:
+                    company["attributed_contract_amount"] += Decimal(str(member["attributed_amount"]))
+
+    company_metrics: dict[str, dict[str, Any]] = {}
+    for company_number, company in companies.items():
+        ordered = sorted(company["events"], key=lambda item: item[0].get("awarded_at") or date.min)
+        recent = [item for item in ordered if item[0] in recent_events]
+        activity_dates = [
+            activity_date for event, _, _ in ordered
+            for activity_date in event.get("activity_dates") or []
+        ]
+        years = sorted({activity_date.year for activity_date in activity_dates})
+        consecutive = 0
+        if years:
+            expected = years[-1]
+            for year in reversed(years):
+                if year != expected:
+                    break
+                consecutive += 1
+                expected -= 1
+        representatives = sorted(
+            recent,
+            key=lambda item: (
+                int(item[1]) + int(item[2]), int(item[1]), int(item[2]),
+                item[0].get("awarded_at") or date.min,
+            ), reverse=True,
+        )[:3]
+        annual: dict[int, dict[str, Any]] = {}
+        for event, _, _ in recent:
+            member = event["members"][company_number]
+            annualized_at = member.get("attributed_at") or event.get("awarded_at")
+            if annualized_at is None:
+                continue
+            member_count = len(event["members"])
+            year_item = annual.setdefault(annualized_at.year, {
+                "year": annualized_at.year,
+                "award_event_count": 0,
+                "attributed_contract_amount": Decimal("0"),
+                "known_amount_count": 0,
+                "sole_count": 0,
+                "consortium_lead_count": 0,
+                "consortium_member_count": 0,
+            })
+            year_item["award_event_count"] += 1
+            attributed_amount = member.get("attributed_amount")
+            if attributed_amount is not None:
+                year_item["attributed_contract_amount"] += Decimal(str(attributed_amount))
+                year_item["known_amount_count"] += 1
+            if member_count == 1:
+                year_item["sole_count"] += 1
+            elif member.get("supplier_role_name") in {"대표사", "주계약자", "대표업체"}:
+                year_item["consortium_lead_count"] += 1
+            else:
+                year_item["consortium_member_count"] += 1
+
+        annual_activity = []
+        for year in sorted(annual):
+            year_item = annual[year]
+            known_count = year_item.pop("known_amount_count")
+            event_count = year_item["award_event_count"]
+            annual_activity.append({
+                **year_item,
+                "attributed_contract_amount": _number(
+                    year_item["attributed_contract_amount"]
+                ),
+                "amount_completeness": (
+                    "complete" if known_count == event_count
+                    else "unknown" if known_count == 0
+                    else "partial"
+                ),
+            })
+        company_metrics[company_number] = {
+            "same_field_event_count": len(recent),
+            "same_project_type_event_count": sum(1 for _, same, _ in recent if same),
+            "similar_amount_event_count": sum(1 for _, _, similar in recent if similar),
+            "first_award_date": min(activity_dates) if activity_dates else None,
+            "latest_award_date": max(activity_dates) if activity_dates else None,
+            "active_years": years,
+            "active_year_count": len(years),
+            "consecutive_active_years": consecutive,
+            "annual_activity": annual_activity,
+            "same_field_contract_amount": _number(company["attributed_contract_amount"]),
+            "same_field_contract_amount_complete": company["contract_amount_complete"],
+            "representative_notices": [{
+                "notice_id": event.get("notice_id"), "notice_name": event.get("notice_name"),
+                "awarded_at": event.get("awarded_at"), "amount": event.get("amount"),
+                "project_type": sorted(event["project_types"])[0] if event["project_types"] else None,
+                "is_similar_amount": similar,
+            } for event, _, similar in representatives],
+        }
+
+    recent_company_events: dict[str, list[dict[str, Any]]] = {}
+    credit_by_company: dict[str, Decimal] = {}
+    unknown_share_event_count = 0
+    for event in recent_events:
+        members = list(event["members"].values())
+        known_shares = [member.get("share_rate") for member in members]
+        use_shares = bool(members) and all(share is not None for share in known_shares)
+        if len(members) > 1 and not use_shares:
+            unknown_share_event_count += 1
+        share_total = sum((Decimal(str(value)) for value in known_shares if value is not None), Decimal("0"))
+        for member in members:
+            number = member["company_number"]
+            recent_company_events.setdefault(number, []).append(event)
+            credit = (
+                Decimal(str(member["share_rate"])) / share_total
+                if use_shares and share_total else Decimal("1") / Decimal(str(len(members)))
+            )
+            credit_by_company[number] = credit_by_company.get(number, Decimal("0")) + credit
+    counts = sorted((len(value) for value in recent_company_events.values()), reverse=True)
+    total = len(recent_events)
+    ranked_credits = sorted(
+        credit_by_company.items(), key=lambda item: (-item[1], item[0])
+    )
+    top_companies = []
+    for rank, (company_number, credit) in enumerate(ranked_credits, start=1):
+        share = round(float(credit / total), 9) if total else None
+        metrics = company_metrics[company_number]
+        metrics.update({
+            "attributed_award_event_count": _number(credit),
+            "market_share": share,
+            "market_share_rank": rank,
+        })
+        top_companies.append({
+            "company_number": company_number,
+            "company_name": companies[company_number].get("company_name"),
+            "attributed_award_event_count": _number(credit),
+            "market_share": share,
+            "rank": rank,
+        })
+    def top_share(size: int) -> float | None:
+        if not total:
+            return None
+        return round(sum(item["market_share"] for item in top_companies[:size]), 9)
+
+    distribution = {
+        "one": sum(value == 1 for value in counts),
+        "two_to_three": sum(2 <= value <= 3 for value in counts),
+        "four_to_nine": sum(4 <= value <= 9 for value in counts),
+        "ten_or_more": sum(value >= 10 for value in counts),
+    }
+    recent_year_floor = as_of_date.year - 2
+    recent_years = []
+    entrant_items = []
+    first_event_by_company = {
+        number: min(values, key=lambda event: event.get("awarded_at") or date.max)
+        for number, values in ((number, [item[0] for item in company["events"]])
+                               for number, company in companies.items())
+    }
+    for year in range(recent_year_floor, as_of_date.year + 1):
+        year_events = [event for event in field_events if event.get("awarded_at") and event["awarded_at"].year == year]
+        new_events = []
+        new_companies = set()
+        for event in year_events:
+            event_new = False
+            for number in event["members"]:
+                if first_event_by_company.get(number) is event:
+                    new_companies.add(number)
+                    event_new = True
+                    if not any(item["company_number"] == number for item in entrant_items):
+                        entrant_items.append({
+                            "company_number": number,
+                            "company_name": companies[number].get("company_name"),
+                            "first_award_date": event.get("awarded_at"),
+                            "representative_notice_id": event.get("notice_id"),
+                            "classification": "first_observed",
+                        })
+            if event_new:
+                new_events.append(event)
+        recent_years.append({
+            "year": year,
+            "incumbent_award_count": len(year_events) - len(new_events),
+            "new_entrant_award_count": len(new_events),
+            "new_entrant_company_count": len(new_companies),
+        })
+
+    observation_dates = [event["awarded_at"] for event in events if event.get("awarded_at")]
+    missing_reasons = []
+    if not recent_events:
+        missing_reasons.append("no_matching_award_events")
+    if unattributed_contract_count:
+        missing_reasons.append("ambiguous_contract_to_award_attribution")
+    if unknown_share_event_count:
+        missing_reasons.append("joint_supplier_share_missing_equal_split_applied")
+    return {
+        "all_events": events,
+        "events": recent_events,
+        "company_metrics": company_metrics,
+        "event_deduplication": {
+            "award_row_count": sum(row.get("source_kind") == "award" for row in rows),
+            "contract_row_count": len(contracts),
+            "merged_award_contract_count": len(merged_award_keys),
+            "contract_only_event_count": contract_only_count,
+            "award_event_count": len(recent_events),
+            "unattributed_contract_count": unattributed_contract_count,
+        },
+        "market_structure": {
+            "award_event_count": total,
+            "company_count": len(recent_company_events),
+            "repeat_company_count": sum(value >= 2 for value in counts),
+            "single_award_company_count": sum(value == 1 for value in counts),
+            "similar_amount_company_count": sum(
+                metrics["similar_amount_event_count"] > 0 for metrics in company_metrics.values()
+            ),
+            "top_1_share": top_share(1), "top_3_share": top_share(3),
+            "top_5_share": top_share(5), "company_distribution": distribution,
+            "top_companies": top_companies[:5],
+            "market_share_completeness": (
+                "partial" if unknown_share_event_count else "complete"
+            ),
+            "unknown_share_event_count": unknown_share_event_count,
+            "unknown_share_policy": "equal_split",
+            "validation": {
+                "attributed_event_count_sum": _number(sum(credit_by_company.values(), Decimal("0"))),
+                "market_share_sum": round(sum(
+                    item["market_share"] for item in top_companies
+                ), 9),
+                "award_event_count": total,
+                "balanced": abs(
+                    sum(credit_by_company.values(), Decimal("0")) - Decimal(str(total))
+                ) <= Decimal("0.000000001"),
+            },
+            "joint_award_policy": {
+                "event_counting": "one_event_per_award",
+                "company_presence": "full_presence",
+                "market_share_attribution": "confirmed_share_else_equal_split",
+                "unknown_share_event_count": unknown_share_event_count,
+            },
+        },
+        "market_entry": {
+            "definition": "first_observed_organization_field_award",
+            "classification": "first_observed",
+            "observation_started_at": min(observation_dates) if observation_dates else None,
+            "recent_new_entrant_count": len(entrant_items),
+            "recent_years": recent_years,
+            "companies": sorted(entrant_items, key=lambda item: item["first_award_date"], reverse=True),
+        },
+        "data_completeness": {
+            "status": "partial" if missing_reasons else "complete",
+            "missing_reasons": missing_reasons,
+        },
+    }
 
 
 def _business_fields(value: str) -> set[str]:
@@ -1277,6 +2885,223 @@ ORDER BY (n.demand_organization_code=%(organization_code)s) DESC,
                     t.normalized_title) DESC
 LIMIT %(candidate_limit)s
 """
+
+_COMPANY_SIMILAR_PROJECT_REFERENCE_QUERY = """
+SELECT n.notice_number || ':' || n.notice_order AS bid_notice_id,
+       n.notice_name, n.work_type, n.estimated_price, n.allocated_budget,
+       LEAST(now(),COALESCE(n.bid_deadline_at,now())) AS as_of,
+       COALESCE(licenses.industry_codes,ARRAY[]::text[]) AS industry_codes,
+       COALESCE(licenses.industry_names,'{}'::jsonb) AS industry_names
+FROM public_procurement.bid_notices n
+LEFT JOIN LATERAL (
+    SELECT array_agg(DISTINCT substring(l.license_restriction_name FROM '/([0-9]{4})$')
+                     ORDER BY substring(l.license_restriction_name FROM '/([0-9]{4})$'))
+             FILTER (WHERE l.license_restriction_name ~ '/[0-9]{4}$') AS industry_codes,
+           jsonb_object_agg(
+               substring(l.license_restriction_name FROM '/([0-9]{4})$'),
+               regexp_replace(l.license_restriction_name,'/[0-9]{4}$','')
+           ) FILTER (WHERE l.license_restriction_name ~ '/[0-9]{4}$') AS industry_names
+    FROM public_procurement.bid_notice_license_restrictions l
+    WHERE l.notice_number=n.notice_number AND l.notice_order=n.notice_order
+) licenses ON true
+WHERE n.notice_number=%(notice_number)s AND n.notice_order=%(notice_order)s
+"""
+
+_COMPANY_SIMILAR_PROJECT_EXPERIENCE_QUERY = """
+WITH reference AS (
+    SELECT n.work_type,LEAST(now(),COALESCE(n.bid_deadline_at,now())) AS as_of,
+           public_procurement.normalize_bid_notice_title(n.notice_name) AS normalized_title,
+           ARRAY(
+               SELECT DISTINCT substring(l.license_restriction_name FROM '/([0-9]{4})$')
+               FROM public_procurement.bid_notice_license_restrictions l
+               WHERE l.notice_number=n.notice_number AND l.notice_order=n.notice_order
+                 AND l.license_restriction_name ~ '/[0-9]{4}$'
+           )::text[] AS industry_codes
+    FROM public_procurement.bid_notices n
+    WHERE n.notice_number=%(notice_number)s AND n.notice_order=%(notice_order)s
+), company_awards AS MATERIALIZED (
+    SELECT DISTINCT ON (a.notice_number,a.notice_order)
+           a.notice_number,a.notice_order,
+           COALESCE(a.final_award_date,a.opening_at::date) AS award_date,
+           a.winning_amount
+    FROM public_procurement.bid_awards a
+    WHERE a.winner_business_registration_number=%(company_number)s
+    ORDER BY a.notice_number,a.notice_order,
+             COALESCE(a.final_award_date,a.opening_at::date) DESC NULLS LAST
+), company_contracts AS MATERIALIZED (
+    SELECT DISTINCT ON (normalized_notice_number)
+           normalized_notice_number,c.concluded_date AS contract_date,
+           c.current_contract_amount AS contract_amount,
+           cs.participation_share_rate,cs.supplier_role_name,
+           (SELECT count(*) FROM public_procurement.contract_suppliers all_cs
+            WHERE all_cs.unified_contract_number=c.unified_contract_number) AS supplier_count
+    FROM public_procurement.contract_suppliers cs
+    JOIN public_procurement.contracts c USING (unified_contract_number)
+    CROSS JOIN LATERAL (
+        SELECT CASE
+          WHEN c.notice_number ~ '^[0-9]{13}$' AND right(c.notice_number,2)='00'
+            THEN left(c.notice_number,length(c.notice_number)-2)
+          ELSE c.notice_number
+        END AS normalized_notice_number
+    ) normalized
+    WHERE cs.business_registration_number=%(company_number)s
+      AND COALESCE(c.notice_number,'')<>''
+    ORDER BY normalized_notice_number,c.concluded_date DESC NULLS LAST
+), company_notice_keys AS MATERIALIZED (
+    SELECT notice_number,notice_order FROM company_awards
+    UNION
+    SELECT normalized_notice_number,'000'::text FROM company_contracts
+), candidates AS MATERIALIZED (
+    SELECT n.*
+    FROM company_notice_keys k
+    JOIN public_procurement.bid_notices n
+      ON n.notice_number=k.notice_number AND n.notice_order=k.notice_order
+    CROSS JOIN reference r
+    WHERE (n.notice_number,n.notice_order)<>(%(notice_number)s,%(notice_order)s)
+      AND n.work_type=r.work_type
+      AND n.notice_published_at >= r.as_of - (%(period_years)s * interval '1 year')
+      AND n.notice_published_at < r.as_of
+      AND EXISTS (
+          SELECT 1 FROM public_procurement.bid_notice_license_restrictions l
+          WHERE l.notice_number=n.notice_number AND l.notice_order=n.notice_order
+            AND l.license_restriction_name ~ '/[0-9]{4}$'
+            AND substring(l.license_restriction_name FROM '/([0-9]{4})$')=ANY(r.industry_codes)
+      )
+)
+SELECT n.notice_number || ':' || n.notice_order AS bid_notice_id,
+       n.notice_name, n.notice_published_at::date AS notice_published_date,
+       n.work_type, n.estimated_price, n.allocated_budget,
+       n.demand_organization_code, n.demand_organization_name,
+       licenses.industry_codes,
+       award.award_date, award.winning_amount,
+       contract.contract_date, contract.contract_amount,
+       contract.participation_share_rate, contract.supplier_role_name,
+       contract.supplier_count,
+       similarity(public_procurement.normalize_bid_notice_title(n.notice_name),
+                  r.normalized_title) AS title_trigram_score
+FROM candidates n
+CROSS JOIN reference r
+LEFT JOIN company_awards award USING (notice_number,notice_order)
+LEFT JOIN company_contracts contract
+  ON contract.normalized_notice_number=n.notice_number
+LEFT JOIN LATERAL (
+    SELECT array_agg(DISTINCT substring(l.license_restriction_name FROM '/([0-9]{4})$')
+                     ORDER BY substring(l.license_restriction_name FROM '/([0-9]{4})$'))
+           AS industry_codes
+    FROM public_procurement.bid_notice_license_restrictions l
+    WHERE l.notice_number=n.notice_number AND l.notice_order=n.notice_order
+      AND l.license_restriction_name ~ '/[0-9]{4}$'
+) licenses ON true
+WHERE award.award_date IS NOT NULL OR contract.contract_date IS NOT NULL
+ORDER BY COALESCE(contract.contract_date,award.award_date,n.notice_published_at::date) DESC
+"""
+
+_COMPANY_SIMILAR_PROJECT_METRICS_QUERY = """
+WITH reference AS (
+    SELECT n.notice_name AS reference_notice_name,n.work_type,
+           LEAST(now(),COALESCE(n.bid_deadline_at,now())) AS as_of,
+           COALESCE(n.estimated_price,n.allocated_budget)::numeric AS reference_amount,
+           ARRAY(
+               SELECT DISTINCT substring(l.license_restriction_name FROM '/([0-9]{4})$')
+               FROM public_procurement.bid_notice_license_restrictions l
+               WHERE l.notice_number=n.notice_number AND l.notice_order=n.notice_order
+                 AND l.license_restriction_name ~ '/[0-9]{4}$'
+           )::text[] AS industry_codes
+    FROM public_procurement.bid_notices n
+    WHERE n.notice_number=%(notice_number)s AND n.notice_order=%(notice_order)s
+), company_awards AS MATERIALIZED (
+    SELECT DISTINCT ON (a.winner_business_registration_number,a.notice_number,a.notice_order)
+           a.winner_business_registration_number AS company_number,
+           a.notice_number,a.notice_order,a.winning_amount
+    FROM public_procurement.bid_awards a
+    CROSS JOIN reference r
+    WHERE a.winner_business_registration_number=ANY(%(company_numbers)s)
+      AND a.work_type=r.work_type
+      AND a.opening_at >= r.as_of - (%(period_years)s * interval '1 year')
+      AND a.opening_at < r.as_of
+    ORDER BY a.winner_business_registration_number,a.notice_number,a.notice_order,
+             COALESCE(a.final_award_date,a.opening_at::date) DESC NULLS LAST
+), company_contracts AS MATERIALIZED (
+    SELECT DISTINCT ON (cs.business_registration_number,normalized_notice_number)
+           cs.business_registration_number AS company_number,
+           normalized_notice_number,c.current_contract_amount AS contract_amount
+    FROM public_procurement.contract_suppliers cs
+    JOIN public_procurement.contracts c USING (unified_contract_number)
+    CROSS JOIN reference r
+    CROSS JOIN LATERAL (
+        SELECT CASE
+          WHEN c.notice_number ~ '^[0-9]{13}$' AND right(c.notice_number,2)='00'
+            THEN left(c.notice_number,length(c.notice_number)-2)
+          ELSE c.notice_number
+        END AS normalized_notice_number
+    ) normalized
+    WHERE cs.business_registration_number=ANY(%(company_numbers)s)
+      AND COALESCE(c.notice_number,'')<>''
+      AND c.contract_type=r.work_type
+      AND c.concluded_date >= r.as_of::date - (%(period_years)s * interval '1 year')
+      AND c.concluded_date < r.as_of::date
+    ORDER BY cs.business_registration_number,normalized_notice_number,
+             c.concluded_date DESC NULLS LAST
+), company_notice_keys AS (
+    SELECT company_number,notice_number,notice_order FROM company_awards
+    UNION
+    SELECT company_number,normalized_notice_number,'000'::text FROM company_contracts
+), eligible_events AS (
+    SELECT k.company_number,n.notice_number,n.notice_order,n.notice_name,
+           r.reference_notice_name,
+           COALESCE(c.contract_amount,a.winning_amount,n.estimated_price,n.allocated_budget)::numeric
+             AS event_amount,r.reference_amount
+    FROM company_notice_keys k
+    JOIN public_procurement.bid_notices n
+      ON n.notice_number=k.notice_number AND n.notice_order=k.notice_order
+    CROSS JOIN reference r
+    LEFT JOIN company_awards a
+      ON a.company_number=k.company_number AND a.notice_number=n.notice_number
+     AND a.notice_order=n.notice_order
+    LEFT JOIN company_contracts c
+      ON c.company_number=k.company_number AND c.normalized_notice_number=n.notice_number
+    WHERE (n.notice_number,n.notice_order)<>(%(notice_number)s,%(notice_order)s)
+      AND n.work_type=r.work_type
+      AND n.notice_published_at >= r.as_of - (%(period_years)s * interval '1 year')
+      AND n.notice_published_at < r.as_of
+      AND EXISTS (
+          SELECT 1 FROM public_procurement.bid_notice_license_restrictions l
+          WHERE l.notice_number=n.notice_number AND l.notice_order=n.notice_order
+            AND l.license_restriction_name ~ '/[0-9]{4}$'
+            AND substring(l.license_restriction_name FROM '/([0-9]{4})$')=ANY(r.industry_codes)
+      )
+)
+, scored AS (
+    SELECT company_number,
+           similarity(
+               public_procurement.normalize_bid_notice_title(notice_name),
+               public_procurement.normalize_bid_notice_title(reference_notice_name)
+           ) >= 0.08 AS title_related,
+           (
+             (reference_notice_name~'(구축|개발|도입)' AND notice_name~'(구축|개발|도입)') OR
+             (reference_notice_name~'(개선|고도화|재구축)' AND notice_name~'(개선|고도화|재구축)') OR
+             (reference_notice_name~'(유지보수|유지관리|운영)' AND notice_name~'(유지보수|유지관리|운영)') OR
+             (reference_notice_name~'(컨설팅|감리|설계)' AND notice_name~'(컨설팅|감리|설계)')
+           ) AS project_type_match,
+           CASE WHEN reference_amount IS NOT NULL AND reference_amount>0
+                  AND event_amount IS NOT NULL AND event_amount>0
+                THEN least(reference_amount,event_amount)/greatest(reference_amount,event_amount)>=0.5
+                ELSE false END AS is_similar_amount
+    FROM eligible_events
+)
+SELECT company_number,count(*) AS candidate_count,
+       count(*) FILTER (WHERE title_related OR project_type_match) AS event_count,
+       count(*) FILTER (WHERE title_related AND project_type_match) AS strong_event_count,
+       count(*) FILTER (WHERE title_related<>project_type_match) AS limited_event_count,
+       count(*) FILTER (WHERE NOT title_related AND NOT project_type_match)
+         AS reference_only_event_count,
+       count(*) FILTER (
+           WHERE (title_related OR project_type_match) AND is_similar_amount
+       ) AS similar_amount_event_count
+FROM scored
+GROUP BY company_number
+"""
+
 _RELEVANT_COMPANY_ACTIVITIES_QUERY = """
 WITH similar_notices AS (
     SELECT * FROM jsonb_to_recordset(%(similar_notices)s::jsonb)
@@ -1457,6 +3282,65 @@ SELECT * FROM award_activities
 UNION ALL SELECT * FROM contract_activities
 ORDER BY company_number, activity_date DESC NULLS LAST, bid_notice_id,
          bid_classification_number NULLS LAST, rebid_number NULLS LAST
+"""
+
+
+_ORGANIZATION_FIELD_EVENT_ROWS_QUERY = """
+WITH organization_awards AS (
+    SELECT 'award'::text AS source_kind,
+           a.notice_number, a.notice_order, a.bid_classification_number,
+           a.rebid_number, NULL::text AS unified_contract_number,
+           NULL::text AS original_contract_number,
+           a.notice_number || ':' || a.notice_order AS bid_notice_id,
+           COALESCE(n.notice_name,a.notice_name) AS notice_name,
+           COALESCE(a.final_award_date,a.opening_at::date) AS event_date,
+           a.winning_amount AS event_amount,
+           a.winner_business_registration_number AS company_number,
+           a.winner_name AS company_name,
+           NULL::numeric AS participation_share_rate,
+           NULL::text AS supplier_role_name,
+           n.notice_published_at::date AS notice_published_date,
+           NULL::text AS contract_period_text,
+           NULL::numeric AS contract_amount,
+           NULL::text AS contract_currency
+    FROM public_procurement.bid_awards a
+    LEFT JOIN public_procurement.bid_notices n
+      ON n.notice_number=a.notice_number AND n.notice_order=a.notice_order
+    WHERE a.demand_organization_code=%(organization_code)s
+      AND (%(work_type)s::text IS NULL OR a.work_type=%(work_type)s)
+      AND COALESCE(a.final_award_date,a.opening_at::date)<%(as_of)s::date
+      AND a.winner_business_registration_number IS NOT NULL
+), organization_contracts AS (
+    SELECT 'contract'::text AS source_kind,
+           NULLIF(c.notice_number,'') AS notice_number,
+           NULL::text AS notice_order, NULL::text AS bid_classification_number,
+           NULL::text AS rebid_number, c.unified_contract_number,
+           COALESCE(NULLIF(c.confirmed_contract_number,''),
+                    NULLIF(c.contract_reference_number,''),c.unified_contract_number)
+             AS original_contract_number,
+           CASE WHEN COALESCE(c.notice_number,'')<>'' THEN c.notice_number || ':000'
+                ELSE 'contract:' || c.unified_contract_number END AS bid_notice_id,
+           c.contract_name AS notice_name, c.concluded_date AS event_date,
+           c.current_contract_amount AS event_amount,
+           cs.business_registration_number AS company_number,
+           cs.supplier_name AS company_name,
+           cs.participation_share_rate, cs.supplier_role_name,
+           NULL::date AS notice_published_date,
+           c.contract_period_text,
+           c.current_contract_amount AS contract_amount,
+           COALESCE(c.current_contract_amount_currency,'KRW') AS contract_currency
+    FROM public_procurement.contract_demand_organizations d
+    JOIN public_procurement.contracts c USING (unified_contract_number)
+    JOIN public_procurement.contract_suppliers cs USING (unified_contract_number)
+    WHERE d.organization_code=%(organization_code)s
+      AND (%(work_type)s::text IS NULL OR c.contract_type=%(work_type)s)
+      AND c.concluded_date<%(as_of)s::date
+      AND cs.business_registration_number IS NOT NULL
+)
+SELECT * FROM organization_awards
+UNION ALL
+SELECT * FROM organization_contracts
+ORDER BY event_date,source_kind,notice_number,unified_contract_number,company_number
 """
 
 
