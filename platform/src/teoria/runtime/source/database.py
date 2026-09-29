@@ -63,6 +63,10 @@ class DatabaseSourceExecutor:
                     f"field '{field}' is not declared on relation '{relation_id}'"
                 )
             if operator not in self.OPERATORS:
+                if operator == "contains":
+                    conditions.append(sql.SQL("%s = ANY({})").format(sql.Identifier(field)))
+                    parameters.append(item["value"])
+                    continue
                 if operator != "in":
                     raise DatabaseSourceExecutionError(f"unsupported database operator '{operator}'")
                 values = item["value"]

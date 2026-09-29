@@ -102,6 +102,13 @@ class CapabilityRunner:
         capability = catalog.capabilities.get(capability_id)
         if capability is None:
             raise CapabilityExecutionError("unknown_capability", f"unknown capability '{capability_id}'", capability_id=capability_id)
+        if capability.lifecycle.status == "deprecated":
+            raise CapabilityExecutionError(
+                "deprecated_capability",
+                f"capability '{capability_id}' is deprecated; replacements: "
+                f"{', '.join(capability.lifecycle.replacement_ids) or 'none'}",
+                capability_id=capability_id,
+            )
         try:
             async with asyncio.timeout(self.timeout_seconds):
                 return await self._run(catalog, capability_id, inputs, include_raw_responses=include_raw_responses)
@@ -163,6 +170,15 @@ class CapabilityRunner:
                 return await execute_company_similar_project_experience(
                     catalog, capability_id, inputs,
                 )
+            if capability.processor == "market_context.analyze_organization_procurement_profile":
+                from teoria.runtime.market_context.processor import execute_organization_procurement_profile
+                return await execute_organization_procurement_profile(catalog, capability_id, inputs)
+            if capability.processor == "market_context.analyze_company_procurement_profile":
+                from teoria.runtime.market_context.processor import execute_company_procurement_profile
+                return await execute_company_procurement_profile(catalog, capability_id, inputs)
+            if capability.processor == "market_context.get_bid_notice_relationship_context":
+                from teoria.runtime.market_context.processor import execute_bid_notice_relationship_context
+                return await execute_bid_notice_relationship_context(catalog, capability_id, inputs)
             raise CapabilityExecutionError(
                 "unknown_capability_processor",
                 f"unknown capability processor '{capability.processor}'",

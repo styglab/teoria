@@ -123,6 +123,22 @@ class RegistryValidator:
             if path.stem != capability.id:
                 diagnostics.append(Diagnostic("capability_filename_mismatch", f"filename must match capability id '{capability.id}.yaml'", path, location="capability.id"))
 
+            for index, replacement_id in enumerate(capability.lifecycle.replacement_ids):
+                replacement = catalog.capabilities.get(replacement_id)
+                location = f"capability.lifecycle.replacement_ids.{index}"
+                if replacement is None:
+                    diagnostics.append(Diagnostic(
+                        "unknown_replacement_capability",
+                        f"unknown replacement capability '{replacement_id}'", path,
+                        location=location,
+                    ))
+                elif replacement.lifecycle.status != "active":
+                    diagnostics.append(Diagnostic(
+                        "deprecated_replacement_capability",
+                        f"replacement capability '{replacement_id}' is not active", path,
+                        location=location,
+                    ))
+
             for effect_name in ("reads", "produces", "creates", "updates"):
                 for index, reference in enumerate(getattr(capability.effects, effect_name)):
                     location = f"capability.effects.{effect_name}.{index}"

@@ -115,6 +115,11 @@ def normalize_bid_notice(record: RawProviderRecord) -> tuple[dict[str, Any], lis
         "demand_organization_name": _text(value.get("dminsttNm")),
         "bid_method_name": _text(value.get("bidMethdNm")),
         "contract_method_name": _text(value.get("cntrctCnclsMthdNm")),
+        "procurement_classification_number": _text(value.get("pubPrcrmntClsfcNo")),
+        "procurement_classification_name": _text(value.get("pubPrcrmntClsfcNm")),
+        "procurement_large_classification_name": _text(value.get("pubPrcrmntLrgClsfcNm")),
+        "procurement_middle_classification_name": _text(value.get("pubPrcrmntMidClsfcNm")),
+        "purchase_items": _purchase_items(value.get("purchsObjPrdctList")),
         "estimated_price": _decimal(value.get("presmptPrce")),
         "allocated_budget": _decimal(value.get("asignBdgtAmt") or value.get("bdgtAmt")),
         "detail_url": _text(value.get("bidNtceDtlUrl")),
@@ -128,6 +133,26 @@ def normalize_bid_notice(record: RawProviderRecord) -> tuple[dict[str, Any], lis
         "source_payload": value,
     }
     return notice, _documents(value, notice_number, notice_order)
+
+
+def _purchase_items(value: Any) -> list[dict[str, str | None]] | None:
+    """Preserve PPS purchase-object entries without inventing missing fields."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    items = []
+    for raw_item in text.strip("[]").split(","):
+        parts = [part.strip() for part in raw_item.split("^")]
+        if not any(parts):
+            continue
+        if len(parts) >= 3:
+            sequence, code, name = parts[0], parts[1], "^".join(parts[2:])
+        elif len(parts) == 2:
+            sequence, code, name = None, parts[0], parts[1]
+        else:
+            sequence, code, name = None, None, parts[0]
+        items.append({"sequence": sequence or None, "code": code or None, "name": name or None})
+    return items or None
 
 
 def normalize_license_restriction(record: RawProviderRecord) -> dict[str, Any]:

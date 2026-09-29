@@ -43,7 +43,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert assessment["kind"] == "compute"
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.09.28.18"
+    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.09.29.16"
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -52,7 +52,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.09.28.18"
+    assert response.json()["registry"]["version"] == "2026.09.29.16"
     assert runner.call[0] == "search_public_procurement_contracts"
     assert runner.call[1]["concluded_date_from"].isoformat() == "2026-01-01"
 
@@ -70,6 +70,38 @@ def test_runtime_api_rejects_invalid_capability_input() -> None:
     )
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "invalid_capability_input"
+
+
+def test_runtime_api_hides_and_rejects_deprecated_capabilities() -> None:
+    app = create_runtime_app(
+        settings=Settings(runtime_api_token="test-token"),
+        catalog=RegistryLoader(REGISTRIES).load(),
+        runner=CapturingRunner(),
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer test-token"}
+
+    discovered = {
+        item["id"] for item in client.get(
+            "/v1/capabilities", headers=headers,
+        ).json()["capabilities"]
+    }
+    assert "analyze_bid_organization_field_companies" not in discovered
+    assert "find_bid_relevant_companies" not in discovered
+    assert "find_similar_bid_notices" not in discovered
+
+    response = client.post(
+        "/v1/capabilities/find_similar_bid_notices:execute",
+        headers=headers,
+        json={"inputs": {"bid_notice_id": "R26TEST:000"}},
+    )
+    assert response.status_code == 410
+    assert response.json()["detail"] == {
+        "code": "deprecated_capability",
+        "message": "find_similar_bid_notices",
+        "replacement_ids": ["get_company_similar_project_experience"],
+        "sunset_at": None,
+    }
 
 
 def test_bid_notice_search_discovery_exposes_pagination_and_sort_contract() -> None:
@@ -93,6 +125,9 @@ def test_bid_notice_search_discovery_exposes_pagination_and_sort_contract() -> N
     assert properties["notice_status"]["default"] == "active"
     assert properties["notice_organization_code"]["type"] == "string"
     assert properties["demand_organization_code"]["type"] == "string"
+    assert properties["large_category"]["type"] == "string"
+    assert properties["middle_category"]["type"] == "string"
+    assert properties["field_code"]["type"] == "string"
     assert properties["bid_statuses"] == {
         "type": "array",
         "items": {

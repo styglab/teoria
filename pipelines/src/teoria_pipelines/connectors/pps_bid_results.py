@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +18,12 @@ from teoria_provider.schema import ProviderDefinition
 
 from teoria_pipelines.connectors.pps_contracts import ConnectorResponseError, _resolve
 from teoria_pipelines.loader import PipelineLoader
-from teoria_pipelines.models import CollectionWindow, ExtractedBatch, RawProviderRecord
+from teoria_pipelines.models import (
+    CollectionWindow,
+    ExtractedBatch,
+    OpeningResultBatch,
+    RawProviderRecord,
+)
 
 
 AWARD_OPERATIONS = [
@@ -26,13 +32,15 @@ AWARD_OPERATIONS = [
     "list_service_bid_awards",
     "list_foreign_bid_awards",
 ]
+LOGGER = logging.getLogger(__name__)
 
 
 class PPSBidResultClient:
     def __init__(self, definition: ProviderDefinition, *, path: Path,
                  executor: ProviderExecutor | None = None, page_size: int = 100,
                  max_pages: int = 1000, opening_concurrency: int = 8,
-                 opening_requests_per_second: float = 4.0) -> None:
+                 opening_requests_per_second: float = 4.0,
+                 opening_request_timeout_seconds: float = 60.0) -> None:
         self.definition = definition
         self.path = path
         self.executor = executor or ProviderExecutor()
@@ -42,8 +50,11 @@ class PPSBidResultClient:
             raise ValueError("opening_concurrency must be positive")
         if opening_requests_per_second <= 0:
             raise ValueError("opening_requests_per_second must be positive")
+        if opening_request_timeout_seconds <= 0:
+            raise ValueError("opening_request_timeout_seconds must be positive")
         self.opening_concurrency = opening_concurrency
         self.opening_requests_per_second = opening_requests_per_second
+        self.opening_request_timeout_seconds = opening_request_timeout_seconds
         self._opening_rate_lock = asyncio.Lock()
         self._next_opening_request_at = 0.0
         self._opening_rate_limiter_active = False
@@ -65,22 +76,25 @@ class PPSBidResultClient:
         })
 
     async def fetch_opening_results(self, execution_id: UUID, window: CollectionWindow,
-                                    award_records: Iterable[RawProviderRecord]) -> ExtractedBatch:
-        keys = sorted({
+                                    award_records: Iterable[RawProviderRecord]) -> OpeningResultBatch:
+        awards_by_key = {
             (
                 str(record.payload.get("bidNtceNo") or "").strip(),
                 str(record.payload.get("bidNtceOrd") or "").strip(),
                 str(record.payload.get("bidClsfcNo") or "").strip(),
                 str(record.payload.get("rbidNo") or "").strip(),
-            )
+            ): record
             for record in award_records if record.operation_id in AWARD_OPERATIONS
-        })
+        }
+        keys = sorted(awards_by_key)
         semaphore = asyncio.Semaphore(self.opening_concurrency)
 
-        async def fetch_one(key: tuple[str, str, str, str]) -> ExtractedBatch:
+        async def fetch_one(
+            key: tuple[str, str, str, str]
+        ) -> tuple[tuple[str, str, str, str], ExtractedBatch | None]:
             notice_number, notice_order, classification_number, rebid_number = key
             if not notice_number:
-                return ExtractedBatch(execution_id=execution_id, window=window)
+                return key, None
             query = {"bidNtceNo": notice_number}
             if notice_order:
                 query["bidNtceOrd"] = notice_order
@@ -89,30 +103,51 @@ class PPSBidResultClient:
             if rebid_number:
                 query["rbidNo"] = rebid_number
             async with semaphore:
-                for attempt in range(5):
-                    try:
-                        return await self._fetch_pages(
-                            execution_id, window, "list_completed_opening_results", query
-                        )
-                    except ProviderExecutionError as exc:
-                        if exc.http_status != 429 or attempt == 4:
-                            raise
-                        delay = 2 ** (attempt + 1)
-                        await self._penalize_opening_rate(delay)
-                        await asyncio.sleep(delay)
-            raise RuntimeError("opening result retry loop exhausted")
+                try:
+                    async with asyncio.timeout(self.opening_request_timeout_seconds):
+                        for attempt in range(5):
+                            try:
+                                batch = await self._fetch_pages(
+                                    execution_id, window, "list_completed_opening_results", query
+                                )
+                                return key, batch
+                            except ProviderExecutionError as exc:
+                                if exc.http_status != 429 or attempt == 4:
+                                    raise
+                                delay = 2 ** (attempt + 1)
+                                await self._penalize_opening_rate(delay)
+                                await asyncio.sleep(delay)
+                except (ProviderExecutionError, ConnectorResponseError, TimeoutError) as exc:
+                    LOGGER.warning(
+                        "opening lookup isolated notice=%s order=%s classification=%s "
+                        "rebid=%s error=%s",
+                        notice_number, notice_order, classification_number, rebid_number,
+                        type(exc).__name__,
+                    )
+                    return key, None
+            return key, None
 
         self._opening_rate_limiter_active = True
         try:
             async with self.executor:
-                batches = await asyncio.gather(*(fetch_one(key) for key in keys))
+                results = await asyncio.gather(*(fetch_one(key) for key in keys))
         finally:
             self._opening_rate_limiter_active = False
-        result = ExtractedBatch(execution_id=execution_id, window=window)
-        for batch in batches:
-            result.records.extend(batch.records)
-            result.pages += batch.pages
-        return result
+        openings = ExtractedBatch(execution_id=execution_id, window=window)
+        successful_awards = ExtractedBatch(execution_id=execution_id, window=window)
+        failed_awards = ExtractedBatch(execution_id=execution_id, window=window)
+        for key, batch in results:
+            if batch is None:
+                failed_awards.records.append(awards_by_key[key])
+                continue
+            successful_awards.records.append(awards_by_key[key])
+            openings.records.extend(batch.records)
+            openings.pages += batch.pages
+        LOGGER.info(
+            "opening lookup batch completed total=%d successful=%d failed=%d",
+            len(keys), len(successful_awards.records), len(failed_awards.records),
+        )
+        return OpeningResultBatch(openings, successful_awards, failed_awards)
 
     async def _fetch_pages(self, execution_id: UUID, window: CollectionWindow,
                            operation_id: str, query: dict[str, Any]) -> ExtractedBatch:

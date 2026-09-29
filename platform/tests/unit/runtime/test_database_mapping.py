@@ -307,6 +307,35 @@ def test_bid_notice_search_binds_exact_notice_number() -> None:
     assert query["pagination"]["count_distinct"] is False
 
 
+def test_bid_notice_search_binds_procurement_hierarchy_filters() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    capability = catalog.capabilities["search_bid_notices"]
+
+    query = CapabilityBinder().bind(
+        catalog,
+        capability,
+        capability.steps[0],
+        {
+            "notice_published_at_from": datetime(2022, 1, 1, tzinfo=timezone.utc),
+            "notice_published_at_to": datetime(2026, 9, 29, 23, 59, 59,
+                                                tzinfo=timezone.utc),
+            "work_type": "service",
+            "large_category": "ICT 서비스",
+            "middle_category": "SW 및 시스템 개발",
+            "field_code": "81111599",
+            "demand_organization_code": "Z004905",
+        },
+    )
+
+    assert query["filters"][2:7] == [
+        {"field": "work_type", "operator": "eq", "value": "service"},
+        {"field": "large_category", "operator": "eq", "value": "ICT 서비스"},
+        {"field": "middle_category", "operator": "eq", "value": "SW 및 시스템 개발"},
+        {"field": "field_codes", "operator": "contains", "value": "81111599"},
+        {"field": "demand_organization_code", "operator": "eq", "value": "Z004905"},
+    ]
+
+
 def test_public_organization_search_binds_filters_sort_and_pagination() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
     capability = catalog.capabilities["search_public_organizations"]

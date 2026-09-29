@@ -1,6 +1,6 @@
 registry:
-  version: 1.3.1
-  registered_at: "2026-08-07"
+  version: 1.4.0
+  registered_at: "2026-09-29"
 
 source:
   id: teoria_public_procurement
@@ -195,6 +195,11 @@ source:
         - {id: notice_order, name: 공고차수, data_type: string}
         - {id: notice_name, name: 공고명, data_type: string}
         - {id: work_type, name: 업무유형, data_type: string}
+        - {id: field_code, name: 대표 조달분류코드, data_type: string}
+        - {id: field_name, name: 대표 조달분류명, data_type: string}
+        - {id: large_category, name: 조달 대분류, data_type: string}
+        - {id: middle_category, name: 조달 중분류, data_type: string}
+        - {id: field_codes, name: 대표·세부품명 조달분류코드 목록, data_type: string}
         - {id: notice_kind_name, name: 공고종류명, data_type: string}
         - {id: is_re_notice, name: 재공고 여부, data_type: boolean}
         - {id: notice_published_at, name: 공고게시시각, data_type: datetime}

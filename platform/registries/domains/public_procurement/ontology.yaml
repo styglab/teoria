@@ -1,5 +1,5 @@
 registry:
-  version: 2.8.0
+  version: 2.10.0
   registered_at: "2026-08-08"
 
 ontology:
@@ -7,6 +7,31 @@ ontology:
   name: 대한민국 공공조달
   description: 대한민국 공공기관의 입찰공고, 참가요건, 조달계약, 기관과 계약업체의 참여 관계를 표현한다.
   object_types:
+    - id: organization_procurement_profile
+      name: 기관 조달 프로필
+      description: 기관의 공고·참여·낙찰·계약과 거래업체를 관찰기간 기준으로 집계한 프로필
+      primary_key: organization_procurement_profile_id
+      properties:
+        - {id: organization_procurement_profile_id, name: 기관 조달 프로필 식별자, description: 기관코드, data_type: string}
+        - {id: relationship_count, name: 거래업체 수, description: 관찰기간에 활동한 고유 업체 수, data_type: integer}
+
+    - id: company_procurement_profile
+      name: 업체 조달 프로필
+      description: 업체의 참여·낙찰·계약과 거래기관을 관찰기간 기준으로 집계한 프로필
+      primary_key: company_procurement_profile_id
+      properties:
+        - {id: company_procurement_profile_id, name: 업체 조달 프로필 식별자, description: 사업자등록번호, data_type: string}
+        - {id: relationship_count, name: 거래기관 수, description: 관찰기간에 활동한 고유 기관 수, data_type: integer}
+
+    - id: bid_notice_relationship_context
+      name: 공고 관계 컨텍스트
+      description: 현재 공고의 참여·낙찰·계약과 참여업체별 게시일 이전 기관 관계를 묶은 컨텍스트
+      primary_key: bid_notice_relationship_context_id
+      properties:
+        - {id: bid_notice_relationship_context_id, name: 공고 관계 컨텍스트 식별자, description: 입찰공고 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, description: 관계를 조회한 현재 공고, data_type: string}
+        - {id: participant_count, name: 참여업체 수, description: 개찰 또는 계약에서 확인된 고유 업체 수, data_type: integer}
+
     - id: company_similar_project_experience
       name: 업체 구조화 조건 유사사업 경험
       description: 기준 공고의 필수 업종·면허 중 하나 이상이 일치하고 업무구분이 같은 과거 수주 경험
@@ -26,6 +51,9 @@ ontology:
         - {id: organization_code, name: 기관코드, description: 관계 대상 공공기관 코드, data_type: string}
         - {id: company_number, name: 사업자등록번호, description: 관계 대상 업체 사업자등록번호, data_type: business_registration_number}
         - {id: award_event_count, name: 기관 수주사건 수, description: 분야 필터 없이 낙찰과 원계약을 중복 제거한 기관·업체 고유 수주사건 수, data_type: integer}
+        - {id: unique_project_count, name: 고유 조달사업 수, description: 동일 공고에 연결된 낙찰과 계약 버전을 하나로 병합한 기관·업체 고유 사업 수, data_type: integer}
+        - {id: contract_event_count, name: 고유 계약사건 수, description: 변경·차수 계약을 동일 공고 또는 계약 관계로 병합한 고유 계약 수, data_type: integer}
+        - {id: contract_version_count, name: 계약 버전 수, description: 고유 계약사건에 포함된 원계약·차수·변경 계약 레코드 수, data_type: integer}
 
     - id: bid_project_lineage
       name: 입찰사업 승계관계
@@ -154,6 +182,10 @@ ontology:
         - {id: notice_order, name: 공고차수, description: 동일 공고번호의 공고 차수, data_type: string}
         - {id: notice_name, name: 공고명, description: 입찰 대상 사업 또는 물품을 설명하는 공고 명칭, data_type: string}
         - {id: work_type, name: 업무유형, description: 물품·용역·공사·외자 등 입찰 업무 유형, data_type: string}
+        - {id: field_code, name: 조달분류코드, description: 제목 추론 없이 원천의 대표 조달분류에서 확인한 분류코드, data_type: string}
+        - {id: field_name, name: 조달분류명, description: 대표 조달분류코드의 명칭, data_type: string}
+        - {id: large_category, name: 조달 대분류, description: 조달 원천 분류에서 정규화한 대분류명, data_type: string}
+        - {id: middle_category, name: 조달 중분류, description: 조달 원천 분류에서 정규화한 중분류명, data_type: string}
         - {id: notice_kind_name, name: 공고종류명, description: 원천에서 제공한 공고 종류 명칭, data_type: string}
         - {id: is_re_notice, name: 재공고 여부, description: 해당 입찰공고가 재공고인지 여부, data_type: boolean}
         - {id: notice_published_at, name: 공고게시시각, description: 나라장터에 공고가 게시된 시각, data_type: datetime}

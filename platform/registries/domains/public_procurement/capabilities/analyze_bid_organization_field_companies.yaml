@@ -1,5 +1,5 @@
 registry:
-  version: 1.6.0
+  version: 1.7.0
   registered_at: "2026-09-26"
 
 capability:
@@ -31,3 +31,12 @@ capability:
       maximum: 100
   returns:
     - public_procurement.bid_organization_field_company
+  lifecycle:
+    status: deprecated
+    deprecated_at: "2026-09-29"
+    replacement_ids:
+      - get_bid_notice_relationship_context
+      - analyze_organization_procurement_profile
+      - get_organization_company_relationship
+      - get_company_similar_project_experience
+    reason: 공고·기관·업체 관계를 한 응답에서 혼합하고 구형 분야 판정과 집계를 사용한다.

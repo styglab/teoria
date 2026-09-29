@@ -1,11 +1,11 @@
 registry:
-  version: 1.5.0
-  registered_at: "2026-09-17"
+  version: 1.6.0
+  registered_at: "2026-09-29"
 
 capability:
   id: search_bid_notices
   name: 입찰공고 검색
-  description: 자유어, 게시·마감기간, 업무유형, 입찰상태, 계약방법과 추정가격으로 정규화된 입찰공고를 페이지 단위 검색한다.
+  description: 자유어, 게시·마감기간, 업무유형, 조달 분야 계층, 입찰상태, 계약방법과 추정가격으로 정규화된 입찰공고를 페이지 단위 검색한다.
   inputs:
     query:
       data_type: string
@@ -24,7 +24,15 @@ capability:
       required: true
     work_type:
       property: public_procurement.bid_notice.work_type
-      enum: [goods, service, construction, foreign, other]
+      enum: [goods, service, construction, foreign, other, unknown]
+    large_category:
+      property: public_procurement.bid_notice.large_category
+    middle_category:
+      property: public_procurement.bid_notice.middle_category
+    field_code:
+      data_type: string
+      field: teoria_public_procurement.bid_notices.field_codes
+      operator: contains
     notice_organization_code:
       property: public_procurement.bid_notice.notice_organization_code
     demand_organization_code:

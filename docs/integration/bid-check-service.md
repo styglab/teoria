@@ -262,6 +262,25 @@ Runtime은 목록 평가 시 공고와 요건을 각각 한 번의 DB 조회로 
 다중 인스턴스 공유 또는 회사 근거 변경 이벤트 기반 즉시 무효화가 필요하면 입찰체크 DB/Redis에
 별도 캐시를 두되 `assessment_fingerprint`를 결과 버전으로 보관하고 짧은 TTL을 함께 적용한다.
 
+### 5. 구형 공고·업체 관계 Capability 폐기
+
+다음 Capability는 `2026-09-29`부터 deprecated이며 기본 discovery에서 반환하지 않고 실행 시
+`410 deprecated_capability`을 반환한다.
+
+- `find_similar_bid_notices`
+- `analyze_bid_organization_field_companies`
+- `find_bid_relevant_companies`
+
+입찰체크는 공고·기관·업체 관계를 한 응답에서 혼합하지 않고 다음 공개 Capability를 조합한다.
+
+- 공고의 참여·낙찰·계약: `get_bid_notice_relationship_context`
+- 기관 조달 프로필: `analyze_organization_procurement_profile`
+- 업체 조달 프로필: `analyze_company_procurement_profile`
+- 기관×업체 이력: `get_organization_company_relationship`
+- 구조화 업종·면허 기반 유사사업: `get_company_similar_project_experience`
+
+<!-- Deprecated contract history retained below for release archaeology.
+
 ### 5. 유사 공고 조회
 
 입찰체크가 공고명을 분리해 여러 번 검색하지 않고 Teoria가 최근 낙찰·계약 공고를 한 번에
@@ -372,6 +391,8 @@ Content-Type: application/json
 `opening_rank=null`, `result=contracted`로 제공한다. 같은 공고의 재입찰을 구분하려면
 `bid_classification_number`와 `rebid_number`를 함께 사용한다. 낙찰 결과만 있고 대응하는 개찰
 참여 레코드가 없으면 순위를 추측하지 않고 `opening_rank=null`로 반환한다.
+
+-->
 
 `organization_relationship.activities`에는 현재 수요기관에서 해당 업체가 상위 10위에 들거나 낙찰한
 공고 활동을 반환한다. `bid_notice_id`는 공고 차수를 포함하며, 같은 공고 안의 재입찰은

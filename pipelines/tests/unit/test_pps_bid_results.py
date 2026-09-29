@@ -125,6 +125,8 @@ class _CapturingClient(PPSBidResultClient):
         self.calls = []
         self.executor = ExecutorContext()
         self.opening_concurrency = 8
+        self.opening_request_timeout_seconds = 60
+        self._opening_rate_limiter_active = False
 
     async def _fetch_pages(self, execution_id, window, operation_id, query):
         self.calls.append((operation_id, query))
@@ -140,11 +142,15 @@ async def test_opening_api_is_called_once_per_distinct_award_key() -> None:
         _record("list_goods_bid_awards", payload),
         _record("list_goods_bid_awards", payload),
     ]
-    await client.fetch_opening_results(records[0].execution_id, records[0].window, records)
+    result = await client.fetch_opening_results(
+        records[0].execution_id, records[0].window, records
+    )
     assert client.calls == [("list_completed_opening_results", {
         "bidNtceNo": "R26BK00000001", "bidNtceOrd": "000",
         "bidClsfcNo": "0", "rbidNo": "000",
     })]
+    assert result.successful_awards.records == [records[1]]
+    assert result.failed_awards.records == []
 
 
 @pytest.mark.asyncio
@@ -170,6 +176,36 @@ async def test_opening_api_uses_bounded_concurrency() -> None:
     }) for number in range(10)]
     await client.fetch_opening_results(records[0].execution_id, records[0].window, records)
     assert client.maximum_active == 3
+
+
+@pytest.mark.asyncio
+async def test_opening_api_isolates_timed_out_award() -> None:
+    class TimeoutClient(_CapturingClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.opening_request_timeout_seconds = 0.01
+
+        async def _fetch_pages(self, execution_id, window, operation_id, query):
+            if query["bidNtceNo"].endswith("1"):
+                await asyncio.sleep(1)
+            return await super()._fetch_pages(execution_id, window, operation_id, query)
+
+    client = TimeoutClient()
+    records = [_record("list_goods_bid_awards", {
+        "bidNtceNo": f"R26BK0000000{number}", "bidNtceOrd": "000",
+        "bidClsfcNo": "0", "rbidNo": "000",
+    }) for number in (1, 2)]
+
+    result = await client.fetch_opening_results(
+        records[0].execution_id, records[0].window, records
+    )
+
+    assert [item.payload["bidNtceNo"] for item in result.successful_awards.records] == [
+        "R26BK00000002"
+    ]
+    assert [item.payload["bidNtceNo"] for item in result.failed_awards.records] == [
+        "R26BK00000001"
+    ]
 
 
 def test_opening_awards_are_split_into_restartable_chunks() -> None:

@@ -9,7 +9,13 @@ from teoria_provider.executor import ProviderExecutor
 from teoria_provider.secrets import EnvironmentSecretProvider
 
 from teoria_pipelines.connectors import PPSBidResultClient
-from teoria_pipelines.models import CollectionWindow, ExtractedBatch, LoadSummary, NormalizedBidResultBatch
+from teoria_pipelines.models import (
+    CollectionWindow,
+    ExtractedBatch,
+    LoadSummary,
+    NormalizedBidResultBatch,
+    OpeningResultBatch,
+)
 from teoria_pipelines.normalization import normalize_bid_result_batch
 from teoria_pipelines.persistence import PostgresStore
 from teoria_pipelines.settings import bootstrap_pipeline_settings
@@ -61,7 +67,7 @@ async def extract_bid_award_operation(execution_id: UUID, window: CollectionWind
 @task(name="공고별 개찰 참여업체 수집", retries=1, retry_delay_seconds=300,
       viz_return_value=VIZ_EXTRACTED)
 async def extract_opening_participants(execution_id: UUID, window: CollectionWindow,
-                                       awards: ExtractedBatch, pipeline_root: str) -> ExtractedBatch:
+                                       awards: ExtractedBatch, pipeline_root: str) -> OpeningResultBatch:
     return await _client(pipeline_root).fetch_opening_results(
         execution_id, window, awards.records
     )

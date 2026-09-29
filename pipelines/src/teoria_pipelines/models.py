@@ -37,6 +37,15 @@ class ExtractedBatch:
 
 
 @dataclass(slots=True)
+class OpeningResultBatch:
+    """Opening results plus the award records whose lookup was conclusive."""
+
+    openings: ExtractedBatch
+    successful_awards: ExtractedBatch
+    failed_awards: ExtractedBatch
+
+
+@dataclass(slots=True)
 class NormalizedBatch:
     contracts: list[dict[str, Any]] = field(default_factory=list)
     suppliers: list[dict[str, Any]] = field(default_factory=list)

@@ -37,6 +37,8 @@ class DocumentStoreMixin:
             for row in batch.notices:
                 values = dict(row)
                 values["source_payload"] = Jsonb(values["source_payload"])
+                if values.get("purchase_items") is not None:
+                    values["purchase_items"] = Jsonb(values["purchase_items"])
                 columns = tuple(values)
                 assignments = [column for column in columns if column not in {"notice_number", "notice_order"}]
                 result = connection.execute(

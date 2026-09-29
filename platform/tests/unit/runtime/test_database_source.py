@@ -44,3 +44,25 @@ def test_database_search_counts_roots_and_pages_with_stable_sort() -> None:
     assert result.pagination == {
         "page": 2, "page_size": 20, "total_items": 21, "total_pages": 2,
     }
+
+
+def test_database_search_filters_scalar_in_array_field() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    rows_result = MagicMock()
+    rows_result.fetchall.return_value = []
+    connection.execute.return_value = rows_result
+
+    with patch("teoria.runtime.source.database.psycopg.connect", return_value=connection):
+        DatabaseSourceExecutor({
+            "TEORIA_RUNTIME_DATA_DATABASE_URL": "postgresql://unused",
+        }).execute(catalog, "teoria_public_procurement", "bid_notices", {
+            "filters": [{
+                "field": "field_codes", "operator": "contains", "value": "81111599",
+            }],
+        })
+
+    statement, parameters = connection.execute.call_args.args
+    assert '%s = ANY("field_codes")' in statement.as_string()
+    assert parameters == ["81111599", 1000]

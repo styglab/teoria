@@ -1,6 +1,6 @@
 registry:
-  version: 1.1.0
-  registered_at: "2026-08-07"
+  version: 1.2.0
+  registered_at: "2026-09-29"
 
 mapping:
   id: bid_notices
@@ -18,6 +18,14 @@ mapping:
       - {field: teoria_public_procurement.bid_notices.notice_name}
     bid_notice.work_type:
       - {field: teoria_public_procurement.bid_notices.work_type}
+    bid_notice.field_code:
+      - {field: teoria_public_procurement.bid_notices.field_code}
+    bid_notice.field_name:
+      - {field: teoria_public_procurement.bid_notices.field_name}
+    bid_notice.large_category:
+      - {field: teoria_public_procurement.bid_notices.large_category}
+    bid_notice.middle_category:
+      - {field: teoria_public_procurement.bid_notices.middle_category}
     bid_notice.notice_kind_name:
       - {field: teoria_public_procurement.bid_notices.notice_kind_name}
     bid_notice.is_re_notice:

@@ -72,6 +72,11 @@ def test_normalizes_notice_and_discovers_documents() -> None:
         "bidNtceNm": "정보시스템 운영 용역", "reNtceYn": "N",
         "bidNtceDt": "202608071000", "bidClseDt": "202608141800",
         "presmptPrce": "100,000,000", "asignBdgtAmt": "110000000",
+        "pubPrcrmntClsfcNo": "81111599",
+        "pubPrcrmntClsfcNm": "정보시스템개발서비스",
+        "pubPrcrmntLrgClsfcNm": "ICT 서비스",
+        "pubPrcrmntMidClsfcNm": "SW 및 시스템 개발",
+        "purchsObjPrdctList": "[1^8111159901^정보시스템개발서비스]",
         "prtcptLmtRgnCd": "11", "prtcptLmtRgnNm": "서울특별시",
         "ntceSpecFileNm1": "공고문.hwpx", "ntceSpecDocUrl1": "https://example.test/a.hwpx",
         "stdNtceDocUrl": "https://example.test/standard.pdf",
@@ -92,6 +97,11 @@ def test_normalizes_notice_and_discovers_documents() -> None:
     assert str(result.notices[0]["estimated_price"]) == "100000000"
     assert result.notices[0]["participation_restriction_region_code"] == "11"
     assert result.notices[0]["participation_restriction_region_name"] == "서울특별시"
+    assert result.notices[0]["procurement_classification_number"] == "81111599"
+    assert result.notices[0]["procurement_middle_classification_name"] == "SW 및 시스템 개발"
+    assert result.notices[0]["purchase_items"] == [{
+        "sequence": "1", "code": "8111159901", "name": "정보시스템개발서비스",
+    }]
     assert {(item["document_slot"], item["file_name"]) for item in result.documents} == {
         ("notice_spec_1", "공고문.hwpx"), ("standard_notice", "표준공고서")
     }

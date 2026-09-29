@@ -86,6 +86,7 @@ def create_runtime_app(
                     "input_schema": capability_input_schema(resolved_catalog, capability),
                 }
                 for capability in resolved_catalog.capabilities.values()
+                if capability.lifecycle.status == "active"
             ]
         }
 
@@ -97,6 +98,13 @@ def create_runtime_app(
         capability = resolved_catalog.capabilities.get(capability_id)
         if capability is None:
             raise HTTPException(status_code=404, detail={"code": "unknown_capability", "message": capability_id})
+        if capability.lifecycle.status == "deprecated":
+            raise HTTPException(status_code=410, detail={
+                "code": "deprecated_capability",
+                "message": capability_id,
+                "replacement_ids": capability.lifecycle.replacement_ids,
+                "sunset_at": capability.lifecycle.sunset_at,
+            })
         schema = capability_input_schema(resolved_catalog, capability)
         errors = sorted(
             Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(request.inputs),

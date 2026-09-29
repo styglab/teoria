@@ -1,5 +1,5 @@
 registry:
-  version: 1.2.0
+  version: 1.3.0
   registered_at: "2026-09-23"
 
 capability:
@@ -39,3 +39,9 @@ capability:
       maximum: 100
   returns:
     - public_procurement.similar_bid_notice
+  lifecycle:
+    status: deprecated
+    deprecated_at: "2026-09-29"
+    replacement_ids:
+      - get_company_similar_project_experience
+    reason: 제목·규칙 기반 공고 유사도를 업체의 구조화된 유사사업 경험으로 대체한다.

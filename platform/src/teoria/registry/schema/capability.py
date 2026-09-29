@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
@@ -11,11 +12,32 @@ from teoria.registry.schema.common import IdentifiedModel, RegistryMetadata, Reg
 REFERENCE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 
 
+class CapabilityLifecycle(RegistryModel):
+    status: Literal["active", "deprecated"] = "active"
+    deprecated_at: date | None = None
+    replacement_ids: list[str] = Field(default_factory=list)
+    sunset_at: date | None = None
+    reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_deprecation(self) -> "CapabilityLifecycle":
+        if self.status == "active" and any((
+            self.deprecated_at, self.replacement_ids, self.sunset_at, self.reason,
+        )):
+            raise ValueError("active capability cannot declare deprecation metadata")
+        if self.status == "deprecated" and self.deprecated_at is None:
+            raise ValueError("deprecated capability must declare deprecated_at")
+        for capability_id in self.replacement_ids:
+            if not SNAKE_CASE_PATTERN.fullmatch(capability_id):
+                raise ValueError("replacement capability ids must be snake_case")
+        return self
+
+
 class CapabilityInput(RegistryModel):
     property: str | None = None
     data_type: str | None = None
     field: str | None = None
-    operator: Literal["eq", "in", "gte", "lte"] = "eq"
+    operator: Literal["eq", "in", "contains", "gte", "lte"] = "eq"
     fields: dict[str, "CapabilityInput"] = Field(default_factory=dict)
     collection: Literal["scalar", "list"] = "scalar"
     required: bool = False
@@ -158,6 +180,7 @@ class CapabilityDefinition(IdentifiedModel):
     steps: list[CapabilityStep] = Field(default_factory=list)
     returns: list[str] = Field(min_length=1)
     outcome: CapabilityOutcome | None = None
+    lifecycle: CapabilityLifecycle = Field(default_factory=CapabilityLifecycle)
 
     @model_validator(mode="after")
     def validate_local_references(self) -> "CapabilityDefinition":

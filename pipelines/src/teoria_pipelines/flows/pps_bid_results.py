@@ -45,6 +45,10 @@ OPERATION_TASK_NAMES = {
 }
 
 
+class OpeningCollectionIncompleteError(RuntimeError):
+    """Raised after healthy opening lookups are saved but failed lookups remain."""
+
+
 @flow(name="나라장터 낙찰정보 일별 수집")
 async def sync_pps_bid_result_window(
     window: CollectionWindow,
@@ -81,14 +85,18 @@ async def sync_pps_bid_result_window(
         opening_raw_counts = []
         opening_loaded = []
         checked_counts = []
+        failed_opening_counts = []
         for index, award_chunk in enumerate(opening_chunks, start=1):
             suffix = f"{index}/{len(opening_chunks)}"
-            openings = await extract_opening_participants.with_options(
+            opening_result = await extract_opening_participants.with_options(
                 name=f"공고별 개찰 참여업체 수집 {suffix}"
             )(started_execution_id, window, award_chunk, pipeline_root)
+            openings = opening_result.openings
+            successful_awards = opening_result.successful_awards
+            failed_opening_counts.append(len(opening_result.failed_awards.records))
             competitive_openings = select_competitive_opening_participants.with_options(
                 name=f"상위 경쟁 참여업체 선별 {suffix}"
-            )(award_chunk, openings)
+            )(successful_awards, openings)
             # Successful opening-result payloads are deliberately not retained.
             # The normalized top-10-plus-winner coverage is the durable contract.
             opening_raw_count = 0
@@ -97,13 +105,18 @@ async def sync_pps_bid_result_window(
             )(competitive_openings, opening_raw_count)
             chunk_loaded = replace_opening_participants.with_options(
                 name=f"개찰 참여업체 교체 저장 {suffix}"
-            )(award_chunk, normalized_openings)
+            )(successful_awards, normalized_openings)
             checked_count = mark_opening_awards_checked.with_options(
                 name=f"개찰 수집 완료상태 저장 {suffix}"
-            )(award_chunk, openings, chunk_loaded)
+            )(successful_awards, openings, chunk_loaded)
             opening_raw_counts.append(opening_raw_count)
             opening_loaded.append(chunk_loaded)
             checked_counts.append(checked_count)
+        failed_opening_count = sum(failed_opening_counts)
+        if failed_opening_count:
+            raise OpeningCollectionIncompleteError(
+                f"{failed_opening_count} opening lookups remain incomplete"
+            )
         loaded = combine_bid_result_summaries(
             award_raw_count, award_loaded, opening_raw_counts, opening_loaded, checked_counts
         )
