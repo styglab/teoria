@@ -839,6 +839,30 @@ async def test_organization_company_relationship_limits_metrics_and_separates_ve
 
 
 @pytest.mark.asyncio
+async def test_organization_company_relationship_validates_explicit_year_range() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    base = {
+        "organization_code": "ORG-1",
+        "business_registration_number": "1234567890",
+    }
+    with pytest.raises(CapabilityExecutionError, match="must be provided together"):
+        await execute_organization_company_relationship(
+            catalog, "get_organization_company_relationship",
+            {**base, "period_from_year": 2023},
+        )
+    with pytest.raises(CapabilityExecutionError, match="less than or equal"):
+        await execute_organization_company_relationship(
+            catalog, "get_organization_company_relationship",
+            {**base, "period_from_year": 2025, "period_to_year": 2023},
+        )
+    with pytest.raises(CapabilityExecutionError, match="cannot be later"):
+        await execute_organization_company_relationship(
+            catalog, "get_organization_company_relationship",
+            {**base, "period_from_year": 2026, "period_to_year": 2027},
+        )
+
+
+@pytest.mark.asyncio
 async def test_company_similar_project_experience_uses_any_industry_overlap() -> None:
     class Reader:
         def find(self, catalog, **kwargs):

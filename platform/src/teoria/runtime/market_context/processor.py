@@ -1548,7 +1548,13 @@ async def execute_organization_company_field_relationship(
             "unsupported_field_code", f"unsupported field_code '{field_code}'",
             capability_id=capability_id,
         )
-    period_years = int(inputs.get("period_years", 10))
+    (
+        resolved_period_from, resolved_period_to, period_years, resolved_period_type,
+        resolved_from_year, resolved_to_year,
+    ) = _resolve_profile_period(
+        {**inputs, "period_years": inputs.get("period_years", 10)},
+        capability_id=capability_id,
+    )
     page = int(inputs.get("page", 1))
     page_size = int(inputs.get("page_size", 20))
     reference_bid_notice_id = (
@@ -1560,7 +1566,7 @@ async def execute_organization_company_field_relationship(
     cache_key = (
         organization_code, company_number, field_code, period_years, page, page_size,
         reference_bid_notice_id, work_type, large_category, middle_category,
-        procurement_field_code, registry_version,
+        procurement_field_code, registry_version, resolved_period_from, resolved_period_to,
     )
     cached = _ORGANIZATION_COMPANY_FIELD_CACHE.get(cache_key)
     if cached and time.monotonic() - cached[0] < ORGANIZATION_FIELD_CACHE_TTL_SECONDS:
@@ -1580,7 +1586,7 @@ async def execute_organization_company_field_relationship(
         )
         reference = context["reference_notice"]
         as_of = reference.get("as_of") if reference else datetime.combine(
-            date.today() + timedelta(days=1), datetime.min.time(), timezone.utc
+            resolved_period_to, datetime.min.time(), timezone.utc
         )
         find_inputs: dict[str, Any] = {
             "organization_code": organization_code,
@@ -1794,7 +1800,9 @@ async def execute_organization_company_field_relationship(
                 "period_years": period_years,
                 "period_from": period_start,
                 "period_to": as_of_date - timedelta(days=1),
-                "period_type": "calendar_fiscal_years",
+                "period_from_year": resolved_from_year or period_start.year,
+                "period_to_year": resolved_to_year or (as_of_date - timedelta(days=1)).year,
+                "period_type": resolved_period_type,
                 "work_type": work_type,
                 "reference_bid_notice_id": reference_bid_notice_id,
                 "event_attribution": "notice_published_at_or_first_contract_date",
@@ -1856,6 +1864,8 @@ async def execute_organization_company_relationship(
         "middle_category": inputs.get("middle_category"),
         "procurement_field_code": inputs.get("field_code"),
         "period_years": inputs.get("period_years", 10),
+        "period_from_year": inputs.get("period_from_year"),
+        "period_to_year": inputs.get("period_to_year"),
         "page": inputs.get("page", 1),
         "page_size": inputs.get("page_size", 20),
     }
@@ -1883,6 +1893,78 @@ async def execute_organization_company_relationship(
     for event in result.outcome["events"]:
         event["organization_match"] = True
         event.pop("field_match_reasons", None)
+    profile = None
+    if reader is None:
+        profile = await _execute_procurement_profile(
+            catalog, "analyze_organization_procurement_profile", {
+                "organization_code": inputs["organization_code"],
+                "business_registration_number": inputs["business_registration_number"],
+                "period_years": inputs.get("period_years", 10),
+                "period_from_year": inputs.get("period_from_year"),
+                "period_to_year": inputs.get("period_to_year"),
+                "work_type": inputs.get("work_type"),
+                "large_category": inputs.get("large_category"),
+                "middle_category": inputs.get("middle_category"),
+                "field_code": inputs.get("field_code"),
+                "page": 1, "page_size": 1,
+            }, profile_type="organization",
+        )
+    relationships = (profile.outcome.get("company_relationships") or []) if profile else []
+    relationship = relationships[0] if relationships else None
+    if relationship:
+        result.outcome["summary"].update({
+            key: relationship[key] for key in (
+                "award_event_count", "contract_event_count", "contract_version_count",
+                "unique_project_count", "total_attributed_contract_amount",
+                "amount_completeness", "active_years", "active_year_count",
+                "first_activity_date", "latest_activity_date", "latest_contract_date",
+            )
+        })
+        result.outcome["yearly_activity"] = relationship["yearly_activity"]
+        result.outcome["major_fields"] = relationship["major_fields"]
+        result.outcome["project_type_distribution"] = relationship[
+            "project_type_distribution"
+        ]
+    elif profile is not None:
+        result.outcome["summary"].update({
+            "award_event_count": 0, "contract_event_count": 0,
+            "contract_version_count": 0, "unique_project_count": 0,
+            "total_attributed_contract_amount": 0, "amount_completeness": "unknown",
+            "active_years": [], "active_year_count": 0,
+            "first_activity_date": None, "latest_activity_date": None,
+            "latest_contract_date": None,
+        })
+        result.outcome["yearly_activity"] = []
+        result.outcome["major_fields"] = []
+        result.outcome["project_type_distribution"] = []
+    if profile is not None:
+        result.outcome["analysis_basis"].update({
+            key: profile.outcome["analysis_basis"][key]
+            for key in (
+                "period_from", "period_to", "period_from_year", "period_to_year",
+                "period_years", "period_type", "event_attribution",
+                "contract_amount_version",
+            )
+        })
+        contract_events = profile.outcome.pop("_relationship_contract_events", [])
+        total_events = len(contract_events)
+        requested_page = int(inputs.get("page", 1))
+        requested_page_size = int(inputs.get("page_size", 20))
+        offset = (requested_page - 1) * requested_page_size
+        result.outcome["events"] = contract_events[offset:offset + requested_page_size]
+        result.outcome["pagination"] = {
+            "page": requested_page, "page_size": requested_page_size,
+            "total_items": total_events,
+            "total_pages": (total_events + requested_page_size - 1) // requested_page_size,
+        }
+        result.outcome["summary"]["linked_notice_count"] = len({
+            item["bid_notice_id"] for item in contract_events
+            if item.get("bid_notice_id") and item.get("notice_linkage") == "linked"
+        })
+        result.outcome["summary"]["unlinked_contract_count"] = sum(
+            item.get("notice_linkage") == "unlinked"
+            for item in contract_events
+        )
     properties = {
         "organization_company_relationship_id": (
             f"{history_inputs['organization_code']}:"
@@ -2714,6 +2796,13 @@ async def _execute_procurement_profile(
     organization_code = (
         str(inputs["organization_code"]) if profile_type == "organization" else None
     )
+    organization_company_number = (
+        "".join(
+            character for character in str(inputs.get("business_registration_number") or "")
+            if character.isdigit()
+        ) or None
+        if profile_type == "organization" else None
+    )
     company_number = (
         "".join(character for character in str(inputs["business_registration_number"])
                 if character.isdigit()) if profile_type == "company" else None
@@ -2723,7 +2812,10 @@ async def _execute_procurement_profile(
     try:
         activities_task = asyncio.to_thread(
             resolved_reader.activities, catalog, organization_code=organization_code,
-            company_numbers=[company_number] if company_number else [],
+            company_numbers=(
+                [company_number] if company_number else
+                [organization_company_number] if organization_company_number else []
+            ),
             period_from=source_period_from, period_to=period_to,
         )
         history_method = (
@@ -2910,6 +3002,35 @@ async def _execute_procurement_profile(
                 "work_type": row.get("work_type"),
             } for row in profile_rows], key=lambda item: item["activity_date"], reverse=True,
         )[:20]
+    elif organization_company_number:
+        outcome["_relationship_contract_events"] = sorted(
+            [{
+                "award_event_id": str(row["event_key"]),
+                "bid_notice_id": row.get("bid_notice_id"),
+                "notice_linkage": (
+                    "linked" if row.get("attribution_date_basis") == "notice_published_at"
+                    else "unlinked"
+                ),
+                "notice_name": row.get("notice_name"),
+                "attribution_date": row.get("activity_date"),
+                "attribution_date_basis": row.get("attribution_date_basis"),
+                "first_contract_date": row.get("first_contract_date"),
+                "latest_contract_version_date": row.get("latest_contract_version_date"),
+                "contract_date": row.get("latest_contract_version_date"),
+                "contract_amount": _number(row.get("event_amount")),
+                "attributed_contract_amount": _number(row.get("attributed_contract_amount")),
+                "attributed_contract_amount_completeness": row.get("amount_completeness"),
+                "work_type": row.get("work_type"),
+                "field_code": row.get("procurement_classification_number"),
+                "field_name": row.get("procurement_classification_name"),
+                "organization_match": True,
+            } for row in profile_rows if row.get("activity_type") == "contract"],
+            key=lambda item: (
+                item.get("attribution_date") or date.min,
+                item.get("latest_contract_version_date") or date.min,
+                item["award_event_id"],
+            ), reverse=True,
+        )
     return CapabilityResult(
         capability_id=capability_id,
         objects=[MaterializedObject(

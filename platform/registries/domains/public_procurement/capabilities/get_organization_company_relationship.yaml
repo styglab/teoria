@@ -1,5 +1,5 @@
 registry:
-  version: 1.3.0
+  version: 1.4.0
   registered_at: "2026-09-28"
 
 capability:
@@ -36,6 +36,14 @@ capability:
       default: 10
       minimum: 1
       maximum: 15
+    period_from_year:
+      data_type: integer
+      minimum: 2000
+      maximum: 2100
+    period_to_year:
+      data_type: integer
+      minimum: 2000
+      maximum: 2100
     page:
       data_type: integer
       default: 1
