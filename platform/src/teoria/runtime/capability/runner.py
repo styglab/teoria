@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import date, datetime, timezone
 from typing import Any
 
+import psycopg
 from pydantic import BaseModel, Field
 
 from teoria.runtime.capability.binder import CapabilityBinder
@@ -179,6 +180,12 @@ class CapabilityRunner:
             if capability.processor == "market_context.get_bid_notice_relationship_context":
                 from teoria.runtime.market_context.processor import execute_bid_notice_relationship_context
                 return await execute_bid_notice_relationship_context(catalog, capability_id, inputs)
+            if capability.processor == "market_context.search_procurement_outcomes":
+                from teoria.runtime.market_context.processor import execute_procurement_outcome_search
+                return await execute_procurement_outcome_search(catalog, capability_id, inputs)
+            if capability.processor == "market_context.search_procurement_activity":
+                from teoria.runtime.market_context.processor import execute_procurement_activity_search
+                return await execute_procurement_activity_search(catalog, capability_id, inputs)
             raise CapabilityExecutionError(
                 "unknown_capability_processor",
                 f"unknown capability processor '{capability.processor}'",
@@ -298,6 +305,20 @@ class CapabilityRunner:
                 page += 1
 
         objects, links = self.materializer.materialize(catalog, fragments, observed_at, allowed_objects, allowed_links)
+        if capability_id == "search_public_procurement_contracts":
+            from teoria.runtime.market_context.processor import enrich_contract_search_objects
+
+            try:
+                await enrich_contract_search_objects(
+                    catalog, objects, observed_at=observed_at,
+                )
+            except (psycopg.Error, RuntimeError) as exc:
+                raise CapabilityExecutionError(
+                    "database_source_error", str(exc), capability_id=capability_id,
+                    source_id="teoria_public_procurement",
+                    operation_id="contract_suppliers",
+                    retryable=isinstance(exc, psycopg.Error),
+                ) from exc
         outcome_result = None
         if capability.outcome:
             outcome_result = {

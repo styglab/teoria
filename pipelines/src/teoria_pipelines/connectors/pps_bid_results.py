@@ -102,13 +102,18 @@ class PPSBidResultClient:
                 query["bidClsfcNo"] = classification_number
             if rebid_number:
                 query["rbidNo"] = rebid_number
+            winner_business_number = _business_number(
+                awards_by_key[key].payload.get("bidwinnrBizno")
+            )
             async with semaphore:
                 try:
                     async with asyncio.timeout(self.opening_request_timeout_seconds):
                         for attempt in range(5):
                             try:
                                 batch = await self._fetch_pages(
-                                    execution_id, window, "list_completed_opening_results", query
+                                    execution_id, window, "list_completed_opening_results", query,
+                                    opening_winner_business_number=winner_business_number,
+                                    opening_maximum_rank=10,
                                 )
                                 return key, batch
                             except ProviderExecutionError as exc:
@@ -149,8 +154,12 @@ class PPSBidResultClient:
         )
         return OpeningResultBatch(openings, successful_awards, failed_awards)
 
-    async def _fetch_pages(self, execution_id: UUID, window: CollectionWindow,
-                           operation_id: str, query: dict[str, Any]) -> ExtractedBatch:
+    async def _fetch_pages(
+        self, execution_id: UUID, window: CollectionWindow,
+        operation_id: str, query: dict[str, Any], *,
+        opening_winner_business_number: str | None = None,
+        opening_maximum_rank: int | None = None,
+    ) -> ExtractedBatch:
         operation = next(item for item in self.definition.operations if item.id == operation_id)
         records: list[RawProviderRecord] = []
         for page_number in range(1, self.max_pages + 1):
@@ -184,6 +193,19 @@ class PPSBidResultClient:
                     source_record_hash=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
                     payload=payload,
                 ))
+            if (
+                operation_id == "list_completed_opening_results"
+                and opening_maximum_rank is not None
+                and _opening_page_completes_storage_contract(
+                    payloads,
+                    winner_business_number=opening_winner_business_number,
+                    maximum_rank=opening_maximum_rank,
+                )
+            ):
+                return ExtractedBatch(
+                    execution_id=execution_id, window=window,
+                    records=records, pages=page_number,
+                )
             if page_number * self.page_size >= total_count:
                 return ExtractedBatch(
                     execution_id=execution_id, window=window,
@@ -209,3 +231,27 @@ class PPSBidResultClient:
             self._next_opening_request_at = max(
                 self._next_opening_request_at, time.monotonic() + delay
             )
+
+
+def _business_number(value: object) -> str:
+    return "".join(character for character in str(value or "") if character.isdigit())
+
+
+def _opening_page_completes_storage_contract(
+    payloads: Iterable[dict[str, Any]], *, winner_business_number: str | None,
+    maximum_rank: int,
+) -> bool:
+    """Stop once the ordered API page crossed top-N and contains the winner."""
+    winner_found = not winner_business_number
+    crossed_rank_boundary = False
+    for payload in payloads:
+        if _business_number(payload.get("prcbdrBizno")) == winner_business_number:
+            winner_found = True
+        rank_text = str(payload.get("opengRank") or "").strip().replace(",", "")
+        try:
+            rank = int(rank_text) if rank_text else None
+        except ValueError:
+            rank = None
+        if rank is not None and rank > maximum_rank:
+            crossed_rank_boundary = True
+    return winner_found and crossed_rank_boundary

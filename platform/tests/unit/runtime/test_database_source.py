@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from teoria.registry.loader import RegistryLoader
+from teoria.runtime.capability.binder import CapabilityBinder
 from teoria.runtime.source.database import DatabaseSourceExecutor
 
 
@@ -66,3 +67,43 @@ def test_database_search_filters_scalar_in_array_field() -> None:
     statement, parameters = connection.execute.call_args.args
     assert '%s = ANY("field_codes")' in statement.as_string()
     assert parameters == ["81111599", 1000]
+
+
+def test_procurement_searches_bind_hierarchy_filters_before_pagination() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    binder = CapabilityBinder()
+    cases = (
+        ("search_bid_awards", "bid_awards", {
+            "opening_at_from": "2026-01-01T00:00:00+00:00",
+            "opening_at_to": "2026-10-01T23:59:59+00:00",
+            "demand_organization_code": "Z004905",
+            "work_type": "service",
+        }),
+        ("search_public_procurement_contracts", "contracts", {
+            "concluded_date_from": "2026-01-01",
+            "concluded_date_to": "2026-10-01",
+            "contracting_organization_code": "Z004905",
+            "work_type": "service",
+        }),
+    )
+    for capability_id, relation_id, base_inputs in cases:
+        capability = catalog.capabilities[capability_id]
+        inputs = {
+            **base_inputs,
+            "large_category": "ICT 서비스",
+            "middle_category": "SW 및 시스템 개발",
+            "field_code": "81111599",
+            "page": 2,
+            "page_size": 5,
+        }
+        query = binder.bind(catalog, capability, capability.steps[0], inputs)
+        filters = {
+            (item["field"], item["value"]) for item in query["filters"]
+        }
+        assert ("large_category", "ICT 서비스") in filters
+        assert ("middle_category", "SW 및 시스템 개발") in filters
+        assert ("field_code", "81111599") in filters
+        assert ("work_type", "service") in filters
+        assert query["pagination"]["page"] == 2
+        assert query["pagination"]["page_size"] == 5
+        assert capability.steps[0].call.endswith(relation_id)

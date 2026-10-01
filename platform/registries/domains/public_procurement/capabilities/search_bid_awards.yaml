@@ -1,5 +1,5 @@
 registry:
-  version: 1.0.0
+  version: 1.1.0
   registered_at: "2026-09-15"
 
 capability:
@@ -20,6 +20,15 @@ capability:
     work_type:
       property: public_procurement.bid_award.work_type
       enum: [goods, construction, service, foreign]
+    large_category:
+      data_type: string
+      field: teoria_public_procurement.bid_awards.large_category
+    middle_category:
+      data_type: string
+      field: teoria_public_procurement.bid_awards.middle_category
+    field_code:
+      data_type: string
+      field: teoria_public_procurement.bid_awards.field_code
     demand_organization_code:
       property: public_procurement.bid_award.demand_organization_code
     winner_business_registration_number:

@@ -1,10 +1,10 @@
 registry:
-  version: 1.5.0
+  version: 1.6.0
   registered_at: "2026-09-28"
 capability:
   id: analyze_company_procurement_profile
   name: 업체 조달 프로필 분석
-  description: 업체 조달관계를 최근 N개 회계연도로 집계하며 조달분류 기반 분야, 제목 기반 사업유형, 물품·용역·공사 등 업무구분을 분리한다.
+  description: 업체 조달관계를 최근 N개 또는 명시한 회계연도 범위로 집계하며 조달분류 기반 분야, 제목 기반 사업유형, 물품·용역·공사 등 업무구분을 분리한다.
   kind: compute
   processor: market_context.analyze_company_procurement_profile
   effects:
@@ -13,6 +13,8 @@ capability:
   inputs:
     business_registration_number: {data_type: business_registration_number, required: true}
     period_years: {data_type: integer, default: 5, minimum: 1, maximum: 15}
+    period_from_year: {data_type: integer, minimum: 2000, maximum: 2100}
+    period_to_year: {data_type: integer, minimum: 2000, maximum: 2100}
     large_category: {data_type: string}
     middle_category: {data_type: string}
     field_code: {data_type: string}

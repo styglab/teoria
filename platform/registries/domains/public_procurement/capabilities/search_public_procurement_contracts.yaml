@@ -1,11 +1,11 @@
 registry:
-  version: 1.1.0
+  version: 1.3.0
   registered_at: "2026-08-04"
 
 capability:
   id: search_public_procurement_contracts
   name: 공공조달 계약 검색
-  description: 계약체결 기간, 자유어와 선택적인 계약유형·계약기관·계약방법·금액 조건으로 공공조달 계약을 페이지 단위 검색한다.
+  description: 계약체결 기간, 자유어, 계약·분야 조건으로 공공조달 계약을 페이지 검색하고 현재 페이지의 단독·공동 계약업체와 대표사, 지분율 완전성을 함께 반환한다.
   inputs:
     query:
       data_type: string
@@ -22,6 +22,19 @@ capability:
     contract_type:
       property: public_procurement.contract.contract_type
       enum: [goods, service, construction, foreign, other]
+    work_type:
+      data_type: string
+      field: teoria_public_procurement.contracts.work_type
+      enum: [goods, service, construction, foreign, other, unknown]
+    large_category:
+      data_type: string
+      field: teoria_public_procurement.contracts.large_category
+    middle_category:
+      data_type: string
+      field: teoria_public_procurement.contracts.middle_category
+    field_code:
+      data_type: string
+      field: teoria_public_procurement.contracts.field_code
     contracting_organization_code:
       data_type: string
       field: teoria_public_procurement.contracts.contracting_organization_code

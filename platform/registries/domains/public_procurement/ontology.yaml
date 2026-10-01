@@ -1,5 +1,5 @@
 registry:
-  version: 2.10.0
+  version: 2.14.0
   registered_at: "2026-08-08"
 
 ontology:
@@ -7,6 +7,31 @@ ontology:
   name: 대한민국 공공조달
   description: 대한민국 공공기관의 입찰공고, 참가요건, 조달계약, 기관과 계약업체의 참여 관계를 표현한다.
   object_types:
+    - id: procurement_activity
+      name: 통합 조달 활동
+      description: 공고 게시를 기준으로 공고·낙찰·계약 생애주기를 하나로 통합한 기관·업체 조달 활동
+      primary_key: activity_id
+      properties:
+        - {id: activity_id, name: 조달 활동 식별자, description: 공고 식별자 또는 공고 미연결 원계약 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, description: 연결된 공고 식별자, data_type: string}
+        - {id: notice_name, name: 공고·계약명, description: 공고명 또는 공고 미연결 계약명, data_type: string}
+        - {id: stage, name: 조달 단계, description: scheduled·open·closed·award·contract·failed_or_cancelled, data_type: string}
+        - {id: latest_activity_date, name: 최신 활동일, description: 최신 계약일·낙찰일·공고 게시일 순으로 결정한 정렬 기준일, data_type: date}
+        - {id: project_amount, name: 화면 대표 사업금액, description: 공고 연결 시 배정예산·추정가격·기초금액 순으로 선택하고 미연결 계약은 최신 계약금액을 사용하는 원천 금액, data_type: monetary_amount}
+        - {id: project_amount_basis, name: 대표 사업금액 기준, description: allocated_budget·estimated_price·base_amount·contract_amount 중 대표 금액의 원천 기준, data_type: string}
+        - {id: project_amount_basis_name, name: 대표 사업금액 기준명, description: 배정예산·추정가격·기초금액·계약금액 중 사용자 표시명, data_type: string}
+
+    - id: procurement_outcome
+      name: 조달 결과
+      description: 동일 공고의 낙찰과 원계약을 통합하고 최신 단계를 대표값으로 제공하는 기관 조달 결과
+      primary_key: outcome_id
+      properties:
+        - {id: outcome_id, name: 조달 결과 식별자, description: 공고 식별자 또는 연결 공고가 없는 원계약 식별자, data_type: string}
+        - {id: bid_notice_id, name: 입찰공고 식별자, description: 연결된 공고가 있을 때의 공고 식별자, data_type: string}
+        - {id: notice_name, name: 공고·계약명, description: 낙찰 또는 최신 계약의 사업명, data_type: string}
+        - {id: stage, name: 최신 조달 단계, description: award 또는 contract, data_type: string}
+        - {id: latest_activity_date, name: 최신 활동일, description: 최신 계약일 또는 계약이 없을 때 낙찰일, data_type: date}
+
     - id: organization_procurement_profile
       name: 기관 조달 프로필
       description: 기관의 공고·참여·낙찰·계약과 거래업체를 관찰기간 기준으로 집계한 프로필

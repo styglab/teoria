@@ -1,0 +1,35 @@
+registry:
+  version: 1.2.0
+  registered_at: "2026-10-01"
+capability:
+  id: search_procurement_activity
+  name: 기관·업체 통합 조달 활동 검색
+  description: 공고 게시일을 기간 기준으로 공고부터 낙찰·계약까지 통합하고 최신 활동일로 정렬한다. 결과 없는 공고는 게시일부터 마감일까지 open이며 입찰서 제출 시작일은 단계 판정에 사용하지 않는다. 화면 대표 금액은 공고 연결 시 배정예산·추정가격·기초금액 순으로, 미연결 계약은 최신 계약금액으로 반환한다.
+  kind: compute
+  processor: market_context.search_procurement_activity
+  effects:
+    reads: [public_procurement.bid_notice, public_procurement.bid_opening_participation, public_procurement.bid_award, public_procurement.contract]
+    produces: [public_procurement.procurement_activity]
+  inputs:
+    organization_code: {data_type: string, required: true}
+    company_number: {data_type: business_registration_number}
+    period_from_year: {data_type: integer, minimum: 2000, maximum: 2100, required: true}
+    period_to_year: {data_type: integer, minimum: 2000, maximum: 2100, required: true}
+    query: {data_type: string}
+    work_type:
+      data_type: string
+      enum: [goods, service, construction, foreign, other, unknown]
+    large_category: {data_type: string}
+    middle_category: {data_type: string}
+    field_code: {data_type: string}
+    stage:
+      data_type: string
+      enum: [all, scheduled, open, closed, award, contract, failed_or_cancelled]
+      default: all
+    page: {data_type: integer, default: 1, minimum: 1}
+    page_size: {data_type: integer, default: 20, minimum: 1, maximum: 100}
+    sort:
+      data_type: string
+      enum: [latest_activity_desc]
+      default: latest_activity_desc
+  returns: [public_procurement.procurement_activity]

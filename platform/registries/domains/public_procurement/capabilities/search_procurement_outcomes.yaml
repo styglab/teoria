@@ -1,0 +1,30 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-10-01"
+capability:
+  id: search_procurement_outcomes
+  name: 기관 낙찰·계약 통합 검색
+  description: 기관의 낙찰과 원계약을 공고 단위로 통합하고 구조화된 업무·분야 조건과 최신 활동일을 기준으로 페이지 검색한다.
+  kind: compute
+  processor: market_context.search_procurement_outcomes
+  effects:
+    reads: [public_procurement.bid_notice, public_procurement.bid_award, public_procurement.contract]
+    produces: [public_procurement.procurement_outcome]
+  inputs:
+    organization_code: {data_type: string, required: true}
+    period_from_year: {data_type: integer, minimum: 2000, maximum: 2100, required: true}
+    period_to_year: {data_type: integer, minimum: 2000, maximum: 2100, required: true}
+    query: {data_type: string}
+    work_type:
+      data_type: string
+      enum: [goods, service, construction, foreign, other, unknown]
+    large_category: {data_type: string}
+    middle_category: {data_type: string}
+    field_code: {data_type: string}
+    sort:
+      data_type: string
+      enum: [latest_activity_desc]
+      default: latest_activity_desc
+    page: {data_type: integer, default: 1, minimum: 1}
+    page_size: {data_type: integer, default: 20, minimum: 1, maximum: 100}
+  returns: [public_procurement.procurement_outcome]

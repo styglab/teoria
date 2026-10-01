@@ -1,11 +1,11 @@
 registry:
-  version: 1.1.0
+  version: 1.3.0
   registered_at: "2026-09-28"
 
 capability:
   id: get_organization_company_relationship
   name: 기관·업체 전체 수주관계
-  description: 분야 또는 유사사업 판정으로 사건을 제외하지 않고 특정 기관과 업체 사이의 전체 고유 수주사건을 최근순으로 페이지 조회한다.
+  description: 분야 또는 유사사업 판정으로 사건을 제외하지 않고 특정 기관과 업체 사이의 전체 고유 수주사건을 최근순으로 페이지 조회한다. 공고 연결 사건은 게시일, 미연결 계약은 최초 계약일에 귀속하며 최초 계약일과 최신 계약 버전일을 분리한다.
   kind: compute
   processor: market_context.get_organization_company_relationship
   effects:
@@ -23,6 +23,13 @@ capability:
       data_type: business_registration_number
       required: true
     work_type:
+      data_type: string
+      enum: [goods, service, construction, foreign, other, unknown]
+    large_category:
+      data_type: string
+    middle_category:
+      data_type: string
+    field_code:
       data_type: string
     period_years:
       data_type: integer

@@ -6,7 +6,10 @@ from uuid import uuid4
 
 import pytest
 
-from teoria_pipelines.connectors.pps_bid_results import PPSBidResultClient
+from teoria_pipelines.connectors.pps_bid_results import (
+    PPSBidResultClient,
+    _opening_page_completes_storage_contract,
+)
 from teoria_pipelines.loader import PipelineLoader
 from teoria_pipelines.models import CollectionWindow, RawProviderRecord
 from teoria_pipelines.normalization import (
@@ -128,7 +131,8 @@ class _CapturingClient(PPSBidResultClient):
         self.opening_request_timeout_seconds = 60
         self._opening_rate_limiter_active = False
 
-    async def _fetch_pages(self, execution_id, window, operation_id, query):
+    async def _fetch_pages(self, execution_id, window, operation_id, query, **kwargs):
+        del kwargs
         self.calls.append((operation_id, query))
         from teoria_pipelines.models import ExtractedBatch
         return ExtractedBatch(execution_id=execution_id, window=window, pages=1)
@@ -162,12 +166,14 @@ async def test_opening_api_uses_bounded_concurrency() -> None:
             self.active = 0
             self.maximum_active = 0
 
-        async def _fetch_pages(self, execution_id, window, operation_id, query):
+        async def _fetch_pages(self, execution_id, window, operation_id, query, **kwargs):
             self.active += 1
             self.maximum_active = max(self.maximum_active, self.active)
             await asyncio.sleep(0.01)
             self.active -= 1
-            return await super()._fetch_pages(execution_id, window, operation_id, query)
+            return await super()._fetch_pages(
+                execution_id, window, operation_id, query, **kwargs
+            )
 
     client = ConcurrentClient()
     records = [_record("list_goods_bid_awards", {
@@ -185,10 +191,12 @@ async def test_opening_api_isolates_timed_out_award() -> None:
             super().__init__()
             self.opening_request_timeout_seconds = 0.01
 
-        async def _fetch_pages(self, execution_id, window, operation_id, query):
+        async def _fetch_pages(self, execution_id, window, operation_id, query, **kwargs):
             if query["bidNtceNo"].endswith("1"):
                 await asyncio.sleep(1)
-            return await super()._fetch_pages(execution_id, window, operation_id, query)
+            return await super()._fetch_pages(
+                execution_id, window, operation_id, query, **kwargs
+            )
 
     client = TimeoutClient()
     records = [_record("list_goods_bid_awards", {
@@ -259,3 +267,30 @@ def test_rejects_non_positive_competitive_rank_limit() -> None:
     empty = ExtractedBatch(uuid4(), CollectionWindow(date(2026, 9, 1), date(2026, 9, 1)))
     with pytest.raises(ValueError, match="maximum_rank must be positive"):
         select_competitive_opening_participants.fn(empty, empty, 0)
+
+
+def test_opening_pagination_stops_after_top_ten_and_winner_are_covered() -> None:
+    payloads = [
+        {"prcbdrBizno": f"{rank:010d}", "opengRank": str(rank)}
+        for rank in range(1, 12)
+    ]
+
+    assert _opening_page_completes_storage_contract(
+        payloads, winner_business_number="0000000001", maximum_rank=10,
+    )
+
+
+def test_opening_pagination_continues_until_winner_is_seen() -> None:
+    payloads = [
+        {"prcbdrBizno": f"{rank:010d}", "opengRank": str(rank)}
+        for rank in range(1, 12)
+    ]
+
+    assert not _opening_page_completes_storage_contract(
+        payloads, winner_business_number="9999999999", maximum_rank=10,
+    )
+
+
+def test_opening_rate_limit_methods_remain_on_client() -> None:
+    assert callable(PPSBidResultClient._wait_for_opening_rate_slot)
+    assert callable(PPSBidResultClient._penalize_opening_rate)

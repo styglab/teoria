@@ -37,11 +37,12 @@ source:
 
     - id: contracts
       name: 조달계약
-      relation: public_procurement.contracts
+      relation: public_procurement.runtime_contracts
       primary_key: [unified_contract_number]
       fields:
         - {id: unified_contract_number, name: 통합계약번호, data_type: string}
         - {id: contract_type, name: 계약유형, data_type: string}
+        - {id: work_type, name: 업무유형, data_type: string}
         - {id: confirmed_contract_number, name: 확정계약번호, data_type: string}
         - {id: contract_reference_number, name: 계약참조번호, data_type: string}
         - {id: contract_name, name: 계약명, data_type: string}
@@ -64,6 +65,10 @@ source:
         - {id: contracting_department_name, name: 계약기관 담당부서명, data_type: string}
         - {id: procurement_classification_number, name: 공공조달분류번호, data_type: string}
         - {id: procurement_classification_name, name: 공공조달분류명, data_type: string}
+        - {id: field_code, name: 조달 기본분류코드, data_type: string}
+        - {id: field_name, name: 조달 기본분류명, data_type: string}
+        - {id: large_category, name: 조달 대분류, data_type: string}
+        - {id: middle_category, name: 조달 중분류, data_type: string}
         - {id: contract_information_url, name: 계약정보 URL, data_type: string}
         - {id: contract_detail_url, name: 계약상세정보 URL, data_type: string}
         - {id: source_registered_at, name: 원천 등록일시, data_type: datetime}
@@ -117,7 +122,7 @@ source:
 
     - id: bid_awards
       name: 입찰 최종낙찰 결과
-      relation: public_procurement.bid_awards
+      relation: public_procurement.runtime_bid_awards
       primary_key: [notice_number, notice_order, bid_classification_number, rebid_number]
       fields:
         - {id: award_id, name: 최종낙찰 식별자, data_type: string}
@@ -127,6 +132,10 @@ source:
         - {id: bid_classification_number, name: 입찰분류번호, data_type: string}
         - {id: rebid_number, name: 재입찰번호, data_type: string}
         - {id: work_type, name: 업무유형, data_type: string}
+        - {id: field_code, name: 조달 기본분류코드, data_type: string}
+        - {id: field_name, name: 조달 기본분류명, data_type: string}
+        - {id: large_category, name: 조달 대분류, data_type: string}
+        - {id: middle_category, name: 조달 중분류, data_type: string}
         - {id: notice_division_code, name: 공고구분코드, data_type: string}
         - {id: notice_name, name: 공고명, data_type: string}
         - {id: participant_count, name: 참가업체수, data_type: integer}
