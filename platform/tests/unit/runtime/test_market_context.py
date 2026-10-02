@@ -14,6 +14,9 @@ from teoria.runtime.market_context.processor import (
     execute_bid_notice_relationship_context,
     execute_company_procurement_profile,
     execute_organization_procurement_profile,
+    execute_organization_supplier_entry_search,
+    execute_company_participation_search,
+    execute_company_competitor_analysis,
     execute_organization_company_field_relationship,
     execute_organization_company_relationship,
     execute_company_similar_project_experience,
@@ -1127,6 +1130,8 @@ async def test_procurement_profile_merges_contract_versions_by_project() -> None
     assert relationship["latest_contract_date"] == date(2025, 1, 1)
     assert relationship["yearly_activity"] == [{
         "year": 2023, "participation_count": 0, "award_event_count": 0,
+        "result_confirmed_participation_count": 0,
+        "successful_participation_count": 0, "award_success_rate": None,
         "contract_event_count": 1, "attributed_contract_amount": 100,
         "amount_completeness": "complete",
     }]
@@ -1359,6 +1364,13 @@ async def test_organization_profile_company_search_sort_and_pagination_are_list_
     assert searched.outcome["work_type_distribution"] == baseline.outcome[
         "work_type_distribution"
     ]
+    assert searched.outcome["company_structure"] == baseline.outcome["company_structure"]
+    assert searched.outcome["notice_quarter_distribution"] == baseline.outcome[
+        "notice_quarter_distribution"
+    ]
+    assert searched.outcome["contract_method_distribution"] == baseline.outcome[
+        "contract_method_distribution"
+    ]
     assert searched.objects[0].properties["relationship_count"] == 3
 
     expected_orders = {
@@ -1375,6 +1387,202 @@ async def test_organization_profile_company_search_sort_and_pagination_are_list_
         assert [
             item["company_name"] for item in result.outcome["company_relationships"]
         ] == expected
+
+
+@pytest.mark.asyncio
+async def test_organization_profile_market_structure_uses_unique_contract_events() -> None:
+    class Reader:
+        def activities(self, catalog, **kwargs):
+            base = {
+                "organization_code": "ORG-1", "organization_name": "기관",
+                "procurement_classification_number": "81111599",
+                "procurement_classification_name": "정보시스템개발서비스",
+                "procurement_large_classification_name": "ICT 서비스",
+                "procurement_middle_classification_name": "SW 및 시스템 개발",
+                "work_type": "service", "amount_completeness": "complete",
+                "activity_type": "contract", "attribution_date_basis": "notice_published_at",
+            }
+            return [
+                {**base, "event_key": "OLD", "bid_notice_id": "OLD:000",
+                 "notice_name": "이전 사업", "company_number": "1111111111",
+                 "company_name": "A사", "activity_date": date(2024, 2, 1),
+                 "notice_published_date": date(2024, 2, 1),
+                 "contract_method_name": "일반경쟁", "event_amount": Decimal("100"),
+                 "attributed_contract_amount": Decimal("100")},
+                {**base, "event_key": "JOINT", "bid_notice_id": "JOINT:000",
+                 "notice_name": "공동 사업", "company_number": "1111111111",
+                 "company_name": "A사", "activity_date": date(2025, 4, 1),
+                 "notice_published_date": date(2025, 4, 1),
+                 "contract_method_name": "제한경쟁", "event_amount": Decimal("100"),
+                 "attributed_contract_amount": Decimal("60")},
+                {**base, "event_key": "JOINT", "bid_notice_id": "JOINT:000",
+                 "notice_name": "공동 사업", "company_number": "2222222222",
+                 "company_name": "B사", "activity_date": date(2025, 4, 1),
+                 "notice_published_date": date(2025, 4, 1),
+                 "contract_method_name": "제한경쟁", "event_amount": Decimal("100"),
+                 "attributed_contract_amount": Decimal("40")},
+                {**base, "event_key": "DIRECT", "bid_notice_id": "DIRECT:000",
+                 "notice_name": "수의 사업", "company_number": "1111111111",
+                 "company_name": "A사", "activity_date": date(2025, 8, 1),
+                 "notice_published_date": date(2025, 8, 1),
+                 "contract_method_name": "수의계약", "event_amount": Decimal("200"),
+                 "attributed_contract_amount": Decimal("200")},
+            ]
+
+        def organization_award_history(self, catalog, **kwargs):
+            return {"1111111111": date(2024, 2, 1), "2222222222": date(2025, 4, 1)}, date(2020, 1, 1)
+
+    result = await execute_organization_procurement_profile(
+        RegistryLoader(REGISTRIES).load(), "analyze_organization_procurement_profile",
+        {"organization_code": "ORG-1", "period_from_year": 2024, "period_to_year": 2025},
+        reader=Reader(),
+    )
+
+    outcome = result.outcome
+    assert outcome["summary"]["average_contract_amount"] == 400 / 3
+    assert outcome["summary"]["previous_period_comparison"] == {
+        "basis": "year_over_year", "current_year": 2025, "comparison_year": 2024,
+        "contract_amount_change_rate": 2.0, "contract_event_count_change": 1,
+        "comparable": True, "comparison_note": None,
+    }
+    assert sum(item["contract_event_count"] for item in outcome["field_distribution"]) == 3
+    assert sum(item["notice_count"] for item in outcome["notice_quarter_distribution"]) == 3
+    assert sum(
+        item["contract_event_count"] for item in outcome["contract_method_distribution"]
+    ) == 3
+    assert outcome["company_structure"]["contracted_company_count"] == 2
+    assert outcome["company_structure"]["multi_contract_company_count"] == 1
+    assert outcome["company_structure"]["single_contract_company_count"] == 1
+    assert outcome["company_structure"]["top_5_company_amount"] == 400
+    assert outcome["company_structure"]["top_5_company_amount_share"] == 1.0
+    assert outcome["company_relationships"][0]["major_field"] == {
+        "field_code": "81111599", "field_name": "정보시스템개발서비스",
+    }
+
+
+@pytest.mark.asyncio
+async def test_supplier_entry_uses_target_year_and_three_prior_calendar_years() -> None:
+    class Reader:
+        def activities(self, catalog, **kwargs):
+            base = {
+                "activity_type": "contract", "organization_code": "ORG-1",
+                "organization_name": "기관", "notice_name": "정보시스템 사업",
+                "procurement_classification_number": "81111599",
+                "procurement_classification_name": "정보시스템개발서비스",
+                "procurement_large_classification_name": "ICT 서비스",
+                "procurement_middle_classification_name": "SW 및 시스템 개발",
+                "work_type": "service", "amount_completeness": "complete",
+                "attribution_date_basis": "notice_published_at",
+            }
+            definitions = [
+                ("A", "1111111111", "신규", 2026, "100"),
+                ("B-OLD", "2222222222", "재진입", 2022, "10"),
+                ("B", "2222222222", "재진입", 2026, "200"),
+                ("C-OLD", "3333333333", "기존", 2024, "50"),
+                ("C", "3333333333", "기존", 2026, "300"),
+            ]
+            return [{
+                **base, "event_key": event, "bid_notice_id": f"{event}:000",
+                "company_number": number, "company_name": name,
+                "activity_date": date(year, 4, 1),
+                "notice_published_date": date(year, 4, 1),
+                "first_contract_date": date(year, 6, 1),
+                "latest_contract_version_date": date(year, 9, 1),
+                "event_amount": Decimal(amount),
+                "attributed_contract_amount": Decimal(amount),
+                "contract_method_name": "일반경쟁",
+            } for event, number, name, year, amount in definitions]
+
+        def organization_award_history(self, catalog, **kwargs):
+            return {
+                "1111111111": date(2026, 4, 1),
+                "2222222222": date(2022, 4, 1),
+                "3333333333": date(2024, 4, 1),
+            }, date(2020, 1, 1)
+
+    catalog = RegistryLoader(REGISTRIES).load()
+    inputs = {
+        "organization_code": "ORG-1", "period_from_year": 2023,
+        "period_to_year": 2026, "work_type": "service",
+        "large_category": "ICT 서비스",
+    }
+    result = await execute_organization_procurement_profile(
+        catalog, "analyze_organization_procurement_profile", inputs, reader=Reader(),
+    )
+    entry = result.outcome["supplier_entry"]
+    assert entry["lookback_from"] == date(2023, 1, 1)
+    assert entry["lookback_to"] == date(2025, 12, 31)
+    assert entry["first_observed_company_count"] == 1
+    assert entry["reentering_company_count"] == 1
+    assert entry["incumbent_company_count"] == 1
+    assert entry["entry_and_reentry_company_count"] == 2
+    assert entry["total_company_count"] == 3
+    assert entry["entry_and_reentry_rate"] == pytest.approx(2 / 3, abs=1e-6)
+    assert entry["history_complete_for_lookback"] is True
+    structure = result.outcome["company_structure"]
+    assert structure["single_contract_company_count"] + structure[
+        "multi_contract_company_count"
+    ] == structure["contracted_company_count"]
+    assert structure["top_5_company_amount"] == 650
+    assert structure["total_company_attributed_contract_amount"] == 650
+    assert structure["top_5_company_amount_share"] == 1.0
+    assert structure["small_supplier_population"] is True
+    assert 0 <= structure["hhi"] <= 10000
+
+    search = await execute_organization_supplier_entry_search(
+        catalog, "search_organization_supplier_entries", {
+            "organization_code": "ORG-1", "target_year": 2026,
+            "work_type": "service", "large_category": "ICT 서비스",
+            "entry_status": "reentering", "page": 1, "page_size": 20,
+        }, reader=Reader(),
+    )
+    assert search.outcome["pagination"]["total_items"] == 1
+    assert search.outcome["items"][0]["company_name"] == "재진입"
+    assert search.outcome["items"][0]["target_year_first_contract_date"] == date(2026, 6, 1)
+    assert search.outcome["items"][0]["target_year_latest_contract_date"] == date(2026, 6, 1)
+    assert search.outcome["items"][0]["previous_contract_date"] == date(2022, 6, 1)
+    assert search.outcome["items"][0]["reentry_contract_date"] == date(2026, 6, 1)
+
+
+@pytest.mark.asyncio
+async def test_company_participation_search_and_competitors_share_filters() -> None:
+    class Reader:
+        def find(self, catalog, **kwargs):
+            return [{
+                "bid_notice_id": "N1:000", "notice_name": "정보시스템 사업",
+                "organization_code": "ORG", "organization_name": "기관",
+                "participant_name": "대상", "participation_date": date(2025, 5, 1),
+                "rank": 2, "participant_count": 7, "bid_amount": Decimal("90"),
+                "winning_amount": Decimal("100"), "result": "unsuccessful",
+                "result_confirmed": True, "work_type": "service",
+                "field_code": "81111599", "field_name": "정보시스템개발서비스",
+                "large_category": "ICT 서비스", "middle_category": "SW 및 시스템 개발",
+                "classification_source": "procurement_classification",
+            }]
+
+        def competitors(self, catalog, **kwargs):
+            return [{
+                "company_number": "2222222222", "company_name": "경쟁사",
+                "bid_notice_id": "N1:000", "participation_date": date(2025, 5, 1),
+                "participation_event_id": "N1:000:0:0", "work_type": "service",
+                "field_code": "81111599", "field_name": "정보시스템개발서비스",
+                "large_category": "ICT 서비스", "middle_category": "SW 및 시스템 개발",
+                "classification_source": "procurement_classification",
+            }]
+
+    inputs = {"business_registration_number": "1111111111", "period_from_year": 2025,
+              "period_to_year": 2025, "work_type": "service",
+              "large_category": "ICT 서비스", "page": 1, "page_size": 20}
+    catalog = RegistryLoader(REGISTRIES).load()
+    history = await execute_company_participation_search(
+        catalog, "search_bid_participations", inputs, reader=Reader(),
+    )
+    assert history.outcome["items"][0]["result"] == "unsuccessful"
+    assert history.outcome["items"][0]["participant_count"] == 7
+    competitors = await execute_company_competitor_analysis(
+        catalog, "analyze_company_competitors", inputs, reader=Reader(),
+    )
+    assert competitors.outcome["items"][0]["co_participation_count"] == 1
 
 
 @pytest.mark.asyncio
@@ -1405,6 +1613,7 @@ async def test_rolling_supplier_entry_ignores_start_year_and_filters_history() -
     reader = Reader()
     catalog = RegistryLoader(REGISTRIES).load()
     outcomes = []
+    supplier_outcomes = []
     for from_year in (2021, 2024):
         result = await execute_organization_procurement_profile(
             catalog, "analyze_organization_procurement_profile", {
@@ -1415,8 +1624,10 @@ async def test_rolling_supplier_entry_ignores_start_year_and_filters_history() -
             }, reader=reader,
         )
         outcomes.append(result.outcome["summary"]["rolling_12m_supplier_entry"])
+        supplier_outcomes.append(result.outcome["supplier_entry"])
 
     assert outcomes[0] == outcomes[1]
+    assert supplier_outcomes[0] == supplier_outcomes[1]
     assert outcomes[0]["history_from"] == date(2020, 1, 1)
     assert outcomes[0]["history_to"] == date(2024, 12, 31)
     for call in reader.history_calls:
@@ -1568,7 +1779,9 @@ async def test_construction_profile_uses_official_field_as_flat_category() -> No
         "field_code": "72153699", "field_name": "실내건축공사",
         "large_category": "실내건축공사", "middle_category": None,
         "detailed_items": [], "classification_source": "construction_work_category",
-        "work_types": ["construction"], "participation_count": 0,
+            "work_types": ["construction"], "participation_count": 0,
+            "result_confirmed_participation_count": 0,
+            "successful_participation_count": 0, "award_success_rate": None,
         "award_event_count": 0, "contract_event_count": 1, "event_count": 1,
         "attributed_contract_amount": 100, "amount_share": 1.0,
     }]
@@ -1617,7 +1830,9 @@ async def test_profile_includes_and_filters_unclassified_field_bucket() -> None:
     assert distribution["미분류"] == {
         "large_category": "미분류", "field_code": None, "field_name": None,
         "middle_category": None, "classification_source": "unclassified",
-        "event_count": 1, "participation_count": 0, "award_event_count": 0,
+            "event_count": 1, "participation_count": 0, "award_event_count": 0,
+            "result_confirmed_participation_count": 0,
+            "successful_participation_count": 0, "award_success_rate": None,
         "contract_event_count": 1, "attributed_contract_amount": 80,
         "work_types": ["goods"], "amount_share": 0.8,
     }

@@ -46,6 +46,7 @@ def test_loads_current_registries() -> None:
     assert set(catalog.capabilities) == {
         "assess_company_bid_eligibilities",
         "assess_company_bid_eligibility",
+            "analyze_company_competitors",
             "analyze_bid_organization_field_companies",
             "analyze_organization_procurement_profile",
             "analyze_company_procurement_profile",
@@ -72,6 +73,7 @@ def test_loads_current_registries() -> None:
             "search_public_procurement_contracts",
             "search_procurement_outcomes",
             "search_procurement_activity",
+            "search_organization_supplier_entries",
             "search_public_organizations",
         "get_company_public_procurement_contracts",
         "search_companies_by_name",

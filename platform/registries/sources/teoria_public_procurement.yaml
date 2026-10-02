@@ -1,6 +1,6 @@
 registry:
-  version: 1.4.0
-  registered_at: "2026-09-29"
+  version: 1.5.0
+  registered_at: "2026-10-02"
 
 source:
   id: teoria_public_procurement
@@ -171,6 +171,7 @@ source:
         - {id: business_registration_number, name: 투찰업체 사업자등록번호, data_type: business_registration_number}
         - {id: opening_result_type_name, name: 개찰결과구분명, data_type: string}
         - {id: opening_rank, name: 개찰순위, data_type: integer}
+        - {id: rank, name: 개찰순위 별칭, data_type: integer}
         - {id: participant_name, name: 투찰업체명, data_type: string}
         - {id: representative_name, name: 투찰업체 대표자명, data_type: string}
         - {id: bid_amount, name: 투찰금액, data_type: number}
@@ -180,11 +181,21 @@ source:
         - {id: draw_number_1, name: 추첨번호1, data_type: string}
         - {id: draw_number_2, name: 추첨번호2, data_type: string}
         - {id: bid_at, name: 투찰시각, data_type: datetime}
+        - {id: participation_date, name: 참여일시, data_type: datetime}
+        - {id: participant_count, name: 전체 참가업체수, data_type: integer}
+        - {id: winning_amount, name: 낙찰금액, data_type: number}
+        - {id: result, name: 참여결과, data_type: string}
+        - {id: result_confirmed, name: 결과확인여부, data_type: boolean}
         - {id: bid_price_evaluation_score, name: 입찰가격점수, data_type: number}
         - {id: technical_evaluation_raw_score, name: 기술평가원점수, data_type: number}
         - {id: technical_evaluation_score, name: 기술평가점수, data_type: number}
         - {id: total_evaluation_score, name: 종합평가점수, data_type: number}
         - {id: work_type, name: 업무유형, data_type: string}
+        - {id: field_code, name: 조달 기본분류코드, data_type: string}
+        - {id: field_name, name: 조달 기본분류명, data_type: string}
+        - {id: large_category, name: 조달 대분류, data_type: string}
+        - {id: middle_category, name: 조달 중분류, data_type: string}
+        - {id: classification_source, name: 분류 출처, data_type: string}
         - {id: notice_name, name: 공고명, data_type: string}
         - {id: opening_at, name: 실개찰시각, data_type: datetime}
         - {id: final_award_date, name: 최종낙찰일, data_type: date}

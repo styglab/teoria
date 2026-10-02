@@ -424,22 +424,9 @@ def test_company_bid_history_binds_business_number_to_each_relation() -> None:
     assert participation_query["pagination"]["count_distinct"] is False
 
 
-def test_bid_participation_search_binds_joined_award_filters() -> None:
+def test_bid_participation_search_uses_compute_processor() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
     capability = catalog.capabilities["search_bid_participations"]
-    query = CapabilityBinder().bind(
-        catalog, capability, capability.steps[0], {
-            "opening_at_from": datetime(2026, 1, 1, tzinfo=timezone.utc),
-            "opening_at_to": datetime(2026, 12, 31, tzinfo=timezone.utc),
-            "work_type": "service",
-            "demand_organization_code": "B000001",
-        },
-    )
-
-    assert [item["field"] for item in query["filters"]] == [
-        "opening_at", "opening_at", "work_type", "demand_organization_code",
-    ]
-    assert query["pagination"] == {
-        "page": 1, "page_size": 20, "root_field": "participation_id",
-        "count_distinct": False,
-    }
+    assert capability.kind == "compute"
+    assert capability.processor == "market_context.search_company_bid_participations"
+    assert capability.steps == []

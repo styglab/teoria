@@ -48,8 +48,8 @@ def test_capabilities_load_and_references_are_valid() -> None:
     assert catalog.capabilities["search_bid_awards"].steps[0].call == (
         "teoria_public_procurement.bid_awards"
     )
-    assert catalog.capabilities["search_bid_participations"].steps[0].call == (
-        "teoria_public_procurement.bid_opening_participants"
+    assert catalog.capabilities["search_bid_participations"].processor == (
+        "market_context.search_company_bid_participations"
     )
 
 

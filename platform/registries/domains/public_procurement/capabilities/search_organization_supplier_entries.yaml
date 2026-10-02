@@ -1,0 +1,37 @@
+registry:
+  version: 1.1.0
+  registered_at: "2026-10-02"
+
+capability:
+  id: search_organization_supplier_entries
+  name: 기관 공급업체 진입 목록 조회
+  description: 선택한 종료 연도의 기관 계약 업체를 신규 관측·재진입·기존으로 분류하고 동일한 업무구분·조달분야 조건으로 조회한다. 분류는 사업 귀속일을 사용하고 모든 contract_date 필드는 변경·차수계약일이 아닌 원계약 사건의 실제 최초 계약일을 반환한다.
+  kind: compute
+  processor: market_context.search_organization_supplier_entries
+  effects:
+    reads:
+      - public_procurement.bid_notice
+      - public_procurement.contract
+    produces:
+      - public_procurement.organization_procurement_profile
+  inputs:
+    organization_code: {data_type: string, required: true}
+    target_year: {data_type: integer, required: true, minimum: 2000, maximum: 2100}
+    entry_status:
+      data_type: string
+      enum: [all, first_observed, reentering, incumbent]
+      default: all
+    large_category: {data_type: string}
+    middle_category: {data_type: string}
+    field_code: {data_type: string}
+    work_type:
+      data_type: string
+      enum: [goods, service, construction, foreign, other, unknown]
+    page: {data_type: integer, default: 1, minimum: 1}
+    page_size: {data_type: integer, default: 20, minimum: 1, maximum: 100}
+    sort:
+      data_type: string
+      enum: [contract_amount_desc, contract_count_desc, first_contract_desc, company_name_asc]
+      default: contract_amount_desc
+  returns:
+    - public_procurement.organization_procurement_profile

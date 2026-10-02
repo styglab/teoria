@@ -1,31 +1,26 @@
 registry:
-  version: 2.0.0
+  version: 1.0.0
   registered_at: "2026-10-02"
 capability:
-  id: search_bid_participations
-  name: 업체 입찰 참여 이력 검색
-  description: 업체의 개찰 참여 이력을 명시적 연도·업무구분·공식 조달분류로 필터링하고 확인된 낙찰·계약 결과를 함께 반환한다. 참여 원천은 상위 10위와 낙찰업체 중심이다.
+  id: analyze_company_competitors
+  name: 업체 주요 동시 참여업체 분석
+  description: 수집된 개찰 참여 결과에서 동일 공고·입찰분류·재입찰에 함께 참여한 업체를 집계한다. 상위 10위 및 낙찰업체 보존 정책 때문에 전체 경쟁업체 모집단은 아니다.
   kind: compute
-  processor: market_context.search_company_bid_participations
+  processor: market_context.analyze_company_competitors
   effects:
-    reads: [public_procurement.bid_opening_participation, public_procurement.bid_award, public_procurement.contract]
+    reads: [public_procurement.bid_opening_participation]
     produces: [public_procurement.bid_opening_participation]
   inputs:
     business_registration_number: {data_type: business_registration_number, required: true}
     period_years: {data_type: integer, default: 5, minimum: 1, maximum: 15}
     period_from_year: {data_type: integer, minimum: 2000, maximum: 2100}
     period_to_year: {data_type: integer, minimum: 2000, maximum: 2100}
-    query: {data_type: string}
     large_category: {data_type: string}
     middle_category: {data_type: string}
     field_code: {data_type: string}
     work_type:
       data_type: string
       enum: [goods, service, construction, foreign, other, unknown]
-    sort:
-      data_type: string
-      enum: [participation_desc, rank_asc, amount_desc]
-      default: participation_desc
     page: {data_type: integer, default: 1, minimum: 1}
     page_size: {data_type: integer, default: 20, minimum: 1, maximum: 100}
   returns: [public_procurement.bid_opening_participation]
