@@ -1,0 +1,60 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-10-02"
+
+capability:
+  id: get_company_detail_context
+  name: 기업 상세 통합 조회
+  description: >-
+    사업자 상태와 기업 식별자를 확인하고, 확정된 법인에 한해 기업개요,
+    최근 가용 재무정보 및 기업관계를 부분 실패를 허용하여 통합 반환한다.
+  kind: compute
+  processor: company_identity.get_company_detail_context
+  effects:
+    reads:
+      - company.business_registration
+      - company.taxpayer_status_observation
+      - company.legal_entity
+      - company.financial_statement
+      - company.financial_fact
+      - company.organization_relationship
+    produces:
+      - company.business_registration
+      - company.taxpayer_status_observation
+      - company.legal_entity
+      - company.financial_statement
+      - company.financial_fact
+      - company.organization_relationship
+  inputs:
+    business_registration_number:
+      property: company.business_registration.business_registration_number
+      required: true
+    company_name:
+      property: company.legal_entity.legal_name
+      required: true
+    financial_year_limit:
+      data_type: integer
+      default: 3
+      minimum: 1
+      maximum: 5
+    financial_lookback_years:
+      data_type: integer
+      default: 7
+      minimum: 1
+      maximum: 10
+    include_relationships:
+      data_type: boolean
+      default: true
+  returns:
+    - company.business_registration
+    - company.taxpayer_status_observation
+    - company.business_registration_has_taxpayer_status
+    - company.legal_entity
+    - company.legal_entity_has_business_registration
+    - company.financial_statement
+    - company.financial_fact
+    - company.legal_entity_has_financial_statement
+    - company.financial_statement_has_fact
+    - company.organization_relationship
+    - company.organization_relationship_has_reference_entity
+    - company.organization_relationship_has_related_entity

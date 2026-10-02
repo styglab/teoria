@@ -192,8 +192,8 @@ async def test_batch_assessment_returns_list_summaries_and_reuses_cache() -> Non
     assert key_outcomes["past_performance"]["applicability"] == "not_applicable"
     assert key_outcomes["participation_region"]["applicability"] == "not_applicable"
     assert key_outcomes["industry_license"]["outcome"] is None
-    assert runner.calls.count("get_bid_notices_by_ids") == 2
-    assert runner.calls.count("get_bid_requirements_by_notice_ids") == 2
+    assert runner.calls.count("get_bid_notices_by_ids") == 1
+    assert runner.calls.count("get_bid_requirements_by_notice_ids") == 1
     assert runner.calls.count("get_business_registration_status") == 1
     assert runner.calls.count("get_company_qualifications") == 1
     assert runner.calls.count("get_direct_production_confirmations") == 1

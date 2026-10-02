@@ -71,6 +71,16 @@ _company_evidence_cache: OrderedDict[str, tuple[float, CompanyEvidenceSnapshot]]
 logger = logging.getLogger(__name__)
 
 
+def _runtime_cache(runner: Any) -> Any:
+    cache = getattr(runner, "cache", None)
+    if cache is None:
+        from teoria.runtime.cache import MemoryRuntimeCache
+
+        cache = MemoryRuntimeCache()
+        runner.cache = cache
+    return cache
+
+
 def clear_assessment_cache() -> None:
     _assessment_cache.clear()
     _batch_summary_cache.clear()
@@ -83,29 +93,26 @@ async def execute_bid_eligibility_assessment(
     capability_id: str,
     inputs: dict[str, Any],
 ) -> CapabilityResult:
-    cache_key = _hash({
+    cache_inputs = {
         "business_registration_number": inputs.get("business_registration_number"),
         "bid_notice_id": inputs.get("bid_notice_id"),
         "reference_date": inputs.get("reference_date"),
         "participation_mode": inputs.get("participation_mode") or "single",
         "registry_version": catalog.release.version if catalog.release else "draft",
         "ruleset_version": RULESET_VERSION,
-    })
-    cached = _assessment_cache.get(cache_key)
-    now_monotonic = time.monotonic()
-    if cached and now_monotonic - cached[0] < CACHE_TTL_SECONDS:
-        _assessment_cache.move_to_end(cache_key)
-        return cached[1].model_copy(deep=True)
-    if cached:
-        del _assessment_cache[cache_key]
+    }
+    runtime_cache = _runtime_cache(runner)
+    cache_key = runtime_cache.key(
+        catalog.release.version if catalog.release else "draft", capability_id, cache_inputs,
+    )
+    cached = await runtime_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     result = await _execute_bid_eligibility_assessment_uncached(
         runner, catalog, capability_id, inputs,
     )
-    _assessment_cache[cache_key] = (now_monotonic, result.model_copy(deep=True))
-    _assessment_cache.move_to_end(cache_key)
-    while len(_assessment_cache) > CACHE_MAX_ENTRIES:
-        _assessment_cache.popitem(last=False)
+    await runtime_cache.set(cache_key, result, int(CACHE_TTL_SECONDS))
     return result
 
 
@@ -163,6 +170,13 @@ async def execute_bid_eligibility_assessments(
     capability_id: str,
     inputs: dict[str, Any],
 ) -> CapabilityResult:
+    runtime_cache = _runtime_cache(runner)
+    shared_cache_key = runtime_cache.key(
+        catalog.release.version if catalog.release else "draft", capability_id, inputs,
+    )
+    shared_cached = await runtime_cache.get(shared_cache_key)
+    if shared_cached is not None:
+        return shared_cached
     bid_notice_ids = list(dict.fromkeys(str(item) for item in inputs["bid_notice_ids"]))
     if not 1 <= len(bid_notice_ids) <= 100:
         raise CapabilityExecutionError(
@@ -238,11 +252,13 @@ async def execute_bid_eligibility_assessments(
         "batch bid eligibility assessment completed notices=%d cache_hits=%d duration_ms=%.1f",
         len(bid_notice_ids), cache_hits, (time.monotonic() - started) * 1000,
     )
-    return CapabilityResult(
+    result = CapabilityResult(
         capability_id=capability_id,
         objects=assessments,
         outcome={"items": summaries},
     )
+    await runtime_cache.set(shared_cache_key, result, int(CACHE_TTL_SECONDS))
+    return result
 
 
 async def _load_company_evidence_for_dates(

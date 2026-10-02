@@ -83,6 +83,10 @@ Prefect DB ─┬→ Server → work pool → prefect-deploy ┘
 Redis ──────┴→ Background Services
 ```
 
+`prefect-redis`는 Prefect 메시징 전용이고 `runtime-redis`는 Runtime Capability 결과 캐시
+전용이다. Runtime API를 여러 replica로 실행해도 Registry 버전과 Capability 입력이 같은 결과를
+공유한다. Redis 조회·저장 장애는 Capability 실행을 중단시키지 않고 캐시 미사용으로 전환된다.
+
 `prefect-ai-worker`는 API key 대신 ChatGPT-managed Codex 로그인을 사용한다. 최초 배포 후
 다음 명령으로 전용 `codex-auth` volume에 로그인 세션을 만든다.
 

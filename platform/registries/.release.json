@@ -1,7 +1,7 @@
 {
-  "version": "2026.10.02.3",
-  "git_commit": "c048cf3809ac5bc8b9699bbf9971c8d8443960f9",
-  "checksum": "sha256:07915860065eb8bf268074e75187028caa12b9c48d3d006d1aaa392a857b820c",
-  "published_at": "2026-10-02T02:36:24.689014+00:00",
+  "version": "2026.10.02.8",
+  "git_commit": "4e27098dcd79dfa8c5f2580bad7fcb4708d5b8e4",
+  "checksum": "sha256:09879f6401dbb10767a741495f9b0586dfb58e9732cf235b441b5c565779ef28",
+  "published_at": "2026-10-02T09:09:22.440341+00:00",
   "status": "published"
 }

@@ -117,6 +117,18 @@ services:
     volumes:
       - prefect-redis:/data
 
+  runtime-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - runtime-redis:/data
+
   prefect-server:
     image: prefecthq/prefect:3-python3.12
     restart: unless-stopped
@@ -272,6 +284,9 @@ services:
       TEORIA_REGISTRY_REQUIRE_PUBLISHED: "true"
       TEORIA_RUNTIME_API_ROOT_PATH: /runtime-api
       TEORIA_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
+      TEORIA_RUNTIME_CACHE_BACKEND: redis
+      TEORIA_RUNTIME_CACHE_URL: redis://runtime-redis:6379/0
+      TEORIA_RUNTIME_CACHE_PREFIX: teoria:runtime
       TEORIA_RUNTIME_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
       TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY: ${TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY:-}
       TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY:-}
@@ -281,6 +296,8 @@ services:
     depends_on:
       postgres-migrate:
         condition: service_completed_successfully
+      runtime-redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 5s
@@ -357,4 +374,5 @@ volumes:
     name: teoria_data-db
   prefect-db:
   prefect-redis:
+  runtime-redis:
   codex-auth:

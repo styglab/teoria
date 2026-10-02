@@ -693,14 +693,73 @@ POST /v1/capabilities/get_bid_notice_contracts:execute
 
 ### 법인 기본정보와 재무정보
 
-법인등록번호를 확보한 경우 다음 Capability를 사용할 수 있다.
+업체 상세 화면에서는 개별 원천 Capability를 직접 조합하지 않고 통합 Capability를 우선 사용한다.
+
+```http
+POST /v1/capabilities/get_company_detail_context:execute
+```
+
+```json
+{
+  "inputs": {
+    "business_registration_number": "2148627427",
+    "company_name": "한국이디에스",
+    "financial_year_limit": 3,
+    "financial_lookback_years": 7,
+    "include_relationships": true
+  }
+}
+```
+
+`financial_availability`는 탐색 연도와 `available_years`, `no_data_years`, `error_years`를 구분한다.
+`no_data`는 원천 조회 실패가 아니며, 하나 이상의 섹션 호출이 실패한 경우에만
+`partial_failure=true`가 된다. 입찰체크는 `sections`의 상태를 기준으로 데이터 없음,
+식별자 미확정, 원천 오류를 서로 다르게 표시한다.
+
+사업자등록번호만 확보한 경우 먼저 기업 식별자를 해소한다.
+
+```http
+POST /v1/capabilities/resolve_company_identifiers:execute
+```
+
+```json
+{
+  "inputs": {
+    "business_registration_number": "2148627427",
+    "company_name": "(주)한국이디에스"
+  }
+}
+```
+
+`outcome.resolution_status`가 `confirmed`일 때만
+`outcome.identifiers.corporate_registration_number`를 법인 기본정보·재무정보 조회에 사용한다.
+회사명은 금융위원회 기업기본정보에서 후보를 찾는 검색 단서로만 사용한다. 검색 결과의 회사명이
+입력과 완전히 같지 않아도 금융위원회 응답의 사업자등록번호가 입력값과 정확히 일치하면 확정한다.
+회사명만 일치하고 사업자등록번호가 다른 결과는 법인으로 연결하지 않으며 `unresolved`와 누락
+사유를 반환한다. 따라서 나라장터 등록 여부와 관계없이 공식 회사명과 사업자등록번호를 확보한
+업체에 사용할 수 있다.
+
+```json
+{
+  "resolution_status": "confirmed",
+  "resolution_method": "fsc_business_number_exact_match",
+  "identifiers": {
+    "business_registration_number": "2148627427",
+    "corporate_registration_number": "1101111611056",
+    "financial_supervisory_unique_number": "01244160"
+  }
+}
+```
+
+법인등록번호를 확보한 뒤 다음 Capability를 사용할 수 있다.
 
 | Capability | 필수 입력 | 내용 |
 |---|---|---|
 | `get_company_profile` | `corporate_registration_number` | 법인 기본정보, 주소, 연결된 사업자등록번호 |
 | `get_company_financials` | `corporate_registration_number`, `fiscal_year` | 요약재무정보, 재무상태표, 손익계산서 |
 
-사업자등록번호만 가지고 법인 기본·재무정보를 바로 조회할 수 있다고 가정하면 안 된다. 법인등록번호가 없으면 조달 프로필과 사업자 상태 등 사업자번호 기반 기능만 제공한다.
+식별 결과가 `unresolved`이면 법인정보를 추정하지 않고 조달 프로필과 사업자 상태 등
+사업자번호 기반 기능만 제공한다.
 
 ### 세부 조회 Capability
 

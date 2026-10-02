@@ -77,6 +77,7 @@ class CapabilityRunner:
         timeout_seconds: float = 120.0,
         max_pages: int = 100,
         database_executor: DatabaseSourceExecutor | None = None,
+        cache: Any | None = None,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be greater than zero")
@@ -91,6 +92,11 @@ class CapabilityRunner:
         self.timeout_seconds = timeout_seconds
         self.max_pages = max_pages
         self.database_executor = database_executor or DatabaseSourceExecutor()
+        if cache is None:
+            from teoria.runtime.cache import MemoryRuntimeCache
+
+            cache = MemoryRuntimeCache()
+        self.cache = cache
 
     async def run(
         self,
@@ -131,6 +137,22 @@ class CapabilityRunner:
     ) -> CapabilityResult:
         capability = catalog.capabilities[capability_id]
         if capability.kind != "query":
+            if capability.processor == "company_identity.resolve_company_identifiers":
+                from teoria.runtime.company_identity.processor import (
+                    execute_company_identifier_resolution,
+                )
+
+                return await execute_company_identifier_resolution(
+                    self, catalog, capability_id, inputs,
+                )
+            if capability.processor == "company_identity.get_company_detail_context":
+                from teoria.runtime.company_identity.processor import (
+                    execute_company_detail_context,
+                )
+
+                return await execute_company_detail_context(
+                    self, catalog, capability_id, inputs,
+                )
             if capability.processor == "assessment.evaluate_bid_eligibility":
                 from teoria.runtime.assessment.processor import execute_bid_eligibility_assessment
 
@@ -150,7 +172,9 @@ class CapabilityRunner:
             if capability.processor == "market_context.analyze_bid_organization_field_companies":
                 from teoria.runtime.market_context.processor import execute_organization_field_companies
 
-                return await execute_organization_field_companies(catalog, capability_id, inputs)
+                return await execute_organization_field_companies(
+                    catalog, capability_id, inputs, cache=self.cache,
+                )
             if capability.processor == "market_context.find_bid_project_lineage":
                 from teoria.runtime.market_context.processor import execute_bid_project_lineage
 
@@ -161,7 +185,7 @@ class CapabilityRunner:
                 )
 
                 return await execute_organization_company_relationship(
-                    catalog, capability_id, inputs,
+                    catalog, capability_id, inputs, cache=self.cache,
                 )
             if capability.processor == "market_context.get_company_similar_project_experience":
                 from teoria.runtime.market_context.processor import (

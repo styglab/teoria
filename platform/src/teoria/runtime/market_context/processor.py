@@ -18,6 +18,11 @@ from teoria.runtime.assessment.models import CompanyEvidenceSnapshot, requiremen
 from teoria.runtime.assessment.processor import evaluate_requirement_category
 from teoria.runtime.capability.runner import CapabilityExecutionError, CapabilityResult
 from teoria.runtime.mapping.materializer import MaterializedObject
+from teoria.runtime.procurement_classification import (
+    decorate_field_distribution,
+    field_identity,
+    normalize_category,
+)
 from teoria.runtime.provenance import Provenance
 
 
@@ -1015,16 +1020,24 @@ async def execute_organization_field_companies(
     company_reader: BidCompetitorCandidateReader | None = None,
     event_reader: OrganizationFieldEventReader | None = None,
     similar_experience_reader: CompanySimilarProjectExperienceReader | None = None,
+    cache: Any | None = None,
 ) -> CapabilityResult:
     total_started = time.perf_counter()
     bid_notice_id = str(inputs["bid_notice_id"])
     period_years = int(inputs.get("period_years", 5))
     limit = int(inputs.get("limit", 50))
     registry_version = catalog.release.version if catalog.release else "unpublished"
-    cache_key = (bid_notice_id, period_years, limit, registry_version)
-    cached = _ORGANIZATION_FIELD_CACHE.get(cache_key)
-    if cached and time.monotonic() - cached[0] < ORGANIZATION_FIELD_CACHE_TTL_SECONDS:
-        result = cached[1].model_copy(deep=True)
+    cache_inputs = {"bid_notice_id": bid_notice_id, "period_years": period_years, "limit": limit}
+    cache_key = (
+        cache.key(registry_version, capability_id, cache_inputs)
+        if cache is not None else (bid_notice_id, period_years, limit, registry_version)
+    )
+    cached_result = await cache.get(cache_key) if cache is not None else None
+    cached = _ORGANIZATION_FIELD_CACHE.get(cache_key) if cache is None else None
+    if cached_result is not None or (
+        cached and time.monotonic() - cached[0] < ORGANIZATION_FIELD_CACHE_TTL_SECONDS
+    ):
+        result = cached_result or cached[1].model_copy(deep=True)
         result.outcome["timings"] = {
             "current_notice_lookup_ms": 0.0,
             "organization_history_query_ms": 0.0,
@@ -1035,7 +1048,7 @@ async def execute_organization_field_companies(
             "cache_hit": True,
         }
         return result
-    if cached:
+    if cached and cache is None:
         _ORGANIZATION_FIELD_CACHE.pop(cache_key, None)
     timings: dict[str, float] = {}
     try:
@@ -1409,10 +1422,13 @@ async def execute_organization_field_companies(
             "timings": timings,
         },
     )
-    if len(_ORGANIZATION_FIELD_CACHE) >= 128:
-        oldest_key = min(_ORGANIZATION_FIELD_CACHE, key=lambda key: _ORGANIZATION_FIELD_CACHE[key][0])
-        _ORGANIZATION_FIELD_CACHE.pop(oldest_key, None)
-    _ORGANIZATION_FIELD_CACHE[cache_key] = (time.monotonic(), result.model_copy(deep=True))
+    if cache is not None:
+        await cache.set(cache_key, result, ORGANIZATION_FIELD_CACHE_TTL_SECONDS)
+    else:
+        if len(_ORGANIZATION_FIELD_CACHE) >= 128:
+            oldest_key = min(_ORGANIZATION_FIELD_CACHE, key=lambda key: _ORGANIZATION_FIELD_CACHE[key][0])
+            _ORGANIZATION_FIELD_CACHE.pop(oldest_key, None)
+        _ORGANIZATION_FIELD_CACHE[cache_key] = (time.monotonic(), result.model_copy(deep=True))
     return result
 
 
@@ -1568,6 +1584,7 @@ async def execute_organization_company_field_relationship(
     inputs: dict[str, Any],
     *,
     reader: OrganizationFieldEventReader | None = None,
+    cache: Any | None = None,
 ) -> CapabilityResult:
     started = time.perf_counter()
     organization_code = str(inputs["organization_code"])
@@ -1612,9 +1629,16 @@ async def execute_organization_company_field_relationship(
         reference_bid_notice_id, work_type, large_category, middle_category,
         procurement_field_code, registry_version, resolved_period_from, resolved_period_to,
     )
-    cached = _ORGANIZATION_COMPANY_FIELD_CACHE.get(cache_key)
-    if cached and time.monotonic() - cached[0] < ORGANIZATION_FIELD_CACHE_TTL_SECONDS:
-        result = cached[1].model_copy(deep=True)
+    shared_cache_key = (
+        cache.key(registry_version, capability_id, {"cache_key": cache_key})
+        if cache is not None else cache_key
+    )
+    shared_cached = await cache.get(shared_cache_key) if cache is not None else None
+    cached = _ORGANIZATION_COMPANY_FIELD_CACHE.get(cache_key) if cache is None else None
+    if shared_cached is not None or (
+        cached and time.monotonic() - cached[0] < ORGANIZATION_FIELD_CACHE_TTL_SECONDS
+    ):
+        result = shared_cached or cached[1].model_copy(deep=True)
         result.outcome["timings"] = {
             "total_ms": round((time.perf_counter() - started) * 1000, 3),
             "cache_hit": True,
@@ -1886,9 +1910,12 @@ async def execute_organization_company_field_relationship(
             },
         },
     )
-    _ORGANIZATION_COMPANY_FIELD_CACHE[cache_key] = (
-        time.monotonic(), result.model_copy(deep=True),
-    )
+    if cache is not None:
+        await cache.set(shared_cache_key, result, ORGANIZATION_FIELD_CACHE_TTL_SECONDS)
+    else:
+        _ORGANIZATION_COMPANY_FIELD_CACHE[cache_key] = (
+            time.monotonic(), result.model_copy(deep=True),
+        )
     return result
 
 
@@ -1898,6 +1925,7 @@ async def execute_organization_company_relationship(
     inputs: dict[str, Any],
     *,
     reader: OrganizationFieldEventReader | None = None,
+    cache: Any | None = None,
 ) -> CapabilityResult:
     """Return complete company×organization history without field filtering."""
     history_inputs = {
@@ -1918,6 +1946,7 @@ async def execute_organization_company_relationship(
         "get_organization_company_field_relationship",
         history_inputs,
         reader=reader,
+        cache=cache,
     )
     result.capability_id = capability_id
     result.outcome["relationship_type"] = "organization_history"
@@ -2227,8 +2256,7 @@ def _fiscal_period_start(as_of: date | datetime, period_years: int) -> date:
 
 
 def _normalized_category(value: Any) -> str | None:
-    normalized = " ".join(str(value or "").split())
-    return normalized or None
+    return normalize_category(value)
 
 
 def _effective_large_category(row: dict[str, Any]) -> str | None:
@@ -2252,6 +2280,23 @@ def _filter_profile_rows(
         if work_type and str(row.get("work_type") or "unknown") != work_type:
             continue
         field_identity = _procurement_field_identity(row)
+        # Backward-compatible transition path. ``물품`` used to be emitted as
+        # a synthetic field category; it now remains an input alias only.
+        legacy_goods_scope = (
+            large_category == "물품"
+            and (work_type == "goods" or str(row.get("work_type") or "") == "goods")
+        )
+        if legacy_goods_scope:
+            if field_identity is None:
+                continue
+            if middle_category and _normalized_category(
+                field_identity.get("name")
+            ) != middle_category:
+                continue
+            if field_code and str(field_identity.get("code") or "") != field_code:
+                continue
+            filtered.append(row)
+            continue
         if large_category or middle_category or field_code:
             if large_category == "미분류":
                 if field_identity is not None or middle_category or field_code:
@@ -2260,11 +2305,15 @@ def _filter_profile_rows(
                 continue
             if field_identity is None:
                 continue
-            if large_category and _effective_large_category(row) != large_category:
+            if large_category and _normalized_category(
+                field_identity.get("large_category")
+            ) != large_category:
                 continue
-            if middle_category and _effective_middle_category(row) != middle_category:
+            if middle_category and _normalized_category(
+                field_identity.get("middle_category")
+            ) != middle_category:
                 continue
-            if field_code and str(row.get("procurement_classification_number")) != field_code:
+            if field_code and str(field_identity.get("code") or "") != field_code:
                 continue
         filtered.append(row)
     return filtered
@@ -2324,6 +2373,8 @@ def _drilldown_field_distribution(
         return "unclassified", fields
     if work_type == "construction":
         return ("detail" if field_code else "construction_field"), fields
+    if work_type == "goods":
+        return ("detail" if field_code else "field"), fields
     if field_code:
         return "detail", fields
     if middle_category:
@@ -3219,6 +3270,10 @@ async def _execute_procurement_profile(
         " ".join(str(inputs.get("company_query") or "").split()).casefold()
         if profile_type == "organization" else ""
     )
+    organization_query = (
+        " ".join(str(inputs.get("organization_query") or "").split()).casefold()
+        if profile_type == "company" else ""
+    )
     allowed_work_types = {"goods", "service", "construction", "foreign", "other", "unknown"}
     if work_type and work_type not in allowed_work_types:
         raise CapabilityExecutionError(
@@ -3388,6 +3443,10 @@ async def _execute_procurement_profile(
         fields, large_category=large_category, middle_category=middle_category,
         field_code=field_code, work_type=work_type,
     )
+    field_distribution = decorate_field_distribution(
+        field_distribution, level=field_distribution_level, work_type=work_type,
+        large_category=large_category, middle_category=middle_category,
+    )
     sort_fields = {
         "contract_amount": "total_attributed_contract_amount",
         "contract_count": "contract_event_count",
@@ -3399,6 +3458,13 @@ async def _execute_procurement_profile(
         relationships = [
             item for item in relationships
             if company_query in " ".join(str(item.get("company_name") or "").split()).casefold()
+        ]
+    if organization_query:
+        relationships = [
+            item for item in relationships
+            if organization_query in " ".join(
+                str(item.get("organization_name") or "").split()
+            ).casefold()
         ]
     relationship_key = "company_number" if profile_type == "organization" else "organization_code"
     relationships.sort(key=lambda item: str(item.get(relationship_key) or ""))
@@ -3473,13 +3539,15 @@ async def _execute_procurement_profile(
                 "middle_category": middle_category,
                 "field_code": field_code,
                 "field_name": next((
-                    row.get("procurement_classification_name") for row in profile_rows
-                    if field_code and str(row.get("procurement_classification_number")) == field_code
-                    and row.get("procurement_classification_name")
+                    identity.get("name") for row in profile_rows
+                    if (identity := _procurement_field_identity(row))
+                    and field_code and str(identity.get("code") or "") == field_code
+                    and identity.get("name")
                 ), None),
             },
             "work_type": work_type,
             "company_query": company_query or None,
+            "organization_query": organization_query or None,
             "company_relationship_sort": {
                 "contract_amount": "contract_amount_desc",
                 "contract_count": "contract_count_desc",
@@ -4891,27 +4959,7 @@ def _work_type_label(value: str) -> str:
 
 
 def _procurement_field_identity(row: dict[str, Any]) -> dict[str, Any] | None:
-    """Use provider classifications as the field identity; never infer it from a title."""
-    code = str(row.get("procurement_classification_number") or "").strip()
-    name = str(row.get("procurement_classification_name") or "").strip()
-    if not code and not name:
-        return None
-    is_construction = str(row.get("work_type") or "") == "construction"
-    return {
-        "code": code or f"name:{name}",
-        "name": name or None,
-        "large_category": name if is_construction else _normalized_category(
-            row.get("procurement_large_classification_name")
-        ),
-        "middle_category": None if is_construction else _normalized_category(
-            row.get("procurement_middle_classification_name")
-        ),
-        "detailed_items": row.get("purchase_items") or [],
-        "source": (
-            "construction_work_category" if is_construction
-            else "procurement_classification"
-        ),
-    }
+    return field_identity(row)
 
 
 def _organization_field_analysis_basis(

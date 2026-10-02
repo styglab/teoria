@@ -1,0 +1,31 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-10-02"
+
+capability:
+  id: resolve_company_identifiers
+  name: 기업 식별자 해소
+  description: >-
+    회사명을 금융위원회 기업기본정보의 후보 검색 단서로 사용하고,
+    응답 사업자등록번호가 입력값과 정확히 일치할 때만 법인등록번호와
+    금융감독원 법인고유번호를 확정한다.
+  kind: compute
+  processor: company_identity.resolve_company_identifiers
+  effects:
+    reads:
+      - company.business_registration
+      - company.legal_entity
+    produces:
+      - company.business_registration
+      - company.legal_entity
+  inputs:
+    business_registration_number:
+      property: company.business_registration.business_registration_number
+      required: true
+    company_name:
+      property: company.legal_entity.legal_name
+      required: true
+  returns:
+    - company.business_registration
+    - company.legal_entity
+    - company.legal_entity_has_business_registration

@@ -14,6 +14,7 @@ from teoria.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.runtime.capability.presentation import serialize_capability_result
 from teoria.runtime.capability.runner import CapabilityExecutionError, CapabilityRunner
 from teoria.runtime.capability.schema import capability_input_schema, coerce_capability_inputs
+from teoria.runtime.cache import create_runtime_cache
 
 
 class ExecutionOptions(BaseModel):
@@ -48,6 +49,11 @@ def create_runtime_app(
         ),
         timeout_seconds=resolved_settings.capability_timeout_seconds,
         max_pages=resolved_settings.source_max_pages,
+        cache=create_runtime_cache(
+            resolved_settings.runtime_cache_backend,
+            url=resolved_settings.runtime_cache_url,
+            prefix=resolved_settings.runtime_cache_prefix,
+        ),
     )
     app = FastAPI(
         title="Teoria Runtime API",

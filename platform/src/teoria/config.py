@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     capability_timeout_seconds: float = Field(default=120.0, gt=0)
     runtime_api_token: str | None = None
     runtime_api_root_path: str = ""
+    runtime_cache_backend: Literal["memory", "redis", "disabled"] = "memory"
+    runtime_cache_url: str = "redis://localhost:6379/0"
+    runtime_cache_prefix: str = "teoria:runtime"
     admin_api_root_path: str = ""
     admin_data_database_url: str | None = None
     registry_require_published: bool = False

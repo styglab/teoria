@@ -23,6 +23,16 @@ def test_capabilities_load_and_references_are_valid() -> None:
     assert search.steps[0].call == "fsc_company_basic.get_company_overview"
     assert search.kind == "query"
     assert search.effects.reads == []
+    resolver = catalog.capabilities["resolve_company_identifiers"]
+    assert resolver.kind == "compute"
+    assert resolver.processor == "company_identity.resolve_company_identifiers"
+    assert resolver.inputs["business_registration_number"].required is True
+    assert resolver.inputs["company_name"].required is True
+    detail = catalog.capabilities["get_company_detail_context"]
+    assert detail.kind == "compute"
+    assert detail.processor == "company_identity.get_company_detail_context"
+    assert detail.inputs["financial_year_limit"].default == 3
+    assert detail.inputs["financial_lookback_years"].default == 7
     requirements = catalog.capabilities["get_bid_requirements"]
     assert [step.call for step in requirements.steps] == [
         "teoria_public_procurement.bid_requirement_sets",

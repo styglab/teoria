@@ -1084,6 +1084,65 @@ async def test_procurement_profiles_keep_event_types_and_attributed_amounts_sepa
         "정보시스템개발서비스"
     )
 
+
+@pytest.mark.asyncio
+async def test_company_profile_organization_search_is_relationship_list_only() -> None:
+    class Reader:
+        def activities(self, catalog, **kwargs):
+            return [{
+                "activity_type": "contract", "event_key": f"C{index}",
+                "bid_notice_id": f"N{index}:000", "notice_name": "정보시스템 계약",
+                "organization_code": organization_code,
+                "organization_name": organization_name,
+                "company_number": "1111111111", "company_name": "업체",
+                "procurement_classification_number": "81111599",
+                "procurement_classification_name": "정보시스템개발서비스",
+                "procurement_large_classification_name": "ICT 서비스",
+                "procurement_middle_classification_name": "SW 및 시스템 개발",
+                "work_type": "service", "activity_date": date(2025, index, 1),
+                "event_amount": Decimal(str(amount)),
+                "attributed_contract_amount": Decimal(str(amount)),
+                "amount_completeness": "complete",
+            } for index, (organization_code, organization_name, amount) in enumerate((
+                ("ORG-1", "근로 복지 공단", 300),
+                ("ORG-2", "한국사회보장정보원", 200),
+                ("ORG-3", "근로 복지 연구원", 100),
+            ), start=1)]
+
+    catalog = RegistryLoader(REGISTRIES).load()
+    base_inputs = {
+        "business_registration_number": "1111111111",
+        "period_from_year": 2025, "period_to_year": 2025,
+        "page": 1, "page_size": 1,
+    }
+    baseline = await execute_company_procurement_profile(
+        catalog, "analyze_company_procurement_profile", base_inputs, reader=Reader(),
+    )
+    page_one = await execute_company_procurement_profile(
+        catalog, "analyze_company_procurement_profile",
+        {**base_inputs, "organization_query": "  근로 복지  "}, reader=Reader(),
+    )
+    page_two = await execute_company_procurement_profile(
+        catalog, "analyze_company_procurement_profile",
+        {**base_inputs, "organization_query": "근로 복지", "page": 2}, reader=Reader(),
+    )
+
+    assert page_one.outcome["pagination"]["total_items"] == 2
+    assert page_one.outcome["pagination"]["total_pages"] == 2
+    assert page_two.outcome["pagination"]["total_items"] == 2
+    assert page_two.outcome["pagination"]["total_pages"] == 2
+    assert page_one.outcome["organization_relationships"][0]["organization_name"] == (
+        "근로 복지 공단"
+    )
+    assert page_two.outcome["organization_relationships"][0]["organization_name"] == (
+        "근로 복지 연구원"
+    )
+    assert page_one.outcome["summary"] == baseline.outcome["summary"]
+    assert page_one.outcome["yearly_activity"] == baseline.outcome["yearly_activity"]
+    assert page_one.outcome["field_distribution"] == baseline.outcome["field_distribution"]
+    assert page_one.outcome["analysis_basis"]["organization_query"] == "근로 복지"
+    assert page_one.objects[0].properties["relationship_count"] == 2
+
     empty = await execute_organization_procurement_profile(
         catalog, "analyze_organization_procurement_profile",
         {"organization_code": "ORG-1", "field_code": "00000000"}, reader=Reader(),
@@ -1784,7 +1843,75 @@ async def test_construction_profile_uses_official_field_as_flat_category() -> No
             "successful_participation_count": 0, "award_success_rate": None,
         "award_event_count": 0, "contract_event_count": 1, "event_count": 1,
         "attributed_contract_amount": 100, "amount_share": 1.0,
+        "display_level": "field_code", "display_code": "72153699",
+        "display_name": "실내건축공사", "has_children": False,
+        "selection_filter": {
+            "work_type": "construction", "large_category": "실내건축공사",
+            "field_code": "72153699",
+        },
     }]
+
+
+@pytest.mark.asyncio
+async def test_goods_profile_uses_primary_official_purchase_item() -> None:
+    class Reader:
+        def activities(self, catalog, **kwargs):
+            return [{
+                "activity_type": "contract", "event_key": "C1",
+                "bid_notice_id": "N1:000", "notice_name": "장비 구매",
+                "organization_code": "ORG-1", "organization_name": "기관",
+                "company_number": "1111111111", "company_name": "업체",
+                "procurement_classification_number": None,
+                "procurement_classification_name": None,
+                "procurement_large_classification_name": None,
+                "procurement_middle_classification_name": None,
+                "purchase_items": [
+                    {"sequence": "2", "code": "4711150301", "name": "세탁물건조기"},
+                    {"sequence": "1", "code": "4711150201", "name": "업소용세탁기"},
+                ],
+                "work_type": "goods", "activity_date": date(2025, 3, 1),
+                "event_amount": Decimal("100"),
+                "attributed_contract_amount": Decimal("100"),
+                "amount_completeness": "complete",
+            }]
+
+    catalog = RegistryLoader(REGISTRIES).load()
+    result = await execute_organization_procurement_profile(
+        catalog, "analyze_organization_procurement_profile",
+        {"organization_code": "ORG-1", "work_type": "goods"}, reader=Reader(),
+    )
+
+    assert result.outcome["field_distribution_level"] == "field"
+    assert result.outcome["field_distribution"] == [{
+        "field_code": "4711150201", "field_name": "업소용세탁기",
+        "large_category": None, "middle_category": None,
+        "detailed_items": [
+            {"sequence": "2", "code": "4711150301", "name": "세탁물건조기"},
+            {"sequence": "1", "code": "4711150201", "name": "업소용세탁기"},
+        ],
+        "classification_source": "purchase_item", "work_types": ["goods"],
+        "participation_count": 0, "award_event_count": 0,
+        "result_confirmed_participation_count": 0,
+        "successful_participation_count": 0, "contract_event_count": 1,
+        "event_count": 1, "attributed_contract_amount": 100,
+        "amount_share": 1.0, "award_success_rate": None,
+        "display_level": "field_code", "display_code": "4711150201",
+        "display_name": "업소용세탁기", "has_children": False,
+        "selection_filter": {"work_type": "goods", "field_code": "4711150201"},
+    }]
+    filtered = await execute_organization_procurement_profile(
+        catalog, "analyze_organization_procurement_profile",
+        {"organization_code": "ORG-1", "work_type": "goods",
+         "large_category": "물품", "middle_category": "업소용세탁기",
+         "field_code": "4711150201"}, reader=Reader(),
+    )
+    assert filtered.outcome["summary"]["contract_event_count"] == 1
+    assert filtered.outcome["analysis_basis"]["field_filter"]["field_name"] == "업소용세탁기"
+    assert filtered.outcome["field_distribution"][0]["classification_source"] == "purchase_item"
+    assert filtered.outcome["field_distribution"][0]["detailed_items"] == [
+        {"sequence": "2", "code": "4711150301", "name": "세탁물건조기"},
+        {"sequence": "1", "code": "4711150201", "name": "업소용세탁기"},
+    ]
 
 
 @pytest.mark.asyncio
@@ -1829,12 +1956,16 @@ async def test_profile_includes_and_filters_unclassified_field_bucket() -> None:
     assert sum(item["attributed_contract_amount"] for item in distribution.values()) == 100
     assert distribution["미분류"] == {
         "large_category": "미분류", "field_code": None, "field_name": None,
-        "middle_category": None, "classification_source": "unclassified",
+        "middle_category": None, "detailed_items": [],
+        "classification_source": "unclassified",
             "event_count": 1, "participation_count": 0, "award_event_count": 0,
             "result_confirmed_participation_count": 0,
             "successful_participation_count": 0, "award_success_rate": None,
         "contract_event_count": 1, "attributed_contract_amount": 80,
         "work_types": ["goods"], "amount_share": 0.8,
+        "display_level": "unclassified", "display_code": None,
+        "display_name": "미분류", "has_children": False,
+        "selection_filter": {"work_type": "goods", "large_category": "미분류"},
     }
 
     filtered = await execute_organization_procurement_profile(
