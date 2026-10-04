@@ -40,7 +40,7 @@ class PPSBidResultClient:
                  executor: ProviderExecutor | None = None, page_size: int = 100,
                  max_pages: int = 1000, opening_concurrency: int = 8,
                  opening_requests_per_second: float = 4.0,
-                 opening_request_timeout_seconds: float = 60.0) -> None:
+                 opening_request_timeout_seconds: float = 20.0) -> None:
         self.definition = definition
         self.path = path
         self.executor = executor or ProviderExecutor()

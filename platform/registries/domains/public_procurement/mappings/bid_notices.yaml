@@ -30,6 +30,26 @@ mapping:
       - {field: teoria_public_procurement.bid_notices.notice_kind_name}
     bid_notice.is_re_notice:
       - {field: teoria_public_procurement.bid_notices.is_re_notice}
+    bid_notice.notice_kind:
+      - {field: teoria_public_procurement.bid_notices.notice_kind}
+    bid_notice.notice_lineage_id:
+      - {field: teoria_public_procurement.bid_notices.notice_lineage_id}
+    bid_notice.root_bid_notice_id:
+      - {field: teoria_public_procurement.bid_notices.root_bid_notice_id}
+    bid_notice.previous_bid_notice_id:
+      - {field: teoria_public_procurement.bid_notices.previous_bid_notice_id}
+    bid_notice.superseded_by_bid_notice_id:
+      - {field: teoria_public_procurement.bid_notices.superseded_by_bid_notice_id}
+    bid_notice.is_latest_in_lineage:
+      - {field: teoria_public_procurement.bid_notices.is_latest_in_lineage}
+    bid_notice.lineage_status:
+      - {field: teoria_public_procurement.bid_notices.lineage_status}
+    bid_notice.lineage_confidence:
+      - {field: teoria_public_procurement.bid_notices.lineage_confidence}
+    bid_notice.lineage_count:
+      - {field: teoria_public_procurement.bid_notices.lineage_count}
+    bid_notice.lineage_notices:
+      - {field: teoria_public_procurement.bid_notices.lineage_notices}
     bid_notice.notice_published_at:
       - {field: teoria_public_procurement.bid_notices.notice_published_at}
     bid_notice.bid_begin_at:

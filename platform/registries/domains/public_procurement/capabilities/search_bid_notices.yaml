@@ -1,5 +1,5 @@
 registry:
-  version: 1.6.0
+  version: 1.7.0
   registered_at: "2026-09-29"
 
 capability:
@@ -49,6 +49,12 @@ capability:
       property: public_procurement.bid_notice.notice_status
       enum: [active, cancelled, superseded]
       default: active
+    lineage_mode:
+      data_type: string
+      field: teoria_public_procurement.bid_notices.lineage_modes
+      operator: contains
+      enum: [all, latest_only, grouped]
+      default: all
     bid_deadline_at_from:
       property: public_procurement.bid_notice.bid_deadline_at
       operator: gte

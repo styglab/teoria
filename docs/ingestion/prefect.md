@@ -189,6 +189,7 @@ Provider 원문은 `source_record_hash`가 동일한 JSON payload를
 | `pps-bid-result-reconciliation-30d` | 매일 02:30 | 최근 30일 지연 낙찰 확정 보정 |
 | `pps-bid-result-reconciliation-90d` | 매주 일요일 03:30 | 최근 90일 장기 지연 낙찰 확정 보정 |
 | `pps-bid-result-backfill` | 매시 40분 | `2026-09-13`부터 `2021-01-01`까지 개찰일시 기준 역방향 적재 |
+| `pps-bid-opening-enrichment` | 10분마다 | 낙찰 적재와 분리된 큐에서 최근 낙찰 우선으로 개찰 참여업체 Top 10과 낙찰업체를 보강 |
 
 증분 수집과 Backfill은 독립 checkpoint를 사용한다. 기본 계약 Backfill checkpoint는
 `pps_contract_backfill_2021_2026`이고 `2026-09-13`부터 `2021-01-01`까지 역방향으로 진행한다. 범위를 완료하면
@@ -197,6 +198,11 @@ Provider 원문은 `source_record_hash`가 동일한 JSON payload를
 별도 범위를 적재할 때는 UI에서 같은 Flow의 Custom Run이나 Schedule 파라미터에 고유한
 `checkpoint_id`, `start_date`, `end_date`를 지정한다. 서로 다른 Backfill에 같은
 `checkpoint_id`를 사용하면 진행 상태가 충돌하므로 사용하지 않는다.
+
+낙찰 목록 수집은 정상화·적재와 개찰 보강 대상 등록이 성공하면 체크포인트를 갱신한다.
+공고별 개찰조회는 별도 `pps-bid-opening-enrichment` Flow가 처리하며, 실패 건은
+30분·2시간·12시간·1일 간격으로 재시도한다. 따라서 제공기관 개찰 API 지연은 낙찰
+증분 수집이나 Backfill 체크포인트를 막지 않는다.
 Backfill의 `checkpoint_id`, `start_date`, `end_date`는 필수이며 `end_date`는 오늘보다 이전이어야 한다.
 
 공공데이터포털은 데이터 갱신주기를 실시간으로 안내하지만 정확한 반영 지연은 보장하지 않는다.

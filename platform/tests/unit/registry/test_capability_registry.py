@@ -61,6 +61,9 @@ def test_capabilities_load_and_references_are_valid() -> None:
     assert catalog.capabilities["search_bid_participations"].processor == (
         "market_context.search_company_bid_participations"
     )
+    assert catalog.capabilities["get_bid_notice_participations"].processor == (
+        "market_context.get_bid_notice_participations"
+    )
 
 
 def test_capability_inputs_are_semantic_ontology_references() -> None:

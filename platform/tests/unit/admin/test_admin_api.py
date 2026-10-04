@@ -22,7 +22,7 @@ def test_admin_api_exposes_overview_and_ontology_graph() -> None:
 
     release = client.get("/v1/admin/registry-release")
     assert release.status_code == 200
-    assert release.json()["version"] == "2026.10.02.8"
+    assert release.json()["version"] == "2026.10.04.13"
     assert release.json()["status"] == "published"
 
     validation = client.get("/v1/admin/validation")

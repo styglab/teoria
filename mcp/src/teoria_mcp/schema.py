@@ -25,17 +25,10 @@ def capability_output_schema() -> dict[str, Any]:
                 "required": ["page", "page_size", "total_items", "total_pages"],
                 "additionalProperties": False,
             },
-            "outcome": {
-                "type": "object",
-                "properties": {
-                    "type": {"type": "string"},
-                    "status": {"type": "string"},
-                    "matched": {"type": "boolean"},
-                    "observed_at": {"type": "string", "format": "date-time"},
-                    "input": {"type": "object"},
-                },
-                "required": ["type", "status", "matched", "observed_at", "input"],
-            },
+            # Compute capabilities expose capability-specific structured outcomes.
+            # Assessment outcomes may contain type/status/matched/input while market
+            # context outcomes contain lists, completeness, and analysis metadata.
+            "outcome": {"type": "object"},
         },
         "required": ["status", "capability", "objects", "links", "total_objects", "total_links", "truncated"],
     }

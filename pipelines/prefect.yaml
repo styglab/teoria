@@ -73,6 +73,23 @@ deployments:
       name: teoria-ingestion
       work_queue_name: default
 
+  - name: pps-contract-event-ledger-refresh
+    version: 1.0.0
+    description: 변경된 공식 조달분야의 원계약·공동수급 귀속 원장과 인사이트 사전집계를 갱신한다.
+    entrypoint: teoria_pipelines.flows.pps_contracts.refresh_pps_contract_event_ledger
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      batch_size: 5
+    schedules:
+      - cron: "15 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
   - name: pps-bid-result-incremental
     version: 1.1.0
     description: 최근 3일의 최종낙찰과 해당 공고의 개찰 참여업체 결과를 4시간마다 갱신한다.
@@ -280,20 +297,80 @@ deployments:
       work_queue_name: default
 
   - name: pps-bid-result-backfill
-    version: 1.1.0
-    description: 2026-09-13부터 2021-01-01까지 최신 연도 우선으로 개찰일시 기준 낙찰정보를 Backfill한다.
+    version: 1.2.0
+    description: 현재 연도 포함 최근 5개 회계연도(2022년 이후) 낙찰정보를 최신 연도 우선으로 Backfill한다.
     entrypoint: teoria_pipelines.flows.pps_bid_results.sync_pps_bid_results_backfill
     concurrency_limit:
       limit: 1
       collision_strategy: CANCEL_NEW
     parameters:
       checkpoint_id: pps_bid_result_backfill_5y
-      start_date: "2021-01-01"
+      start_date: "2022-01-01"
       end_date: "2026-09-13"
       pipeline_root: /app/pipelines
       batch_days: 30
     schedules:
       - cron: "40 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-opening-incremental-enrichment
+    version: 2.0.0
+    description: 신규 낙찰의 개찰 참여업체 Top 10과 낙찰업체를 우선 보강한다.
+    entrypoint: teoria_pipelines.flows.pps_bid_results.enrich_pps_bid_opening_participants
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 30
+      lease_minutes: 15
+      queue_mode: incremental
+    schedules:
+      - cron: "*/5 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-opening-backfill-enrichment
+    version: 2.0.0
+    description: 최근 5개년 개찰 참여업체를 최신 건부터 과거 방향으로 지속 보강한다.
+    entrypoint: teoria_pipelines.flows.pps_bid_results.enrich_pps_bid_opening_participants
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 60
+      lease_minutes: 30
+      queue_mode: backfill
+    schedules:
+      - cron: "2-59/10 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-opening-retry-enrichment
+    version: 2.0.0
+    description: 실패·부분 수집된 개찰 건을 별도 지연 정책으로 재시도한다.
+    entrypoint: teoria_pipelines.flows.pps_bid_results.enrich_pps_bid_opening_participants
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 15
+      lease_minutes: 15
+      queue_mode: retry
+    schedules:
+      - cron: "7,37 * * * *"
         timezone: Asia/Seoul
         active: true
     work_pool:

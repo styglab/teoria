@@ -21,14 +21,15 @@ from teoria_pipelines.tasks.pps_bid_results import (
     PIPELINE_ID,
     combine_bid_result_batches,
     combine_bid_result_summaries,
+    claim_opening_enrichment,
+    enqueue_opening_enrichment,
     extract_bid_award_operation,
     extract_opening_participants,
+    finish_opening_enrichment,
     mark_opening_awards_checked,
     normalize_bid_results,
     replace_opening_participants,
     select_competitive_opening_participants,
-    select_pending_opening_awards,
-    split_opening_award_chunks,
     upsert_bid_results,
 )
 from teoria_pipelines.tasks.pps_contracts import (
@@ -45,16 +46,11 @@ OPERATION_TASK_NAMES = {
 }
 
 
-class OpeningCollectionIncompleteError(RuntimeError):
-    """Raised after healthy opening lookups are saved but failed lookups remain."""
-
-
 @flow(name="나라장터 낙찰정보 일별 수집")
 async def sync_pps_bid_result_window(
     window: CollectionWindow,
     pipeline_root: str = "/app/pipelines",
     pipeline_id: str = PIPELINE_ID,
-    opening_chunk_size: int = 100,
 ) -> LoadSummary:
     prefect_run_id = flow_run.get_id()
     execution_id = UUID(prefect_run_id) if prefect_run_id else uuid4()
@@ -80,50 +76,50 @@ async def sync_pps_bid_result_window(
         normalized_awards = normalize_bid_results(awards, award_raw_count)
         award_loaded = upsert_bid_results(normalized_awards)
 
-        pending_awards = select_pending_opening_awards(awards)
-        opening_chunks = split_opening_award_chunks(pending_awards, opening_chunk_size)
-        opening_raw_counts = []
-        opening_loaded = []
-        checked_counts = []
-        failed_opening_counts = []
-        for index, award_chunk in enumerate(opening_chunks, start=1):
-            suffix = f"{index}/{len(opening_chunks)}"
-            opening_result = await extract_opening_participants.with_options(
-                name=f"공고별 개찰 참여업체 수집 {suffix}"
-            )(started_execution_id, window, award_chunk, pipeline_root)
-            openings = opening_result.openings
-            successful_awards = opening_result.successful_awards
-            failed_opening_counts.append(len(opening_result.failed_awards.records))
-            competitive_openings = select_competitive_opening_participants.with_options(
-                name=f"상위 경쟁 참여업체 선별 {suffix}"
-            )(successful_awards, openings)
-            # Successful opening-result payloads are deliberately not retained.
-            # The normalized top-10-plus-winner coverage is the durable contract.
-            opening_raw_count = 0
-            normalized_openings = normalize_bid_results.with_options(
-                name=f"개찰정보 정규화 {suffix}"
-            )(competitive_openings, opening_raw_count)
-            chunk_loaded = replace_opening_participants.with_options(
-                name=f"개찰 참여업체 교체 저장 {suffix}"
-            )(successful_awards, normalized_openings)
-            checked_count = mark_opening_awards_checked.with_options(
-                name=f"개찰 수집 완료상태 저장 {suffix}"
-            )(successful_awards, openings, chunk_loaded)
-            opening_raw_counts.append(opening_raw_count)
-            opening_loaded.append(chunk_loaded)
-            checked_counts.append(checked_count)
-        failed_opening_count = sum(failed_opening_counts)
-        if failed_opening_count:
-            raise OpeningCollectionIncompleteError(
-                f"{failed_opening_count} opening lookups remain incomplete"
-            )
+        queue_class = "incremental" if pipeline_id == INCREMENTAL_PIPELINE_ID else "backfill"
+        enqueue_opening_enrichment(awards, queue_class)
         loaded = combine_bid_result_summaries(
-            award_raw_count, award_loaded, opening_raw_counts, opening_loaded, checked_counts
+            award_raw_count, award_loaded, [], [], []
         )
         checkpointed = update_checkpoint(
             execution_id, pipeline_id, window.end, loaded.raw_records, loaded
         )
         return complete_pipeline_run(execution_id, checkpointed)
+    except BaseException as exc:
+        fail_pipeline_run(execution_id, type(exc).__name__)
+        raise
+
+
+@flow(name="나라장터 개찰 참여업체 보강")
+async def enrich_pps_bid_opening_participants(
+    pipeline_root: str = "/app/pipelines", batch_size: int = 20,
+    lease_minutes: int = 15, queue_mode: str = "incremental",
+) -> LoadSummary:
+    prefect_run_id = flow_run.get_id()
+    execution_id = UUID(prefect_run_id) if prefect_run_id else uuid4()
+    today = date.today()
+    window = CollectionWindow(today, today)
+    started_execution_id = start_pipeline_run(
+        execution_id, f"pps_bid_opening_{queue_mode}_enrichment", window
+    )
+    try:
+        awards = claim_opening_enrichment(
+            started_execution_id, queue_mode, batch_size, lease_minutes
+        )
+        if not awards.records:
+            summary = LoadSummary()
+            return complete_pipeline_run(execution_id, summary)
+        result = await extract_opening_participants(
+            started_execution_id, window, awards, pipeline_root
+        )
+        competitive = select_competitive_opening_participants(
+            result.successful_awards, result.openings
+        )
+        normalized = normalize_bid_results(competitive, 0)
+        loaded = replace_opening_participants(result.successful_awards, normalized)
+        mark_opening_awards_checked(result.successful_awards, result.openings, loaded)
+        finish_opening_enrichment(result)
+        return complete_pipeline_run(execution_id, loaded)
     except BaseException as exc:
         fail_pipeline_run(execution_id, type(exc).__name__)
         raise

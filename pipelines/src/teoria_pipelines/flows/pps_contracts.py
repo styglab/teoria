@@ -13,11 +13,13 @@ from teoria_pipelines.tasks import (
     complete_operation,
     complete_pipeline_run,
     determine_collection_window,
+    enqueue_contract_event_ledger_refresh,
     extract_contract_operation,
     fail_pipeline_run,
     get_completed_operation,
     normalize_contracts,
     record_backfill_gap,
+    refresh_contract_event_ledger,
     resolve_backfill_gap,
     save_raw_records,
     start_pipeline_run,
@@ -89,6 +91,7 @@ async def sync_pps_contract_window(window: CollectionWindow,
             raw_count = save_raw_records(previous_batch)
             normalized = normalize_contracts(previous_batch, raw_count)
             loaded = upsert_contracts(normalized)
+            enqueue_contract_event_ledger_refresh(normalized, loaded)
             summaries.append(complete_operation(
                 pipeline_id, window, operation_id, execution_id, raw_count, loaded
             ))
@@ -206,6 +209,7 @@ async def retry_pps_contract_backfill_gaps(
             raw_count = save_raw_records(batch)
             normalized = normalize_contracts(batch, raw_count)
             loaded = upsert_contracts(normalized)
+            enqueue_contract_event_ledger_refresh(normalized, loaded)
             summary = complete_operation(
                 source_pipeline_id, window, operation_id, execution_id,
                 raw_count, loaded,
@@ -226,3 +230,8 @@ def _sum_summaries(summaries: list[LoadSummary]) -> LoadSummary:
         organizations=sum(item.organizations for item in summaries),
         demand_organizations=sum(item.demand_organizations for item in summaries),
     )
+
+
+@flow(name="계약 사건 사전집계 갱신")
+def refresh_pps_contract_event_ledger(batch_size: int = 5) -> int:
+    return refresh_contract_event_ledger(batch_size)

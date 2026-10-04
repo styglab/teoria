@@ -179,6 +179,7 @@ class PaginatedBidNoticeExecutor:
                 {"field": "bid_status", "operator": "in",
                  "value": ["scheduled", "open", "unknown"]},
                 {"field": "notice_status", "operator": "eq", "value": "active"},
+                {"field": "lineage_modes", "operator": "contains", "value": "all"},
             ],
             "search": {
                 "fields": ["notice_name", "notice_number", "notice_organization_name",
@@ -259,8 +260,11 @@ def test_bid_notice_search_uses_declared_query_defaults() -> None:
         "page": 1, "page_size": 20, "root_field": "bid_notice_id",
         "count_distinct": False,
     }
-    assert query["filters"][-1] == {
+    assert query["filters"][-2] == {
         "field": "notice_status", "operator": "eq", "value": "active",
+    }
+    assert query["filters"][-1] == {
+        "field": "lineage_modes", "operator": "contains", "value": "all",
     }
 
 
@@ -334,6 +338,19 @@ def test_bid_notice_search_binds_procurement_hierarchy_filters() -> None:
         {"field": "field_codes", "operator": "contains", "value": "81111599"},
         {"field": "demand_organization_code", "operator": "eq", "value": "Z004905"},
     ]
+
+
+def test_bid_notice_search_binds_lineage_mode() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    capability = catalog.capabilities["search_bid_notices"]
+    query = CapabilityBinder().bind(catalog, capability, capability.steps[0], {
+        "notice_published_at_from": datetime(2026, 8, 1, tzinfo=timezone.utc),
+        "notice_published_at_to": datetime(2026, 9, 30, tzinfo=timezone.utc),
+        "lineage_mode": "grouped",
+    })
+    assert query["filters"][-1] == {
+        "field": "lineage_modes", "operator": "contains", "value": "grouped",
+    }
 
 
 def test_public_organization_search_binds_filters_sort_and_pagination() -> None:

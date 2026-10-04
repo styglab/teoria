@@ -1,0 +1,15 @@
+registry:
+  version: 1.0.0
+  registered_at: "2026-10-02"
+capability:
+  id: get_bid_notice_participations
+  name: 공고별 개찰 참여업체 조회
+  description: 공고의 보유 개찰 참여업체를 차수별로 반환하고 원천 참가업체 수와 비교해 보존 완전성을 명시한다.
+  kind: compute
+  processor: market_context.get_bid_notice_participations
+  effects:
+    reads: [public_procurement.bid_opening_participation, public_procurement.bid_award]
+    produces: [public_procurement.bid_opening_participation]
+  inputs:
+    bid_notice_id: {property: public_procurement.bid_notice.bid_notice_id, required: true}
+  returns: [public_procurement.bid_opening_participation]

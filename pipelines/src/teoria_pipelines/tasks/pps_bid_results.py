@@ -52,6 +52,32 @@ def _client(pipeline_root: str) -> PPSBidResultClient:
             backoff_seconds=settings.source_retry_backoff_seconds,
             secret_provider=EnvironmentSecretProvider(),
         ),
+        opening_concurrency=settings.bid_opening_concurrency,
+        opening_requests_per_second=settings.bid_opening_requests_per_second,
+        opening_request_timeout_seconds=settings.bid_opening_request_timeout_seconds,
+    )
+
+
+@task(name="개찰 보강 대상 등록")
+def enqueue_opening_enrichment(awards: ExtractedBatch, queue_class: str) -> int:
+    return _store().enqueue_bid_opening_enrichment(awards.records, queue_class)
+
+
+@task(name="개찰 보강 대상 선점", viz_return_value=VIZ_EXTRACTED)
+def claim_opening_enrichment(
+    execution_id: UUID, queue_mode: str, batch_size: int = 20, lease_minutes: int = 15
+) -> ExtractedBatch:
+    records = _store().claim_bid_opening_enrichment(
+        execution_id, queue_mode, batch_size, lease_minutes
+    )
+    today = date.today()
+    return ExtractedBatch(execution_id, CollectionWindow(today, today), records)
+
+
+@task(name="개찰 보강 상태 저장")
+def finish_opening_enrichment(result: OpeningResultBatch) -> None:
+    _store().finish_bid_opening_enrichment(
+        result.successful_awards.records, result.failed_awards.records
     )
 
 

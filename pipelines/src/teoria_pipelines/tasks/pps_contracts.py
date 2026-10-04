@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import UUID
 
 from prefect import task
+import psycopg
 from teoria_provider.executor import ProviderExecutor
 from teoria_provider.secrets import EnvironmentSecretProvider
 
@@ -162,6 +163,54 @@ def normalize_contracts(batch: ExtractedBatch, raw_record_count: int) -> Normali
       viz_return_value=VIZ_SUMMARY)
 def upsert_contracts(batch: NormalizedBatch) -> LoadSummary:
     return _store().upsert_normalized(batch)
+
+
+@task(name="계약 분야 집계 갱신 예약", viz_return_value=0)
+def enqueue_contract_event_ledger_refresh(
+    batch: NormalizedBatch, load_summary: LoadSummary,
+) -> int:
+    del load_summary
+    field_codes = sorted({str(item["procurement_classification_number"])
+        for item in batch.contracts if item.get("procurement_classification_number")})
+    if not field_codes:
+        return 0
+    store = _store()
+    with psycopg.connect(store.database_url) as connection:
+        connection.executemany(
+            "INSERT INTO ingestion.contract_event_ledger_refresh_queue(field_code) VALUES (%s) "
+            "ON CONFLICT(field_code) DO UPDATE SET requested_at=now(),last_error=NULL",
+            [(code,) for code in field_codes],
+        )
+    return len(field_codes)
+
+
+@task(name="계약 사건 사전집계 갱신", retries=1, retry_delay_seconds=60,
+      viz_return_value=0)
+def refresh_contract_event_ledger(batch_size: int = 5) -> int:
+    store = _store(); refreshed = 0
+    with psycopg.connect(store.database_url, autocommit=True) as connection:
+        rows = connection.execute(
+            "SELECT field_code FROM ingestion.contract_event_ledger_refresh_queue "
+            "ORDER BY requested_at,field_code LIMIT %s", (batch_size,),
+        ).fetchall()
+        for (field_code,) in rows:
+            try:
+                connection.execute(
+                    "SELECT public_procurement.refresh_contract_event_company_ledger(%s)",
+                    (field_code,),
+                )
+                connection.execute(
+                    "DELETE FROM ingestion.contract_event_ledger_refresh_queue WHERE field_code=%s",
+                    (field_code,),
+                )
+                refreshed += 1
+            except psycopg.Error as exc:
+                connection.execute(
+                    "UPDATE ingestion.contract_event_ledger_refresh_queue "
+                    "SET attempts=attempts+1,last_error=%s,requested_at=now() WHERE field_code=%s",
+                    (type(exc).__name__, field_code),
+                )
+    return refreshed
 
 
 @task(name="완료 Operation 확인", viz_return_value=None)

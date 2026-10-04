@@ -45,6 +45,12 @@ def test_output_schema_declares_optional_pagination_metadata() -> None:
     assert pagination["required"] == ["page", "page_size", "total_items", "total_pages"]
 
 
+def test_output_schema_accepts_capability_specific_compute_outcomes() -> None:
+    outcome = capability_output_schema()["properties"]["outcome"]
+
+    assert outcome == {"type": "object"}
+
+
 @pytest.mark.asyncio
 async def test_delegates_execution_to_runtime_api() -> None:
     client = CapturingRuntimeClient()

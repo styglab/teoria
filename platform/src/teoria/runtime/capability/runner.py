@@ -211,12 +211,25 @@ class CapabilityRunner:
             if capability.processor == "market_context.search_company_bid_participations":
                 from teoria.runtime.market_context.processor import execute_company_participation_search
                 return await execute_company_participation_search(catalog, capability_id, inputs)
+            if capability.processor == "market_context.get_bid_notice_participations":
+                from teoria.runtime.market_context.processor import execute_bid_notice_participations
+                return await execute_bid_notice_participations(catalog, capability_id, inputs)
             if capability.processor == "market_context.analyze_company_competitors":
                 from teoria.runtime.market_context.processor import execute_company_competitor_analysis
                 return await execute_company_competitor_analysis(catalog, capability_id, inputs)
             if capability.processor == "market_context.get_bid_notice_relationship_context":
                 from teoria.runtime.market_context.processor import execute_bid_notice_relationship_context
                 return await execute_bid_notice_relationship_context(catalog, capability_id, inputs)
+            if capability.processor == "market_context.analyze_bid_participation_context":
+                from teoria.runtime.market_context.processor import execute_bid_participation_context
+                return await execute_bid_participation_context(
+                    catalog, capability_id, inputs, cache=self.cache,
+                )
+            if capability.processor == "market_context.search_bid_related_projects":
+                from teoria.runtime.market_context.processor import execute_bid_related_projects_search
+                return await execute_bid_related_projects_search(
+                    catalog, capability_id, inputs, cache=self.cache,
+                )
             if capability.processor == "market_context.search_procurement_outcomes":
                 from teoria.runtime.market_context.processor import execute_procurement_outcome_search
                 return await execute_procurement_outcome_search(catalog, capability_id, inputs)

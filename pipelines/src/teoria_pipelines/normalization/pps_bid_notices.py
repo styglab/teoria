@@ -105,6 +105,10 @@ def normalize_bid_notice(record: RawProviderRecord) -> tuple[dict[str, Any], lis
         "notice_kind_name": _text(value.get("ntceKindNm")),
         "registration_type_name": _text(value.get("rgstTyNm")),
         "is_re_notice": _boolean(value.get("reNtceYn")),
+        "previous_notice_number": _text(value.get("befBidBbancNo")),
+        "lineage_root_notice_number": (
+            _text(value.get("befBidBbancNo")) or notice_number
+        ),
         "notice_published_at": _datetime(value.get("bidNtceDt")),
         "bid_begin_at": _datetime(value.get("bidBeginDt")),
         "bid_deadline_at": _datetime(value.get("bidClseDt")),

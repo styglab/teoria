@@ -222,6 +222,17 @@ source:
         - {id: field_codes, name: 대표·세부품명 조달분류코드 목록, data_type: string}
         - {id: notice_kind_name, name: 공고종류명, data_type: string}
         - {id: is_re_notice, name: 재공고 여부, data_type: boolean}
+        - {id: notice_kind, name: 정규화 공고종류, data_type: string}
+        - {id: notice_lineage_id, name: 공고 계보 식별자, data_type: string}
+        - {id: root_bid_notice_id, name: 원공고 식별자, data_type: string}
+        - {id: previous_bid_notice_id, name: 직전 공고 식별자, data_type: string}
+        - {id: superseded_by_bid_notice_id, name: 후속 공고 식별자, data_type: string}
+        - {id: is_latest_in_lineage, name: 계보 최신 여부, data_type: boolean}
+        - {id: lineage_status, name: 계보 상태, data_type: string}
+        - {id: lineage_confidence, name: 계보 판정 신뢰수준, data_type: string}
+        - {id: lineage_count, name: 계보 공고 수, data_type: integer}
+        - {id: lineage_notices, name: 계보 공고 목록 JSON, data_type: string}
+        - {id: lineage_modes, name: 지원 계보 조회 모드, data_type: string}
         - {id: notice_published_at, name: 공고게시시각, data_type: datetime}
         - {id: bid_begin_at, name: 입찰시작시각, data_type: datetime}
         - {id: bid_deadline_at, name: 입찰마감시각, data_type: datetime}

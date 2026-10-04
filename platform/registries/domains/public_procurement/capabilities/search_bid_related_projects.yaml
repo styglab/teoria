@@ -1,0 +1,37 @@
+registry:
+  version: 1.2.2
+  registered_at: "2026-10-04"
+capability:
+  id: search_bid_related_projects
+  name: 공고 관련 과거 사업 검색
+  description: 현재 공고와 동일 기관·업무구분·공식 조달분야의 과거 계약사업을 공고 계보와 원계약 사건 기준으로 검색한다.
+  kind: compute
+  processor: market_context.search_bid_related_projects
+  effects:
+    reads: [public_procurement.bid_notice, public_procurement.contract]
+    produces: [public_procurement.bid_participation_context]
+  inputs:
+    bid_notice_id: {property: public_procurement.bid_notice.bid_notice_id, required: true}
+    relationship_type:
+      data_type: string
+      default: same_field
+      enum: [same_field]
+    project_filter:
+      data_type: string
+      default: all
+      enum: [all, similar_amount, entry_or_reentering_supplier, repeat_supplier]
+    project_filters:
+      data_type: string
+      collection: list
+      enum: [similar_amount, entry_or_reentering_supplier, repeat_supplier]
+    filter_operator:
+      data_type: string
+      default: and
+      enum: [and, or]
+    sort:
+      data_type: string
+      default: recent_desc
+      enum: [recent_desc, amount_desc, amount_similarity]
+    page: {data_type: integer, default: 1, minimum: 1}
+    page_size: {data_type: integer, default: 20, minimum: 1, maximum: 100}
+  returns: [public_procurement.bid_participation_context]
