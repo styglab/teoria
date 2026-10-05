@@ -1,11 +1,15 @@
 # Platform Admin UI
 
-`platform/admin-ui/`는 발행된 Semantic Registry를 탐색하는 읽기 전용 관리자 화면이다. 일반 사용자용 Service UI와 분리한다.
+`platform/admin-ui/`는 발행된 Semantic Registry와 OpenMetadata 연결을 탐색하고,
+Teoria가 소유하는 Suggestion과 Semantic Binding을 검토하는 관리자 화면이다.
+일반 사용자용 Service UI와 분리한다.
 
 Admin UI는 독립 TypeScript 프론트엔드 프로젝트이고, Admin API는 Registry Loader와 검증 기능을 사용하는 `teoria-platform` Python 패키지의 HTTP 인터페이스다. 따라서 UI는 `platform/admin-ui/`, API 구현은 `platform/src/teoria/admin/`에 둔다.
 
 ```text
-Admin UI → Admin API → Registry Loader
+Admin UI → Admin API ─┬→ Registry Loader
+                      ├→ Teoria Application DB
+                      └→ OpenMetadata REST API
 MCP      → Runtime API → Capability Runner
 ```
 
@@ -32,4 +36,14 @@ Compose 환경에서 Admin UI와 Admin API는 호스트에 직접 공개하지 �
 
 Compose에서 Admin API Swagger UI는 `http://localhost:8081/admin-api/docs`, Runtime API Swagger UI는 `http://localhost:8081/runtime-api/docs`에서 접근한다.
 
-초기 범위는 Overview, Ontology 목록, Object·Link 그래프와 Object 상세다. Lineage와 Git-backed Draft 편집은 별도 feature로 확장한다.
+현재 범위:
+
+- Metadata: OpenMetadata 자산의 최소 탐색
+- Suggestions: Metadata Intelligence 제안 검토와 승인
+- Bindings: Stable Ontology Concept과 OpenMetadata Glossary/Data Asset 연결
+- Ontology·Capability·Source·Mapping·Lineage 탐색
+
+Binding 화면에서 생성한 연결은 항상 Draft다. 승인·거절은 인증 principal의
+역할을 사용하며 요청 body의 reviewer 문자열을 신뢰하지 않는다. 운영에서
+Bearer 인증을 사용할 때 UI는 현재 세션의 `teoria-admin-token` 값을
+Authorization header로 전달한다. 장기 운영 인증은 OIDC 단계에서 교체한다.

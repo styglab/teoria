@@ -1,16 +1,24 @@
 import { useEffect, useState } from "react";
-import { Activity, Boxes, Braces, CircleDot, Database, GitFork, Moon, Network, Search, Sun, Workflow, X } from "lucide-react";
+import { Activity, Boxes, Braces, CircleDot, Database, GitFork, Lightbulb, Moon, Network, Search, Sun, Workflow, X } from "lucide-react";
 import { adminApi, type CapabilitySummary, type LineageLink, type LinkEdge, type MappingSummary, type ObjectNode, type OntologyGraph as GraphData, type OntologySummary, type Overview, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/admin";
 import { MetricCard } from "../components/MetricCard";
 import { DetailPanel } from "../features/ontology/DetailPanel";
 import { OntologyGraph } from "../features/ontology/OntologyGraph";
 import { CapabilitiesView, LineageView, MappingsView, SourcesView } from "../features/registry/RegistryViews";
 import { ValidationView } from "../features/validation/ValidationView";
+import { MetadataExplorer } from "../features/metadata/MetadataExplorer";
+import { SuggestionReview } from "../features/intelligence/SuggestionReview";
+import { BindingManager } from "../features/binding/BindingManager";
+import { OntologyAuthoring } from "../features/ontology/OntologyAuthoring";
 
-type Section = "ontologies" | "capabilities" | "sources" | "mappings" | "lineage";
+type Section = "metadata" | "intelligence" | "authoring" | "ontologies" | "bindings" | "capabilities" | "sources" | "mappings" | "lineage";
 type Theme = "light" | "dark";
 
 const sectionCopy: Record<Exclude<Section, "ontologies">, { eyebrow: string; title: string; description: string }> = {
+  metadata: { eyebrow: "METADATA FOUNDATION", title: "Metadata", description: "OpenMetadata가 관리하는 데이터 자산과 연결 상태를 확인합니다." },
+  intelligence: { eyebrow: "METADATA INTELLIGENCE", title: "Suggestions", description: "AI가 제안한 메타데이터 변경을 검토하고 승인된 변경만 권위 저장소에 반영합니다." },
+  authoring: { eyebrow: "BUSINESS KNOWLEDGE", title: "Ontology Authoring", description: "Published Ontology에서 Draft를 만들고 검토·승인·게시합니다." },
+  bindings: { eyebrow: "SEMANTIC GOVERNANCE", title: "Bindings", description: "Business Ontology와 OpenMetadata의 의미 연결을 생성하고 검토합니다." },
   capabilities: { eyebrow: "SEMANTIC OPERATIONS", title: "Capabilities", description: "사용자 의도를 실행 가능한 Source Operation과 Ontology 반환 타입으로 연결합니다." },
   sources: { eyebrow: "DATA CONTRACTS", title: "Sources", description: "Semantic Runtime이 직접 호출하거나 조회하는 외부 API와 Database Source를 확인합니다." },
   mappings: { eyebrow: "SEMANTIC BINDINGS", title: "Mappings", description: "Source 필드가 Ontology 속성과 객체로 변환되는 계약을 확인합니다." },
@@ -79,15 +87,20 @@ export function App() {
 
       <aside className="sidebar">
         <nav>
+          <span className="nav-group-label">FOUNDATION</span>
+          <button className={section === "metadata" ? "active" : ""} onClick={() => { setSection("metadata"); setSelectedItem(null); }}><Database size={16} /> Metadata</button>
+          <button className={section === "intelligence" ? "active" : ""} onClick={() => { setSection("intelligence"); setSelectedItem(null); }}><Lightbulb size={16} /> Suggestions</button>
+          <button className={section === "bindings" ? "active" : ""} onClick={() => { setSection("bindings"); setSelectedItem(null); }}><GitFork size={16} /> Bindings</button>
+          <button className={section === "authoring" ? "active" : ""} onClick={() => { setSection("authoring"); setSelectedItem(null); }}><Boxes size={16} /> Ontology Authoring</button>
           <span className="nav-group-label">REGISTRY</span>
-          <button className={section === "ontologies" ? "active" : ""} onClick={() => setSection("ontologies")}><Network size={16} /> Ontologies</button>
+          <button className={section === "ontologies" ? "active" : ""} onClick={() => setSection("ontologies")}><Network size={16} /> Runtime Registry</button>
           <button className={section === "capabilities" ? "active" : ""} onClick={() => { setSection("capabilities"); setSelectedItem(null); }}><Braces size={16} /> Capabilities</button>
           <button className={section === "sources" ? "active" : ""} onClick={() => { setSection("sources"); setSelectedItem(null); }}><Database size={16} /> Sources</button>
           <button className={section === "mappings" ? "active" : ""} onClick={() => { setSection("mappings"); setSelectedItem(null); }}><GitFork size={16} /> Mappings</button>
           <button className={section === "lineage" ? "active" : ""} onClick={() => { setSection("lineage"); setSelectedItem(null); }}><Workflow size={16} /> Lineage</button>
         </nav>
         {section === "ontologies" && <div className="ontology-list">
-          <span>ONTOLOGIES</span>
+          <span>RUNTIME ONTOLOGIES</span>
           <button className={selectedOntology === "all" ? "selected" : ""} onClick={() => setSelectedOntology("all")}>
             <i /><div><strong>전체 Ontology</strong><small>{overview?.counts.object_types ?? 0} objects · {overview?.counts.link_types ?? 0} links</small></div>
           </button>
@@ -108,7 +121,7 @@ export function App() {
         </section>
         {section === "ontologies" ? <section className="workspace">
           <div className="workspace-header">
-            <div><span>ONTOLOGY EXPLORER</span><h1>{graph?.ontology.name ?? "Registry 불러오는 중"}</h1><p>{graph?.ontology.description}</p></div>
+            <div><span>LEGACY RUNTIME CONTRACT EXPLORER</span><h1>{graph?.ontology.name ?? "Registry 불러오는 중"}</h1><p>{graph?.ontology.description}</p></div>
             {graph && <div className="graph-counts"><b>{graph.nodes.length}</b> nodes <b>{graph.edges.length}</b> edges</div>}
           </div>
           <div className="canvas-wrap">
@@ -119,10 +132,10 @@ export function App() {
         </section> : <section className="workspace">
           <div className="workspace-header">
             <div><span>{sectionCopy[section].eyebrow}</span><h1>{sectionCopy[section].title}</h1><p>{sectionCopy[section].description}</p></div>
-            <div className="graph-counts"><b>{section === "capabilities" ? capabilities.length : section === "sources" ? sources.length : section === "mappings" ? mappings.length : lineage.length}</b> items</div>
+            {section !== "intelligence" && section !== "bindings" && <div className="graph-counts"><b>{section === "capabilities" ? capabilities.length : section === "sources" ? sources.length : section === "mappings" ? mappings.length : lineage.length}</b> items</div>}
           </div>
           <div className="canvas-wrap">
-            {error ? <div className="error-state">{error}</div> : section === "capabilities" ? <CapabilitiesView items={capabilities} /> : section === "sources" ? <SourcesView items={sources} /> : section === "mappings" ? <MappingsView items={mappings} /> : <LineageView links={lineage} />}
+            {error ? <div className="error-state">{error}</div> : section === "metadata" ? <MetadataExplorer /> : section === "intelligence" ? <SuggestionReview /> : section === "authoring" ? <OntologyAuthoring /> : section === "bindings" ? <BindingManager /> : section === "capabilities" ? <CapabilitiesView items={capabilities} /> : section === "sources" ? <SourcesView items={sources} /> : section === "mappings" ? <MappingsView items={mappings} /> : <LineageView links={lineage} />}
           </div>
         </section>}
       </main>

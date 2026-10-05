@@ -4,7 +4,7 @@
 
 | 프로젝트 | 소유 | 제외 |
 |---|---|---|
-| `platform` | Semantic Registry, 검증·발행, Runtime, 직접 Source 실행, DB 조회 | Prefect, MCP transport |
+| `platform` | Business Ontology, Semantic Binding, Metadata Intelligence, Semantic Registry, Runtime, 직접 Source 실행, OpenMetadata REST integration | Prefect, MCP transport, OpenMetadata metadata 복제 |
 | `pipelines` | Connector, Prefect, raw·정규화·적재, Data DB migration | Ontology, Capability, MCP |
 | `mcp` | MCP Tool, protocol 변환, Runtime API client | Source 키, DB, Registry 실행 |
 | `packages/provider` | API schema, request/response 검증, HTTP retry·오류 | Registry, Prefect, MCP |
@@ -14,6 +14,7 @@
 ```text
 pipelines ──SQL write contract──▶ Teoria Data DB
 platform  ──SQL read contract───▶ Teoria Data DB
+platform  ──REST reference──────▶ OpenMetadata
 mcp       ──Runtime HTTP API────▶ platform
 platform  ──▶ teoria-provider ◀── pipelines
 ```
@@ -33,6 +34,16 @@ platform  ──▶ teoria-provider ◀── pipelines
 | API→DB 정규화 | `pipelines/src/teoria_pipelines/normalization/` |
 | Source·DB→Ontology 변환 | `platform/src/teoria/runtime/mapping/functions/` |
 | Data DB schema | `pipelines/database/migrations/` |
+| Teoria Application DB schema | `platform/database/migrations/` |
+| OpenMetadata REST boundary | `platform/src/teoria/metadata/openmetadata/` |
+| Business Ontology v2 | `platform/src/teoria/ontology/` |
+| Semantic Binding | `platform/src/teoria/binding/` |
+| Metadata Intelligence | `platform/src/teoria/intelligence/` |
+
+OpenMetadata의 entity 본문은 Platform DB에 저장하지 않는다. Binding에
+필요한 `MetadataTargetRef`만 `teoria_app`에 정규화해 저장하며 이는
+metadata cache가 아니다. Capability는 독립 knowledge source로 유지하고
+Ontology와의 연결은 Semantic Binding으로 표현한다.
 
 같은 수집 API를 Source와 Connector에 중복 등록하지 않는다. Pipeline이 적재한 DB는 Platform의 Database Source와 Mapping으로 Ontology에 연결한다.
 
@@ -58,6 +69,22 @@ checkpoints/     cursor와 재개 정책
 - MCP에는 Data DB 권한을 주지 않는다.
 - migration과 Database Source 호환성은 통합 검증으로 확인한다.
 - 각 배포 프로젝트는 자체 `pyproject.toml`과 Dockerfile을 갖고 루트 `uv.lock`을 공유한다.
+
+배포 설정은 제품 이름이 아니라 실행 환경을 최상위 경계로 둔다.
+
+```text
+deploy/
+├── compose/
+│   ├── compose.yaml
+│   ├── nginx/
+│   └── openmetadata/   # Compose 전용 설정과 ingestion 예제
+└── k3s/
+    └── charts/         # Kubernetes 전용 설정
+```
+
+Prefect와 OpenMetadata 서비스 정의는 모두 `compose.yaml`에 둔다. 특정
+서비스의 Compose 전용 보조 파일만 `deploy/compose/<service>/`에 두며,
+향후 Kubernetes용 OpenMetadata 리소스는 `deploy/k3s/` 아래에 둔다.
 
 ```bash
 uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines

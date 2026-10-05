@@ -12,6 +12,37 @@
 - Provider API wire 계약, 요청 생성, 응답 검증과 HTTP 실행만 `packages/provider/`의 `teoria-provider`를 사용한다.
 - 프로젝트 사이에 일반적인 `common`, `shared`, `utils` 패키지를 만들지 않는다.
 
+## Metadata and knowledge authority
+
+[AI-Native Metadata Platform](docs/architecture/ai-native-metadata-platform.md)의 책임 경계를 유지한다.
+[Platform Guide](docs/platform-guide.md)와 [Product Roadmap](docs/roadmap.md)을 현재 구현과 동기화한다.
+
+- Prefect는 Workflow와 Data Operations를 소유한다. Metadata 의미나 Ontology를 소유하지 않는다.
+- OpenMetadata ingestion schedule과 retry도 Prefect가 소유한다. 기본 배포에 Airflow를 추가하지 않고 공식 ingestion image를 ephemeral Job으로 실행하며, 일반 Prefect Worker 이미지에 OpenMetadata ingestion dependency를 설치하지 않는다.
+- OpenMetadata는 Technical Metadata와 Governance/Semantic Metadata의 authoritative source다. Data Asset, Schema, Description, Owner, Tag, Glossary, Domain, physical lineage, quality와 usage를 Teoria DB에 복제하지 않는다.
+- Teoria Application DB는 Business Ontology, Semantic Binding, Metadata Intelligence의 Suggestion/Review/Application과 Context 설정만 소유한다.
+- Business Ontology에는 지속 가능한 업무 의미만 둔다. API 응답, Capability 응답과 Runtime projection을 Business Object로 만들지 않는다.
+- Runtime Mapping(`source record -> runtime object`)과 Semantic Binding(`ontology concept <-> term/asset/API/capability`)을 혼용하지 않는다.
+- OpenMetadata 연결은 `MetadataTargetRef` 값 객체로만 표현한다. system, entity ID, entity type, FQN과 필요한 version 이외의 OpenMetadata entity 상태를 저장하지 않는다.
+- 기본 semantic path는 `Physical Asset -> OpenMetadata Glossary Term -> Teoria Ontology`다. Direct Data Asset binding은 허용하지만 Glossary Term binding보다 우선하는 것으로 간주하지 않는다.
+- Capability는 Business Ontology 및 OpenMetadata와 독립된 knowledge source다. Ontology와의 의미 연결은 `CapabilityTargetRef`를 사용하는 Semantic Binding으로 표현한다.
+- API Field binding은 활성 Source Registry 계약에서 원본 필드와 Operation이 검증된 경우에만 승인한다. 이름 유사성으로 authoritative binding을 만들지 않는다.
+- AI 결과는 Suggestion이며 authoritative metadata가 아니다. Review/Approval과 적용 성공 전에는 OpenMetadata나 published Ontology를 변경하지 않는다.
+- Admin 쓰기 API는 인증된 principal을 변경 주체로 기록한다. 요청 body의 reviewer/actor 문자열을 권위 정보로 신뢰하지 않는다.
+- Binding은 draft/review/approve 또는 reject/deprecate 생명주기를 거치며 승인 기록을 보존한다.
+- Ontology Binding은 version별 revision ID가 아니라 Stable Concept ID를 의미 식별자로 사용한다.
+- Published Ontology revision은 직접 수정하지 않는다. 변경은 Published version에서 새 Draft를 생성해 검토·승인·게시한다.
+- Authoring DB 모델을 Runtime contract로 직접 사용하지 않는다. Runtime은 Published version에서 생성된 immutable artifact를 사용한다.
+- 기존 YAML Ontology Object를 추가·제거하면 `platform/ontology-migrations/ontology-v2.yaml` 분류도 함께 갱신하고 `teoria ontology-migration-report`를 실행한다.
+- 운영 환경에서는 `TEORIA_ADMIN_AUTH_MODE=bearer`와 별도 Admin token을 사용한다. 개발용 disabled mode를 외부에 노출하지 않는다.
+
+Application DB migration을 변경하면 새 순번 migration만 추가하고 이미 적용된 SQL을 변경하지 않는다. 다음을 함께 검증한다.
+
+```bash
+uv run --locked --package teoria-platform pytest platform/tests
+docker compose -f deploy/compose/compose.yaml config --quiet
+```
+
 ## Provider contract work
 
 Source Registry를 생성하거나 수정하기 전에 `docs/registry/source-authoring.md`를 끝까지 읽고 그 절차와 체크리스트를 따른다.

@@ -1,0 +1,48 @@
+schema_version: "1.0"
+ontologies:
+  - namespace: company
+    target_version: 0.2.0
+    properties:
+      - {object: PostalAddress, code: postalCode, name: 우편번호, value_type: string}
+      - {object: PostalAddress, code: address, name: 주소, value_type: string}
+      - {object: Qualification, code: qualificationType, name: 자격 유형, value_type: string}
+      - {object: Qualification, code: validFrom, name: 유효 시작일, value_type: date, temporal: true}
+      - {object: Qualification, code: validTo, name: 유효 종료일, value_type: date, temporal: true}
+      - {object: FinancialStatement, code: fiscalYear, name: 사업연도, value_type: integer}
+      - {object: FinancialStatement, code: revenue, name: 매출액, value_type: decimal, unit: KRW}
+      - {object: FinancialStatement, code: assets, name: 자산총계, value_type: decimal, unit: KRW}
+      - {object: FinancialStatement, code: liabilities, name: 부채총계, value_type: decimal, unit: KRW}
+      - {object: FinancialStatement, code: equity, name: 자본총계, value_type: decimal, unit: KRW}
+      - {object: FinancialFact, code: value, name: 재무 값, value_type: decimal}
+      - {object: FinancialFact, code: unit, name: 단위, value_type: string}
+    relationships:
+      - {code: HAS_ADDRESS, name: 주소 보유, source: LegalEntity, target: PostalAddress}
+      - {code: HAS_BUSINESS_REGISTRATION, name: 사업자등록 보유, source: LegalEntity, target: BusinessRegistration}
+      - {code: HAS_QUALIFICATION, name: 자격 보유, source: LegalEntity, target: Qualification}
+      - {code: HAS_FINANCIAL_STATEMENT, name: 재무제표 보유, source: LegalEntity, target: FinancialStatement}
+      - {code: CONTAINS_FINANCIAL_FACT, name: 재무 항목 포함, source: FinancialStatement, target: FinancialFact}
+
+  - namespace: procurement
+    target_version: 0.5.0
+    properties:
+      - {object: BidRequirement, code: originalText, name: 원문 요건, value_type: string}
+      - {object: BidRequirement, code: requirementType, name: 요건 유형, value_type: string}
+      - {object: Industry, code: name, name: 업종명, value_type: string}
+      - {object: Sanction, code: validFrom, name: 제재 시작일, value_type: date, temporal: true}
+      - {object: Sanction, code: validTo, name: 제재 종료일, value_type: date, temporal: true}
+      - {object: BidParticipation, code: participatedAt, name: 참여일, value_type: date, temporal: true}
+      - {object: BidParticipation, code: rank, name: 개찰 순위, value_type: integer}
+      - {object: BidParticipation, code: bidAmount, name: 투찰금액, value_type: decimal, unit: KRW}
+      - {object: ContractParticipation, code: companyRole, name: 계약 역할, value_type: string}
+      - {object: ContractParticipation, code: sharePercent, name: 공동수급 지분율, value_type: decimal, unit: percent}
+      - {object: ContractParticipation, code: attributedAmount, name: 업체 귀속 계약금액, value_type: decimal, unit: KRW}
+    relationships:
+      - {code: HAS_REQUIREMENT_SET, name: 참가요건 집합, source: BidNotice, target: BidRequirementSet}
+      - {code: CONTAINS_REQUIREMENT, name: 참가요건 포함, source: BidRequirementSet, target: BidRequirement}
+      - {code: HAS_DIRECT_PRODUCTION_CONFIRMATION, name: 직접생산확인 보유, source: Company, target: DirectProductionConfirmation}
+      - {code: REGISTERED_IN_INDUSTRY, name: 업종 등록, source: Company, target: RegisteredIndustry}
+      - {code: HAS_SANCTION, name: 조달 제재 보유, source: Company, target: Sanction}
+      - {code: HAS_BID_PARTICIPATION, name: 입찰 참여 포함, source: BidNotice, target: BidParticipation}
+      - {code: BID_PARTICIPANT, name: 입찰 참여 업체, source: BidParticipation, target: Company}
+      - {code: HAS_CONTRACT_PARTICIPATION, name: 계약 참여 포함, source: Contract, target: ContractParticipation}
+      - {code: CONTRACT_PARTICIPANT, name: 계약 참여 업체, source: ContractParticipation, target: Company}

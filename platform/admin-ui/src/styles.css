@@ -51,6 +51,14 @@ main { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; display: flex; 
 .metric-card { min-height: 66px; display: flex; align-items: center; gap: 11px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: rgba(14,18,29,.8); }
 .metric-icon { width: 34px; height: 34px; display: grid; place-items: center; color: #a9a1ff; border: 1px solid #302b53; border-radius: 8px; background: #17152a; }
 .metric-card strong, .metric-card span { display: block; }
+.metadata-explorer { padding: 18px; }
+.metadata-status { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.metadata-status div { display: grid; gap: 2px; }
+.metadata-status small { color: var(--muted); }
+.metadata-status a { margin-left: auto; display: flex; align-items: center; gap: 5px; color: var(--accent); text-decoration: none; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; background: #41cf8d; box-shadow: 0 0 0 4px rgba(65,207,141,.12); }
+.metadata-empty { min-height: 300px; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--muted); text-align: center; }
+.metadata-empty h3, .metadata-empty p { margin: 0; }
 .metric-card strong { font-size: 19px; line-height: 1.1; }
 .metric-card span { margin-top: 3px; color: var(--muted); font-size: 10px; }
 .workspace { flex: 1; min-height: 0; margin: 10px 16px 16px; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: rgba(9,12,19,.85); }
@@ -213,3 +221,47 @@ main { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; display: flex; 
   .global-search { display: none; }
   .nav-group-label { display: none; }
 }
+.suggestion-list { padding: 24px; display: grid; gap: 12px; overflow: auto; }
+.suggestion-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.suggestion-actions button { border: 1px solid var(--border); border-radius: 7px; padding: 8px 12px; cursor: pointer; }
+
+.binding-manager { height: 100%; overflow: auto; padding: 16px; }
+.binding-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.binding-health { display: flex; align-items: center; gap: 7px; padding: 8px 10px; color: var(--muted); font-size: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.binding-health.valid { color: var(--mint); }
+.binding-health span { color: var(--muted); }
+.binding-filters { display: flex; gap: 4px; margin-left: auto; }
+.binding-filters button, .binding-add, .binding-form button, .binding-list footer button { display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; color: var(--muted); font-size: 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); cursor: pointer; }
+.binding-filters button.active, .binding-add, .binding-list footer button.primary { color: #dedaff; border-color: #474078; background: #211d3c; }
+.binding-form { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; padding: 14px; border: 1px solid #38325f; border-radius: 10px; background: #121426; }
+.binding-form label { display: grid; gap: 5px; color: var(--muted); font-size: 9px; }
+.binding-form input, .binding-form select { min-width: 0; padding: 8px 9px; color: inherit; border: 1px solid var(--border); border-radius: 6px; background: #0c1019; }
+.binding-form button { align-self: end; justify-content: center; color: white; background: #5148b4; }
+.binding-error { margin-bottom: 10px; padding: 9px 11px; color: #ff9ca8; border: 1px solid #582b35; border-radius: 8px; background: #251319; font-size: 10px; }
+.binding-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 11px; }
+.binding-list article { padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: #101522; }
+.binding-list article > header { display: flex; align-items: center; gap: 10px; }
+.binding-icon { width: 31px; height: 31px; display: grid; place-items: center; color: #aaa3ff; border-radius: 7px; background: #211e3b; }
+.binding-list header > div:nth-child(2) { min-width: 0; flex: 1; }
+.binding-list h3, .binding-list small { margin: 0; }
+.binding-list h3 { margin-top: 3px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.binding-list small { color: var(--muted); font-size: 8px; }
+.binding-status { padding: 3px 6px; color: #d0b56f; font-size: 8px; text-transform: uppercase; border: 1px solid #514526; border-radius: 5px; }
+.binding-status.approved { color: var(--mint); border-color: #285348; }
+.binding-status.rejected, .binding-status.deprecated { color: #8992a9; border-color: var(--border); }
+.binding-direction { display: grid; grid-template-columns: 24px 1fr; align-items: center; margin: 12px 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: #0c111c; }
+.binding-direction > span { color: #786fe0; font-size: 16px; }
+.binding-direction strong, .binding-direction small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.binding-direction strong { font-size: 10px; }.binding-direction small { margin-top: 4px; }
+.binding-list dl { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 0; }
+.binding-list dl div { padding: 7px 8px; border-radius: 6px; background: #151a29; }
+.binding-list dt { color: #66708a; font-size: 8px; }.binding-list dd { margin: 3px 0 0; font-size: 9px; }
+.binding-list footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; }
+.binding-list footer > div { display: flex; gap: 6px; }
+:root[data-theme="light"] .binding-form, :root[data-theme="light"] .binding-list article { background: #f8f9fc; }
+:root[data-theme="light"] .binding-form input, :root[data-theme="light"] .binding-form select, :root[data-theme="light"] .binding-direction, :root[data-theme="light"] .binding-list dl div { background: white; }
+.authoring-layout { display: grid; grid-template-columns: minmax(220px, .32fr) 1fr; gap: 18px; height: 100%; padding: 18px; overflow: auto; }
+.authoring-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.authoring-toolbar select { padding: 8px; color: var(--text); border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+.authoring-layout aside .registry-card { width: 100%; display: flex; justify-content: space-between; text-align: left; }
+.authoring-layout aside .registry-card.selected { border-color: #7168d9; }

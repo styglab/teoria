@@ -9,6 +9,7 @@ description = "Teoria Semantic Platform registry and runtime"
 requires-python = ">=3.11,<3.13"
 dependencies = [
   "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
   "jsonschema>=4.23,<5",
   "langgraph>=1.0,<2",
   "pydantic>=2.7,<3",

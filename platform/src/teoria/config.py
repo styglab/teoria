@@ -25,7 +25,18 @@ class Settings(BaseSettings):
     runtime_cache_url: str = "redis://localhost:6379/0"
     runtime_cache_prefix: str = "teoria:runtime"
     admin_api_root_path: str = ""
+    admin_auth_mode: Literal["disabled", "bearer"] = "disabled"
+    admin_api_token: str | None = None
+    admin_api_actor: str = "system:admin"
+    admin_api_roles: str = "metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner"
     admin_data_database_url: str | None = None
+    app_database_url: str | None = None
+    openmetadata_enabled: bool = False
+    openmetadata_base_url: str = "http://localhost:8585/api"
+    openmetadata_auth_token: str | None = None
+    openmetadata_timeout_seconds: float = Field(default=10.0, gt=0)
+    openmetadata_verify_ssl: bool = True
+    openmetadata_database_service: str = "teoria_postgresql"
     registry_require_published: bool = False
 
 

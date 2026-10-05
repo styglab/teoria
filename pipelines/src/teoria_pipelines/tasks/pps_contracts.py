@@ -176,11 +176,12 @@ def enqueue_contract_event_ledger_refresh(
         return 0
     store = _store()
     with psycopg.connect(store.database_url) as connection:
-        connection.executemany(
-            "INSERT INTO ingestion.contract_event_ledger_refresh_queue(field_code) VALUES (%s) "
-            "ON CONFLICT(field_code) DO UPDATE SET requested_at=now(),last_error=NULL",
-            [(code,) for code in field_codes],
-        )
+        with connection.cursor() as cursor:
+            cursor.executemany(
+                "INSERT INTO ingestion.contract_event_ledger_refresh_queue(field_code) VALUES (%s) "
+                "ON CONFLICT(field_code) DO UPDATE SET requested_at=now(),last_error=NULL",
+                [(code,) for code in field_codes],
+            )
     return len(field_codes)
 
 

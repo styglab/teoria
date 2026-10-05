@@ -21,7 +21,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 RUN useradd --create-home --uid 10001 teoria
 COPY --chown=teoria:teoria platform/registries ./platform/registries
+COPY --chown=teoria:teoria platform/ontology-migrations ./platform/ontology-migrations
 COPY --chown=teoria:teoria platform/references ./platform/references
+COPY --chown=teoria:teoria platform/database ./platform/database
 
 USER teoria
 ENV TEORIA_REGISTRY_PATH=/app/platform/registries

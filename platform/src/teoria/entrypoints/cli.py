@@ -11,6 +11,13 @@ from teoria.config import Settings, bootstrap_settings
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
 from teoria.registry.release import publish_registry
 from teoria.registry.validator import RegistryValidator
+from teoria.persistence import apply_migrations
+from teoria.binding.repository import BindingRepository
+from teoria.binding.capability_manifest import CapabilityBindingManifest, apply_capability_binding_manifest
+from teoria.ontology.migration import OntologyMigrationManifest, build_migration_report
+from teoria.ontology.authoring import OntologyAuthoringRepository
+from teoria.ontology.promotion import BusinessConceptPromotion, apply_business_concept_promotion
+from teoria.ontology.enrichment import OntologyEnrichmentManifest, apply_ontology_enrichment
 from teoria.registry.verification.source.graph import SourceVerificationServices, create_source_verification_graph
 
 
@@ -92,8 +99,130 @@ def main() -> int:
     publish_parser.add_argument("--version", required=True)
     publish_parser.add_argument("--output", type=Path)
     publish_parser.add_argument("--git-commit")
+    migrate_parser = subparsers.add_parser("migrate-app", help="apply Teoria application DB migrations")
+    migrate_parser.add_argument("--migrations", type=Path, default=Path("platform/database/migrations"))
+    binding_parser = subparsers.add_parser("bind-openmetadata", help="bind a confirmed OpenMetadata reference to an ontology property")
+    binding_parser.add_argument("--ontology-ref", required=True, help="namespace.Object.property")
+    binding_parser.add_argument("--target-type", choices=("glossary_term", "data_asset"), required=True)
+    binding_parser.add_argument("--external-id", required=True)
+    binding_parser.add_argument("--entity-type", required=True)
+    binding_parser.add_argument("--fqn", required=True)
+    binding_parser.add_argument("--external-version")
+    binding_parser.add_argument("--locator", required=True)
+    binding_parser.add_argument("--binding-type", default="represents")
+    binding_parser.add_argument("--purpose")
+    binding_parser.add_argument("--authority", choices=("authoritative", "preferred", "supplemental"), default="preferred")
+    binding_parser.add_argument("--priority", type=int, default=100)
+    binding_parser.add_argument("--actor", default="system:openmetadata-sync")
+    migration_report_parser = subparsers.add_parser("ontology-migration-report", help="validate and report legacy Registry to Ontology v2 migration")
+    migration_report_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/ontology-v2.yaml"))
+    migration_report_parser.add_argument("--registries", type=Path, default=settings.registry_path)
+    promotion_parser = subparsers.add_parser("promote-business-concepts", help="author legacy business concepts in Ontology v2")
+    promotion_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/business-concepts-v1.yaml"))
+    promotion_parser.add_argument("--actor", default="system:ontology-migration")
+    promotion_parser.add_argument("--publish", action="store_true")
+    capability_binding_parser = subparsers.add_parser("bind-capabilities", help="apply reviewed Ontology-to-Capability bindings")
+    capability_binding_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/capability-bindings-v1.yaml"))
+    capability_binding_parser.add_argument("--registries", type=Path, default=settings.registry_path)
+    capability_binding_parser.add_argument("--actor", default="system:ontology-migration")
+    capability_binding_parser.add_argument("--approve", action="store_true")
+    enrichment_parser = subparsers.add_parser("enrich-business-ontology", help="apply reviewed properties and relationships to Ontology v2")
+    enrichment_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/business-ontology-enrichment-v1.yaml"))
+    enrichment_parser.add_argument("--actor", default="system:ontology-migration")
+    enrichment_parser.add_argument("--publish", action="store_true")
     _add_verify_parser(subparsers, settings)
     args = parser.parse_args()
+
+    if args.command == "migrate-app":
+        if not settings.app_database_url:
+            print("ERROR TEORIA_APP_DATABASE_URL is required")
+            return 1
+        for version in apply_migrations(settings.app_database_url, args.migrations):
+            print(f"Applied {version}")
+        return 0
+
+    if args.command == "bind-openmetadata":
+        if not settings.app_database_url:
+            print("ERROR TEORIA_APP_DATABASE_URL is required")
+            return 1
+        parts = args.ontology_ref.split(".")
+        if len(parts) != 3:
+            print("ERROR --ontology-ref must be namespace.Object.property")
+            return 1
+        try:
+            binding_id = BindingRepository(settings.app_database_url).bind_openmetadata_reference(
+                namespace=parts[0], object_code=parts[1], property_code=parts[2],
+                target_type=args.target_type, external_entity_id=args.external_id,
+                entity_type=args.entity_type, fully_qualified_name=args.fqn,
+                external_version=args.external_version, locator=args.locator,
+                binding_type=args.binding_type, purpose=args.purpose,
+                authority=args.authority, priority=args.priority, created_by=args.actor,
+            )
+        except ValueError as exc:
+            print(f"ERROR {exc}")
+            return 1
+        print(f"Bound {args.ontology_ref} to {args.locator} ({binding_id})")
+        return 0
+
+    if args.command == "ontology-migration-report":
+        try:
+            catalog = RegistryLoader(args.registries).load()
+            manifest = OntologyMigrationManifest.load(args.manifest)
+            report = build_migration_report(catalog, manifest, application_database_url=settings.app_database_url)
+        except (OSError, ValueError) as exc:
+            print(f"ERROR ontology_migration_report_failed: {exc}")
+            return 1
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["status"] == "valid" else 1
+
+    if args.command == "promote-business-concepts":
+        if not settings.app_database_url:
+            print("ERROR TEORIA_APP_DATABASE_URL is required")
+            return 1
+        try:
+            result = apply_business_concept_promotion(
+                OntologyAuthoringRepository(settings.app_database_url),
+                BusinessConceptPromotion.load(args.manifest),
+                actor=args.actor,
+                publish=args.publish,
+            )
+        except (OSError, ValueError) as exc:
+            print(f"ERROR business_concept_promotion_failed: {exc}")
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "bind-capabilities":
+        if not settings.app_database_url:
+            print("ERROR TEORIA_APP_DATABASE_URL is required")
+            return 1
+        try:
+            catalog = RegistryLoader(args.registries).load()
+            result = apply_capability_binding_manifest(
+                BindingRepository(settings.app_database_url), catalog,
+                CapabilityBindingManifest.load(args.manifest),
+                actor=args.actor, approve=args.approve,
+            )
+        except (OSError, ValueError) as exc:
+            print(f"ERROR capability_binding_failed: {exc}")
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "enrich-business-ontology":
+        if not settings.app_database_url:
+            print("ERROR TEORIA_APP_DATABASE_URL is required")
+            return 1
+        try:
+            result = apply_ontology_enrichment(
+                OntologyAuthoringRepository(settings.app_database_url),
+                OntologyEnrichmentManifest.load(args.manifest), actor=args.actor, publish=args.publish,
+            )
+        except (OSError, ValueError) as exc:
+            print(f"ERROR ontology_enrichment_failed: {exc}")
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
 
     if args.command == "verify" and args.registry_type == "source":
         return asyncio.run(_verify_source(args, settings))

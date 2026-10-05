@@ -1,0 +1,34 @@
+source:
+  type: postgres
+  serviceName: teoria_postgresql
+  serviceConnection:
+    config:
+      type: Postgres
+      scheme: postgresql+psycopg2
+      username: teoria_metadata
+      authType:
+        password: ${TEORIA_METADATA_DB_PASSWORD}
+      hostPort: postgres:5432
+      database: teoria_data
+  sourceConfig:
+    config:
+      type: DatabaseMetadata
+      includeTables: true
+      includeViews: true
+      schemaFilterPattern:
+        includes:
+          - ingestion
+          - public_procurement
+      markDeletedTables: true
+      includeTags: true
+      includeOwners: true
+sink:
+  type: metadata-rest
+  config: {}
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: http://openmetadata-server:8585/api
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: ${OPENMETADATA_INGESTION_BOT_TOKEN}

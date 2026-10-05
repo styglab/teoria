@@ -1,0 +1,32 @@
+schema_version: "1.0"
+ontologies:
+  - namespace: company
+    name: Company Business Ontology
+    description: 법인, 사업자등록, 자격, 기업관계와 재무정보의 지속 가능한 업무 의미
+    target_version: 0.1.0
+    objects:
+      - {code: LegalEntity, name: 법인, legacy_ref: company.legal_entity, identity_property: {code: corporateRegistrationNumber, name: 법인등록번호, value_type: string}}
+      - {code: PostalAddress, name: 우편주소, legacy_ref: company.postal_address, identity_property: {code: addressId, name: 주소 식별자, value_type: string}}
+      - {code: BusinessRegistration, name: 사업자등록, legacy_ref: company.business_registration, identity_property: {code: businessRegistrationNumber, name: 사업자등록번호, value_type: string}}
+      - {code: Qualification, name: 기업 자격, legacy_ref: company.qualification, identity_property: {code: qualificationId, name: 자격 식별자, value_type: string}}
+      - {code: VentureCompanyDisclosure, name: 벤처기업 확인 공시, legacy_ref: company.venture_company_disclosure, identity_property: {code: disclosureId, name: 공시 식별자, value_type: string}}
+      - {code: MarketListing, name: 시장 상장, legacy_ref: company.market_listing, identity_property: {code: listingId, name: 상장 식별자, value_type: string}}
+      - {code: OrganizationRelationship, name: 기업 관계, legacy_ref: company.organization_relationship, identity_property: {code: relationshipId, name: 관계 식별자, value_type: string}}
+      - {code: FinancialStatement, name: 재무제표, legacy_ref: company.financial_statement, identity_property: {code: statementId, name: 재무제표 식별자, value_type: string}}
+      - {code: FinancialFact, name: 재무 항목, legacy_ref: company.financial_fact, identity_property: {code: financialFactId, name: 재무 항목 식별자, value_type: string}}
+
+  - namespace: procurement
+    name: Procurement Business Ontology
+    description: 공공조달의 공고, 참가요건, 참여, 낙찰과 계약 의미
+    target_version: 0.4.0
+    based_on: published
+    objects:
+      - {code: BidRequirementSet, name: 입찰 참가요건 집합, legacy_ref: public_procurement.bid_requirement_set, identity_property: {code: requirementSetId, name: 요건 집합 식별자, value_type: string}}
+      - {code: BidRequirement, name: 입찰 참가요건, legacy_ref: public_procurement.bid_requirement, identity_property: {code: requirementId, name: 요건 식별자, value_type: string}}
+      - {code: DirectProductionConfirmation, name: 직접생산확인, legacy_ref: public_procurement.direct_production_confirmation, identity_property: {code: confirmationId, name: 확인 식별자, value_type: string}}
+      - {code: Industry, name: 조달 업종, legacy_ref: public_procurement.procurement_industry, identity_property: {code: industryCode, name: 업종 코드, value_type: string}}
+      - {code: RegisteredIndustry, name: 등록 업종, legacy_ref: public_procurement.registered_industry, identity_property: {code: registrationId, name: 등록 식별자, value_type: string}}
+      - {code: RegisteredSupplyProduct, name: 등록 공급품, legacy_ref: public_procurement.registered_supply_product, identity_property: {code: registrationId, name: 등록 식별자, value_type: string}}
+      - {code: Sanction, name: 조달 제재, legacy_ref: public_procurement.procurement_sanction, identity_property: {code: sanctionId, name: 제재 식별자, value_type: string}}
+      - {code: BidParticipation, name: 입찰 참여, legacy_ref: public_procurement.bid_opening_participation, identity_property: {code: participationId, name: 참여 식별자, value_type: string}}
+      - {code: ContractParticipation, name: 계약 참여, legacy_ref: public_procurement.contract_participation, identity_property: {code: participationId, name: 참여 식별자, value_type: string}}

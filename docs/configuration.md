@@ -25,6 +25,22 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_RUNTIME_CACHE_URL` | `redis://localhost:6379/0` | Redis Runtime 캐시 접속 URL |
 | `TEORIA_RUNTIME_CACHE_PREFIX` | `teoria:runtime` | Registry 버전과 Capability 키 앞에 붙는 캐시 namespace |
 | `TEORIA_ADMIN_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Admin API 앞에 붙이는 URL 경로 |
+| `TEORIA_ADMIN_AUTH_MODE` | `disabled` | Admin 쓰기 API 인증 방식. 공유·운영 환경은 `bearer` 사용 |
+| `TEORIA_ADMIN_API_TOKEN` | 없음 | `bearer` mode의 Admin API credential |
+| `TEORIA_ADMIN_API_ACTOR` | `system:admin` | 감사 기록에 남길 인증 principal ID |
+| `TEORIA_ADMIN_API_ROLES` | Admin 역할 전체 | 쉼표로 구분한 Admin 승인 역할 |
+| `TEORIA_APP_DATABASE_URL` | 없음 | Ontology v2, Binding, Intelligence를 저장하는 Teoria Application DB URL |
+| `TEORIA_OPENMETADATA_ENABLED` | `false` | Admin API OpenMetadata integration 활성화 여부 |
+| `TEORIA_OPENMETADATA_BASE_URL` | `http://localhost:8585/api` | OpenMetadata REST API base URL |
+| `TEORIA_OPENMETADATA_AUTH_TOKEN` | 없음 | Backend 전용 OpenMetadata bot JWT |
+| `TEORIA_OPENMETADATA_TIMEOUT_SECONDS` | `10` | OpenMetadata REST 요청 제한시간 |
+| `TEORIA_OPENMETADATA_VERIFY_SSL` | `true` | OpenMetadata TLS 인증서 검증 여부 |
+| `TEORIA_OPENMETADATA_DATABASE_SERVICE` | `teoria_postgresql` | 기본 Teoria PostgreSQL Database Service 이름 |
+| `OPENMETADATA_VERSION` | `1.12.6` | Server와 ephemeral ingestion image에 공통 적용하는 OpenMetadata 버전 |
+| `OPENMETADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata 전용 PostgreSQL 암호 |
+| `OPENMETADATA_INGESTION_BOT_TOKEN` | 없음 | 일회성 ingestion Job이 OpenMetadata REST API에 쓰는 bot JWT |
+| `TEORIA_METADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata PostgreSQL connector의 Teoria Data DB read-only 암호 |
+| `TEORIA_LOCAL_PLATFORM_DB_PASSWORD` | 로컬 개발값 | Compose의 Control/Application PostgreSQL 관리 계정 암호 |
 | `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | checksum이 일치하는 Published Registry만 Runtime에서 허용 |
 | `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
 | `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `5` | Connector의 멱등 요청 최대 시도 횟수 |

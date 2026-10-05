@@ -55,8 +55,9 @@ docker compose --env-file deploy/compose/.env \
 
 | 서비스 | 역할 |
 |---|---|
-| `postgres`, `postgres-migrate` | Teoria 공유 PostgreSQL과 migration |
-| `prefect-db`, `prefect-redis` | Prefect 영속 상태, 메시징과 서비스 조정 |
+| `postgres`, `postgres-migrate` | `teoria_data` Data Plane PostgreSQL과 migration |
+| `platform-postgres` | `teoria_app`, `prefect`, `openmetadata_db`가 DB·role을 분리해 공유하는 Control/Application PostgreSQL |
+| `prefect-redis` | Prefect 메시징과 서비스 조정 |
 | `prefect-server`, `prefect-services` | Prefect API/UI와 Scheduler 등 백그라운드 서비스 |
 | `prefect-init`, `prefect-deploy` | Work pool과 Deployment 등록 |
 | `prefect-worker` | Prefect Flow 실행 |

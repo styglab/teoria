@@ -8,7 +8,7 @@ x-pipeline-runner: &pipeline-runner
     target: worker
 
 x-prefect-services-environment: &prefect-services-environment
-  PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}@prefect-db:5432/prefect
+  PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}@platform-postgres:5432/prefect
   PREFECT_MESSAGING_BROKER: prefect_redis.messaging
   PREFECT_MESSAGING_CACHE: prefect_redis.messaging
   PREFECT_REDIS_MESSAGING_HOST: prefect-redis
@@ -72,12 +72,20 @@ services:
       - sh
       - -ec
       - |
-        psql --set=ON_ERROR_STOP=1 --set=runtime_password="$${TEORIA_LOCAL_RUNTIME_DB_PASSWORD}" <<'SQL'
+        psql --set=ON_ERROR_STOP=1 \
+          --set=runtime_password="$${TEORIA_LOCAL_RUNTIME_DB_PASSWORD}" \
+          --set=metadata_password="$${TEORIA_METADATA_DB_PASSWORD}" <<'SQL'
         SELECT format('CREATE ROLE teoria_runtime LOGIN PASSWORD %L', :'runtime_password')
         WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_runtime')
         \gexec
         ALTER ROLE teoria_runtime PASSWORD :'runtime_password';
         ALTER ROLE teoria_runtime SET statement_timeout = '30s';
+        SELECT format('CREATE ROLE teoria_metadata LOGIN PASSWORD %L', :'metadata_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_metadata')
+        \gexec
+        ALTER ROLE teoria_metadata PASSWORD :'metadata_password';
+        ALTER ROLE teoria_metadata SET statement_timeout = '60s';
+        GRANT CONNECT ON DATABASE teoria_data TO teoria_metadata;
         SQL
     environment:
       PGHOST: postgres
@@ -86,24 +94,116 @@ services:
       PGUSER: teoria_pipeline
       PGPASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
       TEORIA_LOCAL_RUNTIME_DB_PASSWORD: ${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}
+      TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
     depends_on:
       postgres:
         condition: service_healthy
 
-  prefect-db:
+  postgres-metadata-grants:
+    image: postgres:17
+    command:
+      - sh
+      - -ec
+      - |
+        psql --set=ON_ERROR_STOP=1 <<'SQL'
+        GRANT USAGE ON SCHEMA ingestion, public_procurement TO teoria_metadata;
+        GRANT SELECT ON ALL TABLES IN SCHEMA ingestion, public_procurement TO teoria_metadata;
+        ALTER DEFAULT PRIVILEGES FOR ROLE teoria_pipeline IN SCHEMA ingestion GRANT SELECT ON TABLES TO teoria_metadata;
+        ALTER DEFAULT PRIVILEGES FOR ROLE teoria_pipeline IN SCHEMA public_procurement GRANT SELECT ON TABLES TO teoria_metadata;
+        SQL
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: teoria_data
+      PGUSER: teoria_pipeline
+      PGPASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+
+  platform-postgres:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_DB: prefect
-      POSTGRES_USER: prefect
-      POSTGRES_PASSWORD: ${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}
+      POSTGRES_DB: postgres
+      POSTGRES_USER: platform_admin
+      POSTGRES_PASSWORD: ${TEORIA_LOCAL_PLATFORM_DB_PASSWORD:-platform_local}
+      TEORIA_LOCAL_APP_DB_PASSWORD: ${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}
+      TEORIA_LOCAL_PREFECT_DB_PASSWORD: ${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}
+      OPENMETADATA_DB_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata_local}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect"]
+      test: ["CMD-SHELL", "pg_isready -U platform_admin -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 20
+    expose:
+      - "5432"
     volumes:
-      - prefect-db:/var/lib/postgresql/data
+      - platform-postgres:/var/lib/postgresql/data
+
+  platform-postgres-init:
+    image: postgres:17
+    restart: "no"
+    command:
+      - sh
+      - -ec
+      - |
+        psql --set=ON_ERROR_STOP=1 \
+          --set=teoria_app_password="$${TEORIA_LOCAL_APP_DB_PASSWORD}" \
+          --set=prefect_password="$${TEORIA_LOCAL_PREFECT_DB_PASSWORD}" \
+          --set=openmetadata_password="$${OPENMETADATA_DB_PASSWORD}" <<'SQL'
+        SELECT format('CREATE ROLE teoria_app LOGIN PASSWORD %L', :'teoria_app_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_app')
+        \gexec
+        ALTER ROLE teoria_app PASSWORD :'teoria_app_password';
+        SELECT format('CREATE ROLE prefect LOGIN PASSWORD %L', :'prefect_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'prefect')
+        \gexec
+        ALTER ROLE prefect PASSWORD :'prefect_password';
+        SELECT format('CREATE ROLE openmetadata_user LOGIN PASSWORD %L', :'openmetadata_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmetadata_user')
+        \gexec
+        ALTER ROLE openmetadata_user PASSWORD :'openmetadata_password';
+        SELECT 'CREATE DATABASE teoria_app OWNER teoria_app'
+        WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'teoria_app')
+        \gexec
+        SELECT 'CREATE DATABASE prefect OWNER prefect'
+        WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'prefect')
+        \gexec
+        SELECT 'CREATE DATABASE openmetadata_db OWNER openmetadata_user'
+        WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'openmetadata_db')
+        \gexec
+        REVOKE CONNECT ON DATABASE teoria_app FROM PUBLIC;
+        GRANT CONNECT ON DATABASE teoria_app TO teoria_app, platform_admin;
+        REVOKE CONNECT ON DATABASE prefect FROM PUBLIC;
+        GRANT CONNECT ON DATABASE prefect TO prefect, platform_admin;
+        REVOKE CONNECT ON DATABASE openmetadata_db FROM PUBLIC;
+        GRANT CONNECT ON DATABASE openmetadata_db TO openmetadata_user, platform_admin;
+        SQL
+    environment:
+      PGHOST: platform-postgres
+      PGPORT: 5432
+      PGDATABASE: postgres
+      PGUSER: platform_admin
+      PGPASSWORD: ${TEORIA_LOCAL_PLATFORM_DB_PASSWORD:-platform_local}
+      TEORIA_LOCAL_APP_DB_PASSWORD: ${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}
+      TEORIA_LOCAL_PREFECT_DB_PASSWORD: ${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}
+      OPENMETADATA_DB_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata_local}
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+
+  app-postgres-migrate:
+    image: teoria-platform-runtime:latest
+    build:
+      context: ../..
+      dockerfile: platform/Dockerfile
+    command: ["teoria", "migrate-app", "--migrations", "/app/platform/database/migrations"]
+    environment:
+      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
+    depends_on:
+      platform-postgres-init:
+        condition: service_completed_successfully
 
   prefect-redis:
     image: redis:7-alpine
@@ -140,8 +240,8 @@ services:
       PREFECT_SERVER_UI_SERVE_BASE: /prefect
       PREFECT_SERVER_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
     depends_on:
-      prefect-db:
-        condition: service_healthy
+      platform-postgres-init:
+        condition: service_completed_successfully
       prefect-redis:
         condition: service_healthy
     healthcheck:
@@ -159,8 +259,8 @@ services:
     environment:
       <<: *prefect-services-environment
     depends_on:
-      prefect-db:
-        condition: service_healthy
+      platform-postgres-init:
+        condition: service_completed_successfully
       prefect-redis:
         condition: service_healthy
       prefect-server:
@@ -317,7 +417,16 @@ services:
       TEORIA_ENVIRONMENT: production
       TEORIA_REGISTRY_PATH: /app/platform/registries
       TEORIA_ADMIN_API_ROOT_PATH: /admin-api
+      TEORIA_ADMIN_AUTH_MODE: ${TEORIA_ADMIN_AUTH_MODE:-disabled}
+      TEORIA_ADMIN_API_TOKEN: ${TEORIA_ADMIN_API_TOKEN:-}
+      TEORIA_ADMIN_API_ACTOR: ${TEORIA_ADMIN_API_ACTOR:-system:admin}
+      TEORIA_ADMIN_API_ROLES: ${TEORIA_ADMIN_API_ROLES:-metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner}
       TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
+      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
+      TEORIA_OPENMETADATA_ENABLED: ${TEORIA_OPENMETADATA_ENABLED:-false}
+      TEORIA_OPENMETADATA_BASE_URL: ${TEORIA_OPENMETADATA_BASE_URL:-http://openmetadata-server:8585/api}
+      TEORIA_OPENMETADATA_AUTH_TOKEN: ${TEORIA_OPENMETADATA_AUTH_TOKEN:-}
+      TEORIA_OPENMETADATA_DATABASE_SERVICE: ${TEORIA_OPENMETADATA_DATABASE_SERVICE:-teoria_postgresql}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 5s
@@ -325,6 +434,9 @@ services:
       retries: 20
     expose:
       - "8001"
+    depends_on:
+      app-postgres-migrate:
+        condition: service_completed_successfully
 
   admin-ui:
     image: teoria-platform-admin-ui:latest
@@ -337,6 +449,97 @@ services:
         condition: service_healthy
     expose:
       - "80"
+
+  openmetadata-search:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.0
+    profiles: ["metadata"]
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: ${OPENMETADATA_SEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --fail http://localhost:9200/_cluster/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - openmetadata-search:/usr/share/elasticsearch/data
+
+  openmetadata-migrate:
+    image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-1.12.6}
+    profiles: ["metadata"]
+    restart: "no"
+    environment:
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_SCHEME: postgresql
+      DB_PARAMS: allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+      DB_USER: openmetadata_user
+      DB_USER_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata_local}
+      DB_HOST: platform-postgres
+      DB_PORT: 5432
+      OM_DATABASE: openmetadata_db
+      SEARCH_TYPE: elasticsearch
+      ELASTICSEARCH_HOST: openmetadata-search
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+      PIPELINE_SERVICE_CLIENT_ENABLED: "false"
+      AUTHENTICATION_PROVIDER: basic
+      AUTHORIZER_CLASS_NAME: org.openmetadata.service.security.DefaultAuthorizer
+    entrypoint: ["/bin/bash", "bootstrap/openmetadata-ops.sh", "migrate"]
+    depends_on:
+      platform-postgres-init:
+        condition: service_completed_successfully
+      openmetadata-search:
+        condition: service_healthy
+
+  openmetadata-server:
+    image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-1.12.6}
+    profiles: ["metadata"]
+    restart: unless-stopped
+    environment:
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_SCHEME: postgresql
+      DB_PARAMS: allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+      DB_USER: openmetadata_user
+      DB_USER_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata_local}
+      DB_HOST: platform-postgres
+      DB_PORT: 5432
+      OM_DATABASE: openmetadata_db
+      SEARCH_TYPE: elasticsearch
+      ELASTICSEARCH_HOST: openmetadata-search
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+      PIPELINE_SERVICE_CLIENT_ENABLED: "false"
+      AUTHENTICATION_PROVIDER: basic
+      AUTHORIZER_CLASS_NAME: org.openmetadata.service.security.DefaultAuthorizer
+    depends_on:
+      openmetadata-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8586'"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+    ports:
+      - "${OPENMETADATA_HTTP_PORT:-8585}:8585"
+
+  # One-shot ingestion runner. Scheduling and retries belong to Prefect; this
+  # service deliberately contains no Airflow control plane.
+  openmetadata-ingestion-job:
+    image: docker.getcollate.io/openmetadata/ingestion-base:${OPENMETADATA_VERSION:-1.12.6}
+    profiles: ["metadata-ingestion"]
+    restart: "no"
+    environment:
+      TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-}
+      OPENMETADATA_INGESTION_BOT_TOKEN: ${OPENMETADATA_INGESTION_BOT_TOKEN:-}
+    entrypoint: ["metadata"]
+    command: ["ingest", "-c", "/config/teoria-postgres.yaml"]
+    volumes:
+      - ./openmetadata/ingestion/teoria-postgres.yaml.example:/config/teoria-postgres.yaml:ro
+    depends_on:
+      openmetadata-server:
+        condition: service_healthy
 
   pipelines-check:
     profiles: ["tools"]
@@ -372,7 +575,9 @@ services:
 volumes:
   postgres:
     name: teoria_data-db
-  prefect-db:
+  platform-postgres:
+    name: teoria_platform-db
   prefect-redis:
   runtime-redis:
   codex-auth:
+  openmetadata-search:

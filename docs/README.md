@@ -1,11 +1,23 @@
 # Teoria 문서
 
+처음 보는 경우 [Platform Guide](platform-guide.md)에서 구성과 역할별 사용
+흐름을 확인하고, [Product Roadmap](roadmap.md)에서 현재 단계와 다음 완료
+조건을 확인한다.
+
 ## 설계
 
 - [Architecture](architecture/overview.md): 전체 구성
+- [AI-Native Metadata Platform](architecture/ai-native-metadata-platform.md): Metadata·Ontology·Binding 권위와 목표 구조
 - [Repository Structure](architecture/repository-structure.md): 프로젝트 소유권과 의존
+- [Semantic Governance](architecture/semantic-governance.md): 인증, 승인, Binding 생명주기와 조달 Ontology v2
+- [Ontology Authoring](architecture/ontology-authoring.md): Stable Concept, version lifecycle, publish artifact
+- [Legacy Registry Migration](architecture/legacy-registry-migration.md): 기존 Ontology/Capability를 중단 없이 분리·이전하는 기준
+- [OpenMetadata Ingestion Orchestration](architecture/openmetadata-ingestion-orchestration.md): Airflow 없는 Prefect·ephemeral Job 운영 경계
+- [PostgreSQL Deployment](architecture/postgresql-deployment.md): Data Plane과 Control/Application DB 배치·이전·분리 기준
 - [Naming](architecture/naming.md): 코드·Registry·배포 이름
 - [Configuration](configuration.md): 환경변수와 secret
+- [Platform Guide](platform-guide.md): 플랫폼 구성, 실행, 역할별 사용법
+- [Product Roadmap](roadmap.md): AI-Native vertical slice와 단계별 완료 조건
 
 ## Semantic Registry
 

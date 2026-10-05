@@ -76,6 +76,20 @@ jobs:
           TEORIA_PREFECT_USERNAME: validation
           TEORIA_RUNTIME_API_TOKEN: validation
         run: docker compose -f deploy/compose/compose.yaml config --quiet
+      - name: Validate OpenMetadata Compose profile
+        env:
+          TEORIA_LOCAL_RUNTIME_DB_PASSWORD: validation
+          TEORIA_OBJECT_STORAGE_ACCESS_KEY: validation
+          TEORIA_OBJECT_STORAGE_ENDPOINT: http://object-storage.invalid
+          TEORIA_OBJECT_STORAGE_SECRET_KEY: validation
+          TEORIA_PREFECT_PASSWORD: validation
+          TEORIA_PREFECT_USERNAME: validation
+          TEORIA_RUNTIME_API_TOKEN: validation
+        run: >-
+          docker compose
+          -f deploy/compose/compose.yaml
+          --profile metadata
+          config --quiet
       - name: Validate Helm and Helmfile environments
         run: |
           docker run --rm -v "$PWD:/work" -w /work \

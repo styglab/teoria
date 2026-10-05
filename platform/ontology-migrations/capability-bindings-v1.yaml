@@ -1,0 +1,10 @@
+schema_version: "1.0"
+bindings:
+  - {ontology_stable_key: company.LegalEntity.corporateRegistrationNumber, capability_id: get_company_profile, target_scope: input, field_path: corporate_registration_number, binding_type: accepts}
+  - {ontology_stable_key: company.LegalEntity, capability_id: get_company_profile, target_scope: output, field_path: company.legal_entity, binding_type: returns}
+  - {ontology_stable_key: company.PostalAddress, capability_id: get_company_profile, target_scope: output, field_path: company.postal_address, binding_type: returns}
+  - {ontology_stable_key: company.BusinessRegistration, capability_id: get_company_profile, target_scope: output, field_path: company.business_registration, binding_type: returns}
+  - {ontology_stable_key: procurement.Contract, capability_id: get_public_procurement_contract, target_scope: output, field_path: public_procurement.contract, binding_type: returns}
+  - {ontology_stable_key: procurement.Organization, capability_id: get_public_procurement_contract, target_scope: output, field_path: public_procurement.public_organization, binding_type: returns}
+  - {ontology_stable_key: procurement.BidNotice, capability_id: get_bid_notice, target_scope: output, field_path: public_procurement.bid_notice, binding_type: returns}
+  - {ontology_stable_key: procurement.Organization, capability_id: get_bid_notice, target_scope: output, field_path: public_procurement.public_organization, binding_type: returns}

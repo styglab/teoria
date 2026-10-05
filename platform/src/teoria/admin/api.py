@@ -8,7 +8,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from teoria.admin.ontology_graph import build_ontology_graph
 from teoria.admin.overview import build_registry_overview
 from teoria.admin.bid_check import BidCheckReader
+from teoria.admin.metadata_api import create_metadata_router
+from teoria.admin.semantic_api import create_semantic_router
+from teoria.admin.intelligence_api import create_intelligence_router
+from teoria.admin.auth import AdminAuthorizer
+from teoria.admin.binding_api import create_binding_router
+from teoria.admin.ontology_authoring_api import create_ontology_authoring_router
+from teoria.binding.repository import BindingRepository
+from teoria.intelligence.repository import SuggestionRepository
+from teoria.intelligence.service import SuggestionService
+from teoria.ontology.authoring import OntologyAuthoringRepository
+from teoria.ontology.migration import OntologyMigrationManifest, build_migration_report
 from teoria.config import Settings, bootstrap_settings
+from teoria.metadata.openmetadata import OpenMetadataClient, OpenMetadataService
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.registry.validator import RegistryValidator
 
@@ -18,13 +30,41 @@ def create_admin_app(
     settings: Settings | None = None,
     catalog: RegistryCatalog | None = None,
     bid_check_reader: BidCheckReader | None = None,
+    metadata_service: OpenMetadataService | None = None,
+    binding_repository: BindingRepository | None = None,
+    suggestion_repository: SuggestionRepository | None = None,
 ) -> FastAPI:
     resolved_settings = settings or bootstrap_settings()
+    authorizer = AdminAuthorizer(resolved_settings)
     resolved_catalog = catalog or RegistryLoader(resolved_settings.registry_path).load()
     resolved_bid_reader = bid_check_reader or (
         BidCheckReader(resolved_settings.admin_data_database_url)
         if resolved_settings.admin_data_database_url else None
     )
+    resolved_metadata_service = metadata_service
+    resolved_binding_repository = binding_repository or (
+        BindingRepository(resolved_settings.app_database_url)
+        if resolved_settings.app_database_url else None
+    )
+    resolved_suggestion_repository = suggestion_repository or (
+        SuggestionRepository(resolved_settings.app_database_url)
+        if resolved_settings.app_database_url else None
+    )
+    resolved_ontology_authoring_repository = (
+        OntologyAuthoringRepository(resolved_settings.app_database_url)
+        if resolved_settings.app_database_url else None
+    )
+    if resolved_metadata_service is None and resolved_settings.openmetadata_enabled:
+        resolved_metadata_service = OpenMetadataService(
+            OpenMetadataClient(
+                resolved_settings.openmetadata_base_url,
+                resolved_settings.openmetadata_auth_token,
+                timeout_seconds=resolved_settings.openmetadata_timeout_seconds,
+                verify_ssl=resolved_settings.openmetadata_verify_ssl,
+            ),
+            base_url=resolved_settings.openmetadata_base_url,
+            database_service=resolved_settings.openmetadata_database_service,
+        )
     app = FastAPI(
         title="Teoria Admin API",
         version="1.0.0",
@@ -34,9 +74,22 @@ def create_admin_app(
         app.add_middleware(
             CORSMiddleware,
             allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173"],
-            allow_methods=["GET"],
+            allow_methods=["GET", "POST"],
             allow_headers=["*"],
         )
+    app.include_router(create_metadata_router(resolved_metadata_service))
+    app.include_router(create_semantic_router(resolved_binding_repository))
+    app.include_router(create_binding_router(resolved_binding_repository, authorizer, resolved_catalog))
+    app.include_router(create_ontology_authoring_router(resolved_ontology_authoring_repository, authorizer))
+    app.include_router(create_intelligence_router(
+        resolved_suggestion_repository,
+        SuggestionService(
+            resolved_suggestion_repository,
+            resolved_metadata_service.client if resolved_metadata_service else None,
+            resolved_binding_repository,
+        ) if resolved_suggestion_repository else None,
+        authorizer,
+    ))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -66,6 +119,17 @@ def create_admin_app(
                 for ontology in resolved_catalog.ontologies.values()
             ]
         }
+
+    @app.get("/v1/admin/ontology-migration")
+    async def ontology_migration() -> dict[str, Any]:
+        manifest_path = resolved_settings.registry_path.parent / "ontology-migrations" / "ontology-v2.yaml"
+        if not manifest_path.exists():
+            raise HTTPException(status_code=404, detail={"code": "ontology_migration_manifest_not_found"})
+        return build_migration_report(
+            resolved_catalog,
+            OntologyMigrationManifest.load(manifest_path),
+            application_database_url=resolved_settings.app_database_url,
+        )
 
     @app.get("/v1/admin/capabilities")
     async def list_capabilities() -> dict[str, list[dict[str, Any]]]:

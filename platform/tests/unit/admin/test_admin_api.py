@@ -68,6 +68,55 @@ def test_admin_api_returns_not_found_for_unknown_ontology() -> None:
     assert response.status_code == 404
 
 
+def test_admin_mutations_require_configured_bearer_token() -> None:
+    app = create_admin_app(
+        settings=Settings(
+            admin_auth_mode="bearer",
+            admin_api_token="test-secret",
+            admin_api_actor="user:test-admin",
+            admin_api_roles="metadata_admin",
+        ),
+        catalog=RegistryLoader(REGISTRIES).load(),
+    )
+    client = TestClient(app)
+    payload = {
+        "target_type": "openmetadata_table",
+        "target_ref": "table-id",
+        "suggestion_type": "description",
+        "proposed_value": {"description": "설명"},
+        "confidence": 0.9,
+        "model_provider": "test",
+        "model_name": "test",
+        "policy_version": "1",
+    }
+
+    assert client.post("/v1/admin/intelligence/suggestions", json=payload).status_code == 401
+    authenticated = client.post(
+        "/v1/admin/intelligence/suggestions",
+        json=payload,
+        headers={"Authorization": "Bearer test-secret"},
+    )
+    assert authenticated.status_code == 503
+
+    ontology_draft = client.post(
+        "/v1/admin/ontology-authoring/ontologies/procurement/versions",
+        json={"version": "0.3.0"},
+    )
+    assert ontology_draft.status_code == 401
+
+    forbidden = TestClient(create_admin_app(
+        settings=Settings(
+            admin_auth_mode="bearer", admin_api_token="test-secret",
+            admin_api_roles="metadata_reviewer",
+        ),
+        catalog=RegistryLoader(REGISTRIES).load(),
+    )).post(
+        "/v1/admin/ontology-authoring/ontologies/procurement/versions",
+        json={"version": "0.3.0"}, headers={"Authorization": "Bearer test-secret"},
+    )
+    assert forbidden.status_code == 403
+
+
 def test_admin_api_exposes_pipeline_bid_check_results() -> None:
     class Reader:
         def list_notices(self, *, page: int, page_size: int, query: str | None,

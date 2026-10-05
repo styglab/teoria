@@ -1,0 +1,53 @@
+schema_version: "1.0"
+source_registry_release: "2026.10.04.13"
+target_ontology: procurement
+classifications:
+  BUSINESS_CONCEPT: 지속 가능한 업무 의미로 Ontology v2 승격 대상
+  RUNTIME_PROJECTION: Capability 입출력 계약으로 유지
+  ASSESSMENT_RESULT: 판단·관찰·근거 결과로 별도 결과 모델 유지
+  DEPRECATED: 사용처 제거 후 폐기
+objects:
+  assessment.bid_eligibility_assessment: {classification: ASSESSMENT_RESULT, migration_status: retain, rationale: 입찰 참가자격 평가 실행 결과}
+  assessment.requirement_assessment: {classification: ASSESSMENT_RESULT, migration_status: retain, rationale: 개별 요건 판단 결과}
+  assessment.evidence: {classification: ASSESSMENT_RESULT, migration_status: retain, rationale: 평가 판단의 근거 기록}
+  company.legal_entity: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: company.LegalEntity, rationale: 법적 실체의 지속 가능한 의미}
+  company.postal_address: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: company.PostalAddress, rationale: 주소 값 객체}
+  company.business_registration: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: company.BusinessRegistration, rationale: 사업자등록 업무 객체}
+  company.taxpayer_status_observation: {classification: ASSESSMENT_RESULT, migration_status: retain, rationale: 시점별 세무상태 관찰 결과}
+  company.qualification: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: company.Qualification, rationale: 업체 자격 업무 객체}
+  company.registration_verification: {classification: ASSESSMENT_RESULT, migration_status: retain, rationale: 식별자 연결 검증 결과}
+  company.venture_company_disclosure: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: company.VentureCompanyDisclosure, rationale: 벤처기업 확인 공시}
+  company.innovation_certification_observation: {classification: ASSESSMENT_RESULT, migration_status: retain, rationale: 혁신 인증 관찰 결과}
+  company.market_listing: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: company.MarketListing, rationale: 상장 관계}
+  company.organization_relationship: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: company.OrganizationRelationship, rationale: 기업 간 관계}
+  company.financial_statement: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: company.FinancialStatement, rationale: 재무제표 업무 객체}
+  company.financial_fact: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: company.FinancialFact, rationale: 재무 항목 값}
+  public_procurement.procurement_activity: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 공고·낙찰·계약 통합 조회 응답}
+  public_procurement.procurement_outcome: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 낙찰·계약 통합 결과 응답}
+  public_procurement.organization_procurement_profile: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 기관 프로필 집계 응답}
+  public_procurement.company_procurement_profile: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 업체 프로필 집계 응답}
+  public_procurement.bid_notice_relationship_context: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 공고 관계 컨텍스트 응답}
+  public_procurement.bid_participation_context: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 입찰 인사이트 집계 응답}
+  public_procurement.company_similar_project_experience: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 유사사업 경험 조회 응답}
+  public_procurement.organization_company_relationship: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 기관 업체 관계 집계 응답}
+  public_procurement.bid_project_lineage: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 사업 계보 판정 응답}
+  public_procurement.similar_bid_notice: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 유사 공고 검색 결과}
+  public_procurement.bid_relevant_company: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 주목 업체 분석 결과}
+  public_procurement.bid_organization_field_company: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 기관 분야 업체 집계 응답}
+  public_procurement.bid_notice: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.BidNotice, rationale: 조달 공고 업무 객체}
+  public_procurement.bid_requirement_set: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.BidRequirementSet, rationale: 공고 참가요건의 논리 집합}
+  public_procurement.bid_requirement: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.BidRequirement, rationale: 개별 참가요건}
+  public_procurement.bid_requirement_evidence: {classification: ASSESSMENT_RESULT, migration_status: retain, rationale: 요건 추출 근거}
+  public_procurement.bid_participation_finding: {classification: ASSESSMENT_RESULT, migration_status: retain, rationale: 참여 판단 결과}
+  public_procurement.bid_participation_finding_evidence: {classification: ASSESSMENT_RESULT, migration_status: retain, rationale: 참여 판단 근거}
+  public_procurement.procurement_supplier: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.Company, rationale: 조달 참여 업체}
+  public_procurement.direct_production_confirmation: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.DirectProductionConfirmation, rationale: 직접생산확인 자격}
+  public_procurement.procurement_industry: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.Industry, rationale: 조달 업종·면허 분류}
+  public_procurement.registered_industry: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.RegisteredIndustry, rationale: 업체 등록 업종 관계}
+  public_procurement.registered_supply_product: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.RegisteredSupplyProduct, rationale: 업체 등록 공급품 관계}
+  public_procurement.procurement_sanction: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.Sanction, rationale: 조달 제재 사건}
+  public_procurement.bid_award: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.Award, rationale: 중복 제거된 낙찰 사건}
+  public_procurement.bid_opening_participation: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.BidParticipation, rationale: 공고별 업체 참여 사건}
+  public_procurement.contract: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.Contract, rationale: 원계약 기준 계약 사건}
+  public_procurement.public_organization: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.Organization, rationale: 공공 조달 기관}
+  public_procurement.contract_participation: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.ContractParticipation, rationale: 공동계약 업체 역할과 귀속 관계}
