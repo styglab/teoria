@@ -1,224 +1,61 @@
 # Teoria product roadmap
 
-이 문서는 Teoria의 구현 순서와 각 단계의 완료 조건을 정의한다. 기능 수를
-늘리는 것보다 하나의 검증 가능한 AI-Native loop를 먼저 완성한다.
+로드맵은 완료된 migration 일지가 아니라 남은 제품 결과와 완료 조건만 관리한다.
+현재 구현 사실은 코드, Registry와 [Architecture](architecture/overview.md)가 기준이다.
 
-## 제품 목표
+## 현재 기반
 
-```text
-OpenMetadata asset
-  → deterministic candidate retrieval
-  → governed AI suggestion with evidence
-  → human review
-  → Binding draft
-  → Binding approval
-  → Context resolution
-  → API / MCP / Agent
-```
+- 프로젝트와 저장소 권위 경계
+- Source·Mapping·Capability Runtime과 HTTP API
+- Connector·Prefect 수집 및 Data DB
+- Ontology version lifecycle과 immutable publish artifact
+- Semantic Binding review 기록과 Metadata Intelligence suggestion
+- OpenMetadata integration과 Admin UI
+- Runtime API만 호출하는 MCP gateway
 
-첫 reference slice는 OpenMetadata Column
-`public_procurement.contracts.current_contract_amount`와 Stable Concept
-`procurement.Contract.currentAmount`다.
+## 다음 결과
 
-## 현재 상태
+### 1. Published artifact Runtime
 
-| 영역 | 상태 | 비고 |
-|---|---|---|
-| Prefect/Data Operations | 운영 중 | 수집, backfill, normalization, checkpoint |
-| OpenMetadata Foundation | 구현 | PostgreSQL ingestion과 REST gateway |
-| Business Ontology v2 | 구현 | 23개 legacy Business Concept을 통합 `teoria` 온톨로지로 이전, 0.1.1 게시 |
-| Ontology Authoring API | 구현 | validation, diff, audit, publish artifact |
-| Semantic Binding | 구현 | Stable Concept 중심 |
-| Binding Governance/UI | 구현 | draft, approve, reject, deprecate |
-| Capability Runtime | 운영 중 | Registry 기반 실행, 검증된 Capability target 11개 연결 및 coverage report |
-| Ontology Authoring UI | 검토 UI 구현 | 그래프 탐색, 도메인 필터, 버전 diff, validation/Binding impact, lifecycle |
-| Metadata Intelligence | 첫 vertical slice 구현 | Column 후보 생성, evidence/version 검증, 승인 시 Binding Draft |
-| Runtime Artifact consumption | 첫 read slice 구현 | Context resolver가 checksum을 검증한 Published Artifact만 사용, Runtime 전체 전환은 필요 |
-| Context Engine | 첫 vertical slice 구현 | `계약금액` → Contract.amount → 목적별 Metadata/API/Capability 실행 경로 |
-| Semantic MCP | 미구현 | Context Engine 이후 |
-| OIDC | 운영 전 필요 | 현재 Bearer/role 경계 사용 |
-
-## Milestone 1 — Minimal Ontology Authoring UI
-
-상태: **검토 가능한 첫 운영 버전 구현**. Business Object/Relationship
-그래프, 도메인·검색 필터, Stable Concept diff, validation과 Binding impact를
-한 화면에서 확인할 수 있다. 다음 반복에서는 Draft Object/Property 편집과
-그래프 기반 Relationship authoring을 보강한다.
-
-목표는 Ontology Studio가 아니라 AI가 만든 Ontology Suggestion을 사람이
-검토할 수 있는 최소 authoring surface다.
-
-범위:
-
-- version history와 Published 상태
-- Published에서 Draft 생성
-- Object, Property, Relationship의 기본 편집
-- validation, semantic diff, Binding impact
-- submit, approve, publish
-- audit history
-
-Rule/Metric 고급 편집기, 시각적 graph authoring, 협업 댓글은 후순위다.
+Runtime이 authoring table이 아니라 Published artifact만 읽도록 전환한다.
 
 완료 조건:
 
-- UI에서 Published revision을 직접 수정할 수 없다.
-- Draft 변경과 diff가 Stable Concept 기준으로 표시된다.
-- validation 또는 Binding compatibility 실패 시 publish가 차단된다.
-- 게시 결과의 artifact checksum을 확인할 수 있다.
+- artifact checksum과 Registry release가 실행·감사 로그에 남는다.
+- publish 실패 또는 Binding incompatibility가 Runtime 상태를 바꾸지 않는다.
+- rollback은 이전 immutable artifact 선택으로 수행한다.
 
-## Milestone 2 — Binding Intelligence vertical slice
+### 2. Context Engine vertical slice
 
-상태: **deterministic vertical slice 구현**.
-
-- Metadata 화면에서 OpenMetadata Table/Column을 열어 후보 생성을 요청한다.
-- 이름·설명 token, datatype, Glossary evidence로 Published Property 후보를 정렬한다.
-- Suggestion에는 OpenMetadata source version과 대안 후보를 저장한다.
-- 승인 직전 source version을 다시 확인하며 변경됐으면 `STALE_EVIDENCE`로 차단한다.
-- 승인 결과는 확정 Binding이 아니라 별도 검토가 필요한 Binding Draft다.
-
-### Candidate retrieval
-
-초기에는 별도 Vector DB나 Graph DB를 도입하지 않는다.
-
-1. Glossary exact/synonym match
-2. normalized column/property name
-3. description token similarity
-4. datatype와 unit compatibility
-5. parent table/object context
-6. PK/FK와 relationship context
-7. 필요하면 PostgreSQL `pg_trgm`
-
-Top 5~10 후보만 LLM에 전달한다. LLM은 전체 Ontology 검색이 아니라 후보의
-재정렬과 설명 생성을 담당한다.
-
-현재 구현은 결정론적 후보 검색까지만 사용한다. LLM reranking은 평가셋과
-provider 정책이 준비된 뒤 추가한다.
-
-### Suggestion contract
-
-```json
-{
-  "suggestion_type": "binding",
-  "source": {
-    "system": "openmetadata",
-    "entity_id": "...",
-    "entity_version": "1.4",
-    "fqn": "teoria_postgresql.teoria_data.public_procurement.contracts.current_contract_amount"
-  },
-  "candidate": {
-    "ontology_concept_id": "...",
-    "stable_key": "procurement.Contract.currentAmount",
-    "ontology_version": "0.3.0"
-  },
-  "confidence": 0.97,
-  "evidence": [
-    {"type": "glossary_exact_match", "score": 1.0},
-    {"type": "name_similarity", "score": 0.93},
-    {"type": "datatype_compatibility", "score": 1.0},
-    {"type": "table_context", "score": 0.91}
-  ],
-  "policy_version": "binding-suggestion-v1"
-}
-```
-
-승인 결과는 Approved Binding이 아니라 Binding Draft다. Binding reviewer가
-다시 의미 연결을 승인한다. 원천 entity version 또는 Ontology version이
-변경되면 `stale_evidence`로 전환하고 재평가한다.
+승인된 Ontology, Binding과 Capability를 사용해 질문을 실행계획으로 변환한다.
 
 완료 조건:
 
-- reference column에서 `Contract.amount`가 설명 가능한 후보로 생성된다.
-- evidence, provenance, model/prompt/policy version이 보존된다.
-- 중복되거나 충돌하는 Approved Binding을 생성하지 않는다.
-- 승인 전에는 authoritative state를 변경하지 않는다.
+- 계획에 사용한 concept, capability, source와 artifact version을 설명한다.
+- 접근권한과 시간 범위를 실행 전에 검증한다.
+- 부분 실패와 불확실성을 결과에 보존한다.
 
-## Milestone 3 — Suggestion framework generalization
+### 3. Semantic MCP/SDK
 
-| 종류 | 적용 대상 | 승인 결과 |
-|---|---|---|
-| Metadata Suggestion | Description, Tag, Glossary, Domain, Owner 후보 | OpenMetadata REST write-back |
-| Binding Suggestion | Term/Asset/API/Capability ↔ Concept | Teoria Binding Draft |
-| Ontology Suggestion | Object, Property, Relationship, Rule, Metric | Teoria Ontology Draft |
+Capability 목록을 그대로 노출하는 수준을 넘어 semantic discovery와 provenance를
+안정된 client 계약으로 제공한다.
 
-공통 필드:
+완료 조건:
 
-- target and candidate references
-- confidence and scored evidence
-- source/ontology/capability contract versions
-- provenance, model, prompt, policy version
-- risk level, status, reviewer, review timestamps
-- stale evidence state and re-evaluation history
+- MCP와 SDK가 같은 Runtime API 계약을 사용한다.
+- schema를 client 코드에 복제하지 않고 discovery로 협상한다.
+- pagination, timeout, retry와 오류 의미가 문서화되고 회귀 테스트된다.
 
-## Milestone 4 — Published Artifact Runtime
+### 4. Production identity and scale
 
-- Published Artifact loader와 checksum 검증
-- 마지막 정상 Artifact fallback
-- 기존 Registry와 parity report
-- shadow mode에서 결과 비교
-- Runtime의 단계적 artifact 전환
-
-기존 Registry를 바로 제거하지 않는다. Context Engine을 시작하기 전까지
-동일한 Concept/Relationship 결과가 나오는지 검증한다.
-
-## Milestone 5 — Context Engine vertical slice
-
-상태: **첫 read-only vertical slice 구현**. Admin API의
-`GET /v1/admin/context/resolve?term=계약금액`이 Published Artifact의
-checksum을 검증하고 승인된 OpenMetadata 및 Capability Binding만 조합한다.
-또한 `POST /v1/admin/context/query`는 첫 제한된 질문 형식에서 기관을
-식별하고 최근 N개 회계연도를 계산하여 기존 Capability Runtime을 실제
-실행한다. 일반 자연어 intent resolution과 다른 Business Concept 확장은
-다음 반복 범위다.
-
-입력 `계약금액`을 다음 Context Package로 해석한다.
-
-- Stable Concept `Contract.amount`
-- OpenMetadata Glossary Term과 Column
-- description, quality, lineage, freshness
-- 승인된 Capability와 API field binding
-- evidence와 provenance
-
-Context Engine은 OpenMetadata JSON이나 전체 Ontology를 Agent에게 그대로
-전달하지 않는다. 요청에 필요한 최소 context만 조합한다.
-
-`Contract.amount`는 `purpose=analytics`일 때 승인된
-`search_public_procurement_contracts` Binding을 선택한다. `purpose=realtime`은
-승인된 실시간 Capability가 있을 때만 선택하며, 검증된 Source Registry 계약이
-없는 API Field를 이름만으로 생성하지 않는다. Capability 의미 연결 현황은
-`GET /v1/admin/bindings/capability-coverage`에서 확인한다.
-
-## Milestone 6 — Semantic MCP / SDK
-
-Milestone 6에 앞서 조달 Business Ontology를 현실의 객체·사건·관계 기준으로
-재검토한다. 상세 기준과 migration 순서는
-[Procurement Ontology redesign](architecture/procurement-ontology-redesign.md)을
-따른다. `ProcurementCase`, 공고 계보, 공동수급 association event와 계약 버전이
-게시되기 전에는 Capability Binding 커버리지를 기계적으로 확대하지 않는다.
-
-첫 MCP 도구:
-
-- `resolve_business_term`
-- `get_business_object`
-- `resolve_binding`
-- `resolve_capability`
-- `build_context`
-
-OpenMetadata MCP가 asset exploration을 담당하고 Teoria MCP는 Business
-Ontology, Binding, Capability와 Context resolution을 담당한다.
-
-## Milestone 7 — Production identity and scale
-
-- OIDC/SSO와 organization role mapping
-- service account와 human principal 분리
-- approval separation-of-duties
-- suggestion generation batch를 Prefect로 orchestration
-- performance, retention, audit export, disaster recovery
+- Admin OIDC와 세분화된 role
+- Runtime service identity, token rotation, quota와 audit
+- Data/Control plane의 독립 backup·restore 검증
+- Kubernetes workload와 secret 계약 완성
+- suggestion 품질 평가셋과 승인 성과 측정
 
 ## 의도적으로 미루는 항목
 
-- 별도 Vector DB
-- Neo4j 또는 다른 Graph DB
-- OpenMetadata UI 복제
-- Business Ontology의 OpenMetadata Custom Property 저장
-- 과도한 microservice 분리
-- 자동 승인되는 중·고위험 AI 변경
+Ontology canvas, 범용 graph editor, 자동 승인, OpenMetadata entity 복제, Airflow
+추가, 다중 workflow engine은 위 vertical slice의 운영 가치가 검증되기 전에는
+구축하지 않는다.

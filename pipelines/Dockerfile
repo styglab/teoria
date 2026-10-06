@@ -9,11 +9,11 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-COPY packages/provider/pyproject.toml ./packages/provider/pyproject.toml
+COPY packages/provider_api/pyproject.toml ./packages/provider_api/pyproject.toml
 COPY platform/pyproject.toml ./platform/pyproject.toml
 COPY pipelines/pyproject.toml ./pipelines/pyproject.toml
 COPY mcp/pyproject.toml ./mcp/pyproject.toml
-COPY packages/provider/src ./packages/provider/src
+COPY packages/provider_api/src ./packages/provider_api/src
 COPY pipelines/src ./pipelines/src
 
 FROM base AS worker

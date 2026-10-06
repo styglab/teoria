@@ -1,6 +1,6 @@
 from pydantic import Field, field_validator, model_validator
 
-from teoria_provider.schema import ContractModel, IdentifiedContract, SNAKE_CASE_PATTERN
+from teoria_provider_api.schema import ContractModel, IdentifiedContract, SNAKE_CASE_PATTERN
 
 
 class PipelineCursor(ContractModel):

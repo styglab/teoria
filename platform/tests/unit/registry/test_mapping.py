@@ -2,7 +2,7 @@ from datetime import date
 from pathlib import Path
 
 from teoria.registry.loader import RegistryLoader
-from teoria.registry.validator import RegistryValidator
+from teoria.registry.validation.registry import RegistryValidator
 from teoria.runtime.mapping.functions.common import format_date_yyyymmdd, format_year, parse_date
 from teoria.runtime.mapping.functions.company import combine_korean_address, normalize_representative_names
 

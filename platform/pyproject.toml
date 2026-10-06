@@ -18,12 +18,12 @@ dependencies = [
   "python-dotenv>=1.0,<2",
   "PyYAML>=6.0,<7",
   "redis>=6,<7",
-  "teoria-provider",
+  "teoria-provider-api",
   "uvicorn>=0.34,<1",
 ]
 
 [tool.uv.sources]
-teoria-provider = { workspace = true }
+teoria-provider-api = { workspace = true }
 
 [dependency-groups]
 dev = [

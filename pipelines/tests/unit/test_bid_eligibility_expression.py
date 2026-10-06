@@ -4,7 +4,7 @@ import pytest
 import yaml
 from jsonschema import Draft202012Validator
 
-from teoria_pipelines.bid_eligibility_expression import (
+from teoria_pipelines.bid_eligibility.expression import (
     compile_eligibility_facts,
     validate_compiled_expression,
 )

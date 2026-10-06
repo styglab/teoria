@@ -495,7 +495,7 @@ services:
     image: teoria-platform-admin-ui:latest
     build:
       context: ../..
-      dockerfile: platform/admin-ui/Dockerfile
+      dockerfile: platform/admin_ui/Dockerfile
     restart: unless-stopped
     depends_on:
       admin-api:

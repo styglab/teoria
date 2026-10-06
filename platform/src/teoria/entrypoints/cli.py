@@ -6,12 +6,13 @@ from pathlib import Path
 import yaml
 import psycopg
 
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.secrets import EnvironmentSecretProvider
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.secrets import EnvironmentSecretProvider
 from teoria.config import Settings, bootstrap_settings
+from teoria.registry.artifact import RegistryArtifactError, RegistryArtifactStore
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
 from teoria.registry.release import publish_registry
-from teoria.registry.validator import RegistryValidator
+from teoria.registry.validation.registry import RegistryValidator
 from teoria.persistence import apply_migrations
 from teoria.binding.repository import BindingRepository
 from teoria.binding.capability_manifest import CapabilityBindingManifest, apply_capability_binding_manifest
@@ -106,6 +107,11 @@ def main() -> int:
     publish_parser.add_argument("--version", required=True)
     publish_parser.add_argument("--output", type=Path)
     publish_parser.add_argument("--git-commit")
+    activate_parser = subparsers.add_parser(
+        "activate-artifact", help="atomically activate a validated Registry artifact"
+    )
+    activate_parser.add_argument("store", type=Path)
+    activate_parser.add_argument("--version", required=True)
     migrate_parser = subparsers.add_parser("migrate-app", help="apply Teoria application DB migrations")
     migrate_parser.add_argument("--migrations", type=Path, default=Path("platform/database/migrations"))
     binding_parser = subparsers.add_parser("bind-openmetadata", help="bind a confirmed OpenMetadata reference to an ontology property")
@@ -122,29 +128,29 @@ def main() -> int:
     binding_parser.add_argument("--priority", type=int, default=100)
     binding_parser.add_argument("--actor", default="system:openmetadata-sync")
     migration_report_parser = subparsers.add_parser("ontology-migration-report", help="validate and report legacy Registry to Ontology v2 migration")
-    migration_report_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/ontology-v2.yaml"))
+    migration_report_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology_migrations/ontology_v2.yaml"))
     migration_report_parser.add_argument("--registries", type=Path, default=settings.registry_path)
     promotion_parser = subparsers.add_parser("promote-business-concepts", help="author legacy business concepts in Ontology v2")
-    promotion_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/business-concepts-v1.yaml"))
+    promotion_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology_migrations/business_concepts_v1.yaml"))
     promotion_parser.add_argument("--actor", default="system:ontology-migration")
     promotion_parser.add_argument("--publish", action="store_true")
     capability_binding_parser = subparsers.add_parser("bind-capabilities", help="apply reviewed Ontology-to-Capability bindings")
-    capability_binding_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/capability-bindings-v1.yaml"))
+    capability_binding_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology_migrations/capability_bindings_v1.yaml"))
     capability_binding_parser.add_argument("--registries", type=Path, default=settings.registry_path)
     capability_binding_parser.add_argument("--actor", default="system:ontology-migration")
     capability_binding_parser.add_argument("--approve", action="store_true")
     enrichment_parser = subparsers.add_parser("enrich-business-ontology", help="apply reviewed properties and relationships to Ontology v2")
-    enrichment_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/business-ontology-enrichment-v1.yaml"))
+    enrichment_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology_migrations/business_ontology_enrichment_v1.yaml"))
     enrichment_parser.add_argument("--actor", default="system:ontology-migration")
     enrichment_parser.add_argument("--publish", action="store_true")
     blueprint_parser = subparsers.add_parser("apply-ontology-blueprint", help="create a reviewed ontology blueprint as a draft")
-    blueprint_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/teoria-business-ontology-v1.yaml"))
+    blueprint_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology_migrations/teoria_business_ontology_v1.yaml"))
     blueprint_parser.add_argument("--actor", default="system:ontology-migration")
     metadata_binding_parser = subparsers.add_parser("plan-openmetadata-bindings", help="create draft bindings from a reviewed OpenMetadata manifest")
-    metadata_binding_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/teoria-openmetadata-bindings-v1.yaml"))
+    metadata_binding_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology_migrations/teoria_openmetadata_bindings_v1.yaml"))
     metadata_binding_parser.add_argument("--actor", default="system:ontology-migration")
     rule_parser = subparsers.add_parser("apply-business-rules", help="add reviewed derivation rules to an ontology draft")
-    rule_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/teoria-business-rules-v1.yaml"))
+    rule_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology_migrations/teoria_business_rules_v1.yaml"))
     rule_parser.add_argument("--actor", default="system:ontology-migration")
     shadow_parser = subparsers.add_parser("validate-ontology-shadow", help="compare ontology identity rules with operational procurement data")
     shadow_parser.add_argument("--bid-notice-id", required=True)
@@ -347,6 +353,15 @@ def main() -> int:
 
     if args.command == "verify" and args.registry_type == "source":
         return asyncio.run(_verify_source(args, settings))
+
+    if args.command == "activate-artifact":
+        try:
+            active = RegistryArtifactStore(args.store).activate(args.version)
+        except (OSError, RegistryArtifactError) as exc:
+            print(f"ERROR registry_artifact_activation_failed: {exc}")
+            return 1
+        print(f"Activated Registry {active.version} ({active.checksum}).")
+        return 0
 
     try:
         catalog = RegistryLoader(args.path).load()

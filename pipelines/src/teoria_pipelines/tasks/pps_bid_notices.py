@@ -13,8 +13,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from prefect import task
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.secrets import EnvironmentSecretProvider
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.secrets import EnvironmentSecretProvider
 
 from teoria_pipelines.checkpoints import resolve_backfill_windows, resolve_incremental_window
 from teoria_pipelines.connectors import PPSBidNoticeClient

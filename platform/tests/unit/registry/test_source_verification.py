@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.models import ExecutionResponse
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.models import ExecutionResponse
 from teoria.registry.verification.source.graph import SourceVerificationServices, create_source_verification_graph
 
 

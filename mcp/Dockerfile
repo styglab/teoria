@@ -12,7 +12,7 @@ COPY pyproject.toml uv.lock ./
 COPY platform/pyproject.toml ./platform/pyproject.toml
 COPY pipelines/pyproject.toml ./pipelines/pyproject.toml
 COPY mcp/pyproject.toml ./mcp/pyproject.toml
-COPY packages/provider/pyproject.toml ./packages/provider/pyproject.toml
+COPY packages/provider_api/pyproject.toml ./packages/provider_api/pyproject.toml
 COPY mcp/src ./mcp/src
 
 RUN --mount=type=cache,target=/root/.cache/uv \

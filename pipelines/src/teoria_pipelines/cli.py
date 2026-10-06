@@ -10,8 +10,8 @@ from pathlib import Path
 import yaml
 from psycopg import Error as PostgresError
 
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.secrets import EnvironmentSecretProvider
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.secrets import EnvironmentSecretProvider
 from teoria_pipelines.loader import PipelineLoadError, PipelineLoader
 from teoria_pipelines.persistence import PostgresStore
 from teoria_pipelines.settings import bootstrap_pipeline_settings

@@ -16,10 +16,6 @@ capability:
       data_type: string
       default: same_field
       enum: [same_field]
-    project_filter:
-      data_type: string
-      default: all
-      enum: [all, similar_amount, entry_or_reentering_supplier, repeat_supplier]
     project_filters:
       data_type: string
       collection: list

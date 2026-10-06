@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     context_runtime_api_token: str | None = None
     context_runtime_timeout_seconds: float = Field(default=150.0, gt=0)
     registry_require_published: bool = False
+    runtime_artifact_path: Path | None = None
+    runtime_artifact_store: Path | None = None
 
 
 def bootstrap_settings(*, cwd: Path | None = None) -> Settings:
@@ -52,8 +54,4 @@ def bootstrap_settings(*, cwd: Path | None = None) -> Settings:
     env_file = Path(configured_env_file).expanduser() if configured_env_file else working_directory / ".env"
     if configured_env_file or environment != "production":
         load_dotenv(dotenv_path=env_file, override=False)
-    # Temporary compatibility for the pre-Settings variable name.
-    legacy_registry_path = os.environ.get("TEORIA_REGISTRIES")
-    if "TEORIA_REGISTRY_PATH" not in os.environ and legacy_registry_path:
-        return Settings(registry_path=Path(legacy_registry_path))
     return Settings()

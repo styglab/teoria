@@ -1,46 +1,26 @@
 # Teoria 문서
 
-처음 보는 경우 [Platform Guide](platform-guide.md)에서 구성과 역할별 사용
-흐름을 확인하고, [Product Roadmap](roadmap.md)에서 현재 단계와 다음 완료
-조건을 확인한다.
+문서는 현재 계약과 운영 방법만 유지한다. 완료된 migration 과정과 시점별 분석은
+Git 이력에서 확인하며 현재 규칙처럼 복제하지 않는다.
 
-## 설계
+## 시작점
 
-- [Architecture](architecture/overview.md): 전체 구성
-- [AI-Native Metadata Platform](architecture/ai-native-metadata-platform.md): Metadata·Ontology·Binding 권위와 목표 구조
-- [Procurement Ontology Redesign](architecture/procurement-ontology-redesign.md): Palantir식 객체·사건·링크 원칙과 조달 Ontology 재구축안
-- [Source-to-Object Matrix](architecture/source-to-object-matrix.md): 다중 원천의 객체·식별자·관찰·권위·충돌 정책
-- [Ontology Source Profile](architecture/ontology-source-profile-2026-10-06.md): 운영 데이터의 식별·계보·연결·완전성 baseline
-- [Repository Structure](architecture/repository-structure.md): 프로젝트 소유권과 의존
-- [Semantic Governance](architecture/semantic-governance.md): 인증, 승인, Binding 생명주기와 조달 Ontology v2
-- [Ontology Authoring](architecture/ontology-authoring.md): Stable Concept, version lifecycle, publish artifact
-- [Legacy Registry Migration](architecture/legacy-registry-migration.md): 기존 Ontology/Capability를 중단 없이 분리·이전하는 기준
-- [OpenMetadata Ingestion Orchestration](architecture/openmetadata-ingestion-orchestration.md): Airflow 없는 Prefect·ephemeral Job 운영 경계
-- [PostgreSQL Deployment](architecture/postgresql-deployment.md): Data Plane과 Control/Application DB 배치·이전·분리 기준
-- [Naming](architecture/naming.md): 코드·Registry·배포 이름
-- [Configuration](configuration.md): 환경변수와 secret
-- [Platform Guide](platform-guide.md): 플랫폼 구성, 실행, 역할별 사용법
-- [Product Roadmap](roadmap.md): AI-Native vertical slice와 단계별 완료 조건
+- [Platform guide](platform-guide.md): 실행과 역할별 작업 흐름
+- [Architecture](architecture/overview.md): 시스템과 데이터 권위 경계
+- [Repository structure](architecture/repository-structure.md): 프로젝트 소유권
+- [Ontology](architecture/ontology.md): Business Ontology와 Binding 계약
+- [Product roadmap](roadmap.md): 남은 제품 결과와 완료 조건
 
-## Semantic Registry
+## 작성과 운영
 
-- [공통 원칙](registry/common.md)
-- [Data Type과 Value Set](registry/core_registry.md)
-- [Source](registry/source_registry.md) / [작성 절차](registry/source-authoring.md)
-- [Runtime Contract Registry](registry/runtime-contract-registry.md)
-- [Mapping](../platform/registries/domains/company/mappings/README.md)
-- [Capability](../platform/registries/domains/company/capabilities/README.md)
-- [Validation](registry/validation.md)
+- [Registry guide](registry/README.md)
+- [Source authoring](registry/source-authoring.md)
+- [Connector](ingestion/connectors.md)와 [Prefect](ingestion/prefect.md)
+- [Configuration](configuration.md)
+- [Deployment](../deploy/README.md)
+- [Admin UI](admin-ui.md)와 [MCP](mcp.md)
+- [입찰체크 연동](integration/bid-check-service.md)
+- [Source authoring skill](skills/source-registry-author.md)
 
-## 실행
-
-- [Connector와 Pipeline](ingestion/connectors.md)
-- [Prefect 운영](ingestion/prefect.md)
-- [MCP Gateway](mcp.md)
-- [입찰체크 서비스 연동 가이드](integration/bid-check-service.md)
-- [공공조달 Capability 현황](integration/public-procurement-capabilities.md)
-- [Platform Admin UI](admin-ui.md)
-- [Registry lifecycle](architecture/registry-lifecycle.md)
-- [Source 작성 Skill](skills/source-registry-author.md)
-
-Provider 원문은 소유 프로젝트의 `references/`에 둔다. `archive/`는 과거 산출물이며 현재 규격의 기준이 아니다.
+Provider 원문은 해당 프로젝트의 `references/providers/`에 둔다. 검증 결과를
+별도 보관해야 할 때만 목적과 보존 기간이 드러나는 경로를 명시적으로 만든다.

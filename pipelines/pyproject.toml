@@ -19,7 +19,7 @@ dependencies = [
   "pypdf>=5,<7",
   "python-dotenv>=1.0,<2",
   "PyYAML>=6.0,<7",
-  "teoria-provider",
+  "teoria-provider-api",
 ]
 
 [dependency-groups]
@@ -44,11 +44,11 @@ teoria-pipelines = "teoria_pipelines.cli:main"
 
 [tool.uv.sources]
 teoria-platform = { workspace = true }
-teoria-provider = { workspace = true }
+teoria-provider-api = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/teoria_pipelines"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src", "../packages/provider/src"]
+pythonpath = ["src", "../packages/provider_api/src"]
 testpaths = ["tests"]

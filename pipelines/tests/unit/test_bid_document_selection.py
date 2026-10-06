@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from teoria_pipelines.bid_document_selection import (
+from teoria_pipelines.bid_eligibility.selection import (
     deduplicate_semantic_documents,
     select_eligibility_blocks,
 )

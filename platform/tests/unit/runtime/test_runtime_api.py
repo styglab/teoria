@@ -43,7 +43,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert assessment["kind"] == "compute"
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.10.06.3"
+    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.10.06.4"
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -52,7 +52,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.10.06.3"
+    assert response.json()["registry"]["version"] == "2026.10.06.4"
     assert runner.call[0] == "search_public_procurement_contracts"
     assert runner.call[1]["concluded_date_from"].isoformat() == "2026-01-01"
 
@@ -235,5 +235,13 @@ def test_runtime_api_can_require_a_published_registry() -> None:
         create_runtime_app(
             settings=Settings(runtime_api_token="test-token", registry_require_published=True),
             catalog=catalog,
+            runner=CapturingRunner(),
+        )
+
+
+def test_production_runtime_requires_an_immutable_artifact() -> None:
+    with pytest.raises(RuntimeError, match="RUNTIME_ARTIFACT"):
+        create_runtime_app(
+            settings=Settings(environment="production", runtime_api_token="test-token"),
             runner=CapturingRunner(),
         )

@@ -6,8 +6,8 @@ from uuid import UUID
 
 from prefect import task
 import psycopg
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.secrets import EnvironmentSecretProvider
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.secrets import EnvironmentSecretProvider
 
 from teoria_pipelines.checkpoints import (
     resolve_backfill_windows,

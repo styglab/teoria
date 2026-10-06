@@ -4,13 +4,21 @@
 
 변경 전에 [Repository Structure](docs/architecture/repository-structure.md)를 읽고 소유 프로젝트를 결정한다.
 
+Teoria의 제품 경계는 AI-Native Metadata & Ontology Platform이다. 공공조달은
+첫 vertical domain이며 플랫폼 자체와 동일시하지 않는다. 조달 고유 규칙은
+Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 domain에서 실제
+재사용이 확인되기 전에는 Platform 공통 추상화로 승격하지 않는다.
+
 - 의미 정의, Semantic Registry, 사용자 요청 실행과 Runtime은 `platform/`에 둔다.
 - 지속 수집, Connector, Prefect, 정규화, 적재와 Data DB migration은 `pipelines/`에 둔다.
 - MCP protocol과 Runtime HTTP client는 `mcp/`에 둔다.
 - MCP는 목표 운영 구조에서 Runtime API만 호출한다. 현재 embedded mode는 Runtime API 구현 전까지의 호환 경로다.
 - Pipeline 실행 코드에서 Platform의 Capability 또는 Mapping Runtime을 직접 호출하지 않는다.
-- Provider API wire 계약, 요청 생성, 응답 검증과 HTTP 실행만 `packages/provider/`의 `teoria-provider`를 사용한다.
+- Provider API wire 계약, 요청 생성, 응답 검증과 HTTP 실행만 `packages/provider_api/`의 `teoria-provider-api`를 사용한다.
 - 프로젝트 사이에 일반적인 `common`, `shared`, `utils` 패키지를 만들지 않는다.
+- `packages/`에는 둘 이상의 프로젝트가 실제로 사용하는 설치형 라이브러리만 둔다. 각 패키지는 독립 `pyproject.toml`, 테스트와 단일 책임을 가지며 소유 프로젝트를 역으로 import하지 않는다.
+- 미래 사용을 예상한 빈 패키지나 추상화는 만들지 않는다.
+- 지원 배포 정의는 `deploy/compose/`에 둔다. `deploy/experimental/`의 파일을 운영 지원 계약으로 문서화하거나 의존하지 않는다.
 
 ## Naming convention
 
@@ -29,7 +37,7 @@
 
 ## Metadata and knowledge authority
 
-[AI-Native Metadata Platform](docs/architecture/ai-native-metadata-platform.md)의 책임 경계를 유지한다.
+[Architecture](docs/architecture/overview.md)의 책임 경계를 유지한다.
 [Platform Guide](docs/platform-guide.md)와 [Product Roadmap](docs/roadmap.md)을 현재 구현과 동기화한다.
 
 - Prefect는 Workflow와 Data Operations를 소유한다. Metadata 의미나 Ontology를 소유하지 않는다.
@@ -48,7 +56,8 @@
 - Ontology Binding은 version별 revision ID가 아니라 Stable Concept ID를 의미 식별자로 사용한다.
 - Published Ontology revision은 직접 수정하지 않는다. 변경은 Published version에서 새 Draft를 생성해 검토·승인·게시한다.
 - Authoring DB 모델을 Runtime contract로 직접 사용하지 않는다. Runtime은 Published version에서 생성된 immutable artifact를 사용한다.
-- 기존 YAML Ontology Object를 추가·제거하면 `platform/ontology-migrations/ontology-v2.yaml` 분류도 함께 갱신하고 `teoria ontology-migration-report`를 실행한다.
+- Production Runtime이 `platform/registries/`나 authoring DB를 직접 읽는 경로를 추가하지 않는다. `TEORIA_RUNTIME_ARTIFACT_PATH` 또는 `TEORIA_RUNTIME_ARTIFACT_STORE`로 checksum 검증된 versioned artifact만 적재한다.
+- 기존 YAML Ontology Object를 추가·제거하면 `platform/ontology_migrations/ontology_v2.yaml` 분류도 함께 갱신하고 `teoria ontology-migration-report`를 실행한다.
 - 운영 환경에서는 `TEORIA_ADMIN_AUTH_MODE=bearer`와 별도 Admin token을 사용한다. 개발용 disabled mode를 외부에 노출하지 않는다.
 
 Application DB migration을 변경하면 새 순번 migration만 추가하고 이미 적용된 SQL을 변경하지 않는다. 다음을 함께 검증한다.

@@ -1,5 +1,5 @@
-from teoria_provider.models import ExecutionResponse
-from teoria_provider.response_validator import ProviderResponseValidator
+from teoria_provider_api.models import ExecutionResponse
+from teoria_provider_api.response_validator import ProviderResponseValidator
 
 from teoria.registry.loader import RegistryCatalog
 

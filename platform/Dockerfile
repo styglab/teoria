@@ -12,8 +12,8 @@ COPY pyproject.toml uv.lock ./
 COPY platform/pyproject.toml ./platform/pyproject.toml
 COPY pipelines/pyproject.toml ./pipelines/pyproject.toml
 COPY mcp/pyproject.toml ./mcp/pyproject.toml
-COPY packages/provider/pyproject.toml ./packages/provider/pyproject.toml
-COPY packages/provider/src ./packages/provider/src
+COPY packages/provider_api/pyproject.toml ./packages/provider_api/pyproject.toml
+COPY packages/provider_api/src ./packages/provider_api/src
 COPY platform/src ./platform/src
 
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 RUN useradd --create-home --uid 10001 teoria
 COPY --chown=teoria:teoria platform/registries ./platform/registries
-COPY --chown=teoria:teoria platform/ontology-migrations ./platform/ontology-migrations
+COPY --chown=teoria:teoria platform/ontology_migrations ./platform/ontology_migrations
 COPY --chown=teoria:teoria platform/references ./platform/references
 COPY --chown=teoria:teoria platform/database ./platform/database
 

@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.request_builder import ProviderRequestBuilder
-from teoria_provider.response_validator import ProviderResponseValidator
-from teoria_provider.schema import ProviderDefinition
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.request_builder import ProviderRequestBuilder
+from teoria_provider_api.response_validator import ProviderResponseValidator
+from teoria_provider_api.schema import ProviderDefinition
 
 from teoria_pipelines.connectors.pps_contracts import ConnectorResponseError, _resolve
 from teoria_pipelines.loader import PipelineLoader

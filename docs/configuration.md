@@ -20,6 +20,8 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_SOURCE_MAX_PAGES` | `100` | Capability 최대 페이지 |
 | `TEORIA_CAPABILITY_TIMEOUT_SECONDS` | `120` | Capability deadline |
 | `TEORIA_RUNTIME_API_TOKEN` | 없음 | Runtime API Bearer token |
+| `TEORIA_RUNTIME_ARTIFACT_PATH` | 없음 | 단일 immutable Registry artifact version 디렉터리 |
+| `TEORIA_RUNTIME_ARTIFACT_STORE` | 없음 | atomic `active.json`을 가진 Registry artifact store |
 | `TEORIA_RUNTIME_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Runtime API 앞에 붙이는 URL 경로 |
 | `TEORIA_RUNTIME_CACHE_BACKEND` | `memory` | Runtime 공유 캐시 구현: `memory`, `redis`, `disabled` |
 | `TEORIA_RUNTIME_CACHE_URL` | `redis://localhost:6379/0` | Redis Runtime 캐시 접속 URL |
@@ -29,6 +31,7 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_ADMIN_API_TOKEN` | 없음 | `bearer` mode의 Admin API credential |
 | `TEORIA_ADMIN_API_ACTOR` | `system:admin` | 감사 기록에 남길 인증 principal ID |
 | `TEORIA_ADMIN_API_ROLES` | Admin 역할 전체 | 쉼표로 구분한 Admin 승인 역할 |
+| `TEORIA_ADMIN_DATA_DATABASE_URL` | 없음 | Admin API가 입찰 데이터 조회에 사용하는 read-only Data DB URL |
 | `TEORIA_APP_DATABASE_URL` | 없음 | Ontology v2, Binding, Intelligence를 저장하는 Teoria Application DB URL |
 | `TEORIA_OPENMETADATA_ENABLED` | `false` | Admin API OpenMetadata integration 활성화 여부 |
 | `TEORIA_OPENMETADATA_BASE_URL` | `http://localhost:8585/api` | OpenMetadata REST API base URL |
@@ -41,6 +44,7 @@ uv sync --locked --all-packages --all-groups
 | `OPENMETADATA_INGESTION_BOT_TOKEN` | 없음 | 일회성 ingestion Job이 OpenMetadata REST API에 쓰는 bot JWT |
 | `TEORIA_CONTEXT_RUNTIME_API_URL` | `http://localhost:8000` | Context Engine이 승인된 Capability를 실행할 Runtime API 내부 주소 |
 | `TEORIA_CONTEXT_RUNTIME_API_TOKEN` | 없음 | Context Engine 전용 Runtime API service credential; Compose에서는 Runtime token을 주입 |
+| `TEORIA_CONTEXT_RUNTIME_TIMEOUT_SECONDS` | `150` | Context Engine의 Runtime API 호출 제한시간 |
 | `TEORIA_METADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata PostgreSQL connector의 Teoria Data DB read-only 암호 |
 | `TEORIA_LOCAL_PLATFORM_DB_PASSWORD` | 로컬 개발값 | Compose의 Control/Application PostgreSQL 관리 계정 암호 |
 | `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | checksum이 일치하는 Published Registry만 Runtime에서 허용 |

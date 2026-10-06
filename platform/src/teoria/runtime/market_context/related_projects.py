@@ -16,7 +16,6 @@ SUPPORTED_PROJECT_FILTERS = (
 
 @dataclass(frozen=True)
 class RelatedProjectQuery:
-    legacy_filter: str = "all"
     filters: tuple[str, ...] = ()
     filters_supplied: bool = False
     operator: str = "and"
@@ -30,7 +29,6 @@ class RelatedProjectQuery:
         filters = tuple(dict.fromkeys(
             str(value) for value in inputs.get("project_filters", [])))
         return cls(
-            legacy_filter=str(inputs.get("project_filter", "all")),
             filters=filters,
             filters_supplied=supplied,
             operator=str(inputs.get("filter_operator", "and")),
@@ -54,9 +52,6 @@ def filter_and_page_related_projects(
         predicate = all if query.operator == "and" else any
         filtered = [item for item in filtered if predicate(
             value in item["matched_filters"] for value in query.filters)]
-    elif not query.filters_supplied and query.legacy_filter != "all":
-        filtered = [item for item in filtered
-            if query.legacy_filter in item["matched_filters"]]
 
     if query.sort == "amount_desc":
         filtered.sort(key=lambda item: (
@@ -76,8 +71,7 @@ def filter_and_page_related_projects(
         item["matched_filters"] = sorted(item["matched_filters"])
         item["is_repeat_supplier"] = bool(item["repeat_suppliers"])
 
-    applied_filters = list(query.filters) if query.filters_supplied else (
-        [] if query.legacy_filter == "all" else [query.legacy_filter])
+    applied_filters = list(query.filters)
     return {
         "items": page_items,
         "filter_counts": filter_counts,

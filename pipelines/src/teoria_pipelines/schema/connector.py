@@ -1,4 +1,4 @@
-from teoria_provider.schema import ContractMetadata, ContractModel, ProviderDefinition
+from teoria_provider_api.schema import ContractMetadata, ContractModel, ProviderDefinition
 
 
 class ConnectorRegistry(ContractModel):

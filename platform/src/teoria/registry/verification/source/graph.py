@@ -3,14 +3,14 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
-from teoria_provider.errors import ProviderExecutionError
-from teoria_provider.executor import MissingCredentialError, ProviderExecutor
-from teoria_provider.models import ExecutionResponse, PreparedRequest
+from teoria_provider_api.errors import ProviderExecutionError
+from teoria_provider_api.executor import MissingCredentialError, ProviderExecutor
+from teoria_provider_api.models import ExecutionResponse, PreparedRequest
 from teoria.runtime.source.request_builder import RequestBuildError, SourceRequestBuilder
 from teoria.runtime.source.response_validator import SourceResponseValidator
 from teoria.registry.diagnostics import Diagnostic
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
-from teoria.registry.validator import RegistryValidator
+from teoria.registry.validation.registry import RegistryValidator
 from teoria.registry.verification.source.state import SourceVerificationState
 
 

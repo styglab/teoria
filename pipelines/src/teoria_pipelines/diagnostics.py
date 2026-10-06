@@ -1,3 +1,3 @@
-from teoria_provider.diagnostics import Diagnostic
+from teoria_provider_api.diagnostics import Diagnostic
 
 __all__ = ["Diagnostic"]

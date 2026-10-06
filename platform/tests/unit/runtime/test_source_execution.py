@@ -4,9 +4,9 @@ from datetime import timedelta
 import pytest
 import httpx
 
-from teoria_provider.errors import ProviderExecutionError
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.models import ExecutionResponse
+from teoria_provider_api.errors import ProviderExecutionError
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.models import ExecutionResponse
 from teoria.runtime.source.request_builder import RequestBuildError, SourceRequestBuilder
 from teoria.runtime.source.response_validator import SourceResponseValidator
 from teoria.registry.loader import RegistryLoader

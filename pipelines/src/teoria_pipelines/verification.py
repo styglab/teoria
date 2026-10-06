@@ -1,10 +1,10 @@
 from typing import Any, Mapping
 
-from teoria_provider.diagnostics import Diagnostic
-from teoria_provider.errors import ProviderExecutionError
-from teoria_provider.executor import MissingCredentialError, ProviderExecutor
-from teoria_provider.request_builder import ProviderRequestBuilder, RequestBuildError
-from teoria_provider.response_validator import ProviderResponseValidator
+from teoria_provider_api.diagnostics import Diagnostic
+from teoria_provider_api.errors import ProviderExecutionError
+from teoria_provider_api.executor import MissingCredentialError, ProviderExecutor
+from teoria_provider_api.request_builder import ProviderRequestBuilder, RequestBuildError
+from teoria_provider_api.response_validator import ProviderResponseValidator
 
 from teoria_pipelines.loader import PipelineCatalog
 from teoria_pipelines.validator import PipelineValidator

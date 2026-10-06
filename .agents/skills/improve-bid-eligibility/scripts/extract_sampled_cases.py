@@ -11,7 +11,7 @@ from pathlib import Path
 
 from teoria_pipelines.persistence import PostgresStore
 from teoria_pipelines.settings import bootstrap_pipeline_settings
-from teoria_pipelines.tasks.bid_eligibility import (
+from teoria_pipelines.bid_eligibility.tasks import (
     EXTRACTION_VERSION,
     extract_bid_eligibility_notice,
 )

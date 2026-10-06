@@ -26,7 +26,7 @@ from teoria.ontology.migration import OntologyMigrationManifest, build_migration
 from teoria.config import Settings, bootstrap_settings
 from teoria.metadata.openmetadata import OpenMetadataClient, OpenMetadataService
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
-from teoria.registry.validator import RegistryValidator
+from teoria.registry.validation.registry import RegistryValidator
 
 
 def create_admin_app(
@@ -141,7 +141,7 @@ def create_admin_app(
 
     @app.get("/v1/admin/ontology-migration")
     async def ontology_migration() -> dict[str, Any]:
-        manifest_path = resolved_settings.registry_path.parent / "ontology-migrations" / "ontology-v2.yaml"
+        manifest_path = resolved_settings.registry_path.parent / "ontology_migrations" / "ontology_v2.yaml"
         if not manifest_path.exists():
             raise HTTPException(status_code=404, detail={"code": "ontology_migration_manifest_not_found"})
         return build_migration_report(

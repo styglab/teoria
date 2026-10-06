@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
 from teoria.registry.schema import ReferenceFile, RuntimeContractRegistry
-from teoria.registry.validator import RegistryValidator
+from teoria.registry.validation.registry import RegistryValidator
 
 
 REGISTRIES = Path(__file__).parents[3] / "registries"

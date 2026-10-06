@@ -1,280 +1,81 @@
 # Teoria platform guide
 
-이 문서는 Teoria가 어떻게 구성되고, 각 사용자가 어떤 경로로 사용하는지
-설명하는 시작점이다.
+Teoria는 OpenMetadata가 관리하는 데이터 자산과 Teoria의 Business Ontology 및
+Capability를 연결해 검증 가능한 business context를 제공한다. 전체 권위 경계는
+[Architecture](architecture/overview.md)를 따른다.
 
-## Teoria란 무엇인가
+## 저장소
 
-Teoria는 Data Catalog의 대체품이 아니다. OpenMetadata가 설명하는 데이터와
-Teoria의 Business Ontology·Capability를 연결하고, AI가 사용할 수 있는
-검증된 business context를 만드는 플랫폼이다.
-
-```text
-External API / DB / File
-          │
-          ▼
-       Prefect ─────────────── 수집·변환·동기화
-          │
-          ▼
-   PostgreSQL / Data Store ─── 실제 데이터
-          │
-          ▼
-     OpenMetadata ──────────── Technical/Semantic Metadata
-          │
-          ├──────────────┐
-          ▼              ▼
- Business Ontology ◀─ Semantic Binding ─▶ Capabilities
-          └──────────────┬───────────────┘
-                         ▼
-                  Context Engine
-                         ▼
-                    API / MCP / Agent
-```
-
-## 누가 무엇을 소유하는가
-
-| 시스템 | 소유 | 소유하지 않음 |
-|---|---|---|
-| Prefect/Pipelines | workflow, connector, raw/core 적재, backfill, checkpoint | metadata 의미, ontology |
-| Data DB | 실제 수집·정규화 데이터 | metadata governance |
-| OpenMetadata | asset, schema, column, glossary, tag, owner, lineage, quality | Business Ontology |
-| Teoria App DB | Ontology, Binding, Suggestion, Review, audit, context 설정 | OpenMetadata entity 본문 |
-| Runtime | Source/Mapping/Capability 실행 | pipeline orchestration |
-| MCP | protocol 변환과 Runtime client | DB·Source credential |
-
-로컬 Compose의 PostgreSQL은 Data Plane과 Control/Application Plane 두
-인스턴스로 나뉜다. `postgres`는 대량 수집·Backfill·Runtime query가 발생하는
-`teoria_data`만 소유한다. `platform-postgres`는 서로 독립된
-`teoria_app`, `prefect`, `openmetadata_db` database를 DB별 role로 운영한다.
-같은 인스턴스라는 이유로 database 간 SQL join이나 metadata 복제를 허용하지 않는다.
-
-## 저장소 구성
-
-| 경로 | 설명 |
+| 경로 | 책임 |
 |---|---|
-| `platform/` | Ontology, Binding, Intelligence, Runtime, Admin API/UI |
-| `pipelines/` | Prefect, Connector, normalization, Data DB migration |
-| `mcp/` | MCP gateway와 Runtime HTTP client |
-| `packages/provider/` | Provider wire contract와 HTTP 실행 |
-| `deploy/compose/` | 로컬/단일 서버 Compose |
-| `deploy/compose/openmetadata/` | Compose용 OpenMetadata ingestion 설정 |
-| `docs/` | Architecture, authoring, operations, roadmap |
+| `platform/` | Ontology, Binding, Intelligence, Runtime, 직접 Source 실행 |
+| `pipelines/` | Connector, Prefect, raw·정규 적재, Data DB migration |
+| `mcp/` | MCP protocol과 Runtime HTTP client |
+| `packages/provider_api/` | Provider wire 계약과 HTTP 실행 |
+| `deploy/` | Compose와 k3s 배포 정의 |
 
 ## 로컬 실행
 
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
 export TEORIA_ENV_FILE=deploy/compose/.env
-
+uv sync --locked --all-packages --all-groups
 docker compose --env-file deploy/compose/.env \
-  -f deploy/compose/compose.yaml \
-  --profile metadata up --build -d
+  -f deploy/compose/compose.yaml up --build -d
 ```
 
-기본 접근점:
+기본 진입점은 다음과 같다.
 
-| 화면/API | URL |
+| 대상 | 주소/명령 |
 |---|---|
-| Teoria Admin UI | `http://localhost:8081/` |
-| Admin API docs | `http://localhost:8081/admin-api/docs` |
-| Runtime API docs | `http://localhost:8081/runtime-api/docs` |
-| Prefect UI | `http://localhost:8081/prefect/` |
-| OpenMetadata UI/API | `http://localhost:8585/` |
+| Admin UI | `http://localhost:8081/` |
+| Admin API | `http://localhost:8081/admin-api/docs` |
+| Runtime API | `http://localhost:8081/runtime-api/docs` |
+| Prefect | `http://localhost:8081/prefect/` |
+| MCP | `uv run --locked --package teoria-mcp teoria-mcp` |
 
-OpenMetadata는 optional overlay지만 Metadata/Binding 기능을 사용할 환경에서는
-함께 실행해야 한다.
+OpenMetadata는 `metadata` profile로 선택 실행한다. 상세한 환경변수는
+[Configuration](configuration.md), 서비스 운영은 [Deployment](../deploy/README.md)를
+참고한다.
 
-## Runtime Registry와 Business Ontology
+## 주요 작업 흐름
 
-YAML Runtime Contract는 현재 Capability가 실행할 입출력 계약이다.
-지속 가능한 업무 의미인 Business Ontology v2와 동일한 것이 아니며, 관리
-화면에서도 `Runtime Registry`로 구분한다.
+### 데이터 운영자
 
-- 41개 Runtime 객체는 모두 migration manifest에 분류되어 있다.
-- 23개 Business Concept은 `company` 0.1.0과 `procurement` 0.4.0에 게시됐다.
-- 9개 집계/조회 projection은 Capability contract로 유지한다.
-- 9개 평가·근거 객체는 assessment result model로 유지한다.
-- 참조가 없던 구형 Capability 3개와 전용 projection 3개는 2026-10-06에 제거됐다.
+Connector와 Prefect Flow를 관리하고 raw·정규 적재가 모두 성공한 뒤 checkpoint가
+이동하는지 확인한다. [Prefect guide](ingestion/prefect.md)를 따른다.
 
-Runtime Contract의 파일명은 `runtime_contract.yaml`, 루트 키는
-`runtime_contract`다. 과거 `ontology.yaml`/`ontology:` 호환 형식은 Registry
-`2026.10.06.3`에서 제거됐다. 이 모델은 Business Ontology의 권위 저장소가 아니라
-Source·Mapping·Capability 실행에 필요한 **Runtime Contract Registry**다.
-지속 가능한 업무 의미의 권위 저장소는 PostgreSQL의 Business Ontology v2
-Authoring/Published 모델이다.
+### Metadata 관리자
 
-Admin UI는 `/v1/admin/runtime-contracts`를 사용한다. 혼동을 일으키던 기존
-`/v1/admin/ontologies` Admin 경로는 제거됐다. Runtime
-Contract를 Published Ontology Artifact로 치환하지 않는다. 의미 해석은 Artifact,
-입출력 구조 검증은 Runtime Contract가 담당하며 둘의 관계는 migration report와
-Semantic Binding으로 확인한다.
+OpenMetadata에서 asset, schema, glossary, owner와 lineage를 관리한다. Teoria에는
+OpenMetadata entity 본문을 복제하지 않는다.
 
-Capability target은 Capability 자체, 선언된 input, 선언된 output 중 하나다.
-Teoria는 현재 immutable Registry release에서 target을 검증한 뒤 Stable
-Concept과 연결한다. 의미가 정확히 같지 않은 필드는 편의상 추론해 연결하지
-않는다.
+### Ontology owner와 Binding reviewer
 
-Capability 연결 누락은 다음 API로 점검한다.
+Published version에서 새 Draft를 만들고 review·approval 후 publish한다. Binding과
+AI Suggestion은 승인 전까지 권위 정보가 아니다. 상세 계약은
+[Ontology](architecture/ontology.md)를 따른다.
 
-```http
-GET /admin-api/v1/admin/bindings/capability-coverage
-```
+### Capability 개발자
 
-API Field Binding은 active Source Registry의 operation과 response object/field가
-실제로 존재할 때만 생성할 수 있다. 이름이 비슷하지만 Source 계약에서 검증되지
-않은 필드는 `API_FIELD` Binding으로 등록하지 않는다.
+Runtime Object, Mapping과 Capability를 Domain Registry에 정의한다. 직접 실행 API는
+Source, 지속 수집 API는 Connector로 작성한다. [Registry guide](registry/README.md)와
+[Source authoring](registry/source-authoring.md)을 따른다.
 
-## 첫 Binding Intelligence 흐름
+### API/MCP 사용자
 
-1. Metadata에서 OpenMetadata Table을 선택한다.
-2. Column의 `Binding 후보 생성`을 실행한다.
-3. 같은 화면에서 추천 Stable Concept, confidence, 대안 후보와 점수별 evidence를 확인한다.
-4. Suggestion을 승인하면 Teoria가 OpenMetadata 원천 버전을 다시 확인한다.
-5. 원천이 바뀌지 않았을 때만 `draft` Binding을 생성한다.
-6. 생성된 Draft는 같은 흐름 또는 **Bindings** 화면에서 별도의 reviewer가
-   승인하거나 거절한다. Binding 승인 전에는 Context Engine의 활성 의미 연결로
-   사용되지 않는다.
+배포된 Runtime의 `/v1/capabilities`에서 사용할 수 있는 Capability와 입력 schema를
+조회하고 `/v1/capabilities/{id}:execute`를 호출한다. MCP는 같은 Runtime API의
+protocol adapter다.
 
-Suggestion 승인과 Binding 승인을 분리했기 때문에 AI 추천이 곧바로 권위 있는
-Semantic Binding이 되지 않는다. 원천 version이 변경되면 승인을 차단하고
-후보를 다시 계산해야 한다.
-
-Ontology Authoring 화면은 Published 버전 직접 편집을 허용하지 않는다.
-새 버전은 Create Draft로 생성하고 `Draft → Review → Approved → Published`
-순서로 전환한다.
-
-## 주요 사용 흐름
-
-### 1. 데이터 운영자
-
-1. `pipelines/connectors/`에 수집 API 계약을 작성한다.
-2. Prefect Flow로 incremental/backfill을 실행한다.
-3. raw와 canonical 적재가 모두 성공한 뒤 checkpoint가 갱신되는지 확인한다.
-4. Prefect가 일회성 OpenMetadata ingestion Job을 실행해 PostgreSQL asset을 갱신한다.
-5. 실행·재시도는 Prefect UI에서, 적재된 metadata는 OpenMetadata에서 확인한다.
-
-### 2. Metadata 관리자
-
-1. Admin UI의 **Metadata**에서 OpenMetadata 연결과 asset을 확인한다.
-2. Description/Glossary/Tag는 OpenMetadata를 권위 저장소로 관리한다.
-3. Teoria DB에 OpenMetadata entity 본문을 복제하지 않는다.
-4. Intelligence Suggestion은 **Suggestions**에서 검토한다.
-
-### 3. Ontology Owner
-
-1. Published version에서 새 Draft를 만든다.
-2. **Graph**에서 전체 Business Object와 Relationship을 확인하고 도메인·검색 필터로 검토 범위를 좁힌다.
-3. **Objects**, **Links**, **Rules**에서 Stable Key와 세부 정의를 확인한다.
-4. **Review**에서 validation, 이전 버전과의 semantic diff, Binding impact를 확인한다.
-5. Review와 Approval을 거쳐 publish한다.
-6. 생성된 Runtime Artifact checksum과 audit history를 확인한다.
-
-Published version은 API뿐 아니라 PostgreSQL trigger로도 수정이 차단된다.
-
-### 4. Binding Reviewer
-
-1. Admin UI의 **Bindings**로 이동한다.
-2. Stable Ontology Concept과 OpenMetadata Glossary/Data Asset target을 확인한다.
-3. 새 연결은 Draft로 생성한다.
-4. evidence와 authority를 검토해 approve 또는 reject한다.
-5. 더 이상 유효하지 않은 Approved Binding은 deprecate한다.
-
-같은 Stable Concept과 Target의 활성 Binding은 Ontology version이 바뀌어도
-중복 생성할 수 없다.
-
-### 5. Capability 개발자
-
-1. Runtime 직접 API/DB를 Source Registry로 작성한다.
-2. Runtime Mapping과 Semantic Binding을 구분한다.
-3. Capability input/output contract와 효과를 명시한다.
-4. Registry validation과 실제 verification을 실행한다.
-5. 향후 CapabilityTargetRef를 Stable Concept에 연결한다.
-
-### 6. AI/Agent 사용자 — 향후 흐름
-
-Agent는 OpenMetadata 전체 JSON이나 Ontology 전체를 직접 읽지 않는다.
-Context Engine에 business term 또는 intent를 전달하고, Teoria가 승인된
-Ontology·Binding·Capability와 metadata quality를 조합한 Context Package를
-반환한다.
-
-첫 read-only vertical slice는 `계약금액`을 지원한다.
-
-```http
-GET /admin-api/v1/admin/context/resolve?term=계약금액
-```
-
-응답은 Published Ontology artifact의 checksum, Stable Concept, 승인된
-OpenMetadata reference, 사용할 수 있는 Capability와 evidence를 포함한다.
-OpenMetadata 실시간 설명을 함께 조회하려면 ingestion bot과 분리된 읽기용
-`TEORIA_OPENMETADATA_AUTH_TOKEN` 및 `TEORIA_OPENMETADATA_ENABLED=true`가
-필요하다. 실제 데이터 freshness가 수집되지 않은 경우 이를 metadata 확인
-시각으로 대체하지 않고 `unavailable`로 반환한다.
-
-첫 실행 vertical slice는 기관명과 최근 회계연도 범위를 해석해 기존
-Capability Runtime을 호출한다.
-
-```http
-POST /admin-api/v1/admin/context/query
-Content-Type: application/json
-
-{
-  "question": "근로복지공단의 최근 5년 계약금액을 알려줘",
-  "as_of": "2026-10-06"
-}
-```
-
-이 요청은 기관 검색 Capability로 `Z004905`를 확인하고, 현재 회계연도를
-포함한 2022-01-01~2026-10-06 범위를 생성한 다음
-`search_public_procurement_contracts`를 실행한다. 합계 기준은 승인된
-`Contract.amount` Data Asset Binding과 일치하는 `current_contract_amount`다.
-응답에는 해석 결과, 실행계획, 합계, artifact checksum, Runtime Registry
-버전과 evidence가 함께 포함된다.
-
-## Governance 규칙
-
-- AI 결과는 Suggestion이지 authoritative metadata가 아니다.
-- Description/Glossary/Tag의 최종 저장소는 OpenMetadata다.
-- Ontology와 Binding의 최종 저장소는 Teoria App DB다.
-- Runtime Mapping은 데이터 변환이며 Semantic Binding이 아니다.
-- 승인 actor는 request body가 아닌 인증 principal이다.
-- evidence 대상의 version이 변경되면 승인 전에 재평가한다.
-- 중·고위험 변경은 자동 적용하지 않는다.
-
-## 기존 Runtime Registry와 Business Ontology v2
-
-Admin UI의 `Runtime Registry`는 현재 Capability 실행에 사용되는 YAML Runtime
-Contract와 Mapping을 보여준다. `Bindings`와 Ontology Authoring API는
-PostgreSQL 기반 Business Ontology v2를 사용한다. 전환 상태와 Object별
-분류는 [Legacy Registry Migration](architecture/legacy-registry-migration.md)을
-따른다.
-
-## 검증 명령
+## 검증
 
 ```bash
+uv run --locked --package teoria-provider-api pytest packages/provider_api/tests
 uv run --locked --package teoria-platform pytest platform/tests
-uv run --locked --package teoria-platform teoria validate platform/registries
-
 uv run --locked --package teoria-pipelines pytest pipelines/tests
-uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
-
 uv run --locked --package teoria-mcp pytest mcp/tests
-
-cd platform/admin-ui
-npm test -- --run
-npm run build
-```
-
-DB migration 또는 Compose 변경 시:
-
-```bash
+uv run --locked --package teoria-platform teoria validate platform/registries
+uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
 docker compose -f deploy/compose/compose.yaml config --quiet
 ```
-
-## 더 읽을 문서
-
-- [Target Architecture](architecture/ai-native-metadata-platform.md)
-- [Repository Ownership](architecture/repository-structure.md)
-- [Semantic Governance](architecture/semantic-governance.md)
-- [Ontology Authoring](architecture/ontology-authoring.md)
-- [OpenMetadata Integration](../deploy/compose/openmetadata/README.md)
-- [Product Roadmap](roadmap.md)

@@ -2,7 +2,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from teoria.registry.loader import RegistryLoader
-from teoria.registry.validator import RegistryValidator
+from teoria.registry.validation.registry import RegistryValidator
 
 
 REGISTRIES = Path(__file__).parents[3] / "registries"

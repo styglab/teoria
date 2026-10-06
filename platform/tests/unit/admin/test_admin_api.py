@@ -18,13 +18,12 @@ def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:
     assert overview.status_code == 200
     assert overview.json()["counts"]["runtime_contract_domains"] == 3
     assert overview.json()["counts"]["runtime_object_types"] == 41
-    assert overview.json()["counts"]["ontologies"] == 3
     assert overview.json()["counts"]["eligibility_rules"] == 12
     assert overview.json()["validation"]["status"] == "valid"
 
     release = client.get("/v1/admin/registry-release")
     assert release.status_code == 200
-    assert release.json()["version"] == "2026.10.06.3"
+    assert release.json()["version"] == "2026.10.06.4"
     assert release.json()["status"] == "published"
 
     validation = client.get("/v1/admin/validation")

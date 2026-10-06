@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import Any
 
-from teoria_provider.diagnostics import Diagnostic
-from teoria_provider.request_builder import ProviderRequestBuilder, RequestBuildError
+from teoria_provider_api.diagnostics import Diagnostic
+from teoria_provider_api.request_builder import ProviderRequestBuilder, RequestBuildError
 
 from teoria.registry.loader import RegistryCatalog
 

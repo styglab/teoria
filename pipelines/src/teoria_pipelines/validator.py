@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from teoria_provider.validator import ProviderContractValidator
+from teoria_provider_api.validator import ProviderContractValidator
 from teoria_pipelines.diagnostics import Diagnostic
 from teoria_pipelines.loader import PipelineCatalog
 

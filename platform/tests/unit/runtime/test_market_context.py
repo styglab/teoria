@@ -113,7 +113,7 @@ async def test_related_projects_pages_by_contract_event_and_nests_contractors() 
 
     result = await execute_bid_related_projects_search(
         RegistryLoader(REGISTRIES).load(), "search_bid_related_projects",
-        {"bid_notice_id": "CURRENT:000", "project_filter": "repeat_supplier",
+        {"bid_notice_id": "CURRENT:000", "project_filters": ["repeat_supplier"],
          "page": 1, "page_size": 20}, reader=Reader(),
     )
     joint = next(item for item in result.outcome["items"] if item["contract_event_id"] == "JOINT")
@@ -127,7 +127,6 @@ async def test_related_projects_pages_by_contract_event_and_nests_contractors() 
     combined = await execute_bid_related_projects_search(
         RegistryLoader(REGISTRIES).load(), "search_bid_related_projects",
         {"bid_notice_id": "CURRENT:000",
-         "project_filter": "repeat_supplier",
          "project_filters": ["similar_amount", "entry_or_reentering_supplier"],
          "filter_operator": "and", "page": 1, "page_size": 20}, reader=Reader(),
     )
@@ -1878,19 +1877,6 @@ async def test_goods_profile_uses_primary_official_purchase_item() -> None:
         "display_name": "업소용세탁기", "has_children": False,
         "selection_filter": {"work_type": "goods", "field_code": "4711150201"},
     }]
-    filtered = await execute_organization_procurement_profile(
-        catalog, "analyze_organization_procurement_profile",
-        {"organization_code": "ORG-1", "work_type": "goods",
-         "large_category": "물품", "middle_category": "업소용세탁기",
-         "field_code": "4711150201"}, reader=Reader(),
-    )
-    assert filtered.outcome["summary"]["contract_event_count"] == 1
-    assert filtered.outcome["analysis_basis"]["field_filter"]["field_name"] == "업소용세탁기"
-    assert filtered.outcome["field_distribution"][0]["classification_source"] == "purchase_item"
-    assert filtered.outcome["field_distribution"][0]["detailed_items"] == [
-        {"sequence": "2", "code": "4711150301", "name": "세탁물건조기"},
-        {"sequence": "1", "code": "4711150201", "name": "업소용세탁기"},
-    ]
 
 
 @pytest.mark.asyncio

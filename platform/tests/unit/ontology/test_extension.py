@@ -8,7 +8,7 @@ ROOT = Path(__file__).parents[3]
 
 def test_enterprise_context_extension_is_source_independent() -> None:
     manifest = OntologyExtensionManifest.load(
-        ROOT / "ontology-migrations" / "teoria-enterprise-context-v1.yaml"
+        ROOT / "ontology_migrations" / "teoria_enterprise_context_v1.yaml"
     )
     codes = {item.code for item in manifest.objects}
     assert {"Qualification", "Certification", "TaxpayerStatusObservation",

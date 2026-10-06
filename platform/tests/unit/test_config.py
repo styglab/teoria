@@ -30,13 +30,3 @@ def test_loads_explicit_env_file_and_validates_types(tmp_path: Path, monkeypatch
     assert settings.capability_timeout_seconds == 45
     for name in names:
         monkeypatch.delenv(name, raising=False)
-
-
-def test_supports_legacy_registry_variable(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("TEORIA_ENVIRONMENT", "production")
-    monkeypatch.setenv("TEORIA_REGISTRIES", "legacy-registries")
-    monkeypatch.delenv("TEORIA_REGISTRY_PATH", raising=False)
-
-    settings = bootstrap_settings(cwd=tmp_path)
-
-    assert settings.registry_path == Path("legacy-registries")

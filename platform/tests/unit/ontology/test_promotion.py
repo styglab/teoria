@@ -8,8 +8,8 @@ ROOT = Path(__file__).parents[3]
 
 
 def test_promotion_manifest_covers_every_planned_business_concept() -> None:
-    migration = OntologyMigrationManifest.load(ROOT / "ontology-migrations" / "ontology-v2.yaml")
-    promotion = BusinessConceptPromotion.load(ROOT / "ontology-migrations" / "business-concepts-v1.yaml")
+    migration = OntologyMigrationManifest.load(ROOT / "ontology_migrations" / "ontology_v2.yaml")
+    promotion = BusinessConceptPromotion.load(ROOT / "ontology_migrations" / "business_concepts_v1.yaml")
 
     promoted = {
         ref

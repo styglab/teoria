@@ -39,7 +39,6 @@ class SuggestionInput(BaseModel):
 
 class ReviewInput(BaseModel):
     decision: Literal["approve", "reject", "request_changes", "supersede"]
-    reviewer: str | None = Field(default=None, description="Deprecated; authenticated principal is authoritative")
     comment: str | None = None
 
 

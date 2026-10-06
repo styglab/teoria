@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import yaml
 import pytest
 
-from teoria_pipelines.bid_eligibility_expression import compile_eligibility_facts
+from teoria_pipelines.bid_eligibility.expression import compile_eligibility_facts
 from teoria_pipelines.flows.pps_contracts import (
     retry_pps_contract_backfill_gaps,
     sync_pps_contract_backfill,
@@ -24,9 +24,9 @@ from teoria_pipelines.flows.pps_bid_notices import (
     sync_pps_bid_notice_window,
     sync_pps_bid_notices,
 )
-from teoria_pipelines.tasks.bid_eligibility import _ensure_codex_authenticated
+from teoria_pipelines.bid_eligibility.tasks import _ensure_codex_authenticated
 from teoria_pipelines.flows.bid_eligibility import _extraction_summary, extract_pps_bid_eligibility
-from teoria_pipelines.tasks.bid_eligibility import (
+from teoria_pipelines.bid_eligibility.tasks import (
     _citation_text,
     _citation_similarity,
     _bind_standard_rules,
@@ -412,7 +412,7 @@ def test_operation_task_retries_once_after_five_minutes() -> None:
 
 def test_codex_authentication_uses_cached_chatgpt_login() -> None:
     with patch(
-        "teoria_pipelines.tasks.bid_eligibility.subprocess.run",
+        "teoria_pipelines.bid_eligibility.tasks.subprocess.run",
         return_value=CompletedProcess(["codex", "login", "status"], 0),
     ) as run:
         _ensure_codex_authenticated()
@@ -422,7 +422,7 @@ def test_codex_authentication_uses_cached_chatgpt_login() -> None:
 
 def test_codex_authentication_failure_has_login_instruction() -> None:
     with patch(
-        "teoria_pipelines.tasks.bid_eligibility.subprocess.run",
+        "teoria_pipelines.bid_eligibility.tasks.subprocess.run",
         return_value=CompletedProcess(["codex", "login", "status"], 1),
     ):
         try:
@@ -779,7 +779,7 @@ def test_extraction_review_rolls_up_requirement_and_unresolved_state() -> None:
 
 def test_extraction_skill_separates_eligibility_stages_and_proofs() -> None:
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
-    with patch("teoria_pipelines.tasks.bid_eligibility.SKILL_ROOT", skill_root):
+    with patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root):
         policy = _skill_instructions()
 
     assert "bid entry, qualification review, or contracting" in policy
@@ -805,7 +805,7 @@ def test_extraction_skill_separates_eligibility_stages_and_proofs() -> None:
 
 def test_runtime_extraction_policy_removes_duplicate_skill_overview() -> None:
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
-    with patch("teoria_pipelines.tasks.bid_eligibility.SKILL_ROOT", skill_root):
+    with patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root):
         full = _skill_instructions()
         runtime = _runtime_extraction_instructions()
 
@@ -816,7 +816,7 @@ def test_runtime_extraction_policy_removes_duplicate_skill_overview() -> None:
 
 
 def test_runtime_prompt_keeps_explicit_eligibility_score_cutoff() -> None:
-    source = Path(PIPELINES / "src/teoria_pipelines/tasks/bid_eligibility.py").read_text()
+    source = Path(PIPELINES / "src/teoria_pipelines/bid_eligibility/tasks.py").read_text()
 
     assert "적격업체 여부를 직접 결정하는 명시적 최저 총점" in source
 
@@ -2859,11 +2859,11 @@ async def test_write_free_extraction_never_persists_outputs_or_failures() -> Non
     )
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
     with (
-        patch("teoria_pipelines.tasks.bid_eligibility._resources", return_value=(store, storage)),
-        patch("teoria_pipelines.tasks.bid_eligibility.bootstrap_pipeline_settings",
+        patch("teoria_pipelines.bid_eligibility.tasks._resources", return_value=(store, storage)),
+        patch("teoria_pipelines.bid_eligibility.tasks.bootstrap_pipeline_settings",
               return_value=settings),
-        patch("teoria_pipelines.tasks.bid_eligibility.subprocess.run", return_value=process),
-        patch("teoria_pipelines.tasks.bid_eligibility.SKILL_ROOT", skill_root),
+        patch("teoria_pipelines.bid_eligibility.tasks.subprocess.run", return_value=process),
+        patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root),
     ):
         result = await extract_bid_eligibility_notice.fn(notice, persist=False)
 
@@ -2901,11 +2901,11 @@ async def test_simple_document_extraction_skips_codex_and_compiles_result() -> N
     }
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
     with (
-        patch("teoria_pipelines.tasks.bid_eligibility._resources", return_value=(store, storage)),
-        patch("teoria_pipelines.tasks.bid_eligibility.bootstrap_pipeline_settings",
+        patch("teoria_pipelines.bid_eligibility.tasks._resources", return_value=(store, storage)),
+        patch("teoria_pipelines.bid_eligibility.tasks.bootstrap_pipeline_settings",
               return_value=settings),
-        patch("teoria_pipelines.tasks.bid_eligibility.subprocess.run") as codex,
-        patch("teoria_pipelines.tasks.bid_eligibility.SKILL_ROOT", skill_root),
+        patch("teoria_pipelines.bid_eligibility.tasks.subprocess.run") as codex,
+        patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root),
     ):
         result = await extract_bid_eligibility_notice.fn(notice, persist=False)
 
@@ -2954,11 +2954,11 @@ async def test_api_only_extraction_skips_codex_and_uses_structured_compiler() ->
     }
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
     with (
-        patch("teoria_pipelines.tasks.bid_eligibility._resources", return_value=(store, storage)),
-        patch("teoria_pipelines.tasks.bid_eligibility.bootstrap_pipeline_settings",
+        patch("teoria_pipelines.bid_eligibility.tasks._resources", return_value=(store, storage)),
+        patch("teoria_pipelines.bid_eligibility.tasks.bootstrap_pipeline_settings",
               return_value=settings),
-        patch("teoria_pipelines.tasks.bid_eligibility.subprocess.run") as codex,
-        patch("teoria_pipelines.tasks.bid_eligibility.SKILL_ROOT", skill_root),
+        patch("teoria_pipelines.bid_eligibility.tasks.subprocess.run") as codex,
+        patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root),
     ):
         result = await extract_bid_eligibility_notice.fn(notice, persist=False)
 

@@ -2,7 +2,7 @@ from datetime import date
 from typing import Literal
 
 from pydantic import Field, HttpUrl, field_validator
-from teoria_provider.schema import ContractModel, SNAKE_CASE_PATTERN
+from teoria_provider_api.schema import ContractModel, SNAKE_CASE_PATTERN
 
 
 class ReferenceFile(ContractModel):

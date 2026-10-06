@@ -1,4 +1,4 @@
-from teoria_pipelines.tasks.bid_eligibility import (
+from teoria_pipelines.bid_eligibility.tasks import (
     _apply_bid_entry_fast_scope,
     _prune_out_of_scope_participation_findings,
     _repair_requirement_semantics,

@@ -1,6 +1,6 @@
 # Teoria Data Pipelines
 
-`pipelines/`는 Connector, Prefect 수집과 Teoria Data DB 쓰기를 소유한다. Platform Runtime을 import하지 않고 공통 API 실행만 `teoria-provider`를 사용한다.
+`pipelines/`는 Connector, Prefect 수집과 Teoria Data DB 쓰기를 소유한다. Platform Runtime을 import하지 않고 공통 API 실행만 `teoria-provider-api`를 사용한다.
 
 ```text
 Connector → Extract → Raw → Normalize → Upsert → Checkpoint

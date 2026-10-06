@@ -11,12 +11,12 @@ ROOT = Path(__file__).parents[3]
 
 def test_every_legacy_business_concept_has_a_real_unified_target() -> None:
     result = validate_unification_plan(
-        OntologyMigrationManifest.load(ROOT / "ontology-migrations/ontology-v2.yaml"),
-        OntologyUnificationManifest.load(ROOT / "ontology-migrations/ontology-unification-v1.yaml"),
-        OntologyBlueprint.load(ROOT / "ontology-migrations/teoria-business-ontology-v1.yaml"),
+        OntologyMigrationManifest.load(ROOT / "ontology_migrations/ontology_v2.yaml"),
+        OntologyUnificationManifest.load(ROOT / "ontology_migrations/ontology_unification_v1.yaml"),
+        OntologyBlueprint.load(ROOT / "ontology_migrations/teoria_business_ontology_v1.yaml"),
         [
-            OntologyExtensionManifest.load(ROOT / "ontology-migrations/teoria-enterprise-context-v1.yaml"),
-            OntologyExtensionManifest.load(ROOT / "ontology-migrations/teoria-legacy-concepts-v1.yaml"),
+            OntologyExtensionManifest.load(ROOT / "ontology_migrations/teoria_enterprise_context_v1.yaml"),
+            OntologyExtensionManifest.load(ROOT / "ontology_migrations/teoria_legacy_concepts_v1.yaml"),
         ],
     )
     assert result == {

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from teoria.registry.loader import RegistryCatalog
-from teoria.registry.validator import RegistryValidator
+from teoria.registry.validation.registry import RegistryValidator
 
 
 def build_registry_overview(catalog: RegistryCatalog) -> dict[str, Any]:
@@ -17,10 +17,6 @@ def build_registry_overview(catalog: RegistryCatalog) -> dict[str, Any]:
             "runtime_link_types": sum(
                 len(item.link_types) for item in catalog.runtime_contracts.values()
             ),
-            # Compatibility fields retained for one Registry release.
-            "ontologies": len(catalog.runtime_contracts),
-            "object_types": sum(len(item.object_types) for item in catalog.runtime_contracts.values()),
-            "link_types": sum(len(item.link_types) for item in catalog.runtime_contracts.values()),
             "sources": len(catalog.sources),
             "mappings": len(catalog.mappings),
             "capabilities": len(catalog.capabilities),

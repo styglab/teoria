@@ -7,9 +7,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import BaseModel, Field
 
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.secrets import EnvironmentSecretProvider
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.secrets import EnvironmentSecretProvider
 from teoria.config import Settings, bootstrap_settings
+from teoria.registry.artifact import RegistryArtifactLoader, RegistryArtifactStore
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.runtime.capability.presentation import serialize_capability_result
 from teoria.runtime.capability.runner import CapabilityExecutionError, CapabilityRunner
@@ -36,7 +37,23 @@ def create_runtime_app(
     resolved_settings = settings or bootstrap_settings()
     if not resolved_settings.runtime_api_token:
         raise RuntimeError("TEORIA_RUNTIME_API_TOKEN is required")
-    resolved_catalog = catalog or RegistryLoader(resolved_settings.registry_path).load()
+    if catalog is not None:
+        resolved_catalog = catalog
+    elif resolved_settings.runtime_artifact_path is not None:
+        resolved_catalog = RegistryArtifactLoader(
+            resolved_settings.runtime_artifact_path
+        ).load()
+    elif resolved_settings.runtime_artifact_store is not None:
+        resolved_catalog = RegistryArtifactStore(
+            resolved_settings.runtime_artifact_store
+        ).load_active()
+    elif resolved_settings.environment == "production":
+        raise RuntimeError(
+            "TEORIA_RUNTIME_ARTIFACT_PATH or TEORIA_RUNTIME_ARTIFACT_STORE "
+            "is required in production"
+        )
+    else:
+        resolved_catalog = RegistryLoader(resolved_settings.registry_path).load()
     if resolved_settings.registry_require_published and (
         resolved_catalog.release is None or resolved_catalog.release.status != "published"
     ):

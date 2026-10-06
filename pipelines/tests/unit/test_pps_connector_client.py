@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from teoria_provider.models import ExecutionResponse
+from teoria_provider_api.models import ExecutionResponse
 from teoria_pipelines.connectors import PPSContractClient
 from teoria_pipelines.connectors.pps_contracts import ConnectorResponseError
 from teoria_pipelines.loader import PipelineLoader

@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from teoria.registry.schema import DataTypeDefinition, SourceRegistry
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
-from teoria.registry.validator import RegistryValidator
+from teoria.registry.validation.registry import RegistryValidator
 
 
 def source_document() -> dict:

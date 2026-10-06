@@ -11,9 +11,9 @@ from pydantic import BaseModel, Field
 from teoria.runtime.capability.binder import CapabilityBinder
 from teoria.runtime.mapping.decoder import MappedFragment, MappingDecoder
 from teoria.runtime.mapping.materializer import MaterializedLink, MaterializedObject, OntologyMaterializer
-from teoria_provider.errors import ProviderExecutionError
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.models import ExecutionResponse
+from teoria_provider_api.errors import ProviderExecutionError
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.models import ExecutionResponse
 from teoria.runtime.source.request_builder import SourceRequestBuilder
 from teoria.runtime.source.response_validator import SourceResponseValidator
 from teoria.runtime.source.database import (

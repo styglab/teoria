@@ -2,7 +2,7 @@ from prefect import flow
 from prefect.task_runners import ThreadPoolTaskRunner
 
 from teoria_pipelines.models import LoadSummary
-from teoria_pipelines.tasks.bid_eligibility import (
+from teoria_pipelines.bid_eligibility.tasks import (
     claim_documents_for_parsing,
     ensure_codex_authentication,
     extract_bid_eligibility_notice,

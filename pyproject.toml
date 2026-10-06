@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["packages/provider", "platform", "pipelines", "mcp"]
+members = ["packages/provider_api", "platform", "pipelines", "mcp"]
 
 [tool.uv]
 package = false

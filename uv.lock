@@ -7,7 +7,7 @@ members = [
     "teoria-mcp",
     "teoria-pipelines",
     "teoria-platform",
-    "teoria-provider",
+    "teoria-provider-api",
 ]
 
 [[package]]
@@ -2053,7 +2053,7 @@ dependencies = [
     { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "teoria-provider" },
+    { name = "teoria-provider-api" },
 ]
 
 [package.dev-dependencies]
@@ -2086,7 +2086,7 @@ requires-dist = [
     { name = "pypdf", specifier = ">=5,<7" },
     { name = "python-dotenv", specifier = ">=1.0,<2" },
     { name = "pyyaml", specifier = ">=6.0,<7" },
-    { name = "teoria-provider", editable = "packages/provider" },
+    { name = "teoria-provider-api", editable = "packages/provider_api" },
 ]
 
 [package.metadata.requires-dev]
@@ -2117,7 +2117,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "redis" },
-    { name = "teoria-provider" },
+    { name = "teoria-provider-api" },
     { name = "uvicorn" },
 ]
 
@@ -2139,7 +2139,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0,<2" },
     { name = "pyyaml", specifier = ">=6.0,<7" },
     { name = "redis", specifier = ">=6,<7" },
-    { name = "teoria-provider", editable = "packages/provider" },
+    { name = "teoria-provider-api", editable = "packages/provider_api" },
     { name = "uvicorn", specifier = ">=0.34,<1" },
 ]
 
@@ -2150,9 +2150,9 @@ dev = [
 ]
 
 [[package]]
-name = "teoria-provider"
+name = "teoria-provider-api"
 version = "0.1.0"
-source = { editable = "packages/provider" }
+source = { editable = "packages/provider_api" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },

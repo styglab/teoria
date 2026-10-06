@@ -2,6 +2,10 @@
 
 Teoria는 AI-Native Metadata & Ontology Platform이다. OpenMetadata가 데이터와 semantic/governance metadata를 설명하고, Teoria가 Business Ontology, Semantic Binding, Metadata Intelligence, Capability semantics와 향후 Context Engine을 제공한다. Prefect는 데이터 수집·변환·동기화 workflow를 담당한다.
 
+공공조달은 플랫폼 전체가 아니라 첫 vertical domain이다. 조달에서 검증한
+Source→Metadata→Ontology→Capability→Context 경로를 다른 업무 도메인으로
+확장하되, 조달 고유 모델과 정책을 Platform 공통 계약으로 일반화하지 않는다.
+
 ```text
 External API ─▶ Prefect ─▶ Teoria Data DB ─▶ OpenMetadata
                                             Technical + Semantic Metadata
@@ -44,15 +48,16 @@ Business Ontology authoring은 Stable Concept과 version별 revision을
 | 경로 | 책임 |
 |---|---|
 | `platform/` | Business Ontology, Semantic Binding, Metadata Intelligence, Source·Capability Runtime |
-| `platform/admin-ui/` | Semantic Registry 관리자용 React UI |
+| `platform/admin_ui/` | Semantic Registry 관리자용 React UI |
 | `pipelines/` | Connector, Prefect Flow, raw·정규 적재, DB migration |
 | `mcp/` | Capability를 MCP Tool로 제공 |
-| `packages/provider/` | 공통 API 요청·응답 계약과 HTTP 실행 |
-| `deploy/` | 로컬 Compose와 온프레미스·AWS EC2 k3s 배포 정의 |
+| `packages/provider_api/` | Platform·Pipelines가 공유하는 Provider API wire 계약과 HTTP 실행 |
+| `deploy/` | 지원되는 로컬 Compose와 실험 단계의 배포 스캐폴드 |
 | `docs/` | 아키텍처와 작성·운영 규칙 |
-| `archive/` | 시점별 검증 결과와 과거 산출물 |
 
 상세 경계는 [Repository Structure](docs/architecture/repository-structure.md)를 따른다.
+`packages/`는 장래 기능의 대기 장소가 아니다. 둘 이상의 프로젝트가 실제로
+공유하고 독립 테스트할 수 있는 설치형 계약만 이 경계로 추출한다.
 
 ## 시작
 
@@ -65,7 +70,7 @@ uv sync --locked --all-packages --all-groups
 테스트와 계약 검증:
 
 ```bash
-uv run --locked --package teoria-provider pytest packages/provider/tests
+uv run --locked --package teoria-provider-api pytest packages/provider_api/tests
 uv run --locked --package teoria-platform pytest platform/tests
 uv run --locked --package teoria-pipelines pytest pipelines/tests
 uv run --locked --package teoria-mcp pytest mcp/tests
@@ -75,6 +80,16 @@ uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
 uv run --locked --package teoria-pipelines --group validation \
   teoria-pipelines validate-integration pipelines \
   --platform-registries platform/registries
+```
+
+운영 Runtime은 원본 Registry 대신 게시 artifact를 사용한다.
+
+```bash
+uv run --locked --package teoria-platform teoria publish platform/registries \
+  --version YYYY.MM.DD.REVISION --output dist/registry
+uv run --locked --package teoria-platform teoria activate-artifact dist/registry \
+  --version YYYY.MM.DD.REVISION
+export TEORIA_RUNTIME_ARTIFACT_STORE=dist/registry
 ```
 
 MCP STDIO:
@@ -108,15 +123,17 @@ Prefect가 스케줄하는 일회성 OpenMetadata ingestion container로 실행�
 
 기본 Compose는 nginx의 8081 포트만 공개한다. `metadata` 프로필을 켜면 OpenMetadata UI/API용 8585 포트가 추가된다. Platform Admin UI는 `http://localhost:8081/`, Prefect UI는 `http://localhost:8081/prefect/`, Runtime API docs는 `http://localhost:8081/runtime-api/docs`, OpenMetadata는 `http://localhost:8585/`에서 확인한다.
 
+`deploy/experimental/k3s/`는 향후 Kubernetes 배포를 위한 스캐폴드이며 현재
+지원되는 운영 배포 계약이 아니다.
+
 ## 문서
 
 - [플랫폼 구성과 사용 가이드](docs/platform-guide.md)
 - [제품 개발 로드맵](docs/roadmap.md)
 - [문서 안내](docs/README.md)
 - [Architecture](docs/architecture/overview.md)
-- [AI-Native Metadata Platform](docs/architecture/ai-native-metadata-platform.md)
+- [Ontology와 Semantic Binding](docs/architecture/ontology.md)
 - [Source 작성](docs/registry/source-authoring.md)
-- [Runtime Contract Registry](docs/registry/runtime-contract-registry.md)
+- [Registry Guide](docs/registry/README.md)
 - [Pipeline과 Prefect](docs/ingestion/prefect.md)
-- [Validation](docs/registry/validation.md)
 - [MCP](docs/mcp.md)

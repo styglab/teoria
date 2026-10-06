@@ -7,7 +7,7 @@
 | `platform` | Business Ontology, Semantic Binding, Metadata Intelligence, Semantic Registry, Runtime, 직접 Source 실행, OpenMetadata REST integration | Prefect, MCP transport, OpenMetadata metadata 복제 |
 | `pipelines` | Connector, Prefect, raw·정규화·적재, Data DB migration | Ontology, Capability, MCP |
 | `mcp` | MCP Tool, protocol 변환, Runtime API client | Source 키, DB, Registry 실행 |
-| `packages/provider` | API schema, request/response 검증, HTTP retry·오류 | Registry, Prefect, MCP |
+| `packages/provider_api` | API schema, request/response 검증, HTTP retry·오류 | Registry, Prefect, MCP |
 
 ## 통신과 의존
 
@@ -16,14 +16,19 @@ pipelines ──SQL write contract──▶ Teoria Data DB
 platform  ──SQL read contract───▶ Teoria Data DB
 platform  ──REST reference──────▶ OpenMetadata
 mcp       ──Runtime HTTP API────▶ platform
-platform  ──▶ teoria-provider ◀── pipelines
+platform  ──▶ teoria-provider-api ◀── pipelines
 ```
 
 - Pipeline 실행 코드는 Platform Runtime을 import하지 않는다.
 - MCP는 Runtime API만 호출하며 Platform Runtime을 embedded import하지 않는다.
-- `teoria-provider`는 Platform이나 Pipelines를 역으로 import하지 않는다.
+- `teoria-provider-api`는 Platform이나 Pipelines를 역으로 import하지 않는다.
 - `common`, `shared`, `utils` 패키지는 만들지 않는다. 안정된 공통 계약만 이름 있는 패키지로 추출한다.
 - 예외적으로 Pipeline 통합 검증 진입점은 Platform Registry를 지연 import할 수 있다.
+
+`packages/`에는 둘 이상의 프로젝트가 실제로 사용하는 설치형 라이브러리만 둔다.
+각 패키지는 독립 `pyproject.toml`, 테스트와 단일 책임을 가지며 Platform이나
+Pipelines를 역으로 import하지 않는다. 미래 사용을 예상한 빈 패키지나
+`common`, `shared`, `utils` 성격의 묶음은 만들지 않는다.
 
 ## 계약 위치
 
@@ -78,13 +83,14 @@ deploy/
 │   ├── compose.yaml
 │   ├── nginx/
 │   └── openmetadata/   # Compose 전용 설정과 ingestion 예제
-└── k3s/
-    └── charts/         # Kubernetes 전용 설정
+└── experimental/
+    └── k3s/            # 아직 지원하지 않는 Kubernetes scaffold
 ```
 
 Prefect와 OpenMetadata 서비스 정의는 모두 `compose.yaml`에 둔다. 특정
 서비스의 Compose 전용 보조 파일만 `deploy/compose/<service>/`에 두며,
-향후 Kubernetes용 OpenMetadata 리소스는 `deploy/k3s/` 아래에 둔다.
+Kubernetes 배포가 지원 수준에 도달하기 전에는 모든 관련 scaffold를
+`deploy/experimental/k3s/` 아래에 둔다.
 
 ```bash
 uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
@@ -94,6 +100,9 @@ uv run --locked --package teoria-pipelines --group validation \
 ```
 
 새 기능은 의미·Runtime이면 `platform`, 지속 수집이면 `pipelines`, MCP protocol이면 `mcp`에 둔다.
+특정 vertical domain의 정책은 해당 Domain Registry와 명시적인 기능 패키지에
+두며, 두 번째 domain에서 재사용이 확인되기 전에는 Platform 공통 추상화로
+승격하지 않는다.
 
 ## Naming
 

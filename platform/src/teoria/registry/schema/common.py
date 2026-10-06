@@ -37,4 +37,4 @@ class ValueDefinition(RegistryModel):
     label: str | None = None
 
 
-from teoria_provider.schema import FieldDefinition  # noqa: E402
+from teoria_provider_api.schema import FieldDefinition  # noqa: E402

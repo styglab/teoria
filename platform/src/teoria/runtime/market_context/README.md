@@ -5,10 +5,12 @@
 
 ## 모듈
 
-- `processor.py`: Capability 진입점, DB reader, 원천 오류 변환, 응답 조립
-- `queries.py`: Market context Reader가 사용하는 SQL 문장
+- `processor.py`: Capability 진입점, 원천 오류 변환과 응답 orchestration
+- `queries/`: 기능별 SQL 문장
+- `readers/`: Data DB 접근 경계
 - `attention.py`: 주목할 업체의 계약 시점 상태, 선정 사유, 다양성 및 정렬 정책
 - `related_projects.py`: 관련 사업의 복합 필터, 정렬, 페이지네이션 정책
+- `similarity.py`: 제목·사업유형·업무분야·금액 유사도 순수 정책
 
 새 판정 규칙은 가능한 한 순수 정책 모듈에 추가한다. 정책 모듈은 Registry,
 DB connection 또는 Runtime cache를 직접 참조하지 않는다. `processor.py`는

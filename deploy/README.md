@@ -2,7 +2,9 @@
 
 `deploy/compose/compose.yaml` is the local development and integration entry
 point. Shared on-premises and AWS EC2 k3s deployment scaffolding lives under
-`deploy/k3s/`; see [`k3s/README.md`](k3s/README.md).
+`deploy/experimental/k3s/`; see
+[`experimental/k3s/README.md`](experimental/k3s/README.md). 이 경로는 아직 지원
+배포가 아닌 검증용 scaffold다.
 
 ## Docker Compose
 
@@ -14,7 +16,8 @@ deploy/
 │   ├── compose.yaml
 │   ├── .env.example
 │   └── nginx/         공개 HTTP nginx 이미지와 설정
-├── k3s/               온프레미스·AWS EC2 공통 Helm 배포 구조
+├── experimental/
+│   └── k3s/          향후 온프레미스·AWS EC2용 Helm scaffold
 └── README.md
 ```
 

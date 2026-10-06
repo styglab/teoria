@@ -5,8 +5,8 @@ from pathlib import Path
 from uuid import UUID
 
 from prefect import task
-from teoria_provider.executor import ProviderExecutor
-from teoria_provider.secrets import EnvironmentSecretProvider
+from teoria_provider_api.executor import ProviderExecutor
+from teoria_provider_api.secrets import EnvironmentSecretProvider
 
 from teoria_pipelines.connectors import PPSBidResultClient
 from teoria_pipelines.models import (

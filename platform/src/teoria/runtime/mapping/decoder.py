@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from teoria.runtime.mapping.codec import apply_codec
-from teoria_provider.models import ExecutionResponse, PreparedRequest
+from teoria_provider_api.models import ExecutionResponse, PreparedRequest
 from teoria.registry.loader import RegistryCatalog
 
 

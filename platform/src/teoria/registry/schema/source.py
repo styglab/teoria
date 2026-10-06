@@ -4,7 +4,7 @@ import re
 from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from teoria_provider.schema import (
+from teoria_provider_api.schema import (
     Access,
     Authentication,
     Components,
