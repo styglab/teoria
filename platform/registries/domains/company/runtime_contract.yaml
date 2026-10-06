@@ -2,7 +2,7 @@ registry:
   version: 2.1.0
   registered_at: "2026-08-08"
 
-ontology:
+runtime_contract:
   id: company
   name: 한국 기업정보
   description: >-

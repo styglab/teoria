@@ -17,7 +17,6 @@ source:
       includeViews: true
       schemaFilterPattern:
         includes:
-          - ingestion
           - public_procurement
       markDeletedTables: true
       includeTags: true

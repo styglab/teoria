@@ -1,6 +1,9 @@
-# Ontology Registry
+# Runtime Contract Registry
 
-Ontology Registry는 AI와 애플리케이션이 공유할 도메인 및 업무 의미를 Object Type, Property, Link Type으로 표현한다. 현재 `company`, `public_procurement`, `assessment` 도메인을 제공한다.
+Runtime Contract Registry는 Source record와 Capability 입출력을 검증하고
+materialize하는 실행 스키마다. 현재 `company`, `public_procurement`,
+`assessment` 계약을 제공한다. 지속 가능한 업무 의미와 lifecycle은
+PostgreSQL 기반 Business Ontology v2가 소유하며 이 YAML과 구분한다.
 
 ## Domain 경계
 
@@ -11,7 +14,9 @@ Domain은 제공기관이나 API별로 나누지 않는다. 같은 식별자로 
 - `assessment`: 회사와 공고 사이에서 수행된 평가, 개별 요건 판단과 그 판단을 뒷받침한 근거를 표현한다.
 - 두 Domain은 사업자등록을 통해 계약업체 관계로 연결하되 서로의 객체를 복제하지 않는다.
 
-Source와 Connector는 데이터를 어디서 어떻게 얻는지를, Domain은 그 데이터가 무엇을 의미하는지를 정의한다. 수집 방식이 실시간 API에서 Database Source로 바뀌어도 Domain 경계는 바뀌지 않는다.
+Source와 Connector는 데이터를 어디서 어떻게 얻는지를 정의하고 Runtime
+Contract는 실행 시 데이터 형태를 정의한다. Business Ontology와의 의미 연결은
+Semantic Binding이 담당한다.
 
 ## Object Type
 
@@ -37,7 +42,9 @@ Object Type은 독립적으로 식별하고 조회할 도메인 개체다.
 
 원천 식별자가 없는 관측·확인 객체는 시스템 생성 식별자를 primary key로 사용할 수 있다. 이 경우 설명에 어떤 값으로 생성하는지와 원천기관 식별자가 아님을 명시한다.
 
-Object Type은 외부에서 수집한 Entity에 한정되지 않는다. 업무적으로 식별되고 관계와 수명주기를 추적할 가치가 있는 평가·승인·결정 같은 Operational Object도 Ontology로 표현한다. 반면 `CompanyEvidenceSnapshot`이나 Expression 실행 노드처럼 한 번의 Runtime 실행을 위한 메모리상 DTO는 Ontology에 넣지 않는다.
+Object Type은 Runtime이 materialize하거나 Capability가 반환하는 데이터 구조다.
+지속 가능한 Business Object를 새로 정의할 때는 이 파일이 아니라 Business
+Ontology Authoring API를 사용한다.
 
 ## Link Type
 
@@ -56,4 +63,11 @@ Link Type은 Object Type 사이에서 허용되는 의미적 관계를 정의한
 
 모든 변경 가능 속성을 별도 관측 객체로 만들 필요는 없다. 현재 상태를 조회하는 데 충분한 값은 본체 Property와 `observed_at` 계열 Property로 표현할 수 있다. 이력 자체가 독립적인 사실이고 여러 시점의 비교가 필요한 납세자 상태, 재무제표, 확인 결과 등은 별도 Object Type으로 모델링한다.
 
-Ontology는 API 필드명, 호출 순서, transform 함수나 Source별 코드를 포함하지 않는다.
+Runtime Contract는 API 호출 순서나 Source별 HTTP 계약을 소유하지 않는다.
+Provider wire 계약은 Source Registry가, 변환은 Runtime Mapping이 담당한다.
+
+## 파일 형식
+
+도메인별 파일은 `runtime_contract.yaml`이며 루트 키도 `runtime_contract`를
+사용한다. 이전 `ontology.yaml` 파일명과 `ontology` 루트 키 지원은 Registry
+`2026.10.06.3`에서 제거됐다.

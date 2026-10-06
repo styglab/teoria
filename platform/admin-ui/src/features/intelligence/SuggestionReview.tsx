@@ -24,6 +24,7 @@ export function SuggestionReview() {
       <header><div><span>{item.suggestion_type} · {item.risk_level}</span><h3>{item.target_ref}</h3></div><b>{item.status}</b></header>
       <p>{item.proposed_value.description ?? (item.proposed_value.ontology_stable_key ? `추천 Binding: ${item.proposed_value.ontology_stable_key}` : JSON.stringify(item.proposed_value))}</p>
       {!!item.proposed_value.alternatives?.length && <small>다른 후보: {item.proposed_value.alternatives.map((candidate) => `${candidate.stable_key} ${(candidate.score * 100).toFixed(0)}%`).join(" · ")}</small>}
+      {!!item.evidence?.length && <div className="suggestion-evidence">{item.evidence.map((evidence) => <span key={evidence.evidence_id}><b>{evidence.evidence_type}</b>{evidence.provenance?.score == null ? "" : ` ${(evidence.provenance.score * 100).toFixed(0)}%`}</span>)}</div>}
       <small>{item.model_provider}/{item.model_name} · confidence {(item.confidence * 100).toFixed(0)}% · policy {item.policy_version}</small>
       {item.rationale && <p>{item.rationale}</p>}
       {item.status === "pending" && <footer className="suggestion-actions">

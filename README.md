@@ -116,7 +116,7 @@ Prefect가 스케줄하는 일회성 OpenMetadata ingestion container로 실행�
 - [Architecture](docs/architecture/overview.md)
 - [AI-Native Metadata Platform](docs/architecture/ai-native-metadata-platform.md)
 - [Source 작성](docs/registry/source-authoring.md)
-- [Ontology](docs/registry/ontology_registry.md)
+- [Runtime Contract Registry](docs/registry/runtime-contract-registry.md)
 - [Pipeline과 Prefect](docs/ingestion/prefect.md)
 - [Validation](docs/registry/validation.md)
 - [MCP](docs/mcp.md)

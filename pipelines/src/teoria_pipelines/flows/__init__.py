@@ -1,4 +1,5 @@
 """Thin Prefect flows grouped by data domain."""
+from teoria_pipelines.flows.openmetadata import sync_openmetadata_postgres
 from teoria_pipelines.flows.pps_contracts import (
     refresh_pps_contract_event_ledger,
     retry_pps_contract_backfill_gaps,
@@ -21,6 +22,7 @@ from teoria_pipelines.flows.pps_bid_notices import (
 from teoria_pipelines.flows.bid_eligibility import parse_pps_bid_documents, extract_pps_bid_eligibility
 
 __all__ = [
+    "sync_openmetadata_postgres",
     "sync_pps_bid_documents",
     "sync_pps_bid_notices",
     "sync_pps_bid_notice_window",

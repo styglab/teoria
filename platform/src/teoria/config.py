@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     openmetadata_timeout_seconds: float = Field(default=10.0, gt=0)
     openmetadata_verify_ssl: bool = True
     openmetadata_database_service: str = "teoria_postgresql"
+    context_runtime_api_url: str = "http://localhost:8000"
+    context_runtime_api_token: str | None = None
+    context_runtime_timeout_seconds: float = Field(default=150.0, gt=0)
     registry_require_published: bool = False
 
 

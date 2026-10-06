@@ -106,9 +106,11 @@ services:
       - -ec
       - |
         psql --set=ON_ERROR_STOP=1 <<'SQL'
-        GRANT USAGE ON SCHEMA ingestion, public_procurement TO teoria_metadata;
-        GRANT SELECT ON ALL TABLES IN SCHEMA ingestion, public_procurement TO teoria_metadata;
-        ALTER DEFAULT PRIVILEGES FOR ROLE teoria_pipeline IN SCHEMA ingestion GRANT SELECT ON TABLES TO teoria_metadata;
+        REVOKE ALL ON SCHEMA ingestion FROM teoria_metadata;
+        REVOKE ALL ON ALL TABLES IN SCHEMA ingestion FROM teoria_metadata;
+        ALTER DEFAULT PRIVILEGES FOR ROLE teoria_pipeline IN SCHEMA ingestion REVOKE ALL ON TABLES FROM teoria_metadata;
+        GRANT USAGE ON SCHEMA public_procurement TO teoria_metadata;
+        GRANT SELECT ON ALL TABLES IN SCHEMA public_procurement TO teoria_metadata;
         ALTER DEFAULT PRIVILEGES FOR ROLE teoria_pipeline IN SCHEMA public_procurement GRANT SELECT ON TABLES TO teoria_metadata;
         SQL
     environment:
@@ -286,6 +288,17 @@ services:
       prefect-server:
         condition: service_healthy
 
+  prefect-metadata-init:
+    profiles: ["metadata-orchestration"]
+    <<: *pipeline-runner
+    command: ["prefect", "work-pool", "create", "--type", "process", "--overwrite", "teoria-metadata"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+
   prefect-deploy:
     <<: *pipeline-runner
     command: ["prefect", "deploy", "--all", "--prefect-file", "/app/pipelines/prefect.yaml"]
@@ -297,6 +310,19 @@ services:
         condition: service_completed_successfully
       prefect-ai-init:
         condition: service_completed_successfully
+
+  prefect-metadata-deploy:
+    profiles: ["metadata-orchestration"]
+    <<: *pipeline-runner
+    command: ["prefect", "deploy", "--all", "--prefect-file", "/app/pipelines/prefect.metadata.yaml"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-metadata-init:
+        condition: service_completed_successfully
+      openmetadata-server:
+        condition: service_healthy
 
   prefect-worker:
     <<: *pipeline-runner
@@ -359,6 +385,29 @@ services:
         condition: service_completed_successfully
       prefect-deploy:
         condition: service_completed_successfully
+
+  prefect-metadata-worker:
+    profiles: ["metadata-orchestration"]
+    image: teoria-pipelines-metadata:latest
+    build:
+      context: ../..
+      dockerfile: pipelines/Dockerfile
+      target: metadata-worker
+    restart: unless-stopped
+    command: ["prefect", "worker", "start", "--pool", "teoria-metadata"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+      TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
+      OPENMETADATA_INGESTION_BOT_TOKEN: ${OPENMETADATA_INGESTION_BOT_TOKEN:-}
+      TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-1.12.6}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      prefect-metadata-deploy:
+        condition: service_completed_successfully
+      openmetadata-server:
+        condition: service_healthy
 
   platform-check:
     profiles: ["tools"]
@@ -425,8 +474,10 @@ services:
       TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
       TEORIA_OPENMETADATA_ENABLED: ${TEORIA_OPENMETADATA_ENABLED:-false}
       TEORIA_OPENMETADATA_BASE_URL: ${TEORIA_OPENMETADATA_BASE_URL:-http://openmetadata-server:8585/api}
-      TEORIA_OPENMETADATA_AUTH_TOKEN: ${TEORIA_OPENMETADATA_AUTH_TOKEN:-}
+      TEORIA_OPENMETADATA_AUTH_TOKEN: ${TEORIA_OPENMETADATA_AUTH_TOKEN:-${OPENMETADATA_INGESTION_BOT_TOKEN:-}}
       TEORIA_OPENMETADATA_DATABASE_SERVICE: ${TEORIA_OPENMETADATA_DATABASE_SERVICE:-teoria_postgresql}
+      TEORIA_CONTEXT_RUNTIME_API_URL: http://runtime-api:8000
+      TEORIA_CONTEXT_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 5s
@@ -437,6 +488,8 @@ services:
     depends_on:
       app-postgres-migrate:
         condition: service_completed_successfully
+      runtime-api:
+        condition: service_healthy
 
   admin-ui:
     image: teoria-platform-admin-ui:latest
@@ -527,16 +580,19 @@ services:
   # One-shot ingestion runner. Scheduling and retries belong to Prefect; this
   # service deliberately contains no Airflow control plane.
   openmetadata-ingestion-job:
-    image: docker.getcollate.io/openmetadata/ingestion-base:${OPENMETADATA_VERSION:-1.12.6}
+    image: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-1.12.6}
+    build:
+      context: ../..
+      dockerfile: deploy/compose/openmetadata/Dockerfile
+      args:
+        OPENMETADATA_VERSION: ${OPENMETADATA_VERSION:-1.12.6}
     profiles: ["metadata-ingestion"]
     restart: "no"
     environment:
-      TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-}
+      TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
       OPENMETADATA_INGESTION_BOT_TOKEN: ${OPENMETADATA_INGESTION_BOT_TOKEN:-}
     entrypoint: ["metadata"]
     command: ["ingest", "-c", "/config/teoria-postgres.yaml"]
-    volumes:
-      - ./openmetadata/ingestion/teoria-postgres.yaml.example:/config/teoria-postgres.yaml:ro
     depends_on:
       openmetadata-server:
         condition: service_healthy

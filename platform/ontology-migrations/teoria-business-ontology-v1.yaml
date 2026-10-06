@@ -1,0 +1,153 @@
+schema_version: "1.0"
+namespace: teoria
+name: Teoria Business Ontology
+description: Source와 무관한 업체 identity와 공공조달 lifecycle의 통합 업무 의미
+target_version: 0.1.0
+objects:
+  - code: BusinessEntity
+    name: 업체
+    stable_key: party.BusinessEntity
+    description: 하나 이상의 사업자등록 단위를 가질 수 있는 경제활동 주체
+    identity_properties: [businessEntityId]
+    properties:
+      - {code: businessEntityId, name: 업체 식별자, stable_key: party.BusinessEntity.businessEntityId, value_type: string, cardinality: one}
+      - {code: displayName, name: 표시명, stable_key: party.BusinessEntity.displayName, value_type: string}
+      - {code: entityType, name: 업체 유형, stable_key: party.BusinessEntity.entityType, value_type: string}
+      - {code: corporateRegistrationNumber, name: 법인등록번호, stable_key: party.BusinessEntity.corporateRegistrationNumber, value_type: string}
+  - code: BusinessRegistration
+    name: 사업자등록
+    stable_key: party.BusinessRegistration
+    description: 세무·조달 활동이 관찰되는 사업자등록 단위
+    identity_properties: [businessRegistrationNumber]
+    properties:
+      - {code: businessRegistrationNumber, name: 사업자등록번호, stable_key: party.BusinessRegistration.businessRegistrationNumber, value_type: string, cardinality: one}
+      - {code: businessStatus, name: 사업자 상태, stable_key: party.BusinessRegistration.businessStatus, value_type: string, temporal: true}
+      - {code: taxType, name: 과세 유형, stable_key: party.BusinessRegistration.taxType, value_type: string, temporal: true}
+  - code: IdentityAssertion
+    name: 업체 식별 연결 근거
+    stable_key: party.IdentityAssertion
+    description: 사업자등록과 업체의 연결 상태, 근거와 provenance를 보존하는 판단
+    identity_properties: [assertionId]
+    properties:
+      - {code: assertionId, name: 연결 근거 식별자, stable_key: party.IdentityAssertion.assertionId, value_type: string, cardinality: one}
+      - {code: status, name: 연결 상태, stable_key: party.IdentityAssertion.status, value_type: string, cardinality: one}
+      - {code: authority, name: 근거 권위, stable_key: party.IdentityAssertion.authority, value_type: string}
+      - {code: confidence, name: 신뢰도, stable_key: party.IdentityAssertion.confidence, value_type: decimal}
+      - {code: observedAt, name: 관찰 시각, stable_key: party.IdentityAssertion.observedAt, value_type: datetime, temporal: true}
+  - code: Organization
+    name: 기관
+    stable_key: procurement.Organization
+    description: 공고를 게시하거나 계약을 체결하는 조달기관
+    identity_properties: [organizationCode]
+    properties:
+      - {code: organizationCode, name: 기관코드, stable_key: procurement.Organization.organizationCode, value_type: string, cardinality: one}
+      - {code: name, name: 기관명, stable_key: procurement.Organization.name, value_type: string}
+  - code: ProcurementCase
+    name: 조달사업
+    stable_key: procurement.ProcurementCase
+    description: 원공고·재공고·정정을 포괄하는 하나의 조달사업
+    identity_properties: [procurementCaseId]
+    properties:
+      - {code: procurementCaseId, name: 조달사업 식별자, stable_key: procurement.ProcurementCase.procurementCaseId, value_type: string, cardinality: one}
+      - {code: name, name: 사업명, stable_key: procurement.ProcurementCase.name, value_type: string}
+      - {code: workType, name: 업무구분, stable_key: procurement.ProcurementCase.workType, value_type: string}
+      - {code: status, name: 사업 상태, stable_key: procurement.ProcurementCase.status, value_type: string}
+  - code: BidNotice
+    name: 입찰공고
+    stable_key: procurement.BidNotice
+    description: 외부에 게시된 개별 입찰공고
+    identity_properties: [bidNoticeId]
+    properties:
+      - {code: bidNoticeId, name: 공고 식별자, stable_key: procurement.BidNotice.bidNoticeId, value_type: string, cardinality: one}
+      - {code: noticeName, name: 공고명, stable_key: procurement.BidNotice.noticeName, value_type: string}
+      - {code: publishedAt, name: 게시일시, stable_key: procurement.BidNotice.publishedAt, value_type: datetime, temporal: true}
+      - {code: deadlineAt, name: 마감일시, stable_key: procurement.BidNotice.deadlineAt, value_type: datetime, temporal: true}
+      - {code: noticeKind, name: 공고 종류, stable_key: procurement.BidNotice.noticeKind, value_type: string}
+      - {code: status, name: 공고 상태, stable_key: procurement.BidNotice.status, value_type: string}
+  - code: ProcurementLot
+    name: 조달 분할 단위
+    stable_key: procurement.ProcurementLot
+    description: 하나의 공고 안에서 독립적으로 참여·낙찰·계약될 수 있는 분류·재입찰 단위
+    identity_properties: [lotId]
+    properties:
+      - {code: lotId, name: 분할 단위 식별자, stable_key: procurement.ProcurementLot.lotId, value_type: string, cardinality: one}
+      - {code: bidClassificationNumber, name: 입찰분류번호, stable_key: procurement.ProcurementLot.bidClassificationNumber, value_type: string}
+      - {code: rebidNumber, name: 재입찰번호, stable_key: procurement.ProcurementLot.rebidNumber, value_type: string}
+  - code: BidParticipation
+    name: 입찰 참여
+    stable_key: procurement.BidParticipation
+    description: 사업자등록 단위가 공고에 제출한 입찰 참여 사건
+    identity_properties: [participationId]
+    properties:
+      - {code: participationId, name: 참여 식별자, stable_key: procurement.BidParticipation.participationId, value_type: string, cardinality: one}
+      - {code: participatedAt, name: 참여일, stable_key: procurement.BidParticipation.participatedAt, value_type: datetime, temporal: true}
+      - {code: rank, name: 개찰 순위, stable_key: procurement.BidParticipation.rank, value_type: integer}
+      - {code: bidAmount, name: 투찰금액, stable_key: procurement.BidParticipation.bidAmount, value_type: decimal, unit: KRW}
+  - code: Award
+    name: 낙찰
+    stable_key: procurement.Award
+    description: 공고 또는 조달 단위에서 확정된 고유 낙찰 사건
+    identity_properties: [awardId]
+    properties:
+      - {code: awardId, name: 낙찰 식별자, stable_key: procurement.Award.awardId, value_type: string, cardinality: one}
+      - {code: awardedAt, name: 낙찰일, stable_key: procurement.Award.awardedAt, value_type: date, temporal: true}
+      - {code: winningAmount, name: 낙찰금액, stable_key: procurement.Award.winningAmount, value_type: decimal, unit: KRW}
+  - code: AwardRecipient
+    name: 낙찰업체 역할
+    stable_key: procurement.AwardRecipient
+    description: 공동수급을 포함한 낙찰 사건과 사업자등록의 역할 관계
+    identity_properties: [awardRecipientId]
+    properties:
+      - {code: awardRecipientId, name: 낙찰업체 역할 식별자, stable_key: procurement.AwardRecipient.awardRecipientId, value_type: string, cardinality: one}
+      - {code: role, name: 낙찰 역할, stable_key: procurement.AwardRecipient.role, value_type: string}
+      - {code: sharePercent, name: 지분율, stable_key: procurement.AwardRecipient.sharePercent, value_type: decimal, unit: percent}
+  - code: Contract
+    name: 계약
+    stable_key: procurement.Contract
+    description: 변경·차수 버전과 구분되는 원계약 단위의 계약 사건
+    identity_properties: [contractId]
+    properties:
+      - {code: contractId, name: 계약 식별자, stable_key: procurement.Contract.contractId, value_type: string, cardinality: one}
+      - {code: originalContractNumber, name: 원계약번호, stable_key: procurement.Contract.originalContractNumber, value_type: string}
+      - {code: name, name: 계약명, stable_key: procurement.Contract.name, value_type: string}
+      - {code: firstContractDate, name: 최초 계약일, stable_key: procurement.Contract.firstContractDate, value_type: date, temporal: true}
+      - {code: currentAmount, name: 계약금액, description: 선택한 기준시점까지 확인된 최신 계약 버전의 원계약 금액, stable_key: procurement.Contract.currentAmount, value_type: decimal, unit: KRW}
+      - {code: status, name: 계약 상태, stable_key: procurement.Contract.status, value_type: string}
+  - code: ContractVersion
+    name: 계약 버전
+    stable_key: procurement.ContractVersion
+    description: 원계약에 속하는 최초·변경·차수 계약의 시점별 원천 버전
+    identity_properties: [unifiedContractNumber]
+    properties:
+      - {code: unifiedContractNumber, name: 통합계약번호, stable_key: procurement.ContractVersion.unifiedContractNumber, value_type: string, cardinality: one}
+      - {code: concludedDate, name: 계약 체결일, stable_key: procurement.ContractVersion.concludedDate, value_type: date, temporal: true}
+      - {code: contractDate, name: 계약일, stable_key: procurement.ContractVersion.contractDate, value_type: date, temporal: true}
+      - {code: amount, name: 버전 계약금액, stable_key: procurement.ContractVersion.amount, value_type: decimal, unit: KRW}
+      - {code: sourceChangedAt, name: 원천 변경시각, stable_key: procurement.ContractVersion.sourceChangedAt, value_type: datetime, temporal: true}
+  - code: ContractParty
+    name: 계약업체 역할
+    stable_key: procurement.ContractParty
+    description: 계약과 사업자등록 사이의 역할·지분·귀속금액 관계
+    identity_properties: [contractPartyId]
+    properties:
+      - {code: contractPartyId, name: 계약업체 역할 식별자, stable_key: procurement.ContractParty.contractPartyId, value_type: string, cardinality: one}
+      - {code: role, name: 계약 역할, stable_key: procurement.ContractParty.role, value_type: string}
+      - {code: sharePercent, name: 지분율, stable_key: procurement.ContractParty.sharePercent, value_type: decimal, unit: percent}
+      - {code: attributedAmount, name: 업체 귀속 계약금액, stable_key: procurement.ContractParty.attributedAmount, value_type: decimal, unit: KRW}
+relationships:
+  - {code: HAS_BUSINESS_REGISTRATION, name: 사업자등록 보유, stable_key: party.HAS_BUSINESS_REGISTRATION, source: BusinessEntity, target: BusinessRegistration, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: SUPPORTED_BY_IDENTITY_ASSERTION, name: 식별 근거로 연결, stable_key: party.SUPPORTED_BY_IDENTITY_ASSERTION, source: BusinessRegistration, target: IdentityAssertion, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: IDENTIFIES_BUSINESS_ENTITY, name: 업체 식별, stable_key: party.IDENTIFIES_BUSINESS_ENTITY, source: IdentityAssertion, target: BusinessEntity, source_cardinality: many, target_cardinality: one, temporal: true}
+  - {code: PUBLISHES, name: 공고 게시, stable_key: procurement.PUBLISHES, source: Organization, target: BidNotice, source_cardinality: one, target_cardinality: many}
+  - {code: HAS_NOTICE, name: 공고 포함, stable_key: procurement.HAS_NOTICE, source: ProcurementCase, target: BidNotice, source_cardinality: one, target_cardinality: many}
+  - {code: HAS_LOT, name: 조달 분할 단위 포함, stable_key: procurement.HAS_LOT, source: BidNotice, target: ProcurementLot, source_cardinality: one, target_cardinality: many}
+  - {code: HAS_PARTICIPATION, name: 입찰 참여 포함, stable_key: procurement.HAS_PARTICIPATION, source: ProcurementLot, target: BidParticipation, source_cardinality: one, target_cardinality: many}
+  - {code: SUBMITTED_BY, name: 입찰 제출 사업자, stable_key: procurement.SUBMITTED_BY, source: BidParticipation, target: BusinessRegistration, source_cardinality: many, target_cardinality: one}
+  - {code: RESULTS_IN_AWARD, name: 낙찰 결과, stable_key: procurement.RESULTS_IN_AWARD, source: ProcurementLot, target: Award, source_cardinality: one, target_cardinality: many}
+  - {code: HAS_AWARD_RECIPIENT, name: 낙찰업체 역할 포함, stable_key: procurement.HAS_AWARD_RECIPIENT, source: Award, target: AwardRecipient, source_cardinality: one, target_cardinality: many}
+  - {code: REPRESENTS_AWARDEE, name: 낙찰 사업자 표시, stable_key: procurement.REPRESENTS_AWARDEE, source: AwardRecipient, target: BusinessRegistration, source_cardinality: many, target_cardinality: one}
+  - {code: RESULTS_IN_CONTRACT, name: 계약 결과, stable_key: procurement.RESULTS_IN_CONTRACT, source: Award, target: Contract, source_cardinality: one, target_cardinality: many}
+  - {code: SIGNS, name: 계약 체결, stable_key: procurement.SIGNS, source: Organization, target: Contract, source_cardinality: one, target_cardinality: many}
+  - {code: HAS_CONTRACT_VERSION, name: 계약 버전 포함, stable_key: procurement.HAS_CONTRACT_VERSION, source: Contract, target: ContractVersion, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: HAS_CONTRACT_PARTY, name: 계약업체 역할 포함, stable_key: procurement.HAS_CONTRACT_PARTY, source: Contract, target: ContractParty, source_cardinality: one, target_cardinality: many}
+  - {code: REPRESENTS_CONTRACTOR, name: 계약 사업자 표시, stable_key: procurement.REPRESENTS_CONTRACTOR, source: ContractParty, target: BusinessRegistration, source_cardinality: many, target_cardinality: one}

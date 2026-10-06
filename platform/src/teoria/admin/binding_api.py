@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field, model_validator
 
 from teoria.admin.auth import AdminAuthorizer, AdminPrincipal
 from teoria.binding.repository import BindingRepository
+from teoria.binding.coverage import build_capability_binding_coverage
+from teoria.binding.api_field import ApiFieldContractError, resolve_api_field_contract
 from teoria.registry.loader import RegistryCatalog
 
 
@@ -65,6 +67,28 @@ class CapabilityBindingInput(BaseModel):
         return self
 
 
+class ApiFieldBindingInput(BaseModel):
+    ontology_ref_type: Literal["object", "property", "relationship", "rule", "metric"]
+    ontology_ref_id: UUID | None = None
+    ontology_concept_id: UUID | None = None
+    source_id: str
+    operation_id: str
+    object_id: str
+    field_path: str
+    binding_type: str = "represents"
+    purpose: str | None = None
+    authority: Literal["authoritative", "preferred", "supplemental"] = "supplemental"
+    priority: int = Field(default=100, ge=0)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    provenance: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def require_ontology_reference(self):
+        if self.ontology_ref_id is None and self.ontology_concept_id is None:
+            raise ValueError("ontology_ref_id or ontology_concept_id is required")
+        return self
+
+
 def create_binding_router(
     repository: BindingRepository | None,
     authorizer: AdminAuthorizer,
@@ -84,6 +108,11 @@ def create_binding_router(
     @router.get("/validation")
     def validate_bindings() -> dict:
         return require_repository().validate_bindings()
+
+    @router.get("/capability-coverage")
+    def capability_coverage() -> dict:
+        bindings = require_repository().list_approved_capability_bindings()
+        return build_capability_binding_coverage(catalog, bindings)
 
     @router.post("", status_code=201)
     def create_binding(
@@ -123,6 +152,34 @@ def create_binding_router(
             raise HTTPException(status_code=409, detail={"code": "active_binding_exists"}) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail={"code": "invalid_capability_binding", "message": str(exc)}) from exc
+
+    @router.post("/api-field", status_code=201)
+    def create_api_field_binding(
+        payload: ApiFieldBindingInput,
+        principal: AdminPrincipal = Depends(authorizer.require("binding_reviewer", "metadata_admin")),
+    ) -> dict:
+        try:
+            contract = resolve_api_field_contract(
+                catalog,
+                source_id=payload.source_id,
+                operation_id=payload.operation_id,
+                object_id=payload.object_id,
+                field_path=payload.field_path,
+            )
+        except ApiFieldContractError as exc:
+            raise HTTPException(status_code=422, detail={"code": exc.code}) from exc
+        registry_version = catalog.release.version if catalog.release else "draft"
+        try:
+            return require_repository().create_api_field_binding(
+                **payload.model_dump(mode="python"),
+                contract_version=contract["contract_version"],
+                registry_version=registry_version,
+                created_by=principal.actor,
+            )
+        except psycopg.errors.UniqueViolation as exc:
+            raise HTTPException(status_code=409, detail={"code": "active_binding_exists"}) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail={"code": "invalid_api_field_binding", "message": str(exc)}) from exc
 
     @router.post("/{binding_id}/reviews")
     def review_binding(

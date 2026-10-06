@@ -2,7 +2,7 @@ registry:
   version: 1.2.0
   registered_at: "2026-08-08"
 
-ontology:
+runtime_contract:
   id: assessment
   name: 평가 업무 온톨로지
   description: 기업과 업무 대상 사이에서 수행된 평가, 개별 요건 판단과 그 판단에 사용된 근거를 표현한다.

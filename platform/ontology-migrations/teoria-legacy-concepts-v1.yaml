@@ -1,0 +1,98 @@
+schema_version: "1.0"
+ontology_namespace: teoria
+ontology_version: 0.1.0
+objects:
+  - code: PostalAddress
+    name: 주소
+    stable_key: party.PostalAddress
+    description: 업체나 기관에 연결되는 정규화된 우편주소
+    identity_properties: [addressId]
+    properties:
+      - {code: addressId, name: 주소 식별자, stable_key: party.PostalAddress.addressId, value_type: string, cardinality: one}
+      - {code: postalCode, name: 우편번호, stable_key: party.PostalAddress.postalCode, value_type: string}
+      - {code: address, name: 주소, stable_key: party.PostalAddress.address, value_type: string}
+  - code: MarketListing
+    name: 시장 상장
+    stable_key: finance.MarketListing
+    description: 업체의 시장별 상장 상태와 기간
+    identity_properties: [listingId]
+    properties:
+      - {code: listingId, name: 상장 식별자, stable_key: finance.MarketListing.listingId, value_type: string, cardinality: one}
+      - {code: market, name: 시장, stable_key: finance.MarketListing.market, value_type: string}
+      - {code: ticker, name: 종목코드, stable_key: finance.MarketListing.ticker, value_type: string}
+      - {code: validFrom, name: 유효 시작일, stable_key: finance.MarketListing.validFrom, value_type: date, temporal: true}
+      - {code: validTo, name: 유효 종료일, stable_key: finance.MarketListing.validTo, value_type: date, temporal: true}
+  - code: BidRequirementSet
+    name: 입찰 참가요건 집합
+    stable_key: procurement.BidRequirementSet
+    description: 공고에 적용되는 참가요건의 논리식과 그룹
+    identity_properties: [requirementSetId]
+    properties:
+      - {code: requirementSetId, name: 요건 집합 식별자, stable_key: procurement.BidRequirementSet.requirementSetId, value_type: string, cardinality: one}
+      - {code: expression, name: 논리식, stable_key: procurement.BidRequirementSet.expression, value_type: json}
+  - code: BidRequirement
+    name: 입찰 참가요건
+    stable_key: procurement.BidRequirement
+    description: 공고 원문에서 근거와 함께 확인된 개별 참가요건
+    identity_properties: [requirementId]
+    properties:
+      - {code: requirementId, name: 요건 식별자, stable_key: procurement.BidRequirement.requirementId, value_type: string, cardinality: one}
+      - {code: requirementType, name: 요건 유형, stable_key: procurement.BidRequirement.requirementType, value_type: string}
+      - {code: originalText, name: 원문 요건, stable_key: procurement.BidRequirement.originalText, value_type: string}
+  - code: Industry
+    name: 조달 업종
+    stable_key: procurement.Industry
+    description: 조달 참여자격과 업체 등록에 사용하는 공식 업종·면허 분류
+    identity_properties: [industryCode]
+    properties:
+      - {code: industryCode, name: 업종코드, stable_key: procurement.Industry.industryCode, value_type: string, cardinality: one}
+      - {code: name, name: 업종명, stable_key: procurement.Industry.name, value_type: string}
+  - code: RegisteredIndustry
+    name: 등록 업종
+    stable_key: procurement.RegisteredIndustry
+    description: 사업자등록 단위와 공식 조달 업종 사이의 시점별 등록 관계
+    identity_properties: [registrationId]
+    properties:
+      - {code: registrationId, name: 등록 식별자, stable_key: procurement.RegisteredIndustry.registrationId, value_type: string, cardinality: one}
+      - {code: validFrom, name: 유효 시작일, stable_key: procurement.RegisteredIndustry.validFrom, value_type: date, temporal: true}
+      - {code: validTo, name: 유효 종료일, stable_key: procurement.RegisteredIndustry.validTo, value_type: date, temporal: true}
+      - {code: sourceRef, name: 원천 참조, stable_key: procurement.RegisteredIndustry.sourceRef, value_type: string}
+  - code: SupplyProduct
+    name: 공급품 분류
+    stable_key: procurement.SupplyProduct
+    description: 업체가 공급자로 등록된 공식 물품·서비스 분류
+    identity_properties: [productCode]
+    properties:
+      - {code: productCode, name: 공급품 코드, stable_key: procurement.SupplyProduct.productCode, value_type: string, cardinality: one}
+      - {code: name, name: 공급품명, stable_key: procurement.SupplyProduct.name, value_type: string}
+  - code: RegisteredSupplyProduct
+    name: 등록 공급품
+    stable_key: procurement.RegisteredSupplyProduct
+    description: 사업자등록 단위와 공급품 분류 사이의 시점별 등록 관계
+    identity_properties: [registrationId]
+    properties:
+      - {code: registrationId, name: 등록 식별자, stable_key: procurement.RegisteredSupplyProduct.registrationId, value_type: string, cardinality: one}
+      - {code: validFrom, name: 유효 시작일, stable_key: procurement.RegisteredSupplyProduct.validFrom, value_type: date, temporal: true}
+      - {code: validTo, name: 유효 종료일, stable_key: procurement.RegisteredSupplyProduct.validTo, value_type: date, temporal: true}
+      - {code: sourceRef, name: 원천 참조, stable_key: procurement.RegisteredSupplyProduct.sourceRef, value_type: string}
+  - code: Sanction
+    name: 조달 제재
+    stable_key: procurement.Sanction
+    description: 사업자등록 단위에 적용되는 기간성 조달 제재
+    identity_properties: [sanctionId]
+    properties:
+      - {code: sanctionId, name: 제재 식별자, stable_key: procurement.Sanction.sanctionId, value_type: string, cardinality: one}
+      - {code: sanctionType, name: 제재 유형, stable_key: procurement.Sanction.sanctionType, value_type: string}
+      - {code: validFrom, name: 제재 시작일, stable_key: procurement.Sanction.validFrom, value_type: date, temporal: true}
+      - {code: validTo, name: 제재 종료일, stable_key: procurement.Sanction.validTo, value_type: date, temporal: true}
+      - {code: sourceRef, name: 원천 참조, stable_key: procurement.Sanction.sourceRef, value_type: string}
+relationships:
+  - {code: HAS_ADDRESS, name: 주소 보유, stable_key: party.HAS_ADDRESS, source: BusinessEntity, target: PostalAddress, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: HAS_MARKET_LISTING, name: 상장 관계 보유, stable_key: finance.HAS_MARKET_LISTING, source: BusinessEntity, target: MarketListing, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: HAS_REQUIREMENT_SET, name: 참가요건 집합 보유, stable_key: procurement.HAS_REQUIREMENT_SET, source: BidNotice, target: BidRequirementSet, source_cardinality: one, target_cardinality: many}
+  - {code: CONTAINS_REQUIREMENT, name: 참가요건 포함, stable_key: procurement.CONTAINS_REQUIREMENT, source: BidRequirementSet, target: BidRequirement, source_cardinality: one, target_cardinality: many}
+  - {code: REGISTRATION_HAS_INDUSTRY, name: 업종 등록 보유, stable_key: procurement.REGISTRATION_HAS_INDUSTRY, source: BusinessRegistration, target: RegisteredIndustry, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: CLASSIFIED_AS_INDUSTRY, name: 업종 분류 참조, stable_key: procurement.CLASSIFIED_AS_INDUSTRY, source: RegisteredIndustry, target: Industry, source_cardinality: many, target_cardinality: one}
+  - {code: REGISTRATION_HAS_SUPPLY_PRODUCT, name: 공급품 등록 보유, stable_key: procurement.REGISTRATION_HAS_SUPPLY_PRODUCT, source: BusinessRegistration, target: RegisteredSupplyProduct, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: CLASSIFIED_AS_SUPPLY_PRODUCT, name: 공급품 분류 참조, stable_key: procurement.CLASSIFIED_AS_SUPPLY_PRODUCT, source: RegisteredSupplyProduct, target: SupplyProduct, source_cardinality: many, target_cardinality: one}
+  - {code: HAS_SANCTION, name: 조달 제재 보유, stable_key: procurement.HAS_SANCTION, source: BusinessRegistration, target: Sanction, source_cardinality: one, target_cardinality: many, temporal: true}

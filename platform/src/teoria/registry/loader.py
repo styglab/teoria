@@ -14,8 +14,8 @@ from teoria.registry.schema import (
     DataTypeRegistry,
     MappingDefinition,
     MappingRegistry,
-    OntologyDefinition,
-    OntologyRegistry,
+    RuntimeContractDefinition,
+    RuntimeContractRegistry,
     ProviderReference,
     EligibilityRuleDefinition,
     EligibilityRuleRegistry,
@@ -56,8 +56,8 @@ class RegistryCatalog:
     source_paths: dict[str, Path]
     data_types: dict[str, DataTypeDefinition]
     value_sets: dict[str, ValueSetDefinition] = field(default_factory=dict)
-    ontologies: dict[str, OntologyDefinition] = field(default_factory=dict)
-    ontology_paths: dict[str, Path] = field(default_factory=dict)
+    runtime_contracts: dict[str, RuntimeContractDefinition] = field(default_factory=dict)
+    runtime_contract_paths: dict[str, Path] = field(default_factory=dict)
     mappings: dict[str, MappingDefinition] = field(default_factory=dict)
     mapping_paths: dict[str, Path] = field(default_factory=dict)
     capabilities: dict[str, CapabilityDefinition] = field(default_factory=dict)
@@ -67,7 +67,6 @@ class RegistryCatalog:
     eligibility_rules: dict[str, EligibilityRuleDefinition] = field(default_factory=dict)
     eligibility_rule_paths: dict[str, Path] = field(default_factory=dict)
     release: RegistryRelease | None = None
-
 
 class RegistryLoadError(Exception):
     def __init__(self, diagnostics: list[Diagnostic]) -> None:
@@ -94,8 +93,8 @@ class RegistryLoader:
         source_paths: dict[str, Path] = {}
         data_types: dict[str, DataTypeDefinition] = {}
         value_sets: dict[str, ValueSetDefinition] = {}
-        ontologies: dict[str, OntologyDefinition] = {}
-        ontology_paths: dict[str, Path] = {}
+        runtime_contracts: dict[str, RuntimeContractDefinition] = {}
+        runtime_contract_paths: dict[str, Path] = {}
         mappings: dict[str, MappingDefinition] = {}
         mapping_paths: dict[str, Path] = {}
         capabilities: dict[str, CapabilityDefinition] = {}
@@ -130,19 +129,19 @@ class RegistryLoader:
                             diagnostics.append(Diagnostic("duplicate_value_set", f"duplicate value set id '{definition.id}'", value_set_path))
                         value_sets[definition.id] = definition
 
-        ontology_paths_to_load = list((self.root / "ontologies").glob("*.yaml"))
-        ontology_paths_to_load.extend((self.root / "domains").glob("*/ontology.yaml"))
-        for path in sorted(ontology_paths_to_load):
+        runtime_contract_paths_to_load = list((self.root / "runtime_contracts").glob("*.yaml"))
+        runtime_contract_paths_to_load.extend((self.root / "domains").glob("*/runtime_contract.yaml"))
+        for path in sorted(runtime_contract_paths_to_load):
             document = self._parse(path, diagnostics)
             if document is None:
                 continue
-            registry = self._validate(OntologyRegistry, document, path, diagnostics)
+            registry = self._validate(RuntimeContractRegistry, document, path, diagnostics)
             if registry:
-                ontology_id = registry.ontology.id
-                if ontology_id in ontologies:
-                    diagnostics.append(Diagnostic("duplicate_ontology", f"duplicate ontology id '{ontology_id}'", path))
-                ontologies[ontology_id] = registry.ontology
-                ontology_paths[ontology_id] = path
+                contract_id = registry.runtime_contract.id
+                if contract_id in runtime_contracts:
+                    diagnostics.append(Diagnostic("duplicate_runtime_contract", f"duplicate runtime contract id '{contract_id}'", path))
+                runtime_contracts[contract_id] = registry.runtime_contract
+                runtime_contract_paths[contract_id] = path
 
         for path in sorted((self.root / "sources").glob("*.yaml")):
             document = self._parse(path, diagnostics)
@@ -210,7 +209,7 @@ class RegistryLoader:
                     references[reference.source] = reference
                     reference_paths[reference.source] = path
 
-        if not any((sources, data_types, value_sets, ontologies, mappings, capabilities, eligibility_rules)):
+        if not any((sources, data_types, value_sets, runtime_contracts, mappings, capabilities, eligibility_rules)):
             diagnostics.append(Diagnostic("empty_registry", "registry root contains no recognized registry documents", self.root))
         if diagnostics:
             raise RegistryLoadError(diagnostics)
@@ -220,8 +219,8 @@ class RegistryLoader:
             source_paths=source_paths,
             data_types=data_types,
             value_sets=value_sets,
-            ontologies=ontologies,
-            ontology_paths=ontology_paths,
+            runtime_contracts=runtime_contracts,
+            runtime_contract_paths=runtime_contract_paths,
             mappings=mappings,
             mapping_paths=mapping_paths,
             capabilities=capabilities,

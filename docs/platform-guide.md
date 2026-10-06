@@ -26,7 +26,7 @@ External API / DB / File
  Business Ontology ◀─ Semantic Binding ─▶ Capabilities
           └──────────────┬───────────────┘
                          ▼
-                  Context Engine (next)
+                  Context Engine
                          ▼
                     API / MCP / Agent
 ```
@@ -86,28 +86,54 @@ OpenMetadata는 optional overlay지만 Metadata/Binding 기능을 사용할 환�
 
 ## Runtime Registry와 Business Ontology
 
-기존 YAML Ontology는 현재 Capability가 실행할 입출력 Runtime Contract다.
+YAML Runtime Contract는 현재 Capability가 실행할 입출력 계약이다.
 지속 가능한 업무 의미인 Business Ontology v2와 동일한 것이 아니며, 관리
 화면에서도 `Runtime Registry`로 구분한다.
 
-- 44개 Runtime 객체는 모두 migration manifest에 분류되어 있다.
+- 41개 Runtime 객체는 모두 migration manifest에 분류되어 있다.
 - 23개 Business Concept은 `company` 0.1.0과 `procurement` 0.4.0에 게시됐다.
-- 12개 집계/조회 projection은 Capability contract로 유지한다.
+- 9개 집계/조회 projection은 Capability contract로 유지한다.
 - 9개 평가·근거 객체는 assessment result model로 유지한다.
+- 참조가 없던 구형 Capability 3개와 전용 projection 3개는 2026-10-06에 제거됐다.
+
+Runtime Contract의 파일명은 `runtime_contract.yaml`, 루트 키는
+`runtime_contract`다. 과거 `ontology.yaml`/`ontology:` 호환 형식은 Registry
+`2026.10.06.3`에서 제거됐다. 이 모델은 Business Ontology의 권위 저장소가 아니라
+Source·Mapping·Capability 실행에 필요한 **Runtime Contract Registry**다.
+지속 가능한 업무 의미의 권위 저장소는 PostgreSQL의 Business Ontology v2
+Authoring/Published 모델이다.
+
+Admin UI는 `/v1/admin/runtime-contracts`를 사용한다. 혼동을 일으키던 기존
+`/v1/admin/ontologies` Admin 경로는 제거됐다. Runtime
+Contract를 Published Ontology Artifact로 치환하지 않는다. 의미 해석은 Artifact,
+입출력 구조 검증은 Runtime Contract가 담당하며 둘의 관계는 migration report와
+Semantic Binding으로 확인한다.
 
 Capability target은 Capability 자체, 선언된 input, 선언된 output 중 하나다.
 Teoria는 현재 immutable Registry release에서 target을 검증한 뒤 Stable
 Concept과 연결한다. 의미가 정확히 같지 않은 필드는 편의상 추론해 연결하지
 않는다.
 
+Capability 연결 누락은 다음 API로 점검한다.
+
+```http
+GET /admin-api/v1/admin/bindings/capability-coverage
+```
+
+API Field Binding은 active Source Registry의 operation과 response object/field가
+실제로 존재할 때만 생성할 수 있다. 이름이 비슷하지만 Source 계약에서 검증되지
+않은 필드는 `API_FIELD` Binding으로 등록하지 않는다.
+
 ## 첫 Binding Intelligence 흐름
 
 1. Metadata에서 OpenMetadata Table을 선택한다.
 2. Column의 `Binding 후보 생성`을 실행한다.
-3. Suggestions에서 추천 Stable Concept, confidence, 대안 후보와 evidence를 확인한다.
+3. 같은 화면에서 추천 Stable Concept, confidence, 대안 후보와 점수별 evidence를 확인한다.
 4. Suggestion을 승인하면 Teoria가 OpenMetadata 원천 버전을 다시 확인한다.
 5. 원천이 바뀌지 않았을 때만 `draft` Binding을 생성한다.
-6. Bindings에서 별도의 reviewer가 Draft를 승인하거나 거절한다.
+6. 생성된 Draft는 같은 흐름 또는 **Bindings** 화면에서 별도의 reviewer가
+   승인하거나 거절한다. Binding 승인 전에는 Context Engine의 활성 의미 연결로
+   사용되지 않는다.
 
 Suggestion 승인과 Binding 승인을 분리했기 때문에 AI 추천이 곧바로 권위 있는
 Semantic Binding이 되지 않는다. 원천 version이 변경되면 승인을 차단하고
@@ -137,10 +163,11 @@ Ontology Authoring 화면은 Published 버전 직접 편집을 허용하지 않�
 ### 3. Ontology Owner
 
 1. Published version에서 새 Draft를 만든다.
-2. Object, Property, Relationship을 편집한다.
-3. validation, semantic diff, Binding impact를 확인한다.
-4. Review와 Approval을 거쳐 publish한다.
-5. 생성된 Runtime Artifact checksum과 audit history를 확인한다.
+2. **Graph**에서 전체 Business Object와 Relationship을 확인하고 도메인·검색 필터로 검토 범위를 좁힌다.
+3. **Objects**, **Links**, **Rules**에서 Stable Key와 세부 정의를 확인한다.
+4. **Review**에서 validation, 이전 버전과의 semantic diff, Binding impact를 확인한다.
+5. Review와 Approval을 거쳐 publish한다.
+6. 생성된 Runtime Artifact checksum과 audit history를 확인한다.
 
 Published version은 API뿐 아니라 PostgreSQL trigger로도 수정이 차단된다.
 
@@ -170,6 +197,39 @@ Context Engine에 business term 또는 intent를 전달하고, Teoria가 승인�
 Ontology·Binding·Capability와 metadata quality를 조합한 Context Package를
 반환한다.
 
+첫 read-only vertical slice는 `계약금액`을 지원한다.
+
+```http
+GET /admin-api/v1/admin/context/resolve?term=계약금액
+```
+
+응답은 Published Ontology artifact의 checksum, Stable Concept, 승인된
+OpenMetadata reference, 사용할 수 있는 Capability와 evidence를 포함한다.
+OpenMetadata 실시간 설명을 함께 조회하려면 ingestion bot과 분리된 읽기용
+`TEORIA_OPENMETADATA_AUTH_TOKEN` 및 `TEORIA_OPENMETADATA_ENABLED=true`가
+필요하다. 실제 데이터 freshness가 수집되지 않은 경우 이를 metadata 확인
+시각으로 대체하지 않고 `unavailable`로 반환한다.
+
+첫 실행 vertical slice는 기관명과 최근 회계연도 범위를 해석해 기존
+Capability Runtime을 호출한다.
+
+```http
+POST /admin-api/v1/admin/context/query
+Content-Type: application/json
+
+{
+  "question": "근로복지공단의 최근 5년 계약금액을 알려줘",
+  "as_of": "2026-10-06"
+}
+```
+
+이 요청은 기관 검색 Capability로 `Z004905`를 확인하고, 현재 회계연도를
+포함한 2022-01-01~2026-10-06 범위를 생성한 다음
+`search_public_procurement_contracts`를 실행한다. 합계 기준은 승인된
+`Contract.amount` Data Asset Binding과 일치하는 `current_contract_amount`다.
+응답에는 해석 결과, 실행계획, 합계, artifact checksum, Runtime Registry
+버전과 evidence가 함께 포함된다.
+
 ## Governance 규칙
 
 - AI 결과는 Suggestion이지 authoritative metadata가 아니다.
@@ -182,8 +242,8 @@ Ontology·Binding·Capability와 metadata quality를 조합한 Context Package�
 
 ## 기존 Runtime Registry와 Business Ontology v2
 
-Admin UI의 `Runtime Registry`는 현재 Capability 실행에 사용되는 YAML
-Ontology와 Mapping을 보여준다. `Bindings`와 Ontology Authoring API는
+Admin UI의 `Runtime Registry`는 현재 Capability 실행에 사용되는 YAML Runtime
+Contract와 Mapping을 보여준다. `Bindings`와 Ontology Authoring API는
 PostgreSQL 기반 Business Ontology v2를 사용한다. 전환 상태와 Object별
 분류는 [Legacy Registry Migration](architecture/legacy-registry-migration.md)을
 따른다.

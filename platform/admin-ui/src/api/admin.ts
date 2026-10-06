@@ -1,9 +1,9 @@
 export type Overview = {
-  counts: Record<"ontologies" | "object_types" | "link_types" | "sources" | "mappings" | "capabilities" | "data_types" | "value_sets", number>;
+  counts: Record<"runtime_contract_domains" | "runtime_object_types" | "runtime_link_types" | "ontologies" | "object_types" | "link_types" | "sources" | "mappings" | "capabilities" | "data_types" | "value_sets", number>;
   validation: { status: "valid" | "invalid"; diagnostic_count: number };
 };
 
-export type OntologySummary = {
+export type RuntimeContractSummary = {
   id: string;
   name: string;
   description: string;
@@ -15,6 +15,7 @@ export type ObjectNode = {
   id: string;
   ontology: string;
   object_type: string;
+  group?: string;
   name: string;
   description: string;
   primary_key: string | null;
@@ -32,8 +33,8 @@ export type LinkEdge = {
   target: string;
 };
 
-export type OntologyGraph = {
-  ontology: { id: string; name: string; description: string };
+export type RuntimeContractGraph = {
+  runtime_contract: { id: string; name: string; description: string };
   nodes: ObjectNode[];
   edges: LinkEdge[];
 };
@@ -91,6 +92,8 @@ export type IntelligenceSuggestion = {
   policy_version: string;
   status: "pending" | "approved" | "rejected" | "changes_requested" | "applied" | "failed";
   created_at: string;
+  evidence: Array<{ evidence_id: string; evidence_type: string; source_ref: string; excerpt: string | null; provenance: { score?: number; source_version?: string | null } }>;
+  resulting_binding?: SemanticBinding;
 };
 export type OntologyConcept = { concept_id: string; concept_kind: "object" | "property" | "relationship" | "rule" | "metric"; stable_key: string; ontology_version: string; version_status: string };
 export type SemanticBinding = {
@@ -103,8 +106,11 @@ export type SemanticBinding = {
   created_by: string; approved_by: string | null; created_at: string; last_verified_at: string | null;
 };
 export type BindingValidation = { status: "valid" | "invalid"; binding_count: number; diagnostic_count: number; diagnostics: Array<{ binding_id: string; code: string }> };
-export type OntologyVersion = { ontology_version_id: string; version: string; status: "draft" | "in_review" | "approved" | "published" | "deprecated"; created_at: string };
-export type OntologyVersionDetail = OntologyVersion & { namespace: string; ontology_name: string; objects: Array<{ business_object_id: string; concept_id: string; code: string; name: string; description: string; properties: Array<{ concept_id: string; code: string; name: string; value_type: string; cardinality: string }> }>; relationships: Array<{ concept_id: string; code: string; name: string }>; rules: unknown[]; metrics: unknown[] };
+export type OntologyVersion = { ontology_version_id: string; version: string; status: "draft" | "in_review" | "approved" | "published" | "deprecated"; based_on_version_id?: string | null; created_at: string };
+export type OntologySummary = { namespace: string; name: string; description: string; version_count: number; latest_version: string | null; latest_status: OntologyVersion["status"] | null };
+export type OntologyVersionDetail = OntologyVersion & { namespace: string; ontology_name: string; objects: Array<{ business_object_id: string; concept_id: string; stable_key: string; code: string; name: string; description: string; identity_policy: { properties?: string[] }; properties: Array<{ concept_id: string; stable_key: string; code: string; name: string; description: string; value_type: string; cardinality: string; unit: string | null; temporal: boolean }> }>; relationships: Array<{ concept_id: string; stable_key: string; code: string; name: string; source_object_id: string; target_object_id: string; source_cardinality: string; target_cardinality: string; temporal: boolean }>; rules: Array<{ concept_id: string; stable_key: string; code: string; name: string; description: string; evaluator_key: string | null }>; metrics: unknown[] };
+export type OntologyDiff = { added: string[]; removed: string[]; changed: string[] };
+export type OntologyBindingImpact = { compatible: boolean; incompatible_binding_count: number; incompatible_bindings: Array<{ binding_id: string; stable_key: string; status: string }> };
 const API_ROOT = "/admin-api/v1/admin";
 
 async function getJson<T>(path: string): Promise<T> {
@@ -124,8 +130,8 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 
 export const adminApi = {
   overview: () => getJson<Overview>("/overview"),
-  ontologies: () => getJson<{ ontologies: OntologySummary[] }>("/ontologies"),
-  ontologyGraph: (id: string) => getJson<OntologyGraph>(`/ontologies/${encodeURIComponent(id)}/graph`),
+  runtimeContracts: () => getJson<{ runtime_contracts: RuntimeContractSummary[] }>("/runtime-contracts"),
+  runtimeContractGraph: (id: string) => getJson<RuntimeContractGraph>(`/runtime-contracts/${encodeURIComponent(id)}/graph`),
   capabilities: () => getJson<{ capabilities: CapabilitySummary[] }>("/capabilities"),
   sources: () => getJson<{ sources: SourceSummary[] }>("/sources"),
   mappings: () => getJson<{ mappings: MappingSummary[] }>("/mappings"),
@@ -144,7 +150,11 @@ export const adminApi = {
   createBinding: (body: Record<string, unknown>) => postJson<SemanticBinding>("/bindings", body),
   reviewBinding: (id: string, decision: "approve" | "reject" | "deprecate", comment?: string) => postJson<SemanticBinding>(`/bindings/${encodeURIComponent(id)}/reviews`, { decision, comment }),
   ontologyVersions: (namespace: string) => getJson<{ items: OntologyVersion[] }>(`/ontology-authoring/ontologies/${encodeURIComponent(namespace)}/versions`),
+  authoredOntologies: () => getJson<{ items: OntologySummary[] }>("/ontology-authoring/ontologies"),
   ontologyVersion: (id: string) => getJson<OntologyVersionDetail>(`/ontology-authoring/versions/${encodeURIComponent(id)}`),
+  ontologyVersionValidation: (id: string) => getJson<ValidationReport & { binding_impact: OntologyBindingImpact }>(`/ontology-authoring/versions/${encodeURIComponent(id)}/validation`),
+  ontologyVersionBindingImpact: (id: string) => getJson<OntologyBindingImpact>(`/ontology-authoring/versions/${encodeURIComponent(id)}/binding-impact`),
+  ontologyVersionDiff: (id: string, against: string) => getJson<OntologyDiff>(`/ontology-authoring/versions/${encodeURIComponent(id)}/diff?against=${encodeURIComponent(against)}`),
   createOntologyDraft: (namespace: string, version: string) => postJson<OntologyVersion>(`/ontology-authoring/ontologies/${encodeURIComponent(namespace)}/versions`, { version }),
   transitionOntology: (id: string, action: "submit" | "request_changes" | "approve" | "revoke") => postJson<OntologyVersion>(`/ontology-authoring/versions/${encodeURIComponent(id)}/transitions`, { action }),
   publishOntology: (id: string) => postJson<OntologyVersion>(`/ontology-authoring/versions/${encodeURIComponent(id)}/publish`, {}),

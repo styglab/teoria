@@ -38,7 +38,7 @@ def build_migration_report(
 ) -> dict:
     registry_objects = {
         f"{ontology_id}.{item.id}"
-        for ontology_id, ontology in catalog.ontologies.items()
+        for ontology_id, ontology in catalog.runtime_contracts.items()
         for item in ontology.object_types
     }
     manifest_objects = set(manifest.objects)
@@ -59,10 +59,16 @@ def build_migration_report(
             candidate = ".".join(qualified.split(".")[:2])
             if candidate in registry_objects:
                 mapping_usage[candidate] += 1
-    stable_keys = _load_stable_keys(application_database_url) if application_database_url else set()
+    published_concepts = (
+        _load_published_concepts(application_database_url)
+        if application_database_url else {}
+    )
+    stable_keys = set(published_concepts)
     missing_targets = sorted(
         ref.target_stable_key for ref in manifest.objects.values()
-        if ref.target_stable_key and stable_keys and ref.target_stable_key not in stable_keys
+        if ref.target_stable_key
+        and application_database_url is not None
+        and ref.target_stable_key not in stable_keys
     )
     classifications = Counter(item.classification for item in manifest.objects.values())
     statuses = Counter(item.migration_status for item in manifest.objects.values())
@@ -76,6 +82,19 @@ def build_migration_report(
         "missing_objects": missing,
         "unknown_objects": unknown,
         "missing_target_stable_keys": missing_targets,
+        "authority_boundary": {
+            "business_ontology": "application_database_published_artifact",
+            "runtime_contract": "immutable_registry_release",
+            "runtime_mapping": "registry_mapping",
+            "semantic_connection": "ontology_binding",
+        },
+        "published_target_verification": (
+            "verified" if application_database_url is not None else "not_checked"
+        ),
+        "published_target_count": sum(
+            1 for item in manifest.objects.values()
+            if item.target_stable_key in published_concepts
+        ),
         "capability_referenced_object_count": len(capability_usage),
         "mapping_referenced_object_count": len(mapping_usage),
         "objects": [
@@ -84,12 +103,57 @@ def build_migration_report(
                 **manifest.objects[ref].model_dump(),
                 "capability_reference_count": capability_usage[ref],
                 "mapping_reference_count": mapping_usage[ref],
+                "published_target": (
+                    published_concepts.get(manifest.objects[ref].target_stable_key)
+                    if manifest.objects[ref].target_stable_key else None
+                ),
+                "runtime_contract_required": bool(
+                    capability_usage[ref] or mapping_usage[ref]
+                ),
+                "transition_status": (
+                    "semantically_linked"
+                    if manifest.objects[ref].target_stable_key in published_concepts
+                    else "runtime_only"
+                    if manifest.objects[ref].classification != "BUSINESS_CONCEPT"
+                    else "target_not_verified"
+                ),
             }
             for ref in sorted(manifest.objects)
         ],
     }
 
 
-def _load_stable_keys(database_url: str) -> set[str]:
+def _load_published_concepts(database_url: str) -> dict[str, dict[str, str]]:
     with psycopg.connect(database_url) as connection:
-        return {row[0] for row in connection.execute("SELECT stable_key FROM ontology.concepts WHERE retired_at IS NULL")}
+        rows = connection.execute(
+            """
+            WITH published_members AS (
+                SELECT bo.concept_id,bo.ontology_version_id
+                  FROM ontology.business_objects bo
+                UNION ALL
+                SELECT p.concept_id,bo.ontology_version_id
+                  FROM ontology.object_properties p
+                  JOIN ontology.business_objects bo USING (business_object_id)
+                UNION ALL
+                SELECT concept_id,ontology_version_id FROM ontology.relationship_types
+                UNION ALL
+                SELECT concept_id,ontology_version_id FROM ontology.business_rules
+                UNION ALL
+                SELECT concept_id,ontology_version_id FROM ontology.metrics
+            )
+            SELECT c.stable_key,v.version,a.artifact_id,a.checksum
+              FROM published_members pm
+              JOIN ontology.concepts c USING (concept_id)
+              JOIN ontology.ontology_versions v USING (ontology_version_id)
+              JOIN ontology.runtime_artifacts a USING (ontology_version_id)
+             WHERE v.status='published' AND c.retired_at IS NULL
+            """
+        ).fetchall()
+    return {
+        row[0]: {
+            "ontology_version": row[1],
+            "artifact_id": str(row[2]),
+            "artifact_checksum": row[3],
+        }
+        for row in rows
+    }

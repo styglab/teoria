@@ -8,12 +8,12 @@ from teoria.registry.validator import RegistryValidator
 REGISTRIES = Path(__file__).parents[3] / "registries"
 
 
-def test_current_ontology_references_are_valid() -> None:
+def test_current_runtime_contract_references_are_valid() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
 
     assert RegistryValidator().validate(catalog) == []
 
-    ontology = catalog.ontologies["company"]
+    ontology = catalog.runtime_contracts["company"]
     assert all(item.id != "representative" for item in ontology.object_types)
     legal_entity = next(item for item in ontology.object_types if item.id == "legal_entity")
     representative_names = next(item for item in legal_entity.properties if item.id == "representative_names")
@@ -51,7 +51,7 @@ def test_current_ontology_references_are_valid() -> None:
     assert disclosure_link.source == "business_registration"
     assert disclosure_link.target == "venture_company_disclosure"
 
-    procurement = catalog.ontologies["public_procurement"]
+    procurement = catalog.runtime_contracts["public_procurement"]
     participation = next(
         item for item in procurement.object_types if item.id == "contract_participation"
     )
@@ -67,7 +67,7 @@ def test_current_ontology_references_are_valid() -> None:
         item.id for item in procurement.link_types
     }
 
-    assessment = catalog.ontologies["assessment"]
+    assessment = catalog.runtime_contracts["assessment"]
     assert {item.id for item in assessment.object_types} == {
         "bid_eligibility_assessment",
         "requirement_assessment",
@@ -89,9 +89,9 @@ def test_current_ontology_references_are_valid() -> None:
     assert links["requirement_assessment_supported_by_evidence"].target == "evidence"
 
 
-def test_reports_ontology_reference_errors() -> None:
+def test_reports_runtime_contract_reference_errors() -> None:
     catalog = deepcopy(RegistryLoader(REGISTRIES).load())
-    ontology = catalog.ontologies["company"]
+    ontology = catalog.runtime_contracts["company"]
     listing = next(item for item in ontology.object_types if item.id == "market_listing")
     market = next(item for item in listing.properties if item.id == "market")
     market.value_set = "missing_value_set"

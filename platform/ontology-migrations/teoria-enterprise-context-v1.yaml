@@ -1,0 +1,91 @@
+schema_version: "1.0"
+ontology_namespace: teoria
+ontology_version: 0.1.0
+objects:
+  - code: Qualification
+    name: 업체 자격
+    stable_key: party.Qualification
+    description: 특정 조달·지원사업 참여 가능성을 뒷받침하는 시점별 업체 자격
+    identity_properties: [qualificationId]
+    properties:
+      - {code: qualificationId, name: 자격 식별자, stable_key: party.Qualification.qualificationId, value_type: string, cardinality: one}
+      - {code: qualificationType, name: 자격 유형, stable_key: party.Qualification.qualificationType, value_type: string, cardinality: one}
+      - {code: status, name: 자격 상태, stable_key: party.Qualification.status, value_type: string}
+      - {code: validFrom, name: 유효 시작일, stable_key: party.Qualification.validFrom, value_type: date, temporal: true}
+      - {code: validTo, name: 유효 종료일, stable_key: party.Qualification.validTo, value_type: date, temporal: true}
+      - {code: sourceRef, name: 원천 참조, stable_key: party.Qualification.sourceRef, value_type: string}
+  - code: Certification
+    name: 기업 인증
+    stable_key: party.Certification
+    description: 중기부·공공구매기관 등이 발급하거나 확인한 기업 인증
+    identity_properties: [certificationId]
+    properties:
+      - {code: certificationId, name: 인증 식별자, stable_key: party.Certification.certificationId, value_type: string, cardinality: one}
+      - {code: certificationType, name: 인증 유형, stable_key: party.Certification.certificationType, value_type: string, cardinality: one}
+      - {code: certificateNumber, name: 인증번호, stable_key: party.Certification.certificateNumber, value_type: string}
+      - {code: status, name: 인증 상태, stable_key: party.Certification.status, value_type: string}
+      - {code: validFrom, name: 유효 시작일, stable_key: party.Certification.validFrom, value_type: date, temporal: true}
+      - {code: validTo, name: 유효 종료일, stable_key: party.Certification.validTo, value_type: date, temporal: true}
+      - {code: sourceRef, name: 원천 참조, stable_key: party.Certification.sourceRef, value_type: string}
+  - code: TaxpayerStatusObservation
+    name: 사업자 상태 관찰
+    stable_key: party.TaxpayerStatusObservation
+    description: NTS 등에서 특정 시점에 확인한 사업자·과세 상태
+    identity_properties: [observationId]
+    properties:
+      - {code: observationId, name: 관찰 식별자, stable_key: party.TaxpayerStatusObservation.observationId, value_type: string, cardinality: one}
+      - {code: businessStatus, name: 사업자 상태, stable_key: party.TaxpayerStatusObservation.businessStatus, value_type: string}
+      - {code: taxType, name: 과세 유형, stable_key: party.TaxpayerStatusObservation.taxType, value_type: string}
+      - {code: observedAt, name: 관찰 시각, stable_key: party.TaxpayerStatusObservation.observedAt, value_type: datetime, cardinality: one, temporal: true}
+      - {code: sourceRef, name: 원천 참조, stable_key: party.TaxpayerStatusObservation.sourceRef, value_type: string}
+  - code: BusinessDisclosure
+    name: 기업 공시
+    stable_key: party.BusinessDisclosure
+    description: 벤처기업 확인 등 외부 기관이 공개한 기업 관련 공시 사실
+    identity_properties: [disclosureId]
+    properties:
+      - {code: disclosureId, name: 공시 식별자, stable_key: party.BusinessDisclosure.disclosureId, value_type: string, cardinality: one}
+      - {code: disclosureType, name: 공시 유형, stable_key: party.BusinessDisclosure.disclosureType, value_type: string, cardinality: one}
+      - {code: disclosedAt, name: 공시일, stable_key: party.BusinessDisclosure.disclosedAt, value_type: date, temporal: true}
+      - {code: sourceRef, name: 원천 참조, stable_key: party.BusinessDisclosure.sourceRef, value_type: string}
+  - code: FinancialStatement
+    name: 재무제표
+    stable_key: finance.FinancialStatement
+    description: 업체의 회계기간·보고서 유형별 재무제표 관찰
+    identity_properties: [statementId]
+    properties:
+      - {code: statementId, name: 재무제표 식별자, stable_key: finance.FinancialStatement.statementId, value_type: string, cardinality: one}
+      - {code: fiscalYear, name: 사업연도, stable_key: finance.FinancialStatement.fiscalYear, value_type: integer, cardinality: one}
+      - {code: statementType, name: 보고서 유형, stable_key: finance.FinancialStatement.statementType, value_type: string}
+      - {code: accountingBasis, name: 회계 기준, stable_key: finance.FinancialStatement.accountingBasis, value_type: string}
+      - {code: sourceRef, name: 원천 참조, stable_key: finance.FinancialStatement.sourceRef, value_type: string}
+  - code: FinancialFact
+    name: 재무 항목
+    stable_key: finance.FinancialFact
+    description: 매출액·영업이익·자산 등 재무제표의 개별 측정값
+    identity_properties: [financialFactId]
+    properties:
+      - {code: financialFactId, name: 재무 항목 식별자, stable_key: finance.FinancialFact.financialFactId, value_type: string, cardinality: one}
+      - {code: factType, name: 재무 항목 유형, stable_key: finance.FinancialFact.factType, value_type: string, cardinality: one}
+      - {code: value, name: 값, stable_key: finance.FinancialFact.value, value_type: decimal}
+      - {code: unit, name: 단위, stable_key: finance.FinancialFact.unit, value_type: string}
+  - code: BusinessEntityRelationship
+    name: 업체 관계
+    stable_key: party.BusinessEntityRelationship
+    description: 지배·종속·계열 등 두 업체 사이에서 시점별로 관찰된 관계
+    identity_properties: [relationshipId]
+    properties:
+      - {code: relationshipId, name: 관계 식별자, stable_key: party.BusinessEntityRelationship.relationshipId, value_type: string, cardinality: one}
+      - {code: relationshipType, name: 관계 유형, stable_key: party.BusinessEntityRelationship.relationshipType, value_type: string, cardinality: one}
+      - {code: validFrom, name: 유효 시작일, stable_key: party.BusinessEntityRelationship.validFrom, value_type: date, temporal: true}
+      - {code: validTo, name: 유효 종료일, stable_key: party.BusinessEntityRelationship.validTo, value_type: date, temporal: true}
+      - {code: sourceRef, name: 원천 참조, stable_key: party.BusinessEntityRelationship.sourceRef, value_type: string}
+relationships:
+  - {code: HAS_QUALIFICATION, name: 자격 보유, stable_key: party.HAS_QUALIFICATION, source: BusinessEntity, target: Qualification, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: HAS_CERTIFICATION, name: 인증 보유, stable_key: party.HAS_CERTIFICATION, source: BusinessEntity, target: Certification, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: HAS_TAXPAYER_STATUS, name: 사업자 상태 관찰 보유, stable_key: party.HAS_TAXPAYER_STATUS, source: BusinessRegistration, target: TaxpayerStatusObservation, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: HAS_DISCLOSURE, name: 기업 공시 보유, stable_key: party.HAS_DISCLOSURE, source: BusinessEntity, target: BusinessDisclosure, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: HAS_FINANCIAL_STATEMENT, name: 재무제표 보유, stable_key: finance.HAS_FINANCIAL_STATEMENT, source: BusinessEntity, target: FinancialStatement, source_cardinality: one, target_cardinality: many, temporal: true}
+  - {code: CONTAINS_FINANCIAL_FACT, name: 재무 항목 포함, stable_key: finance.CONTAINS_FINANCIAL_FACT, source: FinancialStatement, target: FinancialFact, source_cardinality: one, target_cardinality: many}
+  - {code: RELATIONSHIP_FROM, name: 관계 주체, stable_key: party.RELATIONSHIP_FROM, source: BusinessEntityRelationship, target: BusinessEntity, source_cardinality: many, target_cardinality: one, temporal: true}
+  - {code: RELATIONSHIP_TO, name: 관계 대상, stable_key: party.RELATIONSHIP_TO, source: BusinessEntityRelationship, target: BusinessEntity, source_cardinality: many, target_cardinality: one, temporal: true}

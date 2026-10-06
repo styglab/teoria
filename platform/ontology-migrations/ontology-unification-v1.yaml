@@ -1,0 +1,27 @@
+schema_version: "1.0"
+target_namespace: teoria
+target_version: 0.1.0
+concepts:
+  company.legal_entity: {action: merge, targets: [party.BusinessEntity], rationale: 법인과 비법인을 포괄하는 경제활동 주체로 통합}
+  company.postal_address: {action: map, targets: [party.PostalAddress], rationale: 공통 주소 객체로 이전}
+  company.business_registration: {action: map, targets: [party.BusinessRegistration], rationale: 사업자등록 단위 유지}
+  company.qualification: {action: map, targets: [party.Qualification], rationale: 원천 독립 자격 모델로 이전}
+  company.venture_company_disclosure: {action: generalize, targets: [party.BusinessDisclosure, party.Certification], rationale: 공시 사실과 인증 상태를 분리}
+  company.market_listing: {action: map, targets: [finance.MarketListing], rationale: 금융 문맥의 상장 관계로 이전}
+  company.organization_relationship: {action: map, targets: [party.BusinessEntityRelationship], rationale: 업체 간 기간성 관계로 이전}
+  company.financial_statement: {action: map, targets: [finance.FinancialStatement], rationale: 회계기간별 재무제표로 이전}
+  company.financial_fact: {action: map, targets: [finance.FinancialFact], rationale: 재무제표 측정값으로 이전}
+  public_procurement.bid_notice: {action: map, targets: [procurement.BidNotice], rationale: 공고 객체 유지}
+  public_procurement.bid_requirement_set: {action: map, targets: [procurement.BidRequirementSet], rationale: 참가요건 논리 집합 유지}
+  public_procurement.bid_requirement: {action: map, targets: [procurement.BidRequirement], rationale: 근거 기반 개별 요건 유지}
+  public_procurement.procurement_supplier: {action: merge, targets: [party.BusinessRegistration, party.BusinessEntity], rationale: 원천 조달업체와 통합 업체를 구분}
+  public_procurement.direct_production_confirmation: {action: generalize, targets: [party.Qualification, party.Certification], rationale: 직접생산확인은 유형화된 자격·인증으로 표현}
+  public_procurement.procurement_industry: {action: map, targets: [procurement.Industry], rationale: 공식 업종 분류 유지}
+  public_procurement.registered_industry: {action: map, targets: [procurement.RegisteredIndustry], rationale: 사업자등록과 업종의 association object 유지}
+  public_procurement.registered_supply_product: {action: map, targets: [procurement.RegisteredSupplyProduct, procurement.SupplyProduct], rationale: 등록 사건과 분류를 분리}
+  public_procurement.procurement_sanction: {action: map, targets: [procurement.Sanction], rationale: 기간성 제재 사건 유지}
+  public_procurement.bid_award: {action: map, targets: [procurement.Award, procurement.AwardRecipient], rationale: 낙찰 사건과 수령업체 역할을 분리}
+  public_procurement.bid_opening_participation: {action: map, targets: [procurement.BidParticipation], rationale: 참여 association object 유지}
+  public_procurement.contract: {action: map, targets: [procurement.Contract, procurement.ContractVersion], rationale: 원계약 정체성과 원천 버전을 분리}
+  public_procurement.public_organization: {action: map, targets: [procurement.Organization], rationale: 조달기관 유지}
+  public_procurement.contract_participation: {action: rename, targets: [procurement.ContractParty], rationale: 역할·지분·귀속금액 association object로 명확화}

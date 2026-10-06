@@ -31,6 +31,10 @@ dev = [
 orchestration = [
   "prefect>=3,<4",
 ]
+metadata-orchestration = [
+  "docker>=7,<8",
+  "prefect>=3,<4",
+]
 validation = [
   "teoria-platform",
 ]

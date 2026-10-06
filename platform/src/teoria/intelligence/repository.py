@@ -72,7 +72,27 @@ class SuggestionRepository:
         query += " ORDER BY created_at DESC LIMIT %s"
         params.append(limit)
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            return [_jsonable(dict(row)) for row in connection.execute(query, params).fetchall()]
+            rows = connection.execute(query, params).fetchall()
+            suggestion_ids = [row["suggestion_id"] for row in rows]
+            evidence_by_suggestion: dict[Any, list[dict[str, Any]]] = {
+                suggestion_id: [] for suggestion_id in suggestion_ids
+            }
+            if suggestion_ids:
+                evidence_rows = connection.execute(
+                    """SELECT * FROM intelligence.suggestion_evidence
+                         WHERE suggestion_id = ANY(%s) ORDER BY observed_at""",
+                    (suggestion_ids,),
+                ).fetchall()
+                for evidence in evidence_rows:
+                    evidence_by_suggestion[evidence["suggestion_id"]].append(
+                        _jsonable(dict(evidence))
+                    )
+            result = []
+            for row in rows:
+                item = _jsonable(dict(row))
+                item["evidence"] = evidence_by_suggestion[row["suggestion_id"]]
+                result.append(item)
+            return result
 
     def get(self, suggestion_id: UUID) -> dict[str, Any]:
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:

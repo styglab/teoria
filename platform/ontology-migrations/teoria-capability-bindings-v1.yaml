@@ -1,0 +1,13 @@
+schema_version: "1.0"
+bindings:
+  - {ontology_namespace: teoria, ontology_stable_key: party.BusinessEntity.corporateRegistrationNumber, capability_id: get_company_profile, target_scope: input, field_path: corporate_registration_number, binding_type: accepts}
+  - {ontology_namespace: teoria, ontology_stable_key: party.BusinessEntity, capability_id: get_company_profile, target_scope: output, field_path: company.legal_entity, binding_type: returns}
+  - {ontology_namespace: teoria, ontology_stable_key: party.PostalAddress, capability_id: get_company_profile, target_scope: output, field_path: company.postal_address, binding_type: returns}
+  - {ontology_namespace: teoria, ontology_stable_key: party.BusinessRegistration, capability_id: get_company_profile, target_scope: output, field_path: company.business_registration, binding_type: returns}
+  - {ontology_namespace: teoria, ontology_stable_key: procurement.Contract, capability_id: get_public_procurement_contract, target_scope: output, field_path: public_procurement.contract, binding_type: returns}
+  - {ontology_namespace: teoria, ontology_stable_key: procurement.Contract, capability_id: search_public_procurement_contracts, target_scope: output, field_path: public_procurement.contract, binding_type: returns}
+  - {ontology_namespace: teoria, ontology_stable_key: procurement.Contract.currentAmount, capability_id: search_public_procurement_contracts, target_scope: output, field_path: public_procurement.contract, binding_type: provides_property, purpose: analytics, authority: preferred, priority: 10}
+  - {ontology_namespace: teoria, ontology_stable_key: procurement.Contract.currentAmount, capability_id: get_public_procurement_contract, target_scope: output, field_path: public_procurement.contract, binding_type: provides_property, purpose: realtime, authority: preferred, priority: 10}
+  - {ontology_namespace: teoria, ontology_stable_key: procurement.Organization, capability_id: get_public_procurement_contract, target_scope: output, field_path: public_procurement.public_organization, binding_type: returns}
+  - {ontology_namespace: teoria, ontology_stable_key: procurement.BidNotice, capability_id: get_bid_notice, target_scope: output, field_path: public_procurement.bid_notice, binding_type: returns}
+  - {ontology_namespace: teoria, ontology_stable_key: procurement.Organization, capability_id: get_bid_notice, target_scope: output, field_path: public_procurement.public_organization, binding_type: returns}

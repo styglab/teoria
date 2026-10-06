@@ -23,7 +23,8 @@ def test_openmetadata_target_is_a_non_owning_reference() -> None:
 def test_api_and_capability_targets_are_explicit_contract_refs() -> None:
     api_binding = _binding({
         "target_type": "api_field", "source_id": "pps_contract",
-        "operation_id": "get_contract", "field_path": "response.amount",
+        "operation_id": "get_contract", "object_id": "contract",
+        "field_path": "amount",
         "contract_version": "2026-01",
     })
     capability_binding = _binding({

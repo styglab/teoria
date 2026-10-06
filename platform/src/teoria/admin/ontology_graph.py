@@ -5,11 +5,13 @@ from typing import Any
 from teoria.registry.loader import RegistryCatalog
 
 
-def build_ontology_graph(catalog: RegistryCatalog, ontology_ids: list[str]) -> dict[str, Any]:
+def build_runtime_contract_graph(
+    catalog: RegistryCatalog, runtime_contract_ids: list[str],
+) -> dict[str, Any]:
     nodes: dict[str, dict[str, Any]] = {}
     edges: list[dict[str, Any]] = []
-    for ontology_id in ontology_ids:
-        ontology = catalog.ontologies[ontology_id]
+    for ontology_id in runtime_contract_ids:
+        ontology = catalog.runtime_contracts[ontology_id]
         for object_type in ontology.object_types:
             node_id = f"{ontology.id}.{object_type.id}"
             nodes[node_id] = {
@@ -31,8 +33,8 @@ def build_ontology_graph(catalog: RegistryCatalog, ontology_ids: list[str]) -> d
                     for item in object_type.properties
                 ],
             }
-    for ontology_id in ontology_ids:
-        ontology = catalog.ontologies[ontology_id]
+    for ontology_id in runtime_contract_ids:
+        ontology = catalog.runtime_contracts[ontology_id]
         for link in ontology.link_types:
             source = _qualified_object_id(ontology.id, link.source)
             target = _qualified_object_id(ontology.id, link.target)
@@ -44,7 +46,7 @@ def build_ontology_graph(catalog: RegistryCatalog, ontology_ids: list[str]) -> d
                         "ontology": external_ontology,
                         "object_type": external_type,
                         "name": external_type,
-                        "description": "다른 Ontology에서 정의된 Object Type",
+                        "description": "다른 Runtime domain에서 정의된 Object Type",
                         "primary_key": None,
                         "external": True,
                         "properties": [],
@@ -60,17 +62,19 @@ def build_ontology_graph(catalog: RegistryCatalog, ontology_ids: list[str]) -> d
                     "target": target,
                 }
             )
-    if len(ontology_ids) == 1:
-        ontology = catalog.ontologies[ontology_ids[0]]
+    if len(runtime_contract_ids) == 1:
+        ontology = catalog.runtime_contracts[runtime_contract_ids[0]]
         metadata = {"id": ontology.id, "name": ontology.name, "description": ontology.description}
     else:
         metadata = {
             "id": "all",
-            "name": "전체 Ontology",
-            "description": "모든 Ontology Object Type과 Ontology 간 Link를 통합해 표시한다.",
+            "name": "전체 Runtime Contract",
+            "description": "모든 Runtime Object Type과 실행 관계를 통합해 표시한다.",
         }
-    return {"ontology": metadata, "nodes": list(nodes.values()), "edges": edges}
-
-
+    return {
+        "runtime_contract": metadata,
+        "nodes": list(nodes.values()),
+        "edges": edges,
+    }
 def _qualified_object_id(ontology_id: str, reference: str) -> str:
     return reference if "." in reference else f"{ontology_id}.{reference}"

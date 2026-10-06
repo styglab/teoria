@@ -23,7 +23,7 @@ class OntologyInput(BaseModel):
 
 
 class TransitionInput(BaseModel):
-    action: Literal["submit", "request_changes", "approve", "revoke"]
+    action: Literal["submit", "request_changes", "approve", "revoke", "deprecate"]
     comment: str | None = None
 
 
@@ -87,6 +87,9 @@ def create_ontology_authoring_router(repository: OntologyAuthoringRepository | N
         return translate(
             lambda: repo().create_ontology(**payload.model_dump(), actor=principal.actor)
         )
+
+    @router.get("/ontologies")
+    def ontologies(): return {"items":repo().list_ontologies()}
 
     @router.get("/ontologies/{namespace}/versions")
     def versions(namespace: str): return {"items":repo().list_versions(namespace)}

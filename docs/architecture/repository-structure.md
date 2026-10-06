@@ -94,3 +94,12 @@ uv run --locked --package teoria-pipelines --group validation \
 ```
 
 새 기능은 의미·Runtime이면 `platform`, 지속 수집이면 `pipelines`, MCP protocol이면 `mcp`에 둔다.
+
+## Naming
+
+Teoria가 소유하는 repository path와 내부 ID의 기본 형식은 `snake_case`다.
+예: `admin_ui/`, `runtime_client.py`, `get_company_profile.yaml`,
+`001_create_runtime_tables.sql`. 예외는 도구 고정 이름, 외부 계약 원문,
+`PascalCase`인 클래스·React 컴포넌트, `UPPER_SNAKE_CASE`인 환경변수와
+`kebab-case`인 CLI·Docker·배포 리소스다. 기존 문서의 `kebab-case` 파일은
+링크 호환을 위해 유지하며 신규 파일부터 이 규칙을 적용한다.

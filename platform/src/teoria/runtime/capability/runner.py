@@ -161,20 +161,6 @@ class CapabilityRunner:
                 from teoria.runtime.assessment.processor import execute_bid_eligibility_assessments
 
                 return await execute_bid_eligibility_assessments(self, catalog, capability_id, inputs)
-            if capability.processor == "market_context.find_bid_relevant_companies":
-                from teoria.runtime.market_context.processor import execute_bid_relevant_companies
-
-                return await execute_bid_relevant_companies(self, catalog, capability_id, inputs)
-            if capability.processor == "market_context.find_similar_bid_notices":
-                from teoria.runtime.market_context.processor import execute_similar_bid_notices
-
-                return await execute_similar_bid_notices(catalog, capability_id, inputs)
-            if capability.processor == "market_context.analyze_bid_organization_field_companies":
-                from teoria.runtime.market_context.processor import execute_organization_field_companies
-
-                return await execute_organization_field_companies(
-                    catalog, capability_id, inputs, cache=self.cache,
-                )
             if capability.processor == "market_context.find_bid_project_lineage":
                 from teoria.runtime.market_context.processor import execute_bid_project_lineage
 
@@ -424,5 +410,5 @@ class CapabilityRunner:
     @staticmethod
     def _is_object(catalog: RegistryCatalog, reference: str) -> bool:
         ontology_id, item_id = reference.split(".", 1)
-        ontology = catalog.ontologies[ontology_id]
+        ontology = catalog.runtime_contracts[ontology_id]
         return item_id in {item.id for item in ontology.object_types}

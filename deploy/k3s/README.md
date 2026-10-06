@@ -27,6 +27,11 @@ entry point.
 - PostgreSQL, Prefect, Redis, certificate management, and monitoring should be
   composed as upstream Helm releases or managed externally instead of copied
   into the Teoria chart.
+- OpenMetadata Server and its search backend should likewise be upstream or
+  externally managed. Teoria's metadata workflow runs through a dedicated
+  Prefect Kubernetes work pool as an ephemeral
+  `teoria-openmetadata-ingestion:<pinned-version>` Job. Do not mount a container
+  runtime socket into a k3s worker.
 
 Expected Secret names are declared in `charts/teoria/values.yaml`:
 
@@ -35,6 +40,8 @@ Expected Secret names are declared in `charts/teoria/values.yaml`:
 - `teoria-object-storage`
 - `teoria-runtime`
 - `teoria-prefect`
+- `teoria-openmetadata-ingestion` (OpenMetadata URL, ingestion bot token, and
+  read-only Teoria Data DB credential)
 
 Render the selected environment after workload templates are added:
 

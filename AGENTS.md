@@ -12,6 +12,21 @@
 - Provider API wire 계약, 요청 생성, 응답 검증과 HTTP 실행만 `packages/provider/`의 `teoria-provider`를 사용한다.
 - 프로젝트 사이에 일반적인 `common`, `shared`, `utils` 패키지를 만들지 않는다.
 
+## Naming convention
+
+저장소 내부에서 Teoria가 소유하는 파일, 디렉터리와 ID는 기본적으로
+`snake_case`를 사용한다. 문서와 코드라는 이유로 규칙을 나누지 않는다.
+
+- Python 클래스와 React 컴포넌트는 `PascalCase`를 사용한다.
+- 환경변수는 `UPPER_SNAKE_CASE`를 사용한다.
+- CLI 명령, Docker 서비스·이미지와 배포 리소스는 `kebab-case`를 사용한다.
+- `Dockerfile`, `README.md`, `AGENTS.md`, `SKILL.md`, `pyproject.toml`,
+  `package-lock.json`처럼 도구가 고정하거나 생태계 관례가 명확한 이름은 유지한다.
+- 외부 Provider가 정의한 wire name, field와 code는 원본 표기를 유지한다.
+- 기존 `docs/`의 `kebab-case` 경로는 링크 호환을 위해 일괄 변경하지 않는다.
+  새 파일부터 `snake_case`를 적용하고 기존 파일은 별도 호환 계획 없이 이름만
+  바꾸지 않는다.
+
 ## Metadata and knowledge authority
 
 [AI-Native Metadata Platform](docs/architecture/ai-native-metadata-platform.md)의 책임 경계를 유지한다.

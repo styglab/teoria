@@ -79,7 +79,7 @@
 ## 관련 Registry
 
 - Capability 정의: `platform/registries/domains/public_procurement/capabilities/`
-- 공공조달 Ontology: `platform/registries/domains/public_procurement/ontology.yaml`
+- 공공조달 Runtime Contract: `platform/registries/domains/public_procurement/runtime_contract.yaml`
 - Data DB Source: `platform/registries/sources/teoria_public_procurement.yaml`
 - Runtime API 사용법: `docs/integration/bid-check-service.md`
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, Boxes, Braces, CircleDot, Database, GitFork, Lightbulb, Moon, Network, Search, Sun, Workflow, X } from "lucide-react";
-import { adminApi, type CapabilitySummary, type LineageLink, type LinkEdge, type MappingSummary, type ObjectNode, type OntologyGraph as GraphData, type OntologySummary, type Overview, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/admin";
+import { adminApi, type CapabilitySummary, type LineageLink, type LinkEdge, type MappingSummary, type ObjectNode, type RuntimeContractGraph as GraphData, type RuntimeContractSummary, type Overview, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/admin";
 import { MetricCard } from "../components/MetricCard";
 import { DetailPanel } from "../features/ontology/DetailPanel";
 import { OntologyGraph } from "../features/ontology/OntologyGraph";
@@ -19,15 +19,15 @@ const sectionCopy: Record<Exclude<Section, "ontologies">, { eyebrow: string; tit
   intelligence: { eyebrow: "METADATA INTELLIGENCE", title: "Suggestions", description: "AI가 제안한 메타데이터 변경을 검토하고 승인된 변경만 권위 저장소에 반영합니다." },
   authoring: { eyebrow: "BUSINESS KNOWLEDGE", title: "Ontology Authoring", description: "Published Ontology에서 Draft를 만들고 검토·승인·게시합니다." },
   bindings: { eyebrow: "SEMANTIC GOVERNANCE", title: "Bindings", description: "Business Ontology와 OpenMetadata의 의미 연결을 생성하고 검토합니다." },
-  capabilities: { eyebrow: "SEMANTIC OPERATIONS", title: "Capabilities", description: "사용자 의도를 실행 가능한 Source Operation과 Ontology 반환 타입으로 연결합니다." },
+  capabilities: { eyebrow: "SEMANTIC OPERATIONS", title: "Capabilities", description: "사용자 요청을 실행 가능한 Source Operation과 Runtime 반환 계약으로 연결합니다." },
   sources: { eyebrow: "DATA CONTRACTS", title: "Sources", description: "Semantic Runtime이 직접 호출하거나 조회하는 외부 API와 Database Source를 확인합니다." },
-  mappings: { eyebrow: "SEMANTIC BINDINGS", title: "Mappings", description: "Source 필드가 Ontology 속성과 객체로 변환되는 계약을 확인합니다." },
-  lineage: { eyebrow: "REGISTRY LINEAGE", title: "Lineage", description: "Source에서 Mapping과 Capability를 거쳐 Ontology로 이어지는 의미 계보를 확인합니다." },
+  mappings: { eyebrow: "RUNTIME TRANSFORMATION", title: "Mappings", description: "Source 필드가 Runtime Object와 속성으로 변환되는 실행 계약을 확인합니다." },
+  lineage: { eyebrow: "REGISTRY LINEAGE", title: "Lineage", description: "Source에서 Mapping과 Capability를 거쳐 Runtime Contract로 이어지는 실행 계보를 확인합니다." },
 };
 
 export function App() {
   const [overview, setOverview] = useState<Overview | null>(null);
-  const [ontologies, setOntologies] = useState<OntologySummary[]>([]);
+  const [ontologies, setOntologies] = useState<RuntimeContractSummary[]>([]);
   const [selectedOntology, setSelectedOntology] = useState<string>("");
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [selectedItem, setSelectedItem] = useState<ObjectNode | LinkEdge | null>(null);
@@ -52,17 +52,17 @@ export function App() {
   }, [theme]);
 
   useEffect(() => {
-    Promise.all([adminApi.overview(), adminApi.ontologies(), adminApi.validation(), adminApi.registryRelease(), adminApi.capabilities(), adminApi.sources(), adminApi.mappings(), adminApi.lineage()])
+    Promise.all([adminApi.overview(), adminApi.runtimeContracts(), adminApi.validation(), adminApi.registryRelease(), adminApi.capabilities(), adminApi.sources(), adminApi.mappings(), adminApi.lineage()])
       .then(([nextOverview, response, nextValidation, nextRegistryRelease, capabilityResponse, sourceResponse, mappingResponse, lineageResponse]) => {
         setOverview(nextOverview);
-        setOntologies(response.ontologies);
+        setOntologies(response.runtime_contracts);
         setValidation(nextValidation);
         setRegistryRelease(nextRegistryRelease);
         setCapabilities(capabilityResponse.capabilities);
         setSources(sourceResponse.sources);
         setMappings(mappingResponse.mappings);
         setLineage(lineageResponse.links);
-        setSelectedOntology(response.ontologies.length ? "all" : "");
+        setSelectedOntology(response.runtime_contracts.length ? "all" : "");
       })
       .catch((reason: Error) => setError(reason.message));
   }, []);
@@ -70,7 +70,7 @@ export function App() {
   useEffect(() => {
     if (!selectedOntology) return;
     setSelectedItem(null);
-    adminApi.ontologyGraph(selectedOntology).then(setGraph).catch((reason: Error) => setError(reason.message));
+    adminApi.runtimeContractGraph(selectedOntology).then(setGraph).catch((reason: Error) => setError(reason.message));
   }, [selectedOntology]);
 
   const counts = overview?.counts;
@@ -100,9 +100,9 @@ export function App() {
           <button className={section === "lineage" ? "active" : ""} onClick={() => { setSection("lineage"); setSelectedItem(null); }}><Workflow size={16} /> Lineage</button>
         </nav>
         {section === "ontologies" && <div className="ontology-list">
-          <span>RUNTIME ONTOLOGIES</span>
+          <span>RUNTIME CONTRACT DOMAINS</span>
           <button className={selectedOntology === "all" ? "selected" : ""} onClick={() => setSelectedOntology("all")}>
-            <i /><div><strong>전체 Ontology</strong><small>{overview?.counts.object_types ?? 0} objects · {overview?.counts.link_types ?? 0} links</small></div>
+            <i /><div><strong>전체 Runtime Contract</strong><small>{overview?.counts.object_types ?? 0} objects · {overview?.counts.link_types ?? 0} links</small></div>
           </button>
           {ontologies.map((ontology) => (
             <button key={ontology.id} className={ontology.id === selectedOntology ? "selected" : ""} onClick={() => setSelectedOntology(ontology.id)}>
@@ -114,14 +114,14 @@ export function App() {
 
       <main>
         <section className="overview-row">
-          <MetricCard label="Ontologies" value={counts?.ontologies ?? 0} icon={<Network size={17} />} />
-          <MetricCard label="Object types" value={counts?.object_types ?? 0} icon={<Boxes size={17} />} />
-          <MetricCard label="Link types" value={counts?.link_types ?? 0} icon={<GitFork size={17} />} />
+          <MetricCard label="Runtime domains" value={counts?.runtime_contract_domains ?? 0} icon={<Network size={17} />} />
+          <MetricCard label="Object types" value={counts?.runtime_object_types ?? 0} icon={<Boxes size={17} />} />
+          <MetricCard label="Link types" value={counts?.runtime_link_types ?? 0} icon={<GitFork size={17} />} />
           <MetricCard label="Capabilities" value={counts?.capabilities ?? 0} icon={<Braces size={17} />} />
         </section>
         {section === "ontologies" ? <section className="workspace">
           <div className="workspace-header">
-            <div><span>LEGACY RUNTIME CONTRACT EXPLORER</span><h1>{graph?.ontology.name ?? "Registry 불러오는 중"}</h1><p>{graph?.ontology.description}</p></div>
+            <div><span>RUNTIME CONTRACT EXPLORER</span><h1>{graph?.runtime_contract.name ?? "Registry 불러오는 중"}</h1><p>{graph?.runtime_contract.description}</p></div>
             {graph && <div className="graph-counts"><b>{graph.nodes.length}</b> nodes <b>{graph.edges.length}</b> edges</div>}
           </div>
           <div className="canvas-wrap">

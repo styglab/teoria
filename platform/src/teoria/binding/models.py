@@ -21,6 +21,7 @@ class ApiFieldTargetRef(BaseModel):
     system: Literal["provider"] = "provider"
     source_id: str
     operation_id: str
+    object_id: str
     field_path: str
     contract_version: str | None = None
 

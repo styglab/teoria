@@ -155,8 +155,8 @@ Suggestion(pending) + Evidence
   Teoria stores the suggestion, review, and external change reference rather
   than a second copy of the table metadata.
 
-Ontology authoring and governed Binding review are implemented. Intelligence
-generation and the Context Engine remain the next product phases. The current
-API accepts suggestions produced by a future AI job or another trusted internal
-producer; the next vertical slice generates an evidence-backed Binding
-Suggestion from an OpenMetadata Column.
+Ontology authoring, governed Binding review, deterministic Binding suggestion,
+and the first read-only `Contract.amount` Context Package are implemented. The
+next product phases generalize Intelligence generation, move Runtime execution
+behind Published Artifacts after parity validation, and expose context through
+the semantic MCP boundary.

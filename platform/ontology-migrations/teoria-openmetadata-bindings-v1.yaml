@@ -1,0 +1,84 @@
+schema_version: "1.0"
+ontology_namespace: teoria
+ontology_version: 0.1.0
+status: planned_until_ontology_published
+bindings:
+  - ontology_stable_key: procurement.Contract.currentAmount
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.contracts.current_contract_amount
+    binding_type: represents
+    purpose: analytics
+    authority: authoritative
+    note: 원계약의 종료시점 현재 금액 의미로 사용하는 분석 binding
+  - ontology_stable_key: procurement.Contract.currentAmount
+    target_type: glossary_term
+    entity_type: glossaryTerm
+    fully_qualified_name: Procurement.ContractAmount
+    binding_type: represents
+    purpose: semantic_vocabulary
+    authority: authoritative
+  - ontology_stable_key: party.BusinessRegistration.businessRegistrationNumber
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.contract_suppliers.business_registration_number
+    binding_type: represents
+    purpose: identity
+    authority: authoritative
+  - ontology_stable_key: procurement.BidNotice.bidNoticeId
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.bid_notices.notice_number
+    binding_type: contributes_to
+    purpose: identity
+    authority: authoritative
+    note: notice_order와 함께 복합 식별자를 구성함
+  - ontology_stable_key: procurement.ProcurementLot.bidClassificationNumber
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.bid_opening_participants.bid_classification_number
+    binding_type: represents
+    purpose: identity
+    authority: authoritative
+  - ontology_stable_key: procurement.ProcurementLot.rebidNumber
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.bid_opening_participants.rebid_number
+    binding_type: represents
+    purpose: identity
+    authority: authoritative
+  - ontology_stable_key: procurement.BidParticipation.participationId
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.bid_opening_participants.participation_id
+    binding_type: represents
+    purpose: identity
+    authority: authoritative
+  - ontology_stable_key: procurement.ContractVersion.unifiedContractNumber
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.contracts.unified_contract_number
+    binding_type: represents
+    purpose: identity
+    authority: authoritative
+  - ontology_stable_key: procurement.ContractVersion.concludedDate
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.contracts.concluded_date
+    binding_type: represents
+    purpose: operational
+    authority: authoritative
+  - ontology_stable_key: procurement.ContractVersion.contractDate
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.contracts.contract_date
+    binding_type: represents
+    purpose: operational
+    authority: authoritative
+  - ontology_stable_key: procurement.ContractVersion.amount
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.contracts.current_contract_amount
+    binding_type: represents
+    purpose: operational
+    authority: authoritative

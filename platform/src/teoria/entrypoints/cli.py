@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import yaml
+import psycopg
 
 from teoria_provider.executor import ProviderExecutor
 from teoria_provider.secrets import EnvironmentSecretProvider
@@ -14,10 +15,16 @@ from teoria.registry.validator import RegistryValidator
 from teoria.persistence import apply_migrations
 from teoria.binding.repository import BindingRepository
 from teoria.binding.capability_manifest import CapabilityBindingManifest, apply_capability_binding_manifest
+from teoria.binding.openmetadata_manifest import OpenMetadataBindingManifest, apply_openmetadata_binding_manifest
 from teoria.ontology.migration import OntologyMigrationManifest, build_migration_report
 from teoria.ontology.authoring import OntologyAuthoringRepository
 from teoria.ontology.promotion import BusinessConceptPromotion, apply_business_concept_promotion
 from teoria.ontology.enrichment import OntologyEnrichmentManifest, apply_ontology_enrichment
+from teoria.ontology.blueprint import OntologyBlueprint, apply_ontology_blueprint
+from teoria.ontology.profiling import run_ontology_profile
+from teoria.ontology.rule_manifest import BusinessRuleManifest, apply_business_rule_manifest
+from teoria.ontology.shadow import validate_procurement_shadow
+from teoria.ontology.extension import OntologyExtensionManifest, apply_ontology_extension
 from teoria.registry.verification.source.graph import SourceVerificationServices, create_source_verification_graph
 
 
@@ -130,6 +137,23 @@ def main() -> int:
     enrichment_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/business-ontology-enrichment-v1.yaml"))
     enrichment_parser.add_argument("--actor", default="system:ontology-migration")
     enrichment_parser.add_argument("--publish", action="store_true")
+    blueprint_parser = subparsers.add_parser("apply-ontology-blueprint", help="create a reviewed ontology blueprint as a draft")
+    blueprint_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/teoria-business-ontology-v1.yaml"))
+    blueprint_parser.add_argument("--actor", default="system:ontology-migration")
+    metadata_binding_parser = subparsers.add_parser("plan-openmetadata-bindings", help="create draft bindings from a reviewed OpenMetadata manifest")
+    metadata_binding_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/teoria-openmetadata-bindings-v1.yaml"))
+    metadata_binding_parser.add_argument("--actor", default="system:ontology-migration")
+    rule_parser = subparsers.add_parser("apply-business-rules", help="add reviewed derivation rules to an ontology draft")
+    rule_parser.add_argument("--manifest", type=Path, default=Path("platform/ontology-migrations/teoria-business-rules-v1.yaml"))
+    rule_parser.add_argument("--actor", default="system:ontology-migration")
+    shadow_parser = subparsers.add_parser("validate-ontology-shadow", help="compare ontology identity rules with operational procurement data")
+    shadow_parser.add_argument("--bid-notice-id", required=True)
+    extension_parser = subparsers.add_parser("apply-ontology-extension", help="add reviewed objects and relationships to an ontology draft")
+    extension_parser.add_argument("--manifest", type=Path, required=True)
+    extension_parser.add_argument("--actor", default="system:ontology-migration")
+    profile_parser = subparsers.add_parser("profile-ontology-sources", help="profile Data DB identity and lifecycle coverage")
+    profile_parser.add_argument("--deep", action="store_true", help="include expensive cross-table collision and linkage checks")
+    profile_parser.add_argument("--statement-timeout-ms", type=int, default=30_000)
     _add_verify_parser(subparsers, settings)
     args = parser.parse_args()
 
@@ -224,6 +248,103 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
 
+    if args.command == "apply-ontology-blueprint":
+        if not settings.app_database_url:
+            print("ERROR TEORIA_APP_DATABASE_URL is required")
+            return 1
+        try:
+            result = apply_ontology_blueprint(
+                OntologyAuthoringRepository(settings.app_database_url),
+                OntologyBlueprint.load(args.manifest),
+                actor=args.actor,
+            )
+        except (OSError, ValueError) as exc:
+            print(f"ERROR ontology_blueprint_failed: {exc}")
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "plan-openmetadata-bindings":
+        if not settings.app_database_url:
+            print("ERROR TEORIA_APP_DATABASE_URL is required")
+            return 1
+        try:
+            result = apply_openmetadata_binding_manifest(
+                BindingRepository(settings.app_database_url),
+                OpenMetadataBindingManifest.load(args.manifest),
+                actor=args.actor,
+            )
+        except (OSError, ValueError) as exc:
+            print(f"ERROR openmetadata_binding_plan_failed: {exc}")
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "apply-business-rules":
+        if not settings.app_database_url:
+            print("ERROR TEORIA_APP_DATABASE_URL is required")
+            return 1
+        try:
+            result = apply_business_rule_manifest(
+                OntologyAuthoringRepository(settings.app_database_url),
+                BusinessRuleManifest.load(args.manifest),
+                actor=args.actor,
+            )
+        except (OSError, ValueError) as exc:
+            print(f"ERROR business_rule_manifest_failed: {exc}")
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "validate-ontology-shadow":
+        if not settings.admin_data_database_url:
+            print("ERROR TEORIA_ADMIN_DATA_DATABASE_URL is required")
+            return 1
+        try:
+            result = validate_procurement_shadow(
+                settings.admin_data_database_url,
+                args.bid_notice_id,
+            )
+        except (ValueError, LookupError, psycopg.Error) as exc:
+            print(f"ERROR ontology_shadow_validation_failed: {exc}")
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        return 0 if result["status"] in {"passed", "partial"} else 1
+
+    if args.command == "apply-ontology-extension":
+        if not settings.app_database_url:
+            print("ERROR TEORIA_APP_DATABASE_URL is required")
+            return 1
+        try:
+            result = apply_ontology_extension(
+                OntologyAuthoringRepository(settings.app_database_url),
+                OntologyExtensionManifest.load(args.manifest), actor=args.actor,
+            )
+        except (OSError, ValueError) as exc:
+            print(f"ERROR ontology_extension_failed: {exc}")
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "profile-ontology-sources":
+        if not settings.admin_data_database_url:
+            print("ERROR TEORIA_ADMIN_DATA_DATABASE_URL is required")
+            return 1
+        if args.statement_timeout_ms < 1:
+            print("ERROR --statement-timeout-ms must be positive")
+            return 1
+        try:
+            report = run_ontology_profile(
+                settings.admin_data_database_url,
+                include_deep=args.deep,
+                statement_timeout_ms=args.statement_timeout_ms,
+            )
+        except psycopg.Error as exc:
+            print(f"ERROR ontology_source_profile_failed: {exc}")
+            return 1
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0
+
     if args.command == "verify" and args.registry_type == "source":
         return asyncio.run(_verify_source(args, settings))
 
@@ -259,17 +380,17 @@ def main() -> int:
 
     source_count = 1 if args.source else len(catalog.sources)
     source_label = "source" if source_count == 1 else "sources"
-    ontology_count = len(catalog.ontologies)
+    runtime_contract_count = len(catalog.runtime_contracts)
     mapping_count = len(catalog.mappings)
     capability_count = len(catalog.capabilities)
     active_reference_count = sum(reference.status == "active" for reference in catalog.references.values())
     draft_reference_count = sum(reference.status == "draft" for reference in catalog.references.values())
     mapping_label = "mapping" if mapping_count == 1 else "mappings"
-    ontology_label = "ontology" if ontology_count == 1 else "ontologies"
+    runtime_contract_label = "runtime contract" if runtime_contract_count == 1 else "runtime contracts"
     active_reference_label = "reference" if active_reference_count == 1 else "references"
     draft_reference_label = "reference" if draft_reference_count == 1 else "references"
     print(
-        f"Validated {source_count} {source_label}, {ontology_count} {ontology_label}, "
+        f"Validated {source_count} {source_label}, {runtime_contract_count} {runtime_contract_label}, "
         f"{mapping_count} {mapping_label}, {len(catalog.data_types)} data types, "
         f"{len(catalog.value_sets)} value sets, {active_reference_count} active provider {active_reference_label}, "
         f"{draft_reference_count} draft provider {draft_reference_label}, and {capability_count} capabilities."

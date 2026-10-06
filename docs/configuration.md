@@ -32,13 +32,15 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_APP_DATABASE_URL` | 없음 | Ontology v2, Binding, Intelligence를 저장하는 Teoria Application DB URL |
 | `TEORIA_OPENMETADATA_ENABLED` | `false` | Admin API OpenMetadata integration 활성화 여부 |
 | `TEORIA_OPENMETADATA_BASE_URL` | `http://localhost:8585/api` | OpenMetadata REST API base URL |
-| `TEORIA_OPENMETADATA_AUTH_TOKEN` | 없음 | Backend 전용 OpenMetadata bot JWT |
+| `TEORIA_OPENMETADATA_AUTH_TOKEN` | Compose 개발환경에서는 `OPENMETADATA_INGESTION_BOT_TOKEN` fallback | Backend 전용 OpenMetadata bot JWT. 운영에서는 조회·검토에 필요한 최소권한 별도 토큰 권장 |
 | `TEORIA_OPENMETADATA_TIMEOUT_SECONDS` | `10` | OpenMetadata REST 요청 제한시간 |
 | `TEORIA_OPENMETADATA_VERIFY_SSL` | `true` | OpenMetadata TLS 인증서 검증 여부 |
 | `TEORIA_OPENMETADATA_DATABASE_SERVICE` | `teoria_postgresql` | 기본 Teoria PostgreSQL Database Service 이름 |
 | `OPENMETADATA_VERSION` | `1.12.6` | Server와 ephemeral ingestion image에 공통 적용하는 OpenMetadata 버전 |
 | `OPENMETADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata 전용 PostgreSQL 암호 |
 | `OPENMETADATA_INGESTION_BOT_TOKEN` | 없음 | 일회성 ingestion Job이 OpenMetadata REST API에 쓰는 bot JWT |
+| `TEORIA_CONTEXT_RUNTIME_API_URL` | `http://localhost:8000` | Context Engine이 승인된 Capability를 실행할 Runtime API 내부 주소 |
+| `TEORIA_CONTEXT_RUNTIME_API_TOKEN` | 없음 | Context Engine 전용 Runtime API service credential; Compose에서는 Runtime token을 주입 |
 | `TEORIA_METADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata PostgreSQL connector의 Teoria Data DB read-only 암호 |
 | `TEORIA_LOCAL_PLATFORM_DB_PASSWORD` | 로컬 개발값 | Compose의 Control/Application PostgreSQL 관리 계정 암호 |
 | `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | checksum이 일치하는 Published Registry만 Runtime에서 허용 |

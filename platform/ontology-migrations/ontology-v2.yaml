@@ -1,5 +1,5 @@
 schema_version: "1.0"
-source_registry_release: "2026.10.04.13"
+source_registry_release: "2026.10.06.1"
 target_ontology: procurement
 classifications:
   BUSINESS_CONCEPT: 지속 가능한 업무 의미로 Ontology v2 승격 대상
@@ -31,9 +31,6 @@ objects:
   public_procurement.company_similar_project_experience: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 유사사업 경험 조회 응답}
   public_procurement.organization_company_relationship: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 기관 업체 관계 집계 응답}
   public_procurement.bid_project_lineage: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 사업 계보 판정 응답}
-  public_procurement.similar_bid_notice: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 유사 공고 검색 결과}
-  public_procurement.bid_relevant_company: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 주목 업체 분석 결과}
-  public_procurement.bid_organization_field_company: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 기관 분야 업체 집계 응답}
   public_procurement.bid_notice: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.BidNotice, rationale: 조달 공고 업무 객체}
   public_procurement.bid_requirement_set: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.BidRequirementSet, rationale: 공고 참가요건의 논리 집합}
   public_procurement.bid_requirement: {classification: BUSINESS_CONCEPT, migration_status: mapped, target_stable_key: procurement.BidRequirement, rationale: 개별 참가요건}

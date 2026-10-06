@@ -11,11 +11,15 @@ from teoria.registry.loader import RegistryCatalog
 
 
 class CapabilityBindingSeed(BaseModel):
+    ontology_namespace: str | None = None
     ontology_stable_key: str
     capability_id: str
     target_scope: Literal["capability", "input", "output"]
     field_path: str | None = None
     binding_type: str
+    purpose: str = "runtime_semantic_resolution"
+    authority: Literal["authoritative", "preferred", "supplemental"] = "preferred"
+    priority: int = Field(default=100, ge=0)
 
 
 class CapabilityBindingManifest(BaseModel):
@@ -54,7 +58,10 @@ def apply_capability_binding_manifest(
     created = []
     unchanged = []
     for item in manifest.bindings:
-        concept = repository.get_published_concept(item.ontology_stable_key)
+        concept = repository.get_published_concept(
+            item.ontology_stable_key,
+            ontology_namespace=item.ontology_namespace,
+        )
         if concept is None:
             raise ValueError(f"Unknown published ontology concept: {item.ontology_stable_key}")
         target_type = {
@@ -83,9 +90,9 @@ def apply_capability_binding_manifest(
             contract_version=registry_version,
             registry_version=registry_version,
             binding_type=item.binding_type,
-            purpose="runtime_semantic_resolution",
-            authority="preferred",
-            priority=100,
+            purpose=item.purpose,
+            authority=item.authority,
+            priority=item.priority,
             confidence=1.0,
             provenance={"source": "reviewed_manifest", "manifest_version": manifest.schema_version},
             created_by=actor,

@@ -2062,6 +2062,10 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
 ]
+metadata-orchestration = [
+    { name = "docker" },
+    { name = "prefect" },
+]
 orchestration = [
     { name = "prefect" },
 ]
@@ -2090,6 +2094,10 @@ dev = [
     { name = "prefect", specifier = ">=3,<4" },
     { name = "pytest", specifier = ">=8,<9" },
     { name = "pytest-asyncio", specifier = ">=0.24,<2" },
+]
+metadata-orchestration = [
+    { name = "docker", specifier = ">=7,<8" },
+    { name = "prefect", specifier = ">=3,<4" },
 ]
 orchestration = [{ name = "prefect", specifier = ">=3,<4" }]
 validation = [{ name = "teoria-platform", editable = "platform" }]

@@ -20,6 +20,11 @@ The ingestion Job uses the official image pinned to the same version as the
 server. Connector code remains in that image and is not installed in the
 normal Teoria Prefect worker.
 
+The repository builds a thin `teoria-openmetadata-ingestion` image from that
+official image. It adds only the non-secret workflow YAML. Baking the workflow
+avoids host bind-path differences between the Compose client and Docker daemon;
+credentials are still injected only at runtime.
+
 ## Development deployment
 
 The `metadata` Compose profile contains only:
@@ -50,6 +55,19 @@ Docker socket access merely to run metadata ingestion. Development automation
 must use a dedicated Docker work pool/worker. Production k3s automation must
 use a dedicated Kubernetes work pool that creates an ephemeral Job from the
 same pinned image.
+
+Compose provides the opt-in `metadata-orchestration` profile and the dedicated
+`teoria-metadata` process pool. Only `prefect-metadata-worker` receives the
+Docker socket. The normal ingestion and AI workers cannot launch containers.
+Because the Docker socket is host-privileged, this profile is for a trusted
+single-host development deployment only. Kubernetes must use its API and a
+namespaced ServiceAccount instead of mounting a container-runtime socket.
+
+The deployment is isolated in `pipelines/prefect.metadata.yaml`, so it is only
+registered when the `metadata-orchestration` profile is enabled. Generate a
+dedicated least-privilege OpenMetadata ingestion-bot token and set
+`OPENMETADATA_INGESTION_BOT_TOKEN` before starting that profile. Its daily
+05:00 Asia/Seoul schedule is active once registered.
 
 The Prefect deployment owns:
 

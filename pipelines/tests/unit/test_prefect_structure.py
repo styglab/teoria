@@ -382,6 +382,29 @@ def test_incremental_deployment_prevents_overlapping_runs() -> None:
     }
 
 
+def test_openmetadata_ingestion_uses_isolated_worker_and_is_opt_in() -> None:
+    prefect = yaml.safe_load(
+        (PIPELINES / "prefect.metadata.yaml").read_text(encoding="utf-8")
+    )
+    deployment = next(
+        item
+        for item in prefect["deployments"]
+        if item["name"] == "openmetadata-postgres-metadata-sync"
+    )
+
+    assert deployment["work_pool"]["name"] == "teoria-metadata"
+    assert deployment["parameters"] == {
+        "image": "teoria-openmetadata-ingestion:1.12.6",
+        "network": "teoria_default",
+        "timeout_seconds": 1800,
+    }
+    assert deployment["schedules"][0] == {
+        "cron": "0 5 * * *",
+        "timezone": "Asia/Seoul",
+        "active": True,
+    }
+
+
 def test_operation_task_retries_once_after_five_minutes() -> None:
     assert extract_contract_operation.retries == 1
     assert extract_contract_operation.retry_delay_seconds == 300

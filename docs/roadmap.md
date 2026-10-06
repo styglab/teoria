@@ -18,7 +18,7 @@ OpenMetadata asset
 
 첫 reference slice는 OpenMetadata Column
 `public_procurement.contracts.current_contract_amount`와 Stable Concept
-`procurement.Contract.amount`다.
+`procurement.Contract.currentAmount`다.
 
 ## 현재 상태
 
@@ -26,22 +26,24 @@ OpenMetadata asset
 |---|---|---|
 | Prefect/Data Operations | 운영 중 | 수집, backfill, normalization, checkpoint |
 | OpenMetadata Foundation | 구현 | PostgreSQL ingestion과 REST gateway |
-| Business Ontology v2 | 구현 | 23개 legacy Business Concept 매핑, company 0.1.0 / procurement 0.4.0 게시 |
+| Business Ontology v2 | 구현 | 23개 legacy Business Concept을 통합 `teoria` 온톨로지로 이전, 0.1.1 게시 |
 | Ontology Authoring API | 구현 | validation, diff, audit, publish artifact |
 | Semantic Binding | 구현 | Stable Concept 중심 |
 | Binding Governance/UI | 구현 | draft, approve, reject, deprecate |
-| Capability Runtime | 운영 중 | Registry 기반 실행, 검증된 Capability target 8개 연결 |
-| Ontology Authoring UI | 최소 UI 구현 | 버전 조회, Draft 생성, submit/approve/publish |
+| Capability Runtime | 운영 중 | Registry 기반 실행, 검증된 Capability target 11개 연결 및 coverage report |
+| Ontology Authoring UI | 검토 UI 구현 | 그래프 탐색, 도메인 필터, 버전 diff, validation/Binding impact, lifecycle |
 | Metadata Intelligence | 첫 vertical slice 구현 | Column 후보 생성, evidence/version 검증, 승인 시 Binding Draft |
-| Runtime Artifact consumption | 전환 필요 | artifact 생성은 구현됨 |
-| Context Engine | 미구현 | Contract.amount로 시작 |
+| Runtime Artifact consumption | 첫 read slice 구현 | Context resolver가 checksum을 검증한 Published Artifact만 사용, Runtime 전체 전환은 필요 |
+| Context Engine | 첫 vertical slice 구현 | `계약금액` → Contract.amount → 목적별 Metadata/API/Capability 실행 경로 |
 | Semantic MCP | 미구현 | Context Engine 이후 |
 | OIDC | 운영 전 필요 | 현재 Bearer/role 경계 사용 |
 
 ## Milestone 1 — Minimal Ontology Authoring UI
 
-상태: **첫 운영 가능 버전 구현**. 고급 Object/Property 편집기와 semantic
-diff 시각화는 다음 반복에서 보강한다.
+상태: **검토 가능한 첫 운영 버전 구현**. Business Object/Relationship
+그래프, 도메인·검색 필터, Stable Concept diff, validation과 Binding impact를
+한 화면에서 확인할 수 있다. 다음 반복에서는 Draft Object/Property 편집과
+그래프 기반 Relationship authoring을 보강한다.
 
 목표는 Ontology Studio가 아니라 AI가 만든 Ontology Suggestion을 사람이
 검토할 수 있는 최소 authoring surface다.
@@ -105,7 +107,7 @@ provider 정책이 준비된 뒤 추가한다.
   },
   "candidate": {
     "ontology_concept_id": "...",
-    "stable_key": "procurement.Contract.amount",
+    "stable_key": "procurement.Contract.currentAmount",
     "ontology_version": "0.3.0"
   },
   "confidence": 0.97,
@@ -160,6 +162,14 @@ provider 정책이 준비된 뒤 추가한다.
 
 ## Milestone 5 — Context Engine vertical slice
 
+상태: **첫 read-only vertical slice 구현**. Admin API의
+`GET /v1/admin/context/resolve?term=계약금액`이 Published Artifact의
+checksum을 검증하고 승인된 OpenMetadata 및 Capability Binding만 조합한다.
+또한 `POST /v1/admin/context/query`는 첫 제한된 질문 형식에서 기관을
+식별하고 최근 N개 회계연도를 계산하여 기존 Capability Runtime을 실제
+실행한다. 일반 자연어 intent resolution과 다른 Business Concept 확장은
+다음 반복 범위다.
+
 입력 `계약금액`을 다음 Context Package로 해석한다.
 
 - Stable Concept `Contract.amount`
@@ -171,7 +181,19 @@ provider 정책이 준비된 뒤 추가한다.
 Context Engine은 OpenMetadata JSON이나 전체 Ontology를 Agent에게 그대로
 전달하지 않는다. 요청에 필요한 최소 context만 조합한다.
 
+`Contract.amount`는 `purpose=analytics`일 때 승인된
+`search_public_procurement_contracts` Binding을 선택한다. `purpose=realtime`은
+승인된 실시간 Capability가 있을 때만 선택하며, 검증된 Source Registry 계약이
+없는 API Field를 이름만으로 생성하지 않는다. Capability 의미 연결 현황은
+`GET /v1/admin/bindings/capability-coverage`에서 확인한다.
+
 ## Milestone 6 — Semantic MCP / SDK
+
+Milestone 6에 앞서 조달 Business Ontology를 현실의 객체·사건·관계 기준으로
+재검토한다. 상세 기준과 migration 순서는
+[Procurement Ontology redesign](architecture/procurement-ontology-redesign.md)을
+따른다. `ProcurementCase`, 공고 계보, 공동수급 association event와 계약 버전이
+게시되기 전에는 Capability Binding 커버리지를 기계적으로 확대하지 않는다.
 
 첫 MCP 도구:
 

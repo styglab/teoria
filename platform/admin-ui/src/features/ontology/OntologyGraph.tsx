@@ -12,7 +12,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import type { LinkEdge, ObjectNode, OntologyGraph as GraphData } from "../../api/admin";
+import type { LinkEdge, ObjectNode, RuntimeContractGraph as GraphData } from "../../api/admin";
 import { FloatingEdge } from "./FloatingEdge";
 import { ObjectTypeNode } from "./ObjectTypeNode";
 

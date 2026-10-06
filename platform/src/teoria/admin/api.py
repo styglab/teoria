@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from teoria.admin.ontology_graph import build_ontology_graph
+from teoria.admin.ontology_graph import build_runtime_contract_graph
 from teoria.admin.overview import build_registry_overview
 from teoria.admin.bid_check import BidCheckReader
 from teoria.admin.metadata_api import create_metadata_router
@@ -14,7 +14,11 @@ from teoria.admin.intelligence_api import create_intelligence_router
 from teoria.admin.auth import AdminAuthorizer
 from teoria.admin.binding_api import create_binding_router
 from teoria.admin.ontology_authoring_api import create_ontology_authoring_router
+from teoria.admin.context_api import create_context_router
 from teoria.binding.repository import BindingRepository
+from teoria.context import ContextEngine
+from teoria.context.repository import ContextRepository
+from teoria.context.runtime_client import ContextRuntimeClient
 from teoria.intelligence.repository import SuggestionRepository
 from teoria.intelligence.service import SuggestionService
 from teoria.ontology.authoring import OntologyAuthoringRepository
@@ -33,6 +37,7 @@ def create_admin_app(
     metadata_service: OpenMetadataService | None = None,
     binding_repository: BindingRepository | None = None,
     suggestion_repository: SuggestionRepository | None = None,
+    context_engine: ContextEngine | None = None,
 ) -> FastAPI:
     resolved_settings = settings or bootstrap_settings()
     authorizer = AdminAuthorizer(resolved_settings)
@@ -65,6 +70,18 @@ def create_admin_app(
             base_url=resolved_settings.openmetadata_base_url,
             database_service=resolved_settings.openmetadata_database_service,
         )
+    resolved_context_engine = context_engine or (
+        ContextEngine(
+            ContextRepository(resolved_settings.app_database_url),
+            resolved_metadata_service.client if resolved_metadata_service else None,
+            ContextRuntimeClient(
+                resolved_settings.context_runtime_api_url,
+                resolved_settings.context_runtime_api_token,
+                timeout_seconds=resolved_settings.context_runtime_timeout_seconds,
+            ) if resolved_settings.context_runtime_api_token else None,
+        )
+        if resolved_settings.app_database_url else None
+    )
     app = FastAPI(
         title="Teoria Admin API",
         version="1.0.0",
@@ -90,6 +107,7 @@ def create_admin_app(
         ) if resolved_suggestion_repository else None,
         authorizer,
     ))
+    app.include_router(create_context_router(resolved_context_engine))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -105,10 +123,8 @@ def create_admin_app(
             return {"version": None, "git_commit": None, "checksum": None, "published_at": None, "status": "draft"}
         return resolved_catalog.release.public_dict()
 
-    @app.get("/v1/admin/ontologies")
-    async def list_ontologies() -> dict[str, list[dict[str, Any]]]:
-        return {
-            "ontologies": [
+    def runtime_contract_summaries() -> list[dict[str, Any]]:
+        return [
                 {
                     "id": ontology.id,
                     "name": ontology.name,
@@ -116,9 +132,12 @@ def create_admin_app(
                     "object_count": len(ontology.object_types),
                     "link_count": len(ontology.link_types),
                 }
-                for ontology in resolved_catalog.ontologies.values()
+                for ontology in resolved_catalog.runtime_contracts.values()
             ]
-        }
+
+    @app.get("/v1/admin/runtime-contracts")
+    async def list_runtime_contracts() -> dict[str, list[dict[str, Any]]]:
+        return {"runtime_contracts": runtime_contract_summaries()}
 
     @app.get("/v1/admin/ontology-migration")
     async def ontology_migration() -> dict[str, Any]:
@@ -255,13 +274,21 @@ def create_admin_app(
             raise HTTPException(status_code=503, detail={"code": "bid_check_database_unavailable"})
         return {"requirements": resolved_bid_reader.get_requirements(bid_notice_id)}
 
-    @app.get("/v1/admin/ontologies/{ontology_id}/graph")
-    async def ontology_graph(ontology_id: str) -> dict[str, Any]:
-        if ontology_id == "all":
-            return build_ontology_graph(resolved_catalog, list(resolved_catalog.ontologies))
-        if ontology_id not in resolved_catalog.ontologies:
-            raise HTTPException(status_code=404, detail={"code": "ontology_not_found", "message": ontology_id})
-        return build_ontology_graph(resolved_catalog, [ontology_id])
+    def runtime_contract_graph(runtime_contract_id: str) -> dict[str, Any]:
+        if runtime_contract_id == "all":
+            return build_runtime_contract_graph(
+                resolved_catalog, list(resolved_catalog.runtime_contracts),
+            )
+        if runtime_contract_id not in resolved_catalog.runtime_contracts:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "runtime_contract_not_found", "message": runtime_contract_id},
+            )
+        return build_runtime_contract_graph(resolved_catalog, [runtime_contract_id])
+
+    @app.get("/v1/admin/runtime-contracts/{runtime_contract_id}/graph")
+    async def get_runtime_contract_graph(runtime_contract_id: str) -> dict[str, Any]:
+        return runtime_contract_graph(runtime_contract_id)
 
     return app
 

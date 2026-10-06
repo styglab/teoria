@@ -27,6 +27,7 @@ COPY --chown=teoria:teoria pipelines/definitions ./pipelines/definitions
 COPY --chown=teoria:teoria pipelines/references ./pipelines/references
 COPY --chown=teoria:teoria pipelines/database ./pipelines/database
 COPY --chown=teoria:teoria pipelines/prefect.yaml ./pipelines/prefect.yaml
+COPY --chown=teoria:teoria pipelines/prefect.metadata.yaml ./pipelines/prefect.metadata.yaml
 
 USER teoria
 ENV TEORIA_PIPELINE_PATH=/app/pipelines
@@ -47,6 +48,23 @@ RUN mkdir -p /work /home/teoria/.codex \
 USER teoria
 ENV CODEX_HOME=/home/teoria/.codex
 CMD ["prefect", "worker", "start", "--pool", "teoria-ai-extraction"]
+
+FROM base AS metadata-worker
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --package teoria-pipelines --no-dev --group metadata-orchestration --no-editable
+
+COPY pipelines/connectors ./pipelines/connectors
+COPY pipelines/definitions ./pipelines/definitions
+COPY pipelines/references ./pipelines/references
+COPY pipelines/database ./pipelines/database
+COPY pipelines/prefect.yaml ./pipelines/prefect.yaml
+COPY pipelines/prefect.metadata.yaml ./pipelines/prefect.metadata.yaml
+
+# Docker socket access is intentionally isolated to this worker. The worker
+# launches only the pinned OpenMetadata ingestion image and owns no connector
+# implementation itself.
+CMD ["prefect", "worker", "start", "--pool", "teoria-metadata"]
 
 FROM base AS check
 

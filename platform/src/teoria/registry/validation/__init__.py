@@ -1,4 +1,4 @@
-from teoria.registry.validation.ontology import validate_ontologies, validate_value_sets
+from teoria.registry.validation.runtime_contract import validate_runtime_contracts, validate_value_sets
 from teoria.registry.validation.reference import validate_references
 
-__all__ = ["validate_ontologies", "validate_references", "validate_value_sets"]
+__all__ = ["validate_references", "validate_runtime_contracts", "validate_value_sets"]

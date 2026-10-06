@@ -45,15 +45,19 @@ def rank_binding_candidates(
         if concept["concept_kind"] != "property":
             continue
         concept_name = str(concept.get("name") or concept["stable_key"].rsplit(".", 1)[-1])
+        concept_code = str(concept.get("code") or concept["stable_key"].rsplit(".", 1)[-1])
         concept_description = str(concept.get("description") or "")
-        name_score = SequenceMatcher(None, normalize(column_name), normalize(concept_name)).ratio()
-        overlap = column_tokens & (tokens(concept_name) | tokens(concept_description))
+        name_score = max(
+            SequenceMatcher(None, normalize(column_name), normalize(concept_name)).ratio(),
+            SequenceMatcher(None, normalize(column_name), normalize(concept_code)).ratio(),
+        )
+        overlap = column_tokens & (tokens(concept_name) | tokens(concept_code) | tokens(concept_description))
         token_score = len(overlap) / max(len(column_tokens), 1)
         datatype_score = _datatype_compatibility(column.get("dataType"), concept.get("value_type"))
         glossary_score = _glossary_match(column.get("tags") or [], concept_name)
         score = 0.45 * name_score + 0.20 * token_score + 0.20 * datatype_score + 0.15 * glossary_score
         evidence = [
-            {"type": "normalized_name_similarity", "score": round(name_score, 6)},
+            {"type": "normalized_name_similarity", "score": round(name_score, 6), "property_code": concept_code},
             {"type": "token_overlap", "score": round(token_score, 6), "tokens": sorted(overlap)},
             {"type": "datatype_compatibility", "score": round(datatype_score, 6)},
         ]

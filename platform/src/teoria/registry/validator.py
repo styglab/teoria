@@ -8,12 +8,12 @@ from typing import Any, Union, get_args, get_origin, get_type_hints
 
 from teoria.registry.diagnostics import Diagnostic
 from teoria.registry.loader import RegistryCatalog
-from teoria.registry.validation import validate_ontologies, validate_references, validate_value_sets
+from teoria.registry.validation import validate_references, validate_runtime_contracts, validate_value_sets
 from teoria.registry.validation.duplicates import check_duplicates
 from teoria_provider.validator import ProviderContractValidator
 
 BUILTIN_DATA_TYPES = {"string", "integer", "number", "boolean"}
-ONTOLOGY_BUILTIN_DATA_TYPES = BUILTIN_DATA_TYPES | {"date", "datetime"}
+RUNTIME_CONTRACT_BUILTIN_DATA_TYPES = BUILTIN_DATA_TYPES | {"date", "datetime"}
 
 
 class RegistryValidator:
@@ -41,7 +41,7 @@ class RegistryValidator:
 
         validate_value_sets(catalog, diagnostics)
         validate_references(catalog, diagnostics)
-        validate_ontologies(catalog, diagnostics)
+        validate_runtime_contracts(catalog, diagnostics)
         self._validate_mappings(catalog, diagnostics)
         self._validate_capabilities(catalog, diagnostics)
         self._validate_eligibility_rules(catalog, diagnostics)
@@ -61,11 +61,11 @@ class RegistryValidator:
                 diagnostics.append(Diagnostic("unknown_rule_evaluator", f"unknown rule evaluator '{rule.evaluator}'", path, location=f"eligibility_rules.{rule_id}.evaluator"))
             self._check_duplicates([item.id for item in rule.arguments], "rule_argument", path, diagnostics, f"eligibility_rules.{rule_id}.arguments")
             for argument in rule.arguments:
-                if argument.data_type not in ONTOLOGY_BUILTIN_DATA_TYPES and argument.data_type not in catalog.data_types:
+                if argument.data_type not in RUNTIME_CONTRACT_BUILTIN_DATA_TYPES and argument.data_type not in catalog.data_types:
                     diagnostics.append(Diagnostic("unknown_data_type", f"unknown data type '{argument.data_type}'", path, location=f"eligibility_rules.{rule_id}.arguments.{argument.id}.data_type"))
             for index, reference in enumerate(rule.required_facts):
                 parts = reference.split(".")
-                ontology = catalog.ontologies.get(parts[0]) if len(parts) == 3 else None
+                ontology = catalog.runtime_contracts.get(parts[0]) if len(parts) == 3 else None
                 obj = next((item for item in ontology.object_types if item.id == parts[1]), None) if ontology else None
                 if obj is None or parts[2] not in {item.id for item in obj.properties}:
                     diagnostics.append(Diagnostic("unknown_rule_fact", f"unknown ontology property '{reference}'", path, location=f"eligibility_rules.{rule_id}.required_facts.{index}"))
@@ -113,7 +113,7 @@ class RegistryValidator:
                 f"{location}.fields",
                 diagnostics,
                 require_id=True,
-                allowed_builtin_types=ONTOLOGY_BUILTIN_DATA_TYPES,
+                allowed_builtin_types=RUNTIME_CONTRACT_BUILTIN_DATA_TYPES,
             )
             self._check_required(relation.fields, relation.primary_key, path, location, diagnostics)
 
@@ -143,7 +143,7 @@ class RegistryValidator:
                 for index, reference in enumerate(getattr(capability.effects, effect_name)):
                     location = f"capability.effects.{effect_name}.{index}"
                     parts = reference.split(".")
-                    ontology = catalog.ontologies.get(parts[0])
+                    ontology = catalog.runtime_contracts.get(parts[0])
                     obj = next(
                         (item for item in ontology.object_types if item.id == parts[1]),
                         None,
@@ -156,11 +156,11 @@ class RegistryValidator:
             input_leaves = list(self._capability_input_leaves(capability.inputs))
             for input_id, input_definition in input_leaves:
                 location = f"capability.inputs.{input_id}"
-                if input_definition.data_type and input_definition.data_type not in ONTOLOGY_BUILTIN_DATA_TYPES and input_definition.data_type not in catalog.data_types:
+                if input_definition.data_type and input_definition.data_type not in RUNTIME_CONTRACT_BUILTIN_DATA_TYPES and input_definition.data_type not in catalog.data_types:
                     diagnostics.append(Diagnostic("unknown_data_type", f"unknown data type '{input_definition.data_type}'", path, location=location))
                 if input_definition.property:
                     parts = input_definition.property.split(".")
-                    ontology = catalog.ontologies.get(parts[0]) if len(parts) == 3 else None
+                    ontology = catalog.runtime_contracts.get(parts[0]) if len(parts) == 3 else None
                     obj = next((item for item in ontology.object_types if item.id == parts[1]), None) if ontology else None
                     if obj is None or parts[2] not in {item.id for item in obj.properties}:
                         diagnostics.append(Diagnostic("unknown_capability_input_property", f"unknown ontology property '{input_definition.property}'", path, location=location))
@@ -222,7 +222,7 @@ class RegistryValidator:
 
             for index, reference in enumerate(capability.returns):
                 parts = reference.split(".")
-                ontology = catalog.ontologies.get(parts[0]) if len(parts) == 2 else None
+                ontology = catalog.runtime_contracts.get(parts[0]) if len(parts) == 2 else None
                 known = set()
                 if ontology:
                     known = {item.id for item in ontology.object_types} | {item.id for item in ontology.link_types}
@@ -284,7 +284,7 @@ class RegistryValidator:
             path = catalog.mapping_paths[mapping_id]
             if path.stem != mapping.id:
                 diagnostics.append(Diagnostic("mapping_filename_mismatch", f"filename must match mapping id '{mapping.id}.yaml'", path, location="mapping.id"))
-            ontology = catalog.ontologies.get(mapping.ontology)
+            ontology = catalog.runtime_contracts.get(mapping.ontology)
             if ontology is None:
                 diagnostics.append(Diagnostic("unknown_mapping_ontology", f"unknown ontology '{mapping.ontology}'", path, location="mapping.ontology"))
                 continue
@@ -295,8 +295,8 @@ class RegistryValidator:
                 if len(parts) == 2:
                     target_ontology = ontology
                     object_id, property_id = parts
-                elif len(parts) == 3 and parts[0] in catalog.ontologies:
-                    target_ontology = catalog.ontologies[parts[0]]
+                elif len(parts) == 3 and parts[0] in catalog.runtime_contracts:
+                    target_ontology = catalog.runtime_contracts[parts[0]]
                     object_id, property_id = parts[1:]
                 else:
                     diagnostics.append(Diagnostic("unknown_mapping_target", f"unknown mapping target '{target}'", path, location=location))
@@ -358,7 +358,7 @@ class RegistryValidator:
                 for role, spec in materialization.objects.items():
                     if "." in spec.type:
                         object_ontology_id, object_type_id = spec.type.split(".", 1)
-                        object_ontology = catalog.ontologies.get(object_ontology_id)
+                        object_ontology = catalog.runtime_contracts.get(object_ontology_id)
                         obj = next(
                             (item for item in object_ontology.object_types if item.id == object_type_id),
                             None,

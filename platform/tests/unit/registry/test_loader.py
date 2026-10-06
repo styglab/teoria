@@ -1,9 +1,10 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
-from teoria.registry.schema import ReferenceFile
+from teoria.registry.schema import ReferenceFile, RuntimeContractRegistry
 from teoria.registry.validator import RegistryValidator
 
 
@@ -25,7 +26,8 @@ def test_loads_current_registries() -> None:
         "teoria_public_procurement",
     }
     assert "business_registration_number" in catalog.data_types
-    assert set(catalog.ontologies) == {"assessment", "company", "public_procurement"}
+    assert set(catalog.runtime_contracts) == {"assessment", "company", "public_procurement"}
+    assert all(path.name == "runtime_contract.yaml" for path in catalog.runtime_contract_paths.values())
     assert "business_operating_status_kr" in catalog.value_sets
     assert "holds_valid_direct_production_confirmation" in catalog.eligibility_rules
     assert catalog.eligibility_rules["is_valid_women_owned_business"].evaluator == "qualification_valid"
@@ -47,18 +49,15 @@ def test_loads_current_registries() -> None:
         "assess_company_bid_eligibilities",
         "assess_company_bid_eligibility",
             "analyze_company_competitors",
-            "analyze_bid_organization_field_companies",
             "analyze_bid_participation_context",
             "analyze_organization_procurement_profile",
             "analyze_company_procurement_profile",
-        "find_bid_relevant_companies",
         "find_bid_project_lineage",
         "get_organization_company_relationship",
             "get_company_similar_project_experience",
             "get_bid_notice_relationship_context",
             "get_bid_notice_participations",
             "search_bid_related_projects",
-        "find_similar_bid_notices",
         "get_business_registration_status",
         "get_company_financials",
         "get_company_detail_context",
@@ -100,6 +99,31 @@ def test_loads_current_registries() -> None:
             "get_direct_production_confirmations",
             "get_company_bid_qualification_profile",
         }
+
+
+def test_runtime_contract_schema_rejects_the_removed_ontology_root_key() -> None:
+    with pytest.raises(ValidationError):
+        RuntimeContractRegistry.model_validate(
+            {
+                "registry": {"version": "1.0.0", "registered_at": "2026-10-06"},
+                "ontology": {
+                    "id": "legacy",
+                    "name": "Legacy contract",
+                    "description": "Compatibility document",
+                    "object_types": [
+                        {
+                            "id": "item",
+                            "name": "Item",
+                            "description": "Compatibility object",
+                            "primary_key": "id",
+                            "properties": [
+                                {"id": "id", "name": "ID", "description": "ID", "data_type": "string"}
+                            ],
+                        }
+                    ],
+                },
+            }
+        )
 
 
 def test_current_registries_have_resolvable_references() -> None:

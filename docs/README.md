@@ -8,6 +8,9 @@
 
 - [Architecture](architecture/overview.md): 전체 구성
 - [AI-Native Metadata Platform](architecture/ai-native-metadata-platform.md): Metadata·Ontology·Binding 권위와 목표 구조
+- [Procurement Ontology Redesign](architecture/procurement-ontology-redesign.md): Palantir식 객체·사건·링크 원칙과 조달 Ontology 재구축안
+- [Source-to-Object Matrix](architecture/source-to-object-matrix.md): 다중 원천의 객체·식별자·관찰·권위·충돌 정책
+- [Ontology Source Profile](architecture/ontology-source-profile-2026-10-06.md): 운영 데이터의 식별·계보·연결·완전성 baseline
 - [Repository Structure](architecture/repository-structure.md): 프로젝트 소유권과 의존
 - [Semantic Governance](architecture/semantic-governance.md): 인증, 승인, Binding 생명주기와 조달 Ontology v2
 - [Ontology Authoring](architecture/ontology-authoring.md): Stable Concept, version lifecycle, publish artifact
@@ -24,7 +27,7 @@
 - [공통 원칙](registry/common.md)
 - [Data Type과 Value Set](registry/core_registry.md)
 - [Source](registry/source_registry.md) / [작성 절차](registry/source-authoring.md)
-- [Ontology](registry/ontology_registry.md)
+- [Runtime Contract Registry](registry/runtime-contract-registry.md)
 - [Mapping](../platform/registries/domains/company/mappings/README.md)
 - [Capability](../platform/registries/domains/company/capabilities/README.md)
 - [Validation](registry/validation.md)

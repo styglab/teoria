@@ -26,7 +26,14 @@ database SQL and direct reads of OpenMetadata tables are prohibited.
 
 | Database | Role | Consumer |
 |---|---|---|
-| `teoria_data` | `teoria_pipeline` / `teoria_runtime` / `teoria_metadata` | Prefect writes, Runtime reads, OpenMetadata scans |
+| `teoria_data` | `teoria_pipeline` / `teoria_runtime` / `teoria_metadata` | Prefect writes, Runtime reads, OpenMetadata scans business schemas |
+
+`teoria_metadata` has read access to the canonical `public_procurement` schema,
+not the operational `ingestion` schema. Raw payloads, checkpoints, retry queues,
+and pipeline audit tables are DataOps implementation state and are excluded from
+the default business metadata catalog. If they need cataloging for platform
+operations, register them later as a separate opt-in OpenMetadata service/domain
+with separate access policy.
 | `teoria_app` | `teoria_app` | Admin API and ontology/binding migrations |
 | `prefect` | `prefect` | Prefect Server and background services |
 | `openmetadata_db` | `openmetadata_user` | OpenMetadata Server and migrations |
@@ -61,6 +68,23 @@ restart the old database containers with their original volumes. Any writes
 accepted by `platform-postgres` after cutover must be reconciled before
 rollback; therefore rollback should happen before normal operation resumes or
 after taking a fresh dump from the new databases.
+
+## Backup
+
+Create a consistent set of logical custom-format archives for the Data Plane
+and all three Control Plane databases:
+
+```bash
+TEORIA_BACKUP_ROOT=/secure/teoria-backups \
+  deploy/compose/postgres/backup.sh
+```
+
+The script creates a UTC timestamp directory containing four `.dump` files,
+the PostgreSQL server versions, and `SHA256SUMS`. It never deletes previous
+backups. Store the directory outside the repository and Docker volumes, copy it
+to durable encrypted storage, and test restore into disposable databases. A
+backup is not considered operational until checksum verification and a restore
+test have succeeded.
 
 ## Future split triggers
 

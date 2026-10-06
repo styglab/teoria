@@ -5,7 +5,7 @@ from typing import Any
 
 from teoria.registry.loader import RegistryCatalog
 from teoria.registry.schema.capability import CapabilityDefinition, CapabilityInput
-from teoria.registry.schema.ontology import OntologyProperty
+from teoria.registry.schema.runtime_contract import RuntimeContractProperty
 
 
 BUILTIN_TYPES: dict[str, dict[str, Any]] = {
@@ -68,7 +68,7 @@ def _input_schema(catalog: RegistryCatalog, definition: CapabilityInput) -> dict
 def _type_schema(
     catalog: RegistryCatalog,
     type_id: str,
-    property_definition: OntologyProperty | None,
+    property_definition: RuntimeContractProperty | None,
 ) -> dict[str, Any]:
     description = property_definition.description if property_definition else None
     if property_definition and property_definition.value_set:
@@ -107,7 +107,7 @@ def _coerce_input(catalog: RegistryCatalog, definition: CapabilityInput, value: 
     return value
 
 
-def _effective_type(property_definition: OntologyProperty | None, definition: CapabilityInput) -> str:
+def _effective_type(property_definition: RuntimeContractProperty | None, definition: CapabilityInput) -> str:
     if definition.data_type:
         return definition.data_type
     if property_definition and property_definition.value_set:
@@ -116,9 +116,9 @@ def _effective_type(property_definition: OntologyProperty | None, definition: Ca
     return property_definition.data_type
 
 
-def _resolve_property(catalog: RegistryCatalog, reference: str | None) -> OntologyProperty:
+def _resolve_property(catalog: RegistryCatalog, reference: str | None) -> RuntimeContractProperty:
     if not reference:
         raise ValueError("property reference is required")
     ontology_id, object_id, property_id = reference.split(".")
-    object_type = next(item for item in catalog.ontologies[ontology_id].object_types if item.id == object_id)
+    object_type = next(item for item in catalog.runtime_contracts[ontology_id].object_types if item.id == object_id)
     return next(item for item in object_type.properties if item.id == property_id)
