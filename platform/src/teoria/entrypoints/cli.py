@@ -125,6 +125,10 @@ def main() -> int:
     bundle_parser.add_argument("--output", type=Path, required=True)
     bundle_parser.add_argument("--version", required=True)
     bundle_parser.add_argument("--database-url", default=settings.app_database_url)
+    bundle_parser.add_argument(
+        "--ontology-namespace", action="append", dest="ontology_namespaces",
+        help="published Ontology namespace to include; defaults to teoria",
+    )
     migrate_parser = subparsers.add_parser("migrate-app", help="apply Teoria application DB migrations")
     migrate_parser.add_argument("--migrations", type=Path, default=Path("platform/database/migrations"))
     binding_parser = subparsers.add_parser("bind-openmetadata", help="bind a confirmed OpenMetadata reference to an ontology property")
@@ -383,7 +387,9 @@ def main() -> int:
         try:
             ontologies, bindings = RuntimeBundleSnapshotRepository(
                 args.database_url
-            ).snapshot()
+            ).snapshot(
+                ontology_namespaces=set(args.ontology_namespaces or ["teoria"])
+            )
             manifest = RuntimeBundleCompiler().compile(
                 args.registry_artifact,
                 ontologies=ontologies,

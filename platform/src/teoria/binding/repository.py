@@ -139,6 +139,7 @@ class BindingRepository:
                 f"""
                 SELECT ob.*, c.stable_key AS ontology_stable_key,
                        c.concept_kind AS ontology_concept_kind,
+                       o.namespace AS ontology_namespace,
                        mt.system, mt.external_entity_id, mt.entity_type,
                        mt.fully_qualified_name, mt.external_version, mt.last_verified_at,
                        ct.capability_id, ct.target_scope AS capability_target_scope,
@@ -155,6 +156,7 @@ class BindingRepository:
                        at.last_verified_at AS api_last_verified_at
                   FROM binding.ontology_bindings ob
                   JOIN ontology.concepts c ON c.concept_id=ob.ontology_concept_id
+                  JOIN ontology.ontologies o ON o.ontology_id=c.ontology_id
              LEFT JOIN binding.metadata_targets mt ON mt.metadata_target_id = ob.metadata_target_id
              LEFT JOIN binding.capability_targets ct ON ct.capability_target_id = ob.capability_target_id
              LEFT JOIN binding.api_field_targets at ON at.api_field_target_id = ob.api_field_target_id

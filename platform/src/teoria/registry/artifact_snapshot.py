@@ -14,7 +14,9 @@ class RuntimeBundleSnapshotRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
 
-    def snapshot(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    def snapshot(
+        self, *, ontology_namespaces: set[str] | None = None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
             rows = connection.execute(
                 """
@@ -28,9 +30,23 @@ class RuntimeBundleSnapshotRepository:
                 """
             ).fetchall()
         ontologies = [_jsonable(dict(row)) for row in rows]
+        if ontology_namespaces is not None:
+            ontologies = [
+                item for item in ontologies if item["namespace"] in ontology_namespaces
+            ]
+            missing = ontology_namespaces - {item["namespace"] for item in ontologies}
+            if missing:
+                raise ValueError(
+                    f"published Ontology namespace not found: {', '.join(sorted(missing))}"
+                )
         bindings = BindingRepository(self.database_url).list_bindings(
             status="approved", limit=100_000
         )
+        if ontology_namespaces is not None:
+            bindings = [
+                item for item in bindings
+                if item["ontology_namespace"] in ontology_namespaces
+            ]
         return ontologies, bindings
 
 

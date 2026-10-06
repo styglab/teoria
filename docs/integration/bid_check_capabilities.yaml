@@ -1,0 +1,50 @@
+schema_version: "1.0"
+consumer: bid_check
+description: 입찰체크 서비스가 직접 사용하는 Runtime Capability 계약
+ontology_decision:
+  change_required: true
+  strategy: new_draft_from_published
+  target_namespace: teoria
+  reuse_stable_concepts: true
+  rationale: 기존 Published artifact는 재사용하지 않되 의미가 같은 stable concept를 승계한 새 Draft를 검토·게시하고 Capability를 다시 연결한다.
+capabilities:
+  - {id: search_bid_notices, area: bid_notice, status: active}
+  - {id: get_bid_notice, area: bid_notice, status: active}
+  - {id: get_bid_requirements, area: bid_notice, status: active}
+  - {id: get_bid_participation_findings, area: bid_notice, status: active}
+  - {id: get_bid_notice_participations, area: bid_notice, status: active}
+  - {id: get_bid_notice_contracts, area: bid_notice, status: active}
+  - {id: get_bid_notice_relationship_context, area: bid_notice, status: active}
+  - {id: find_bid_project_lineage, area: bid_notice, status: active}
+  - id: find_similar_bid_notices
+    area: bid_notice
+    status: migration_required
+    replacements: [search_bid_related_projects]
+    note: 기존 제목·규칙 기반 유사도 계약이 제거되었으므로 입력과 결과 의미를 확인한 뒤 전환한다.
+  - id: find_bid_relevant_companies
+    area: bid_notice
+    status: migration_required
+    replacements: [get_bid_notice_relationship_context, get_company_similar_project_experience]
+  - {id: analyze_bid_participation_context, area: bid_analysis, status: active}
+  - {id: search_bid_related_projects, area: bid_analysis, status: active}
+  - id: analyze_bid_organization_field_companies
+    area: bid_analysis
+    status: migration_required
+    replacements: [get_bid_notice_relationship_context, analyze_organization_procurement_profile, get_organization_company_relationship, get_company_similar_project_experience]
+  - {id: search_public_organizations, area: organization, status: active}
+  - {id: analyze_organization_procurement_profile, area: organization, status: active}
+  - {id: search_procurement_activity, area: organization, status: active}
+  - {id: search_procurement_outcomes, area: organization, status: active}
+  - {id: search_organization_supplier_entries, area: organization, status: active}
+  - {id: get_organization_company_relationship, area: organization, status: active}
+  - {id: search_public_procurement_contracts, area: organization, status: active}
+  - {id: get_company_procurement_profile, area: company, status: active}
+  - {id: get_company_bid_qualification_profile, area: company, status: active}
+  - {id: get_company_detail_context, area: company, status: active}
+  - {id: analyze_company_procurement_profile, area: company, status: active}
+  - {id: search_bid_participations, area: company, status: active}
+  - {id: analyze_company_competitors, area: company, status: active}
+  - {id: search_companies_by_name, area: company, status: active}
+  - {id: search_bid_awards, area: award, status: active}
+  - {id: assess_company_bid_eligibility, area: eligibility, status: active}
+  - {id: assess_company_bid_eligibilities, area: eligibility, status: active}

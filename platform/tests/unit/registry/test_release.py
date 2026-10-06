@@ -12,6 +12,7 @@ from teoria.registry.artifact import (
     RegistryArtifactStore,
     RuntimeBundleCompiler,
     RuntimeBundleLoader,
+    _checksum,
 )
 
 
@@ -135,8 +136,47 @@ def test_runtime_bundle_loader_rejects_modified_binding_snapshot(tmp_path: Path)
         registry_root / "2026.08.05.1", ontologies=[], bindings=[], output=bundle_root,
     )
     bundle = bundle_root / "2026.08.05.1"
-    RuntimeBundleLoader(bundle).load()
+    loaded = RuntimeBundleLoader(bundle).load()
+    assert loaded.manifest.capability_count == 0
+    assert (bundle / "capabilities.json").is_file()
+    assert (bundle / "compatibility.json").is_file()
     (bundle / "bindings.json").write_text('[{"status":"approved"}]\n', encoding="utf-8")
 
     with pytest.raises(RegistryArtifactError, match="checksum"):
         RuntimeBundleLoader(bundle).load()
+
+
+def test_runtime_bundle_loader_keeps_schema_v1_artifacts_replayable(tmp_path: Path) -> None:
+    root = tmp_path / "registries"
+    root.mkdir()
+    (root / "core").mkdir()
+    (root / "core" / "data_types.yaml").write_text(
+        "registry:\n  version: 1.0.0\n  registered_at: '2026-08-05'\n"
+        "data_types:\n  - id: text\n    name: Text\n    base_type: string\n",
+        encoding="utf-8",
+    )
+    registry_root = tmp_path / "registry_dist"
+    bundle_root = tmp_path / "bundle_dist"
+    publish_registry(root, version="2026.08.05.1", output=registry_root, git_commit="abc123")
+    RuntimeBundleCompiler().compile(
+        registry_root / "2026.08.05.1", ontologies=[], bindings=[], output=bundle_root,
+    )
+    bundle = bundle_root / "2026.08.05.1"
+    manifest_path = bundle / "bundle.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["schema_version"] = "1.0"
+    manifest["bundle_checksum"] = _checksum({
+        "registry": manifest["registry_checksum"],
+        "ontologies": manifest["ontology_checksum"],
+        "bindings": manifest["binding_checksum"],
+    })
+    for key in ("capability_checksum", "capability_count", "compatibility_checksum"):
+        manifest.pop(key)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    (bundle / "capabilities.json").unlink()
+    (bundle / "compatibility.json").unlink()
+
+    loaded = RuntimeBundleLoader(bundle).load()
+
+    assert loaded.manifest.schema_version == "1.0"
+    assert loaded.capabilities == []

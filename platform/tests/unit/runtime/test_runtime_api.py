@@ -42,6 +42,8 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
         if item["id"] == "assess_company_bid_eligibility"
     )
     assert assessment["kind"] == "compute"
+    assert assessment["version"] == "1.2.0"
+    assert assessment["definition_checksum"].startswith("sha256:")
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
     assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.10.06.4"
 
@@ -53,6 +55,10 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
     assert response.json()["registry"]["version"] == "2026.10.06.4"
+    assert response.json()["capability_version"]["id"] == "search_public_procurement_contracts"
+    assert response.json()["capability_version"]["version"] == "1.3.0"
+    assert response.json()["execution"]["execution_id"]
+    assert response.json()["execution"]["capability_version"] == "1.3.0"
     assert runner.call[0] == "search_public_procurement_contracts"
     assert runner.call[1]["concluded_date_from"].isoformat() == "2026-01-01"
 

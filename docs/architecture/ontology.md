@@ -4,6 +4,24 @@ Business Ontology에는 여러 시스템과 시간에 걸쳐 유지되는 업무
 API 응답, Capability 출력, 화면 projection과 평가 결과는 Runtime 계약이지
 Business Object가 아니다.
 
+Teoria의 실행 의미는 네 경계로 분리한다.
+
+- Ontology는 Object, Property와 Relationship으로 업무 세계를 정의한다.
+- Capability는 Ontology를 이용하는 query, compute, decision, action 능력이다.
+- CapabilityVersion은 semantic requirement, 입출력, 구현과 정책을 고정한 불변 계약이다.
+- Runtime Artifact는 호환성이 검증된 Ontology, Binding, Registry와 CapabilityVersion
+  집합을 checksum으로 고정한다.
+
+CapabilityVersion은 Ontology revision 자체에 pin하지 않고 필요한 stable concept를
+선언한다. Artifact compile은 이를 Published Ontology의 immutable concept ID로
+해석하며 선언된 필수 요구사항을 해석할 수 없으면 publish를 차단한다. Lifecycle과
+특정 Artifact에 대한 compatible/incompatible 판정은 서로 다른 상태로 관리한다.
+
+입찰체크 Ontology 변경은 현재 Published version에서 새 Draft를 생성해 수행한다.
+업무 의미가 같은 stable concept는 승계하고, 화면 projection이나 Capability 응답은
+Business Object로 추가하지 않는다. 검토·승인·게시된 새 version만 Runtime bundle에
+포함하며 이전 Published artifact는 신규 배포에 사용하지 않는다.
+
 ## 모델 경계
 
 공공조달 모델은 하나의 shared ontology 안에서 다음 경계를 유지한다.

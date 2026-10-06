@@ -2,6 +2,12 @@
 
 입찰체크 서비스는 MCP나 Data DB에 직접 연결하지 않고 Runtime HTTP API를 호출한다.
 
+입찰체크가 직접 소비하는 Capability 목록과 전환 상태의 machine-readable 계약은
+[`bid_check_capabilities.yaml`](bid_check_capabilities.yaml)에 있다. 이 계약의
+`active` 항목은 Registry discovery에 존재해야 한다. `migration_required` 항목은
+이미 제거된 구형 계약이므로 대체 Capability의 입력·결과 의미를 확인해 서비스
+호출을 전환해야 한다.
+
 ```text
 Bid service → API gateway → Teoria Runtime API → Capability → Source/Data DB
 ```
@@ -32,6 +38,13 @@ curl -H "Authorization: Bearer $TEORIA_RUNTIME_API_TOKEN" \
 Capability 응답의 object와 link에는 type, identity와 provenance가 포함된다.
 객체가 없다는 사실만으로 자격 상태를 추론하지 말고 Capability가 정의한 outcome,
 오류와 데이터 기준일을 함께 확인한다.
+
+## Ontology 경계
+
+입찰체크 Ontology는 기존 Published version을 직접 사용하거나 수정하지 않는다.
+Published version에서 새 Draft를 생성하고 의미가 유지되는 stable concept를
+승계한다. 기관·업체 프로필, 공고 관계 컨텍스트, 유사사업 경험과 같은 집계 응답은
+Business Object로 만들지 않고 Capability 결과 projection으로 유지한다.
 
 ## 오류와 pagination
 

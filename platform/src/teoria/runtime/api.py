@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hmac
 import logging
+from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from jsonschema import Draft202012Validator, FormatChecker
@@ -110,6 +112,10 @@ def create_runtime_app(
             "capabilities": [
                 {
                     "id": capability.id,
+                    "version": capability.version,
+                    "definition_checksum": resolved_catalog.capability_checksums[
+                        (capability.id, capability.version)
+                    ],
                     "name": capability.name,
                     "description": capability.description,
                     "kind": capability.kind,
@@ -128,6 +134,8 @@ def create_runtime_app(
         capability_id: str,
         request: CapabilityExecutionRequest,
     ) -> dict[str, Any]:
+        execution_id = str(uuid4())
+        started_at = datetime.now(timezone.utc)
         capability = resolved_catalog.capabilities.get(capability_id)
         if capability is None:
             raise HTTPException(status_code=404, detail={"code": "unknown_capability", "message": capability_id})
@@ -168,6 +176,25 @@ def create_runtime_app(
             resolved_catalog.release.public_dict() if resolved_catalog.release else {"status": "draft"}
         )
         response["runtime_artifact"] = runtime_bundle.provenance() if runtime_bundle else None
+        response["capability_version"] = {
+            "id": capability.id,
+            "version": capability.version,
+            "definition_checksum": resolved_catalog.capability_checksums[
+                (capability.id, capability.version)
+            ],
+        }
+        response["execution"] = {
+            "execution_id": execution_id,
+            "started_at": started_at.isoformat(),
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "capability_id": capability.id,
+            "capability_version": capability.version,
+            "capability_checksum": resolved_catalog.capability_checksums[
+                (capability.id, capability.version)
+            ],
+            "artifact_version": runtime_bundle.version if runtime_bundle else None,
+            "artifact_checksum": runtime_bundle.bundle_checksum if runtime_bundle else None,
+        }
         logger.info(
             "runtime capability executed",
             extra={

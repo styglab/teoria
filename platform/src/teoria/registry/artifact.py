@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
-import hashlib
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,6 +10,14 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from teoria.registry.artifact_format import (
+    RuntimeBundleComponents,
+    RuntimeBundleFormatError,
+    canonical_json as _canonical,
+    checksum as _checksum,
+    get_runtime_bundle_format,
+)
+from teoria.registry.compatibility import validate_capability_compatibility
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.registry.release import CALVER_PATTERN, RegistryRelease, calculate_registry_checksum
 
@@ -23,18 +31,8 @@ class RegistryArtifactError(RuntimeError):
     """Raised when a Runtime artifact is missing, mutable, or inconsistent."""
 
 
-def _canonical(value: Any) -> bytes:
-    return json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str,
-    ).encode("utf-8")
-
-
-def _checksum(value: Any) -> str:
-    return f"sha256:{hashlib.sha256(_canonical(value)).hexdigest()}"
-
-
 class RuntimeBundleManifest(BaseModel):
-    schema_version: str = "1.0"
+    schema_version: str = "2.0"
     version: str
     created_at: datetime
     registry_version: str
@@ -43,6 +41,9 @@ class RuntimeBundleManifest(BaseModel):
     ontology_artifact_count: int
     binding_checksum: str
     binding_count: int
+    capability_checksum: str | None = None
+    capability_count: int = 0
+    compatibility_checksum: str | None = None
     bundle_checksum: str
 
     def provenance(self) -> dict[str, Any]:
@@ -56,6 +57,8 @@ class LoadedRuntimeBundle(BaseModel):
     catalog: RegistryCatalog
     ontologies: list[dict[str, Any]]
     bindings: list[dict[str, Any]]
+    capabilities: list[dict[str, Any]]
+    compatibility: list[dict[str, Any]]
 
 
 class RuntimeBundleCompiler:
@@ -98,27 +101,57 @@ class RuntimeBundleCompiler:
                 raise RegistryArtifactError(
                     f"published Ontology artifact checksum mismatch: {item.get('namespace')}"
                 )
-        components = {
-            "registry": catalog.release.checksum,
-            "ontologies": _checksum(normalized_ontologies),
-            "bindings": _checksum(normalized_bindings),
-        }
-        bundle_checksum = _checksum(components)
+        compatibility = validate_capability_compatibility(catalog, normalized_ontologies)
+        incompatible = [item for item in compatibility if item["status"] == "incompatible"]
+        if incompatible:
+            details = ", ".join(
+                f"{item['capability_id']}@{item['capability_version']}"
+                for item in incompatible
+            )
+            raise RegistryArtifactError(
+                f"incompatible Capability versions: {details}"
+            )
+        capabilities = [
+            {
+                "id": capability_id,
+                "version": capability.version,
+                "kind": capability.kind,
+                "definition_checksum": catalog.capability_checksums[
+                    (capability_id, capability.version)
+                ],
+                "implementation": capability.implementation.model_dump(mode="json"),
+            }
+            for capability_id, capability in sorted(catalog.capabilities.items())
+        ]
+        bundle_components = RuntimeBundleComponents(
+            ontologies=normalized_ontologies,
+            bindings=normalized_bindings,
+            capabilities=capabilities,
+            compatibility=compatibility,
+        )
+        bundle_format = get_runtime_bundle_format("2.0")
+        component_checksums = bundle_format.checksums(
+            catalog.release.checksum, bundle_components,
+        )
+        bundle_checksum = _checksum(component_checksums)
         destination = Path(output) / bundle_version
         if destination.exists():
             raise FileExistsError(f"Runtime bundle already exists: {destination}")
         shutil.copytree(source, destination)
-        (destination / "ontologies.json").write_bytes(_canonical(normalized_ontologies) + b"\n")
-        (destination / "bindings.json").write_bytes(_canonical(normalized_bindings) + b"\n")
+        bundle_format.write(destination, bundle_components)
         manifest = RuntimeBundleManifest(
+            schema_version=bundle_format.schema_version,
             version=bundle_version,
             created_at=created_at or datetime.now(timezone.utc),
             registry_version=catalog.release.version,
             registry_checksum=catalog.release.checksum,
-            ontology_checksum=components["ontologies"],
+            ontology_checksum=component_checksums["ontologies"],
             ontology_artifact_count=len(normalized_ontologies),
-            binding_checksum=components["bindings"],
+            binding_checksum=component_checksums["bindings"],
             binding_count=len(normalized_bindings),
+            capability_checksum=component_checksums["capabilities"],
+            capability_count=len(capabilities),
+            compatibility_checksum=component_checksums["compatibility"],
             bundle_checksum=bundle_checksum,
         )
         (destination / "bundle.json").write_text(
@@ -140,31 +173,40 @@ class RuntimeBundleLoader:
             manifest = RuntimeBundleManifest.model_validate_json(
                 bundle_path.read_text(encoding="utf-8")
             )
-            ontologies = json.loads((self.artifact / "ontologies.json").read_text(encoding="utf-8"))
-            bindings = json.loads((self.artifact / "bindings.json").read_text(encoding="utf-8"))
+            bundle_format = get_runtime_bundle_format(manifest.schema_version)
+            bundle_components = bundle_format.read(self.artifact)
         except (OSError, ValueError) as exc:
             raise RegistryArtifactError(f"invalid Runtime bundle: {self.artifact}") from exc
         catalog = RegistryArtifactLoader(self.artifact).load()
         assert catalog.release is not None
-        components = {
-            "registry": catalog.release.checksum,
-            "ontologies": _checksum(ontologies),
-            "bindings": _checksum(bindings),
-        }
+        component_checksums = bundle_format.checksums(
+            catalog.release.checksum, bundle_components,
+        )
         if manifest.version != self.artifact.name:
             raise RegistryArtifactError("Runtime bundle directory must match bundle version")
         if (
             manifest.registry_version != catalog.release.version
-            or manifest.registry_checksum != components["registry"]
-            or manifest.ontology_checksum != components["ontologies"]
-            or manifest.binding_checksum != components["bindings"]
-            or manifest.bundle_checksum != _checksum(components)
-            or manifest.ontology_artifact_count != len(ontologies)
-            or manifest.binding_count != len(bindings)
+            or manifest.registry_checksum != component_checksums["registry"]
+            or manifest.ontology_checksum != component_checksums["ontologies"]
+            or manifest.binding_checksum != component_checksums["bindings"]
+            or manifest.bundle_checksum != _checksum(component_checksums)
+            or manifest.ontology_artifact_count != len(bundle_components.ontologies)
+            or manifest.binding_count != len(bundle_components.bindings)
         ):
             raise RegistryArtifactError("Runtime bundle checksum or component manifest mismatch")
+        try:
+            bundle_format.validate_manifest(
+                manifest, bundle_components, component_checksums,
+            )
+        except RuntimeBundleFormatError as exc:
+            raise RegistryArtifactError(str(exc)) from exc
         return LoadedRuntimeBundle(
-            manifest=manifest, catalog=catalog, ontologies=ontologies, bindings=bindings,
+            manifest=manifest,
+            catalog=catalog,
+            ontologies=bundle_components.ontologies,
+            bindings=bundle_components.bindings,
+            capabilities=bundle_components.capabilities,
+            compatibility=bundle_components.compatibility,
         )
 
 

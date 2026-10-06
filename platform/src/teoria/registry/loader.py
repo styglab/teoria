@@ -1,4 +1,6 @@
 from dataclasses import dataclass, field
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +51,13 @@ def _construct_unique_mapping(loader: UniqueKeyLoader, node: yaml.MappingNode, d
 UniqueKeyLoader.add_constructor(BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping)
 
 
+def _document_checksum(document: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        document, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
 @dataclass(slots=True)
 class RegistryCatalog:
     root: Path
@@ -61,6 +70,8 @@ class RegistryCatalog:
     mappings: dict[str, MappingDefinition] = field(default_factory=dict)
     mapping_paths: dict[str, Path] = field(default_factory=dict)
     capabilities: dict[str, CapabilityDefinition] = field(default_factory=dict)
+    capability_versions: dict[tuple[str, str], CapabilityDefinition] = field(default_factory=dict)
+    capability_checksums: dict[tuple[str, str], str] = field(default_factory=dict)
     capability_paths: dict[str, Path] = field(default_factory=dict)
     references: dict[str, ProviderReference] = field(default_factory=dict)
     reference_paths: dict[str, Path] = field(default_factory=dict)
@@ -98,6 +109,8 @@ class RegistryLoader:
         mappings: dict[str, MappingDefinition] = {}
         mapping_paths: dict[str, Path] = {}
         capabilities: dict[str, CapabilityDefinition] = {}
+        capability_versions: dict[tuple[str, str], CapabilityDefinition] = {}
+        capability_checksums: dict[tuple[str, str], str] = {}
         capability_paths: dict[str, Path] = {}
         references: dict[str, ProviderReference] = {}
         reference_paths: dict[str, Path] = {}
@@ -177,10 +190,27 @@ class RegistryLoader:
                 continue
             registry = self._validate(CapabilityRegistry, document, path, diagnostics)
             if registry:
-                capability_id = registry.capability.id
-                if capability_id in capabilities:
-                    diagnostics.append(Diagnostic("duplicate_capability", f"duplicate capability id '{capability_id}'", path))
-                capabilities[capability_id] = registry.capability
+                capability = registry.capability.model_copy(
+                    update={"version": registry.registry.version}
+                )
+                capability_id = capability.id
+                version_key = (capability_id, capability.version)
+                if version_key in capability_versions:
+                    diagnostics.append(Diagnostic(
+                        "duplicate_capability_version",
+                        f"duplicate capability version '{capability_id}@{capability.version}'",
+                        path,
+                    ))
+                capability_versions[version_key] = capability
+                capability_checksums[version_key] = _document_checksum(document)
+                if capability.lifecycle.status == "active":
+                    if capability_id in capabilities:
+                        diagnostics.append(Diagnostic(
+                            "multiple_active_capability_versions",
+                            f"multiple active versions for capability '{capability_id}'",
+                            path,
+                        ))
+                    capabilities[capability_id] = capability
                 capability_paths[capability_id] = path
 
         eligibility_rule_paths_to_load = list((self.root / "rules").glob("*.yaml"))
@@ -224,6 +254,8 @@ class RegistryLoader:
             mappings=mappings,
             mapping_paths=mapping_paths,
             capabilities=capabilities,
+            capability_versions=capability_versions,
+            capability_checksums=capability_checksums,
             capability_paths=capability_paths,
             references=references,
             reference_paths=reference_paths,

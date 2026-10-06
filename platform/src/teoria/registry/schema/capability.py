@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import date
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import Field, field_validator, model_validator
 
@@ -10,10 +11,43 @@ from teoria.registry.schema.common import IdentifiedModel, RegistryMetadata, Reg
 
 
 REFERENCE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
+SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$")
+
+
+class SemanticRequirement(RegistryModel):
+    stable_key: str
+    semantic_id: UUID | None = None
+    required: bool = True
+
+
+class CapabilitySemanticRequirements(RegistryModel):
+    concepts: list[SemanticRequirement] = Field(default_factory=list)
+    properties: list[SemanticRequirement] = Field(default_factory=list)
+    relationships: list[SemanticRequirement] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def requirements_are_unique(self) -> "CapabilitySemanticRequirements":
+        requirements = self.concepts + self.properties + self.relationships
+        keys = [item.stable_key for item in requirements]
+        if len(keys) != len(set(keys)):
+            raise ValueError("semantic requirement stable keys must be unique")
+        return self
+
+
+class CapabilityImplementation(RegistryModel):
+    handler: str | None = None
+    code_version: str | None = None
+    source_revision: str | None = None
+    image_digest: str | None = None
+
+
+class CapabilityPolicy(RegistryModel):
+    permissions: list[str] = Field(default_factory=list)
+    timeout_seconds: float | None = Field(default=None, gt=0)
 
 
 class CapabilityLifecycle(RegistryModel):
-    status: Literal["active", "deprecated"] = "active"
+    status: Literal["draft", "validated", "active", "deprecated", "retired"] = "active"
     deprecated_at: date | None = None
     replacement_ids: list[str] = Field(default_factory=list)
     sunset_at: date | None = None
@@ -21,7 +55,7 @@ class CapabilityLifecycle(RegistryModel):
 
     @model_validator(mode="after")
     def validate_deprecation(self) -> "CapabilityLifecycle":
-        if self.status == "active" and any((
+        if self.status in {"draft", "validated", "active"} and any((
             self.deprecated_at, self.replacement_ids, self.sunset_at, self.reason,
         )):
             raise ValueError("active capability cannot declare deprecation metadata")
@@ -173,8 +207,14 @@ class CapabilityEffects(RegistryModel):
 
 class CapabilityDefinition(IdentifiedModel):
     description: str
-    kind: Literal["query", "compute", "action"] = "query"
+    version: str = "0.0.0"
+    kind: Literal["query", "compute", "decision", "action"] = "query"
     processor: str | None = None
+    semantic_requirements: CapabilitySemanticRequirements = Field(
+        default_factory=CapabilitySemanticRequirements
+    )
+    implementation: CapabilityImplementation = Field(default_factory=CapabilityImplementation)
+    policy: CapabilityPolicy = Field(default_factory=CapabilityPolicy)
     effects: CapabilityEffects = Field(default_factory=CapabilityEffects)
     inputs: dict[str, CapabilityInput] = Field(default_factory=dict)
     steps: list[CapabilityStep] = Field(default_factory=list)
@@ -184,6 +224,8 @@ class CapabilityDefinition(IdentifiedModel):
 
     @model_validator(mode="after")
     def validate_local_references(self) -> "CapabilityDefinition":
+        if not SEMVER_PATTERN.fullmatch(self.version):
+            raise ValueError("capability version must use semantic versioning")
         for input_id in self.inputs:
             if not SNAKE_CASE_PATTERN.fullmatch(input_id):
                 raise ValueError(f"input id '{input_id}' must be snake_case")
@@ -225,9 +267,11 @@ class CapabilityDefinition(IdentifiedModel):
                 raise ValueError("query capability must declare at least one step")
         else:
             if self.processor is None:
-                raise ValueError("compute and action capabilities must declare a processor")
+                raise ValueError("compute, decision, and action capabilities must declare a processor")
             if not REFERENCE_PATTERN.fullmatch(self.processor) or len(self.processor.split(".")) != 2:
                 raise ValueError("processor must use '<namespace>.<processor>'")
+        if self.implementation.handler and self.implementation.handler != self.processor:
+            raise ValueError("implementation handler must match processor")
         return self
 
 
