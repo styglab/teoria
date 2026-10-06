@@ -17,7 +17,7 @@ from teoria.admin.ontology_authoring_api import create_ontology_authoring_router
 from teoria.admin.context_api import create_context_router
 from teoria.binding.repository import BindingRepository
 from teoria.context import ContextEngine
-from teoria.context.repository import ContextRepository
+from teoria.context.repository import BundleContextRepository, ContextRepository
 from teoria.context.runtime_client import ContextRuntimeClient
 from teoria.intelligence.repository import SuggestionRepository
 from teoria.intelligence.service import SuggestionService
@@ -70,9 +70,17 @@ def create_admin_app(
             base_url=resolved_settings.openmetadata_base_url,
             database_service=resolved_settings.openmetadata_database_service,
         )
+    runtime_context_repository = (
+        BundleContextRepository.from_path(resolved_settings.runtime_artifact_path)
+        if resolved_settings.runtime_artifact_path is not None else
+        BundleContextRepository.from_store(resolved_settings.runtime_artifact_store)
+        if resolved_settings.runtime_artifact_store is not None else
+        ContextRepository(resolved_settings.app_database_url)
+        if resolved_settings.app_database_url else None
+    )
     resolved_context_engine = context_engine or (
         ContextEngine(
-            ContextRepository(resolved_settings.app_database_url),
+            runtime_context_repository,
             resolved_metadata_service.client if resolved_metadata_service else None,
             ContextRuntimeClient(
                 resolved_settings.context_runtime_api_url,
@@ -80,7 +88,7 @@ def create_admin_app(
                 timeout_seconds=resolved_settings.context_runtime_timeout_seconds,
             ) if resolved_settings.context_runtime_api_token else None,
         )
-        if resolved_settings.app_database_url else None
+        if runtime_context_repository is not None else None
     )
     app = FastAPI(
         title="Teoria Admin API",

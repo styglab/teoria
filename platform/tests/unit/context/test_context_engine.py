@@ -4,6 +4,7 @@ from datetime import date
 import pytest
 
 from teoria.context.service import ContextEngine
+from teoria.context.repository import BundleContextRepository
 
 
 class Repository:
@@ -60,6 +61,44 @@ class RuntimeClient:
             "pagination": {"page": 1, "page_size": 100, "total_items": 1, "total_pages": 1},
             "registry": {"version": "2026.10.04.13", "status": "published"},
         }
+
+
+def test_bundle_context_repository_uses_frozen_ontology_and_bindings() -> None:
+    bundle = type("Bundle", (), {
+        "ontologies": [{
+            "namespace": "procurement", "version": "0.5.0",
+            "artifact_id": "artifact-1", "schema_version": "1.0",
+            "checksum": "ontology-checksum",
+            "content": {"objects": [{
+                "code": "Contract", "name": "계약",
+                "stable_key": "procurement.Contract",
+                "properties": [{
+                    "code": "currentAmount", "name": "계약금액",
+                    "stable_key": "procurement.Contract.currentAmount",
+                    "description": "계약 금액", "value_type": "money", "unit": "KRW",
+                }],
+            }]},
+        }],
+        "bindings": [{
+            "status": "approved",
+            "ontology_stable_key": "procurement.Contract.currentAmount",
+            "target_type": "capability_output",
+            "target_locator": "capability://search_contracts/output/amount",
+            "capability_id": "search_contracts",
+            "capability_target_scope": "output",
+            "capability_field_path": "contract.current_amount",
+            "capability_contract_version": "1.0",
+            "capability_registry_version": "2026.10.06.1",
+            "binding_type": "provides_property", "purpose": "analytics",
+            "authority": "preferred", "priority": 10, "confidence": 1.0,
+        }],
+    })()
+
+    resolved = BundleContextRepository(bundle).resolve_property("계약금액")
+
+    assert resolved["stable_key"] == "procurement.Contract.currentAmount"
+    assert resolved["bindings"][0]["target_scope"] == "output"
+    assert resolved["bindings"][0]["registry_version"] == "2026.10.06.1"
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,12 @@ import psycopg
 from teoria_provider_api.executor import ProviderExecutor
 from teoria_provider_api.secrets import EnvironmentSecretProvider
 from teoria.config import Settings, bootstrap_settings
-from teoria.registry.artifact import RegistryArtifactError, RegistryArtifactStore
+from teoria.registry.artifact import (
+    RegistryArtifactError,
+    RegistryArtifactStore,
+    RuntimeBundleCompiler,
+)
+from teoria.registry.artifact_snapshot import RuntimeBundleSnapshotRepository
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
 from teoria.registry.release import publish_registry
 from teoria.registry.validation.registry import RegistryValidator
@@ -112,6 +117,14 @@ def main() -> int:
     )
     activate_parser.add_argument("store", type=Path)
     activate_parser.add_argument("--version", required=True)
+    bundle_parser = subparsers.add_parser(
+        "compile-runtime-bundle",
+        help="freeze a Registry artifact with published Ontologies and approved Bindings",
+    )
+    bundle_parser.add_argument("registry_artifact", type=Path)
+    bundle_parser.add_argument("--output", type=Path, required=True)
+    bundle_parser.add_argument("--version", required=True)
+    bundle_parser.add_argument("--database-url", default=settings.app_database_url)
     migrate_parser = subparsers.add_parser("migrate-app", help="apply Teoria application DB migrations")
     migrate_parser.add_argument("--migrations", type=Path, default=Path("platform/database/migrations"))
     binding_parser = subparsers.add_parser("bind-openmetadata", help="bind a confirmed OpenMetadata reference to an ontology property")
@@ -360,7 +373,31 @@ def main() -> int:
         except (OSError, RegistryArtifactError) as exc:
             print(f"ERROR registry_artifact_activation_failed: {exc}")
             return 1
-        print(f"Activated Registry {active.version} ({active.checksum}).")
+        print(f"Activated Runtime bundle {active.version} ({active.checksum}).")
+        return 0
+
+    if args.command == "compile-runtime-bundle":
+        if not args.database_url:
+            print("ERROR runtime_bundle_compile_failed: application database URL is required")
+            return 1
+        try:
+            ontologies, bindings = RuntimeBundleSnapshotRepository(
+                args.database_url
+            ).snapshot()
+            manifest = RuntimeBundleCompiler().compile(
+                args.registry_artifact,
+                ontologies=ontologies,
+                bindings=bindings,
+                output=args.output,
+                version=args.version,
+            )
+        except (OSError, ValueError, RegistryArtifactError, psycopg.Error) as exc:
+            print(f"ERROR runtime_bundle_compile_failed: {exc}")
+            return 1
+        print(
+            f"Compiled Runtime bundle {manifest.version} "
+            f"({manifest.bundle_checksum})."
+        )
         return 0
 
     try:

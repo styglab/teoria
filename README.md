@@ -82,14 +82,19 @@ uv run --locked --package teoria-pipelines --group validation \
   --platform-registries platform/registries
 ```
 
-운영 Runtime은 원본 Registry 대신 게시 artifact를 사용한다.
+운영 Runtime은 원본 Registry나 authoring table 대신 Registry, Published Ontology와
+Approved Binding을 함께 고정한 Runtime bundle을 사용한다.
 
 ```bash
 uv run --locked --package teoria-platform teoria publish platform/registries \
   --version YYYY.MM.DD.REVISION --output dist/registry
-uv run --locked --package teoria-platform teoria activate-artifact dist/registry \
+uv run --locked --package teoria-platform teoria compile-runtime-bundle \
+  dist/registry/YYYY.MM.DD.REVISION --output dist/runtime \
+  --version YYYY.MM.DD.REVISION \
+  --database-url "$TEORIA_APP_DATABASE_URL"
+uv run --locked --package teoria-platform teoria activate-artifact dist/runtime \
   --version YYYY.MM.DD.REVISION
-export TEORIA_RUNTIME_ARTIFACT_STORE=dist/registry
+export TEORIA_RUNTIME_ARTIFACT_STORE=dist/runtime
 ```
 
 MCP STDIO:

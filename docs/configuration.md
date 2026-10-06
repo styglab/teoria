@@ -20,8 +20,8 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_SOURCE_MAX_PAGES` | `100` | Capability 최대 페이지 |
 | `TEORIA_CAPABILITY_TIMEOUT_SECONDS` | `120` | Capability deadline |
 | `TEORIA_RUNTIME_API_TOKEN` | 없음 | Runtime API Bearer token |
-| `TEORIA_RUNTIME_ARTIFACT_PATH` | 없음 | 단일 immutable Registry artifact version 디렉터리 |
-| `TEORIA_RUNTIME_ARTIFACT_STORE` | 없음 | atomic `active.json`을 가진 Registry artifact store |
+| `TEORIA_RUNTIME_ARTIFACT_PATH` | 없음 | 단일 immutable Runtime bundle version 디렉터리 |
+| `TEORIA_RUNTIME_ARTIFACT_STORE` | 없음 | atomic `active.json`을 가진 Runtime bundle store |
 | `TEORIA_RUNTIME_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Runtime API 앞에 붙이는 URL 경로 |
 | `TEORIA_RUNTIME_CACHE_BACKEND` | `memory` | Runtime 공유 캐시 구현: `memory`, `redis`, `disabled` |
 | `TEORIA_RUNTIME_CACHE_URL` | `redis://localhost:6379/0` | Redis Runtime 캐시 접속 URL |

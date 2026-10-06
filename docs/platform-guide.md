@@ -12,7 +12,7 @@ Capability를 연결해 검증 가능한 business context를 제공한다. 전�
 | `pipelines/` | Connector, Prefect, raw·정규 적재, Data DB migration |
 | `mcp/` | MCP protocol과 Runtime HTTP client |
 | `packages/provider_api/` | Provider wire 계약과 HTTP 실행 |
-| `deploy/` | Compose와 k3s 배포 정의 |
+| `deploy/` | 지원되는 Compose와 실험 단계의 k3s 스캐폴드 |
 
 ## 로컬 실행
 

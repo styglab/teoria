@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import logging
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -10,12 +11,15 @@ from pydantic import BaseModel, Field
 from teoria_provider_api.executor import ProviderExecutor
 from teoria_provider_api.secrets import EnvironmentSecretProvider
 from teoria.config import Settings, bootstrap_settings
-from teoria.registry.artifact import RegistryArtifactLoader, RegistryArtifactStore
+from teoria.registry.artifact import RuntimeBundleLoader, RegistryArtifactStore
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.runtime.capability.presentation import serialize_capability_result
 from teoria.runtime.capability.runner import CapabilityExecutionError, CapabilityRunner
 from teoria.runtime.capability.schema import capability_input_schema, coerce_capability_inputs
 from teoria.runtime.cache import create_runtime_cache
+
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionOptions(BaseModel):
@@ -37,16 +41,21 @@ def create_runtime_app(
     resolved_settings = settings or bootstrap_settings()
     if not resolved_settings.runtime_api_token:
         raise RuntimeError("TEORIA_RUNTIME_API_TOKEN is required")
+    runtime_bundle = None
     if catalog is not None:
         resolved_catalog = catalog
     elif resolved_settings.runtime_artifact_path is not None:
-        resolved_catalog = RegistryArtifactLoader(
+        loaded_bundle = RuntimeBundleLoader(
             resolved_settings.runtime_artifact_path
         ).load()
+        resolved_catalog = loaded_bundle.catalog
+        runtime_bundle = loaded_bundle.manifest
     elif resolved_settings.runtime_artifact_store is not None:
-        resolved_catalog = RegistryArtifactStore(
+        loaded_bundle = RegistryArtifactStore(
             resolved_settings.runtime_artifact_store
         ).load_active()
+        resolved_catalog = loaded_bundle.catalog
+        runtime_bundle = loaded_bundle.manifest
     elif resolved_settings.environment == "production":
         raise RuntimeError(
             "TEORIA_RUNTIME_ARTIFACT_PATH or TEORIA_RUNTIME_ARTIFACT_STORE "
@@ -92,6 +101,7 @@ def create_runtime_app(
         return {
             "runtime_api": "1",
             "registry": resolved_catalog.release.public_dict() if resolved_catalog.release else {"status": "draft"},
+            "runtime_artifact": runtime_bundle.provenance() if runtime_bundle else None,
         }
 
     @app.get("/v1/capabilities", dependencies=[Depends(authorize)])
@@ -156,6 +166,20 @@ def create_runtime_app(
         )
         response["registry"] = (
             resolved_catalog.release.public_dict() if resolved_catalog.release else {"status": "draft"}
+        )
+        response["runtime_artifact"] = runtime_bundle.provenance() if runtime_bundle else None
+        logger.info(
+            "runtime capability executed",
+            extra={
+                "capability_id": capability_id,
+                "registry_version": (
+                    resolved_catalog.release.version if resolved_catalog.release else None
+                ),
+                "runtime_bundle_version": runtime_bundle.version if runtime_bundle else None,
+                "runtime_bundle_checksum": (
+                    runtime_bundle.bundle_checksum if runtime_bundle else None
+                ),
+            },
         )
         return response
 

@@ -8,24 +8,19 @@
 - 프로젝트와 저장소 권위 경계
 - Source·Mapping·Capability Runtime과 HTTP API
 - Connector·Prefect 수집 및 Data DB
-- Ontology version lifecycle과 immutable publish artifact
+- Ontology version lifecycle과 Registry·Published Ontology·Approved Binding을
+  함께 고정하는 checksum 기반 Runtime bundle
 - Semantic Binding review 기록과 Metadata Intelligence suggestion
 - OpenMetadata integration과 Admin UI
 - Runtime API만 호출하는 MCP gateway
 
+Runtime bundle은 독립 version 디렉터리로 compile한 뒤 atomic active pointer로
+활성화한다. 실행 응답에는 Registry release와 bundle checksum이 함께 기록되며,
+rollback은 검증된 이전 bundle을 다시 활성화하는 방식이다.
+
 ## 다음 결과
 
-### 1. Published artifact Runtime
-
-Runtime이 authoring table이 아니라 Published artifact만 읽도록 전환한다.
-
-완료 조건:
-
-- artifact checksum과 Registry release가 실행·감사 로그에 남는다.
-- publish 실패 또는 Binding incompatibility가 Runtime 상태를 바꾸지 않는다.
-- rollback은 이전 immutable artifact 선택으로 수행한다.
-
-### 2. Context Engine vertical slice
+### 1. Context Engine vertical slice
 
 승인된 Ontology, Binding과 Capability를 사용해 질문을 실행계획으로 변환한다.
 
@@ -35,7 +30,7 @@ Runtime이 authoring table이 아니라 Published artifact만 읽도록 전환�
 - 접근권한과 시간 범위를 실행 전에 검증한다.
 - 부분 실패와 불확실성을 결과에 보존한다.
 
-### 3. Semantic MCP/SDK
+### 2. Semantic MCP/SDK
 
 Capability 목록을 그대로 노출하는 수준을 넘어 semantic discovery와 provenance를
 안정된 client 계약으로 제공한다.
@@ -46,7 +41,7 @@ Capability 목록을 그대로 노출하는 수준을 넘어 semantic discovery�
 - schema를 client 코드에 복제하지 않고 discovery로 협상한다.
 - pagination, timeout, retry와 오류 의미가 문서화되고 회귀 테스트된다.
 
-### 4. Production identity and scale
+### 3. Production identity and scale
 
 - Admin OIDC와 세분화된 role
 - Runtime service identity, token rotation, quota와 audit

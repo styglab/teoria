@@ -52,8 +52,10 @@ artifact는 stable concept, property와 relationship을 포함하며 checksum으
 계약으로 계속 독립적으로 존재한다.
 
 개발 환경은 빠른 authoring 검증을 위해 원본 Registry를 직접 읽을 수 있다.
-운영 Runtime은 version 디렉터리의 `manifest.json`과 내장 `.release.json`을
-대조하고 전체 YAML checksum을 다시 계산한 뒤에만 artifact를 적재한다.
+운영 Runtime bundle은 Registry release, Published Ontology artifact와 compile
+시점의 Approved Binding snapshot을 함께 고정한다. Loader는 version 디렉터리의
+`manifest.json`, 내장 `.release.json`, `bundle.json`과 각 구성요소 checksum을
+대조한 뒤에만 bundle을 적재한다.
 Artifact store의 `active.json` 교체는 atomic rename으로 수행하며 rollback은
 검증된 이전 version을 다시 activate하는 방식으로 처리한다.
 
