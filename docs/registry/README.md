@@ -37,6 +37,22 @@ Capability는 검증된 입력·출력과 실행 조합을 정의한다.
 Breaking change는 새 Registry version으로 발행한다. Runtime은 검증된 immutable
 bundle과 checksum을 사용하며 Git 작업 파일을 운영 중에 임의로 읽어 바꾸지 않는다.
 
+원본 `platform/registries/`는 사람이 작성하는 draft 계약만 보관하며 release 상태나
+`.release.json`을 저장하지 않는다. 발행 명령은 커밋된 원본을 변경하지 않고 지정한
+Artifact Store에 version 디렉터리와 `manifest.json`을 생성한다.
+
+```bash
+uv run --locked --package teoria-platform teoria publish \
+  platform/registries \
+  --version YYYY.MM.DD.REVISION \
+  --output /path/to/registry_artifacts \
+  --git-commit "$(git rev-parse HEAD)"
+```
+
+따라서 Registry 변경은 한 번만 커밋한다. 생성된 manifest와 Runtime bundle은 Git이
+아니라 Artifact Store가 보관하고, 운영 전환은 검증된 bundle의 `active.json`을
+원자적으로 교체한다.
+
 ## 검증
 
 ```bash

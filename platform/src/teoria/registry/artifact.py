@@ -240,14 +240,7 @@ class RegistryArtifactLoader:
                 "Registry artifact checksum does not match its immutable manifest"
             )
         catalog = RegistryLoader(registry_root).load()
-        if catalog.release is None or catalog.release.status != "published":
-            raise RegistryArtifactError(
-                "Registry artifact does not contain a checksum-valid release"
-            )
-        if catalog.release.public_dict() != manifest.public_dict():
-            raise RegistryArtifactError(
-                "Registry artifact manifest differs from its embedded release"
-            )
+        catalog.release = manifest
         return catalog
 
 

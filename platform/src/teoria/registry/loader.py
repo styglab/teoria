@@ -26,7 +26,7 @@ from teoria.registry.schema import (
     ValueSetRegistry,
 )
 from teoria.registry.diagnostics import Diagnostic
-from teoria.registry.release import RegistryRelease, load_registry_release
+from teoria.registry.release import RegistryRelease
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -261,7 +261,7 @@ class RegistryLoader:
             reference_paths=reference_paths,
             eligibility_rules=eligibility_rules,
             eligibility_rule_paths=eligibility_rule_paths,
-            release=load_registry_release(self.root),
+            release=None,
         )
 
     @staticmethod

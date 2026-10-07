@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from teoria.registry.release import calculate_registry_checksum, load_registry_release, publish_registry
+from teoria.registry.release import calculate_registry_checksum, publish_registry
 from teoria.registry.artifact import (
     RegistryArtifactError,
     RegistryArtifactLoader,
@@ -16,7 +16,7 @@ from teoria.registry.artifact import (
 )
 
 
-def test_publish_uses_calver_and_detects_registry_changes(tmp_path: Path) -> None:
+def test_publish_keeps_authored_registry_unchanged(tmp_path: Path) -> None:
     root = tmp_path / "registries"
     root.mkdir()
     registry = root / "example.yaml"
@@ -25,16 +25,32 @@ def test_publish_uses_calver_and_detects_registry_changes(tmp_path: Path) -> Non
     release = publish_registry(
         root,
         version="2026.08.05.1",
+        output=tmp_path / "dist",
         git_commit="abc123",
         published_at=datetime(2026, 8, 5, tzinfo=timezone.utc),
     )
 
     assert release.checksum == calculate_registry_checksum(root)
-    assert json.loads((root / ".release.json").read_text())["version"] == "2026.08.05.1"
-    assert load_registry_release(root).status == "published"
+    assert not (root / ".release.json").exists()
+    manifest = json.loads(
+        (tmp_path / "dist" / "2026.08.05.1" / "manifest.json").read_text()
+    )
+    assert manifest["version"] == "2026.08.05.1"
 
-    registry.write_text("value: 2\n", encoding="utf-8")
-    assert load_registry_release(root).status == "modified"
+
+def test_publish_excludes_legacy_source_release_file(tmp_path: Path) -> None:
+    root = tmp_path / "registries"
+    root.mkdir()
+    (root / "example.yaml").write_text("value: 1\n", encoding="utf-8")
+    (root / ".release.json").write_text('{"legacy": true}\n', encoding="utf-8")
+
+    publish_registry(
+        root, version="2026.08.05.1", output=tmp_path / "dist", git_commit="abc123"
+    )
+
+    assert not (
+        tmp_path / "dist" / "2026.08.05.1" / "registries" / ".release.json"
+    ).exists()
 
 
 def test_publish_can_create_an_immutable_artifact(tmp_path: Path) -> None:

@@ -47,7 +47,7 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_CONTEXT_RUNTIME_TIMEOUT_SECONDS` | `150` | Context Engine의 Runtime API 호출 제한시간 |
 | `TEORIA_METADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata PostgreSQL connector의 Teoria Data DB read-only 암호 |
 | `TEORIA_LOCAL_PLATFORM_DB_PASSWORD` | 로컬 개발값 | Compose의 Control/Application PostgreSQL 관리 계정 암호 |
-| `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | checksum이 일치하는 Published Registry만 Runtime에서 허용 |
+| `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | 주입된 Registry catalog에 published provenance가 있는지 검사하는 개발·테스트 안전장치. 운영 Runtime은 Artifact 설정이 필수 |
 | `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
 | `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `5` | Connector의 멱등 요청 최대 시도 횟수 |
 | `TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS` | `60` | Connector 재시도 지수 backoff의 최초 대기시간 |

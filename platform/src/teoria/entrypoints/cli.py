@@ -110,7 +110,7 @@ def main() -> int:
     publish_parser = subparsers.add_parser("publish", help="validate and publish an immutable registry release")
     publish_parser.add_argument("path", nargs="?", default=settings.registry_path, type=Path)
     publish_parser.add_argument("--version", required=True)
-    publish_parser.add_argument("--output", type=Path)
+    publish_parser.add_argument("--output", required=True, type=Path)
     publish_parser.add_argument("--git-commit")
     activate_parser = subparsers.add_parser(
         "activate-artifact", help="atomically activate a validated Registry artifact"

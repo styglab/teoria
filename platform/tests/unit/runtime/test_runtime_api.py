@@ -46,7 +46,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     assert assessment["version"] == "1.2.0"
     assert assessment["definition_checksum"].startswith("sha256:")
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.10.07.4"
+    assert client.get("/v1/version", headers=headers).json()["registry"] == {"status": "draft"}
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -55,7 +55,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.10.07.4"
+    assert response.json()["registry"] == {"status": "draft"}
     assert response.json()["capability_version"]["id"] == "search_public_procurement_contracts"
     assert response.json()["capability_version"]["version"] == "1.3.0"
     assert response.json()["execution"]["execution_id"]

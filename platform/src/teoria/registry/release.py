@@ -13,7 +13,6 @@ import yaml
 from pydantic import BaseModel
 
 
-RELEASE_FILE = ".release.json"
 CALVER_PATTERN = re.compile(r"^\d{4}\.\d{2}\.\d{2}\.\d+$")
 
 
@@ -47,21 +46,11 @@ def calculate_registry_checksum(root: Path) -> str:
     return f"sha256:{digest.hexdigest()}"
 
 
-def load_registry_release(root: Path) -> RegistryRelease | None:
-    path = root / RELEASE_FILE
-    if not path.is_file():
-        return None
-    release = RegistryRelease.model_validate_json(path.read_text(encoding="utf-8"))
-    if release.checksum != calculate_registry_checksum(root):
-        return release.model_copy(update={"status": "modified"})
-    return release
-
-
 def publish_registry(
     root: Path,
     *,
     version: str,
-    output: Path | None = None,
+    output: Path,
     git_commit: str | None = None,
     published_at: datetime | None = None,
 ) -> RegistryRelease:
@@ -75,13 +64,11 @@ def publish_registry(
         published_at=published_at or datetime.now(timezone.utc),
     )
     manifest = json.dumps(release.public_dict(), ensure_ascii=False, indent=2) + "\n"
-    (root / RELEASE_FILE).write_text(manifest, encoding="utf-8")
-    if output is not None:
-        destination = output / version
-        if destination.exists():
-            raise FileExistsError(f"release output already exists: {destination}")
-        shutil.copytree(root, destination / "registries")
-        (destination / "manifest.json").write_text(manifest, encoding="utf-8")
+    destination = output / version
+    if destination.exists():
+        raise FileExistsError(f"release output already exists: {destination}")
+    shutil.copytree(root, destination / "registries", ignore=shutil.ignore_patterns(".release.json"))
+    (destination / "manifest.json").write_text(manifest, encoding="utf-8")
     return release
 
 
