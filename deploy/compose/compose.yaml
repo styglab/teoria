@@ -434,6 +434,7 @@ services:
       TEORIA_ENVIRONMENT: production
       TEORIA_REGISTRY_PATH: /app/platform/registries
       TEORIA_REGISTRY_REQUIRE_PUBLISHED: "true"
+      TEORIA_RUNTIME_ARTIFACT_STORE: /app/runtime_artifacts
       TEORIA_RUNTIME_API_ROOT_PATH: /runtime-api
       TEORIA_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
       TEORIA_RUNTIME_CACHE_BACKEND: redis
@@ -445,6 +446,8 @@ services:
       TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY:-}
       TEORIA_SOURCE_PPS_USER_API_KEY: ${TEORIA_SOURCE_PPS_USER_API_KEY:-}
       TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY: ${TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY:-}
+    volumes:
+      - runtime-artifacts:/app/runtime_artifacts:ro
     depends_on:
       postgres-migrate:
         condition: service_completed_successfully
@@ -474,6 +477,7 @@ services:
       TEORIA_ADMIN_API_TOKEN: ${TEORIA_ADMIN_API_TOKEN:-}
       TEORIA_ADMIN_API_ACTOR: ${TEORIA_ADMIN_API_ACTOR:-system:admin}
       TEORIA_ADMIN_API_ROLES: ${TEORIA_ADMIN_API_ROLES:-metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner}
+      TEORIA_RUNTIME_ARTIFACT_STORE: /app/runtime_artifacts
       TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
       TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
       TEORIA_OPENMETADATA_ENABLED: ${TEORIA_OPENMETADATA_ENABLED:-false}
@@ -482,6 +486,8 @@ services:
       TEORIA_OPENMETADATA_DATABASE_SERVICE: ${TEORIA_OPENMETADATA_DATABASE_SERVICE:-teoria_postgresql}
       TEORIA_CONTEXT_RUNTIME_API_URL: http://runtime-api:8000
       TEORIA_CONTEXT_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
+    volumes:
+      - runtime-artifacts:/app/runtime_artifacts:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 5s
@@ -639,5 +645,7 @@ volumes:
     name: teoria_platform-db
   prefect-redis:
   runtime-redis:
+  runtime-artifacts:
+    name: teoria_runtime-artifacts
   codex-auth:
   openmetadata-search:
