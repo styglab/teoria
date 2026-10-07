@@ -1,0 +1,40 @@
+services:
+  teoria_control:
+    url: http://policy-control-plane:8002
+    credentials:
+      bearer:
+        token: "${TEORIA_OPA_CONTROL_PLANE_TOKEN}"
+
+bundles:
+  teoria:
+    service: teoria_control
+    resource: bundles/teoria.tar.gz
+    persist: true
+    polling:
+      min_delay_seconds: 5
+      max_delay_seconds: 10
+    signing:
+      keyid: teoria
+      scope: teoria.authz
+
+keys:
+  teoria:
+    algorithm: RS256
+
+decision_logs:
+  service: teoria_control
+  resource: logs
+  reporting:
+    min_delay_seconds: 1
+    max_delay_seconds: 5
+    upload_size_limit_bytes: 32768
+
+status:
+  service: teoria_control
+
+labels:
+  application: teoria
+  environment: "${TEORIA_ENVIRONMENT}"
+
+default_decision: /teoria/authz/decision
+persistence_directory: /var/lib/opa

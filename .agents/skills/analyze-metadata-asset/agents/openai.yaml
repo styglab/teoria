@@ -1,0 +1,4 @@
+interface:
+  display_name: "Analyze Metadata Asset"
+  short_description: "OpenMetadata 자산을 분석해 검토 가능한 제안을 생성합니다"
+  default_prompt: "Use $analyze-metadata-asset to analyze an OpenMetadata asset and prepare evidence-backed suggestions for the Teoria Review Queue."

@@ -50,11 +50,21 @@ Connector와 Prefect Flow를 관리하고 raw·정규 적재가 모두 성공한
 OpenMetadata에서 asset, schema, glossary, owner와 lineage를 관리한다. Teoria에는
 OpenMetadata entity 본문을 복제하지 않는다.
 
+Metadata Intelligence 제안은 Review Queue에서 승인한 뒤 유형별 application service가
+적용한다. description, Glossary Term 생성·할당과 quality test는 OpenMetadata API를
+사용하며 적용 전 대상 version을 다시 확인한다. AI가 직접 승인하거나 OpenMetadata를
+임의 변경하지 않는다.
+[Metadata Asset 분석 Skill](skills/analyze_metadata_asset.md)을 사용하면 현재
+OpenMetadata 자산과 Ontology·Binding·Source 근거를 대조하여 Review Queue용 제안을
+만들 수 있다.
+
 ### Ontology owner와 Binding reviewer
 
 Published version에서 새 Draft를 만들고 review·approval 후 publish한다. Binding과
 AI Suggestion은 승인 전까지 권위 정보가 아니다. 상세 계약은
 [Ontology](architecture/ontology.md)를 따른다.
+Ontology 변경 Suggestion 승인도 새 Draft와 변경 항목만 생성하며, 별도의 Ontology
+review·approval·publish 단계를 생략하지 않는다.
 
 ### Capability 개발자
 
@@ -67,6 +77,16 @@ Source, 지속 수집 API는 Connector로 작성한다. [Registry guide](registr
 배포된 Runtime의 `/v1/capabilities`에서 사용할 수 있는 Capability와 입력 schema를
 조회하고 `/v1/capabilities/{id}:execute`를 호출한다. MCP는 같은 Runtime API의
 protocol adapter다.
+
+Admin Context API는 `/v1/admin/context/plan`에서 질문의 concept, Capability,
+입력, artifact와 정책 결정을 포함한 Semantic Query Plan을 반환하고,
+`/v1/admin/context/execute`에서 동일 질문을 다시 계획·검증한 뒤 실행한다.
+기존 `/v1/admin/context/query`는 호환용 deprecated alias다. Runtime Capability와
+Context 계획·실행은 OPA 결정을 통과해야 하며 Compose는 OPA 장애 시 fail-closed한다.
+정책 변경은 `deploy/compose/opa/bundle/`에서 수행한다. Compose의 bundle build job은
+Rego 검사·테스트 후 RSA 서명 Bundle을 만들며 OPA는 서명과 scope를 검증한 뒤에만
+활성화한다. 실행 입력은 masking policy로 decision log에서 제거하고 결정 ID, actor,
+action, resource, 결과와 bundle revision은 Application DB audit에 보존한다.
 
 ## 검증
 

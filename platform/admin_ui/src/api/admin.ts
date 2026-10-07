@@ -1,8 +1,3 @@
-export type Overview = {
-  counts: Record<"runtime_contract_domains" | "runtime_object_types" | "runtime_link_types" | "sources" | "mappings" | "capabilities" | "eligibility_rules" | "data_types" | "value_sets", number>;
-  validation: { status: "valid" | "invalid"; diagnostic_count: number };
-};
-
 export type RuntimeContractSummary = {
   id: string;
   name: string;
@@ -61,7 +56,11 @@ export type RegistryRelease = {
   status: "draft" | "published" | "modified";
 };
 
-export type CapabilitySummary = { id: string; name: string; description: string; inputs: string[]; steps: string[]; returns: string[] };
+export type CapabilitySummary = { id: string; name: string; description: string; kind?: string; exposure?: string; processor?: string | null; effects?: Record<string, unknown>; inputs: string[]; steps: string[]; returns: string[] };
+export type CapabilityCoverageItem = { capability_id: string; status: "covered" | "partial" | "unbound"; capability_bound: boolean; inputs: { total: number; bound: number; unbound_fields: string[] }; outputs: { total: number; bound: number; unbound_fields: string[] } };
+export type CapabilityCoverage = { summary: { capability_count: number; capability_bound_count: number; input_count: number; bound_input_count: number; output_count: number; bound_output_count: number; capability_coverage_rate: number | null }; items: CapabilityCoverageItem[] };
+export type ContextNotice = { bid_notice_id: string; notice_name: string | null; notice_organization_name: string | null; notice_published_at: string | null; bid_deadline_at: string | null; bid_status: string | null; work_type: string | null; estimated_price: string | number | null; detail_url: string | null };
+export type ContextQueryResult = { query_type: "contract_amount" | "bid_notice_search"; question: string; interpretation: { organization: { organization_code: string; organization_name: string; query: string } | null; period_from: string; period_to: string; period_years?: number; period_defaulted?: boolean; filters?: Record<string, unknown>; concept: { stable_key: string; name: string; description: string; value_type: string; unit: string | null } }; execution_plan: { capability_id: string; inputs: Record<string, unknown>; selection_reason: string }; result: { status: "complete" | "partial"; contract_event_count?: number; amount_available_contract_count?: number; contract_amount?: number; currency?: string; amount_basis?: string; amount_completeness?: string; total_items?: number; returned_items?: number; notices?: ContextNotice[] }; policy: { decision: "allowed"; actor: string; roles: string[]; max_period_years: number; max_pages?: number; validated_period_years?: number; default_period_days?: number }; validation: { published_artifact_checksum: string; approved_capability_binding: boolean; runtime_registry: RegistryRelease | null; executed_pages: number; failed_pages: number[]; data_freshness: string | null; data_freshness_status: "available" | "unavailable"; metadata_quality_status: "available" | "unavailable" }; evidence: Array<{ type: string; locator: string; authority: string; confidence: string | number | null; last_verified_at: string | null }>; warnings: string[] };
 export type SourceSummary = { id: string; name: string; description: string | null; type: "api" | "database"; provider: string | null; items: number; item_label: string };
 export type MappingSummary = { id: string; name: string; description: string; ontology: string; binding_count: number; property_count: number };
 export type LineageLink = { from: string; via: string; to: string; kind: "mapping" | "capability" };
@@ -77,13 +76,14 @@ export type MetadataTableDetail = MetadataEntity & {
   database_schema: Record<string, unknown> | null;
   columns: Array<{ name: string; displayName?: string; description?: string; dataType?: string; fullyQualifiedName?: string; tags?: Array<Record<string, unknown>> }>;
   glossary_terms: Array<Record<string, unknown>>;
+  test_suite: Record<string, unknown> | null;
 };
 export type IntelligenceSuggestion = {
   suggestion_id: string;
   target_type: string;
   target_ref: string;
   suggestion_type: string;
-  proposed_value: { description?: string; ontology_stable_key?: string; alternatives?: Array<{ stable_key: string; score: number }> };
+  proposed_value: { description?: string; column_name?: string; ontology_stable_key?: string; alternatives?: Array<{ stable_key: string; score: number }>; [key: string]: unknown };
   confidence: number;
   rationale: string | null;
   risk_level: "low" | "medium" | "high";
@@ -113,9 +113,22 @@ export type OntologyDiff = { added: string[]; removed: string[]; changed: string
 export type OntologyBindingImpact = { compatible: boolean; incompatible_binding_count: number; incompatible_bindings: Array<{ binding_id: string; stable_key: string; status: string }> };
 const API_ROOT = "/admin-api/v1/admin";
 
+async function responseError(response: Response): Promise<Error> {
+  let message = `Admin API 요청 실패 (${response.status})`;
+  try {
+    const payload = await response.json() as { detail?: string | { message?: string } };
+    const detail = payload.detail;
+    if (typeof detail === "string") message = detail;
+    else if (detail?.message) message = detail.message;
+  } catch {
+    // Keep the status-based fallback for non-JSON gateway responses.
+  }
+  return new Error(message);
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_ROOT}${path}`);
-  if (!response.ok) throw new Error(`Admin API 요청 실패 (${response.status})`);
+  if (!response.ok) throw await responseError(response);
   return response.json() as Promise<T>;
 }
 
@@ -124,22 +137,36 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_ROOT}${path}`, {
     method: "POST", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`Admin API 요청 실패 (${response.status})`);
+  if (!response.ok) throw await responseError(response);
+  return response.json() as Promise<T>;
+}
+
+async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const token = window.sessionStorage.getItem("teoria-admin-token");
+  const response = await fetch(`${API_ROOT}${path}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body),
+  });
+  if (!response.ok) throw await responseError(response);
   return response.json() as Promise<T>;
 }
 
 export const adminApi = {
-  overview: () => getJson<Overview>("/overview"),
-  runtimeContracts: () => getJson<{ runtime_contracts: RuntimeContractSummary[] }>("/runtime-contracts"),
-  runtimeContractGraph: (id: string) => getJson<RuntimeContractGraph>(`/runtime-contracts/${encodeURIComponent(id)}/graph`),
   capabilities: () => getJson<{ capabilities: CapabilitySummary[] }>("/capabilities"),
+  capabilityCoverage: () => getJson<CapabilityCoverage>("/bindings/capability-coverage"),
+  contextQuery: (question: string) => postJson<ContextQueryResult>("/context/execute", { question }),
   sources: () => getJson<{ sources: SourceSummary[] }>("/sources"),
   mappings: () => getJson<{ mappings: MappingSummary[] }>("/mappings"),
   lineage: () => getJson<{ links: LineageLink[] }>("/lineage"),
   validation: () => getJson<ValidationReport>("/validation"),
   registryRelease: () => getJson<RegistryRelease>("/registry-release"),
   metadataStatus: () => getJson<MetadataStatus>("/metadata/status"),
-  metadataTables: (databaseSchema?: string) => getJson<MetadataPage>(`/metadata/tables${databaseSchema ? `?database_schema=${encodeURIComponent(databaseSchema)}` : ""}`),
+  metadataTables: (options?: { databaseSchema?: string; after?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (options?.databaseSchema) params.set("database_schema", options.databaseSchema);
+    if (options?.after) params.set("after", options.after);
+    if (options?.limit) params.set("limit", String(options.limit));
+    return getJson<MetadataPage>(`/metadata/tables${params.size ? `?${params}` : ""}`);
+  },
   metadataTable: (fqn: string) => getJson<MetadataTableDetail>(`/metadata/tables/${encodeURIComponent(fqn)}`),
   intelligenceSuggestions: (status?: string) => getJson<{ items: IntelligenceSuggestion[] }>(`/intelligence/suggestions${status ? `?status=${encodeURIComponent(status)}` : ""}`),
   reviewSuggestion: (id: string, decision: "approve" | "reject") => postJson<IntelligenceSuggestion>(`/intelligence/suggestions/${encodeURIComponent(id)}/reviews`, { decision }),

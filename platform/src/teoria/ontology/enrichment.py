@@ -15,6 +15,7 @@ class PropertySpec(BaseModel):
     code: str
     name: str
     value_type: str
+    stable_key: str | None = None
     unit: str | None = None
     temporal: bool = False
 
@@ -24,6 +25,7 @@ class RelationshipSpec(BaseModel):
     name: str
     source: str
     target: str
+    stable_key: str | None = None
 
 
 class OntologyEnrichmentSpec(BaseModel):
@@ -58,19 +60,45 @@ def apply_ontology_enrichment(repository: OntologyAuthoringRepository, manifest:
             owner = objects.get(prop.object)
             if owner is None:
                 raise ValueError(f"Unknown object {spec.namespace}.{prop.object}")
+            stable_key = prop.stable_key or f"{owner['stable_key']}.{prop.code}"
+            existing_property = next(
+                (item for item in owner["properties"] if item["code"] == prop.code),
+                None,
+            )
+            if existing_property is not None:
+                if existing_property["stable_key"] == stable_key:
+                    continue
+                repository.delete_item(
+                    version_id,
+                    kind="property",
+                    concept_id=UUID(existing_property["concept_id"]),
+                    actor=actor,
+                )
             repository.add_item(version_id, kind="property", payload={
                 "code": prop.code, "name": prop.name,
-                "stable_key": f"{spec.namespace}.{prop.object}.{prop.code}",
+                "stable_key": stable_key,
                 "object_concept_id": owner["concept_id"], "value_type": prop.value_type,
                 "cardinality": "optional", "unit": prop.unit, "temporal": prop.temporal,
             }, actor=actor)
+        existing_relationships = {item["code"]: item for item in detail["relationships"]}
         for rel in spec.relationships:
             source, target = objects.get(rel.source), objects.get(rel.target)
             if source is None or target is None:
                 raise ValueError(f"Unknown relationship endpoint {spec.namespace}.{rel.code}")
+            stable_key = rel.stable_key or f"{spec.namespace}.{rel.code}"
+            existing_relationship = existing_relationships.get(rel.code)
+            if existing_relationship is not None:
+                if existing_relationship["stable_key"] == stable_key:
+                    continue
+                repository.delete_item(
+                    version_id,
+                    kind="relationship",
+                    concept_id=UUID(existing_relationship["concept_id"]),
+                    actor=actor,
+                )
             repository.add_item(version_id, kind="relationship", payload={
                 "code": rel.code, "name": rel.name,
-                "stable_key": f"{spec.namespace}.{rel.code}",
+                "stable_key": stable_key,
                 "source_object_concept_id": source["concept_id"],
                 "target_object_concept_id": target["concept_id"],
                 "source_cardinality": "one", "target_cardinality": "many", "temporal": True,

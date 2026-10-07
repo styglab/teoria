@@ -45,6 +45,15 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_CONTEXT_RUNTIME_API_URL` | `http://localhost:8000` | Context Engine이 승인된 Capability를 실행할 Runtime API 내부 주소 |
 | `TEORIA_CONTEXT_RUNTIME_API_TOKEN` | 없음 | Context Engine 전용 Runtime API service credential; Compose에서는 Runtime token을 주입 |
 | `TEORIA_CONTEXT_RUNTIME_TIMEOUT_SECONDS` | `150` | Context Engine의 Runtime API 호출 제한시간 |
+| `TEORIA_CONTEXT_MAX_PERIOD_YEARS` | `10` | Context 계획이 허용하는 최대 조회 기간 |
+| `TEORIA_CONTEXT_MAX_PAGES` | `100` | Context 실행당 Runtime 페이지 상한 |
+| `TEORIA_POLICY_MODE` | `disabled` | 정책 결정 방식: 개발·테스트용 `disabled`, 운영용 `opa` |
+| `TEORIA_OPA_URL` | `http://localhost:8181` | OPA REST API base URL |
+| `TEORIA_OPA_DECISION_PATH` | `teoria/authz/decision` | OPA Data API에서 평가할 decision document |
+| `TEORIA_OPA_TIMEOUT_SECONDS` | `3` | OPA 정책 결정 제한시간. 실패·undefined decision은 fail-closed |
+| `TEORIA_OPA_CONTROL_PLANE_TOKEN` | 없음 | OPA Bundle·decision log·status 관리 API 전용 bearer credential |
+| `TEORIA_OPA_BUNDLE_PATH` | `/var/lib/teoria/opa/teoria.tar.gz` | Policy Control Plane이 배포할 서명 Bundle 경로 |
+| `TEORIA_OPA_BUNDLE_REVISION` | `development` | Bundle manifest와 decision log에 기록할 불변 revision |
 | `TEORIA_METADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata PostgreSQL connector의 Teoria Data DB read-only 암호 |
 | `TEORIA_LOCAL_PLATFORM_DB_PASSWORD` | 로컬 개발값 | Compose의 Control/Application PostgreSQL 관리 계정 암호 |
 | `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | 주입된 Registry catalog에 published provenance가 있는지 검사하는 개발·테스트 안전장치. 운영 Runtime은 Artifact 설정이 필수 |
@@ -60,7 +69,8 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_MCP_RUNTIME_TIMEOUT_SECONDS` | `150` | Runtime API 호출 timeout |
 
 로컬 Compose 암호 변수는 `deploy/compose/.env.example`을 따른다. 공유·운영 환경에서는 managed secret으로 덮어쓴다.
-`TEORIA_RUNTIME_API_TOKEN`과 `TEORIA_LOCAL_RUNTIME_DB_PASSWORD`에는 기본값이 없으며 Compose 실행 전에 반드시 설정한다.
+`TEORIA_RUNTIME_API_TOKEN`, `TEORIA_OPA_CONTROL_PLANE_TOKEN`과
+`TEORIA_LOCAL_RUNTIME_DB_PASSWORD`에는 기본값이 없으며 Compose 실행 전에 반드시 설정한다.
 Platform, Pipeline 또는 MCP를 Compose 밖에서 직접 실행할 때는
 `TEORIA_ENV_FILE=deploy/compose/.env`를 명시한다.
 
@@ -71,3 +81,10 @@ Platform, Pipeline 또는 MCP를 Compose 밖에서 직접 실행할 때는
 - YAML에는 실제 값이 아닌 환경변수 이름만 기록한다.
 - 로그, verification case와 archive에 키·개인정보·비공개 원본 응답을 남기지 않는다.
 - Pipeline writer와 Runtime reader의 DB 계정·권한을 분리하고 MCP에는 DB 권한을 주지 않는다.
+- Runtime bearer token은 service authentication이며 최종 사용자 권한을 대신하지 않는다.
+  사용자 principal과 role은 신뢰된 Admin/MCP gateway가 Runtime으로 전달하고 OPA가
+  Capability와 Context 정책을 결정한다. 운영 gateway에 OIDC를 연결하기 전에는
+  외부 사용자가 identity 전달 header를 직접 설정할 수 없도록 한다.
+- OPA signing private key는 `opa-signing-keys` volume 또는 외부 secret manager에만
+  보관하고 이미지, Git, 일반 로그에 포함하지 않는다. 공유 환경에서는 revision을
+  소스 commit 또는 policy release ID로 고정한다.

@@ -21,6 +21,9 @@ Provider API ─▶ Pipelines/Prefect ─▶ Teoria Data DB
                          └──── Semantic Binding ─────────┘
                                          │
                                   Runtime API ─▶ MCP
+                                       │
+                                       ▼
+                                  OPA policy decision
 ```
 
 ## 권위 경계
@@ -43,6 +46,12 @@ source이며 `CapabilityTargetRef` Binding으로 Ontology와 연결한다.
   checkpoint를 갱신한다.
 - Runtime은 직접 호출 Source 또는 Data DB의 read-only relation을 Mapping으로
   runtime object에 변환하고 Capability를 실행한다.
+- Context Engine은 질문을 versioned Semantic Query Plan으로 만들고 계획과 실행을
+  분리한다. 두 단계 모두 OPA에 동일한 principal·action·resource 계약으로 정책을
+  질의하며 정책 서비스가 응답하지 않으면 운영 요청을 허용하지 않는다.
+- OPA 정책은 이미지에 직접 적재하지 않는다. 전용 build job이 versioned bundle을
+  RSA로 서명하고 Policy Control Plane이 이를 배포한다. OPA는 공개키 검증에 성공한
+  bundle만 활성화하고 decision log와 agent status를 Application DB로 전송한다.
 - MCP는 Runtime HTTP API만 호출하며 DB 권한이나 Provider credential을 갖지 않는다.
 - Provider wire 계약과 HTTP 실행은 `teoria-provider-api`만 담당한다.
 - Pipeline 실행 코드는 Platform Capability나 Mapping Runtime을 호출하지 않는다.
@@ -72,6 +81,9 @@ Kubernetes work pool을 사용한다.
 - Application DB와 Data DB migration은 이미 적용된 파일을 수정하지 않고 새 순번을 추가한다.
 - Source와 Connector를 같은 API에 중복 등록하지 않는다.
 - 운영에서는 Admin과 Runtime에 별도 bearer credential을 사용한다.
+- 운영에서는 `TEORIA_POLICY_MODE=opa`를 사용한다. `disabled` policy adapter는
+  개발·테스트에서만 허용한다.
+- OPA readiness는 최초 서명 bundle 활성화와 management plugin 상태를 포함한다.
 
 Ontology 모델은 [Ontology](ontology.md), Registry 계약은
 [Registry guide](../registry/README.md), 배포 방법은 [Deployment](../../deploy/README.md)를

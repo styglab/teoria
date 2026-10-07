@@ -232,6 +232,78 @@ services:
     volumes:
       - runtime-redis:/data
 
+  opa-bundle-build:
+    image: teoria-opa-bundle-builder:1.21.1
+    build:
+      context: ../..
+      dockerfile: deploy/compose/opa/Dockerfile
+      target: bundle_builder
+    restart: "no"
+    environment:
+      TEORIA_OPA_BUNDLE_REVISION: ${TEORIA_OPA_BUNDLE_REVISION:-development}
+    volumes:
+      - opa-signing-keys:/keys
+      - opa-bundles:/bundle
+
+  policy-control-plane:
+    image: teoria-platform-authoring:latest
+    build:
+      context: ../..
+      dockerfile: platform/Dockerfile
+      target: authoring
+    restart: unless-stopped
+    command: ["teoria-policy-control-plane"]
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
+      TEORIA_OPA_CONTROL_PLANE_TOKEN: ${TEORIA_OPA_CONTROL_PLANE_TOKEN:?set TEORIA_OPA_CONTROL_PLANE_TOKEN}
+      TEORIA_OPA_BUNDLE_PATH: /var/lib/teoria/opa/teoria.tar.gz
+    volumes:
+      - opa-bundles:/var/lib/teoria/opa:ro
+    depends_on:
+      app-postgres-migrate:
+        condition: service_completed_successfully
+      opa-bundle-build:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "8002"
+
+  opa:
+    image: teoria-opa:1.21.1
+    build:
+      context: ../..
+      dockerfile: deploy/compose/opa/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    command:
+      - run
+      - --server
+      - --addr=0.0.0.0:8181
+      - --log-format=json
+      - --config-file=/config/opa_config.yaml
+      - --set-file=keys.teoria.key=/keys/public.pem
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_OPA_CONTROL_PLANE_TOKEN: ${TEORIA_OPA_CONTROL_PLANE_TOKEN:?set TEORIA_OPA_CONTROL_PLANE_TOKEN}
+    volumes:
+      - opa-signing-keys:/keys:ro
+      - opa-state:/var/lib/opa
+    depends_on:
+      policy-control-plane:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8181/health?bundles=true&plugins=true"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "8181"
+
   prefect-server:
     image: prefecthq/prefect:3-python3.12
     restart: unless-stopped
@@ -440,6 +512,9 @@ services:
       TEORIA_RUNTIME_CACHE_BACKEND: redis
       TEORIA_RUNTIME_CACHE_URL: redis://runtime-redis:6379/0
       TEORIA_RUNTIME_CACHE_PREFIX: teoria:runtime
+      TEORIA_POLICY_MODE: opa
+      TEORIA_OPA_URL: http://opa:8181
+      TEORIA_OPA_DECISION_PATH: teoria/authz/decision
       TEORIA_RUNTIME_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
       TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY: ${TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY:-}
       TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY:-}
@@ -452,6 +527,8 @@ services:
       postgres-migrate:
         condition: service_completed_successfully
       runtime-redis:
+        condition: service_healthy
+      opa:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -480,12 +557,15 @@ services:
       TEORIA_RUNTIME_ARTIFACT_STORE: /app/runtime_artifacts
       TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
       TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
-      TEORIA_OPENMETADATA_ENABLED: ${TEORIA_OPENMETADATA_ENABLED:-false}
+      TEORIA_OPENMETADATA_ENABLED: ${TEORIA_OPENMETADATA_ENABLED:-true}
       TEORIA_OPENMETADATA_BASE_URL: ${TEORIA_OPENMETADATA_BASE_URL:-http://openmetadata-server:8585/api}
       TEORIA_OPENMETADATA_AUTH_TOKEN: ${TEORIA_OPENMETADATA_AUTH_TOKEN:-${OPENMETADATA_INGESTION_BOT_TOKEN:-}}
       TEORIA_OPENMETADATA_DATABASE_SERVICE: ${TEORIA_OPENMETADATA_DATABASE_SERVICE:-teoria_postgresql}
       TEORIA_CONTEXT_RUNTIME_API_URL: http://runtime-api:8000
       TEORIA_CONTEXT_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
+      TEORIA_POLICY_MODE: opa
+      TEORIA_OPA_URL: http://opa:8181
+      TEORIA_OPA_DECISION_PATH: teoria/authz/decision
     volumes:
       - runtime-artifacts:/app/runtime_artifacts:ro
     healthcheck:
@@ -499,6 +579,8 @@ services:
       app-postgres-migrate:
         condition: service_completed_successfully
       runtime-api:
+        condition: service_healthy
+      opa:
         condition: service_healthy
 
   admin-ui:
@@ -647,5 +729,11 @@ volumes:
   runtime-redis:
   runtime-artifacts:
     name: teoria_runtime-artifacts
+  opa-bundles:
+    name: teoria_opa-bundles
+  opa-signing-keys:
+    name: teoria_opa-signing-keys
+  opa-state:
+    name: teoria_opa-state
   codex-auth:
   openmetadata-search:

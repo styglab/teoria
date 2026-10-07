@@ -54,9 +54,14 @@ def apply_capability_binding_manifest(
     diagnostics = manifest.validate_catalog(catalog)
     if diagnostics:
         raise ValueError("; ".join(diagnostics))
+    if approve and catalog.release is None:
+        raise ValueError(
+            "Approved Capability bindings require an immutable Registry release"
+        )
     registry_version = catalog.release.version if catalog.release else "draft"
     created = []
     unchanged = []
+    replaced = []
     for item in manifest.bindings:
         concept = repository.get_published_concept(
             item.ontology_stable_key,
@@ -78,8 +83,17 @@ def apply_capability_binding_manifest(
             target_locator=locator,
         )
         if existing:
-            unchanged.append(existing)
-            continue
+            if existing.get("target_version") == registry_version:
+                unchanged.append(existing)
+                continue
+            decision = "deprecate" if existing["status"] == "approved" else "reject"
+            replaced.append(repository.review_binding(
+                existing["binding_id"], decision=decision, reviewer=actor,
+                comment=(
+                    "Superseded by Capability binding verified against Registry "
+                    f"release {registry_version}"
+                ),
+            ))
         binding = repository.create_capability_binding(
             ontology_ref_type=concept["concept_kind"],
             ontology_ref_id=None,
@@ -108,5 +122,6 @@ def apply_capability_binding_manifest(
         "binding_count": len(created) + len(unchanged),
         "created_count": len(created),
         "unchanged_count": len(unchanged),
+        "replaced_count": len(replaced),
         "bindings": created + unchanged,
     }

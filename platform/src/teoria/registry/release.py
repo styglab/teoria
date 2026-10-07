@@ -74,9 +74,29 @@ def publish_registry(
 
 def _git_commit(root: Path) -> str:
     try:
+        repository = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        relative_root = root.resolve().relative_to(Path(repository).resolve())
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=normal", "--", relative_root.as_posix()],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if status.stdout.strip():
+            raise ValueError(
+                "Registry has uncommitted changes; commit them before publishing "
+                "or pass an explicit provenance with --git-commit"
+            )
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
-            cwd=root,
+            cwd=repository,
             check=True,
             capture_output=True,
             text=True,

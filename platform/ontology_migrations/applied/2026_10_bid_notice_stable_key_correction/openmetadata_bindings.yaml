@@ -1,0 +1,23 @@
+schema_version: "1.0"
+ontology_namespace: teoria
+ontology_version: 0.1.4
+status: reviewed_correction
+bindings:
+  - ontology_stable_key: procurement.BidNotice.estimatedPrice
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.runtime_bid_notices.estimated_price
+    binding_type: represents
+    purpose: discovery
+    authority: authoritative
+    priority: 100
+    note: 0.1.3에서 잘못 생성된 teoria.BidNotice.estimatedPrice Stable Key 교정
+  - ontology_stable_key: procurement.BidNotice.workType
+    target_type: data_asset
+    entity_type: column
+    fully_qualified_name: teoria_postgresql.teoria_data.public_procurement.runtime_bid_notices.work_type
+    binding_type: represents
+    purpose: discovery
+    authority: authoritative
+    priority: 100
+    note: 0.1.3에서 잘못 생성된 teoria.BidNotice.workType Stable Key 교정

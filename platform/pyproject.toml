@@ -35,6 +35,7 @@ dev = [
 teoria = "teoria.entrypoints.cli:main"
 teoria-runtime-api = "teoria.entrypoints.runtime_api:main"
 teoria-admin-api = "teoria.entrypoints.admin_api:main"
+teoria-policy-control-plane = "teoria.entrypoints.policy_control_plane:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/teoria"]

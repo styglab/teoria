@@ -1,0 +1,7 @@
+schema_version: "1.0"
+ontologies:
+  - namespace: teoria
+    target_version: 0.1.3
+    properties:
+      - {object: BidNotice, code: estimatedPrice, name: 추정가격, value_type: decimal, unit: KRW}
+      - {object: BidNotice, code: workType, name: 업무유형, value_type: string}

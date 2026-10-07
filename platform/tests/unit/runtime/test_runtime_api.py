@@ -7,6 +7,7 @@ from teoria.config import Settings
 from teoria.registry.loader import RegistryLoader
 from teoria.runtime.api import create_runtime_app
 from teoria.runtime.capability.runner import CapabilityResult
+from teoria.policy import PolicyDecision
 
 
 REGISTRIES = Path(__file__).parents[3] / "registries"
@@ -19,6 +20,15 @@ class CapturingRunner:
     async def run(self, catalog, capability_id, inputs):
         self.call = capability_id, inputs
         return CapabilityResult(capability_id=capability_id)
+
+
+class DenyPolicy:
+    async def decide(self, **request):
+        return PolicyDecision(
+            allow=False,
+            reason="missing_capability_permission",
+            decision_id="deny-1",
+        )
 
 
 def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
@@ -77,6 +87,34 @@ def test_runtime_api_rejects_invalid_capability_input() -> None:
     )
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "invalid_capability_input"
+
+
+def test_runtime_api_enforces_policy_before_capability_execution() -> None:
+    runner = CapturingRunner()
+    app = create_runtime_app(
+        settings=Settings(runtime_api_token="test-token"),
+        catalog=RegistryLoader(REGISTRIES).load(),
+        runner=runner,
+        policy_evaluator=DenyPolicy(),
+    )
+    response = TestClient(app).post(
+        "/v1/capabilities/search_public_procurement_contracts:execute",
+        headers={"Authorization": "Bearer test-token"},
+        json={
+            "inputs": {
+                "concluded_date_from": "2026-01-01",
+                "concluded_date_to": "2026-01-02",
+            }
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == {
+        "code": "policy_denied",
+        "reason": "missing_capability_permission",
+        "decision_id": "deny-1",
+    }
+    assert runner.call is None
 
 
 def test_runtime_api_does_not_discover_removed_capabilities() -> None:

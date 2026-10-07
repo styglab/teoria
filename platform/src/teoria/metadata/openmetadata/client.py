@@ -29,6 +29,9 @@ class OpenMetadataClient:
             headers={"Content-Type": "application/json-patch+json"},
         )
 
+    async def post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self._request("POST", path, json=payload)
+
     async def _request(
         self,
         method: str,
@@ -65,11 +68,80 @@ class OpenMetadataClient:
     async def get_table_by_name(self, fully_qualified_name: str) -> dict[str, Any]:
         return await self.get(
             f"v1/tables/name/{quote(fully_qualified_name, safe='')}",
-            params={"fields": "owners,tags,domains,columns,database,databaseSchema"},
+            params={"fields": "owners,tags,domains,columns,database,databaseSchema,testSuite"},
         )
 
     async def update_table_description(self, table_id: str, description: str, *, has_description: bool) -> dict[str, Any]:
         return await self.patch(
             f"v1/tables/{quote(table_id, safe='')}",
             [{"op": "replace" if has_description else "add", "path": "/description", "value": description}],
+        )
+
+    async def update_column_description(
+        self, table_id: str, *, column_index: int, description: str,
+        has_description: bool,
+    ) -> dict[str, Any]:
+        return await self.patch(
+            f"v1/tables/{quote(table_id, safe='')}",
+            [{
+                "op": "replace" if has_description else "add",
+                "path": f"/columns/{column_index}/description",
+                "value": description,
+            }],
+        )
+
+    async def create_glossary_term(self, payload: dict[str, Any]) -> dict[str, Any]:
+        allowed = {
+            "glossary", "parent", "name", "displayName", "description",
+            "synonyms", "relatedTerms", "references", "reviewers", "owners",
+            "tags", "domains",
+        }
+        return await self.post(
+            "v1/glossaryTerms", {key: value for key, value in payload.items() if key in allowed},
+        )
+
+    async def create_test_case(self, payload: dict[str, Any]) -> dict[str, Any]:
+        allowed = {
+            "name", "displayName", "description", "testDefinition", "entityLink",
+            "parameterValues", "owners", "reviewers", "computePassedFailedRowCount",
+            "useDynamicAssertion", "tags", "dimensionColumns", "domains",
+        }
+        return await self.post(
+            "v1/dataQuality/testCases",
+            {key: value for key, value in payload.items() if key in allowed},
+        )
+
+    async def get_test_case(self, test_case_id: str) -> dict[str, Any]:
+        return await self.get(f"v1/dataQuality/testCases/{quote(test_case_id, safe='')}")
+
+    async def create_test_suite(self, payload: dict[str, Any]) -> dict[str, Any]:
+        allowed = {
+            "name", "displayName", "description", "owners",
+            "basicEntityReference", "domains", "tags", "reviewers",
+        }
+        return await self.post(
+            "v1/dataQuality/testSuites/basic",
+            {key: value for key, value in payload.items() if key in allowed},
+        )
+
+    async def get_test_suite(self, test_suite_id: str) -> dict[str, Any]:
+        return await self.get(f"v1/dataQuality/testSuites/{quote(test_suite_id, safe='')}")
+
+    async def assign_column_glossary_term(
+        self, table_id: str, *, column_index: int, term_fqn: str, already_assigned: bool
+    ) -> dict[str, Any]:
+        if already_assigned:
+            return await self.get(f"v1/tables/{quote(table_id, safe='')}", params={"fields": "columns"})
+        return await self.patch(
+            f"v1/tables/{quote(table_id, safe='')}",
+            [{
+                "op": "add",
+                "path": f"/columns/{column_index}/tags/-",
+                "value": {
+                    "tagFQN": term_fqn,
+                    "source": "Glossary",
+                    "labelType": "Manual",
+                    "state": "Confirmed",
+                },
+            }],
         )

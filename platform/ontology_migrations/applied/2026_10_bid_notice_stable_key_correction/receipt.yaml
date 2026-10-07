@@ -1,0 +1,13 @@
+schema_version: "1.0"
+migration_id: 2026_10_bid_notice_stable_key_correction
+ontology_namespace: teoria
+ontology_version: 0.1.4
+ontology_artifact_checksum: dd978094dc04fc59b51457f513f95f2184144485366bc7b44638d93321aad254
+registry_release_version: 2026.10.07.9
+registry_checksum: sha256:ea22feb7fe8bc279ed68ddf5d9e0cb56dece84f39368e0aa89fa50a0838c31a8
+runtime_bundle_version: 2026.10.07.9
+runtime_bundle_checksum: sha256:b5bc8edb9f2a136767347ac07540dadb1c85e32e1b9748ca436b920bb738d6ef
+recorded_git_commit: 69e53bb0437775fd9fafbe0cf03a8e2ed3c36481-dirty-correction
+provenance_status: explicit_dirty_worktree
+applied_by: system:stable-key-correction
+note: 0.1.3의 잘못된 두 BidNotice Property Stable Key를 교정하고 모든 승인 Capability Binding을 immutable Registry release에 재검증했다.

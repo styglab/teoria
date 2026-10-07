@@ -41,6 +41,8 @@ Compose 밖에서 직접 실행할 때는 `TEORIA_ENV_FILE=deploy/compose/.env`�
 TEORIA_PREFECT_USERNAME=admin
 TEORIA_PREFECT_PASSWORD=충분히-긴-비밀번호
 TEORIA_RUNTIME_API_TOKEN=충분히-긴-임의-토큰
+TEORIA_OPA_CONTROL_PLANE_TOKEN=Runtime과 다른-충분히-긴-임의-토큰
+TEORIA_OPA_BUNDLE_REVISION=배포-commit-또는-policy-release-id
 TEORIA_LOCAL_RUNTIME_DB_PASSWORD=충분히-긴-로컬-비밀번호
 TEORIA_OBJECT_STORAGE_ENDPOINT=https://minio.example.com
 TEORIA_OBJECT_STORAGE_ACCESS_KEY=외부-MinIO-access-key
@@ -51,7 +53,7 @@ TEORIA_PIPELINE_DATA_DATABASE_URL=
 TEORIA_RUNTIME_DATA_DATABASE_URL=
 ```
 
-Prefect 계정과 Runtime 비밀값이 없으면 Compose는 시작하지 않는다. 외부 HTTP 요청은 nginx의 단일 포트로만 받고, Admin UI/API, Runtime API와 Prefect Server는 Compose 내부 네트워크에만 노출한다.
+Prefect 계정, Runtime과 OPA Control Plane 비밀값이 없으면 Compose는 시작하지 않는다. 외부 HTTP 요청은 nginx의 단일 포트로만 받고, Admin UI/API, Runtime API, OPA와 Policy Control Plane은 Compose 내부 네트워크에만 노출한다.
 Pipeline Object Storage도 Compose에서 실행하지 않으며 사전에 준비된 외부 S3 호환 MinIO와 bucket을 사용한다.
 
 Data DB는 기본적으로 Compose의 `postgres`를 사용한다. 외부 PostgreSQL을 사용할 때는 `.env`에
@@ -85,6 +87,13 @@ PostgreSQL → migration ┐
 Prefect DB ─┬→ Server → work pool → prefect-deploy ┘
 Redis ──────┴→ Background Services
 ```
+
+OPA는 `opa-bundle-build`가 Rego를 검사하고 RSA 서명 Bundle을 생성한 뒤 시작한다.
+`policy-control-plane`은 인증된 Bundle download, gzip decision log와 status 수집만
+제공한다. OPA healthcheck는 `/health?bundles=true&plugins=true`를 사용하므로 최초
+Bundle 활성화나 management plugin 초기화가 실패하면 Runtime과 Admin API가 시작되지
+않는다. signing private key, Bundle과 OPA last-known-good state는 각각 이름 있는
+volume에 보존된다.
 
 `prefect-redis`는 Prefect 메시징 전용이고 `runtime-redis`는 Runtime Capability 결과 캐시
 전용이다. Runtime API를 여러 replica로 실행해도 Registry 버전과 Capability 입력이 같은 결과를

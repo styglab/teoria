@@ -1,151 +1,84 @@
 import { useEffect, useState } from "react";
-import { Activity, Boxes, Braces, CircleDot, Database, GitFork, Lightbulb, Moon, Network, Search, Sun, Workflow, X } from "lucide-react";
-import { adminApi, type CapabilitySummary, type LineageLink, type LinkEdge, type MappingSummary, type ObjectNode, type RuntimeContractGraph as GraphData, type RuntimeContractSummary, type Overview, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/admin";
-import { MetricCard } from "../components/MetricCard";
-import { DetailPanel } from "../features/ontology/DetailPanel";
-import { OntologyGraph } from "../features/ontology/OntologyGraph";
-import { CapabilitiesView, LineageView, MappingsView, SourcesView } from "../features/registry/RegistryViews";
-import { ValidationView } from "../features/validation/ValidationView";
-import { MetadataExplorer } from "../features/metadata/MetadataExplorer";
-import { SuggestionReview } from "../features/intelligence/SuggestionReview";
+import type { ReactNode } from "react";
+import { Boxes, Braces, CheckCircle2, Database, GitFork, Home, Inbox, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { adminApi, type CapabilitySummary, type LineageLink, type MappingSummary, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/admin";
+import { Button } from "../components/ui/button";
 import { BindingManager } from "../features/binding/BindingManager";
+import { CapabilityStudio } from "../features/capability/CapabilityStudio";
+import { ContextConsole } from "../features/context/ContextConsole";
+import { SuggestionReview } from "../features/intelligence/SuggestionReview";
+import { MetadataExplorer } from "../features/metadata/MetadataExplorer";
 import { OntologyAuthoring } from "../features/ontology/OntologyAuthoring";
 
-type Section = "metadata" | "intelligence" | "authoring" | "runtime_contracts" | "bindings" | "capabilities" | "sources" | "mappings" | "lineage";
-type Theme = "light" | "dark";
+const sections = [
+  { path: "/admin/ask", label: "Ask Teoria", description: "의미 기반 질문 실행", icon: Home },
+  { path: "/admin/capabilities", label: "Capabilities", description: "기능 계약과 준비도", icon: Braces },
+  { path: "/admin/data-catalog", label: "Data Catalog", description: "OpenMetadata 자산과 컬럼", icon: Database },
+  { path: "/admin/review-queue", label: "Review Queue", description: "AI 제안 검토", icon: Inbox },
+  { path: "/admin/semantic-bindings", label: "Semantic Bindings", description: "의미 연결과 승인", icon: GitFork },
+  { path: "/admin/business-concepts", label: "Business Concepts", description: "Ontology authoring", icon: Boxes },
+];
 
-const sectionCopy: Record<Exclude<Section, "runtime_contracts">, { eyebrow: string; title: string; description: string }> = {
-  metadata: { eyebrow: "METADATA FOUNDATION", title: "Metadata", description: "OpenMetadata가 관리하는 데이터 자산과 연결 상태를 확인합니다." },
-  intelligence: { eyebrow: "METADATA INTELLIGENCE", title: "Suggestions", description: "AI가 제안한 메타데이터 변경을 검토하고 승인된 변경만 권위 저장소에 반영합니다." },
-  authoring: { eyebrow: "BUSINESS KNOWLEDGE", title: "Ontology Authoring", description: "Published Ontology에서 Draft를 만들고 검토·승인·게시합니다." },
-  bindings: { eyebrow: "SEMANTIC GOVERNANCE", title: "Bindings", description: "Business Ontology와 OpenMetadata의 의미 연결을 생성하고 검토합니다." },
-  capabilities: { eyebrow: "SEMANTIC OPERATIONS", title: "Capabilities", description: "사용자 요청을 실행 가능한 Source Operation과 Runtime 반환 계약으로 연결합니다." },
-  sources: { eyebrow: "DATA CONTRACTS", title: "Sources", description: "Semantic Runtime이 직접 호출하거나 조회하는 외부 API와 Database Source를 확인합니다." },
-  mappings: { eyebrow: "RUNTIME TRANSFORMATION", title: "Mappings", description: "Source 필드가 Runtime Object와 속성으로 변환되는 실행 계약을 확인합니다." },
-  lineage: { eyebrow: "REGISTRY LINEAGE", title: "Lineage", description: "Source에서 Mapping과 Capability를 거쳐 Runtime Contract로 이어지는 실행 계보를 확인합니다." },
-};
+function FramedPage({ children }: { children: ReactNode }) {
+  return <div className="h-full overflow-hidden p-4"><section className="h-full overflow-hidden rounded-xl border border-border bg-card">{children}</section></div>;
+}
 
 export function App() {
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [runtimeContracts, setRuntimeContracts] = useState<RuntimeContractSummary[]>([]);
-  const [selectedRuntimeContract, setSelectedRuntimeContract] = useState<string>("");
-  const [graph, setGraph] = useState<GraphData | null>(null);
-  const [selectedItem, setSelectedItem] = useState<ObjectNode | LinkEdge | null>(null);
-  const [validation, setValidation] = useState<ValidationReport | null>(null);
-  const [registryRelease, setRegistryRelease] = useState<RegistryRelease | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const location = useLocation();
+  const navigate = useNavigate();
   const [capabilities, setCapabilities] = useState<CapabilitySummary[]>([]);
   const [sources, setSources] = useState<SourceSummary[]>([]);
   const [mappings, setMappings] = useState<MappingSummary[]>([]);
   const [lineage, setLineage] = useState<LineageLink[]>([]);
-  const [section, setSection] = useState<Section>("runtime_contracts");
-  const [validationOpen, setValidationOpen] = useState(false);
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = window.localStorage.getItem("teoria-admin-theme");
-    if (saved === "light" || saved === "dark") return saved;
-    return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  });
+  const [validation, setValidation] = useState<ValidationReport | null>(null);
+  const [release, setRelease] = useState<RegistryRelease | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("teoria-admin-theme", theme);
-  }, [theme]);
-
-  useEffect(() => {
-    Promise.all([adminApi.overview(), adminApi.runtimeContracts(), adminApi.validation(), adminApi.registryRelease(), adminApi.capabilities(), adminApi.sources(), adminApi.mappings(), adminApi.lineage()])
-      .then(([nextOverview, response, nextValidation, nextRegistryRelease, capabilityResponse, sourceResponse, mappingResponse, lineageResponse]) => {
-        setOverview(nextOverview);
-        setRuntimeContracts(response.runtime_contracts);
-        setValidation(nextValidation);
-        setRegistryRelease(nextRegistryRelease);
+    Promise.all([adminApi.capabilities(), adminApi.sources(), adminApi.mappings(), adminApi.lineage(), adminApi.validation(), adminApi.registryRelease()])
+      .then(([capabilityResponse, sourceResponse, mappingResponse, lineageResponse, validationResponse, releaseResponse]) => {
         setCapabilities(capabilityResponse.capabilities);
         setSources(sourceResponse.sources);
         setMappings(mappingResponse.mappings);
         setLineage(lineageResponse.links);
-        setSelectedRuntimeContract(response.runtime_contracts.length ? "all" : "");
+        setValidation(validationResponse);
+        setRelease(releaseResponse);
       })
       .catch((reason: Error) => setError(reason.message));
   }, []);
 
-  useEffect(() => {
-    if (!selectedRuntimeContract) return;
-    setSelectedItem(null);
-    adminApi.runtimeContractGraph(selectedRuntimeContract).then(setGraph).catch((reason: Error) => setError(reason.message));
-  }, [selectedRuntimeContract]);
+  const current = sections.find((item) => location.pathname === item.path) ?? sections[0];
+  return <div className={`min-h-screen bg-background text-foreground ${sidebarOpen ? "pl-64" : "pl-16"}`}>
+    <aside className={`fixed inset-y-0 left-0 z-30 flex flex-col border-r border-border bg-background transition-[width] ${sidebarOpen ? "w-64" : "w-16"}`}>
+      <Link to="/admin/ask" className="flex h-16 cursor-pointer items-center border-b border-border px-4" aria-label="Ask Teoria 홈">
+        <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground text-background"><Braces className="size-4" /></div>
+        {sidebarOpen && <div className="ml-3 min-w-0"><strong className="block text-sm tracking-tight">Teoria</strong><span className="block text-[11px] text-muted-foreground">Semantic Operations</span></div>}
+      </Link>
+      <nav className="flex-1 space-y-1 p-2" aria-label="주요 메뉴">
+        {sections.map((item) => { const Icon = item.icon; return <NavLink key={item.path} to={item.path} className={({ isActive }) => `flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isActive ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`} title={!sidebarOpen ? item.label : undefined}><Icon className="size-4 shrink-0" />{sidebarOpen && <span className="min-w-0"><strong className="block truncate text-xs font-medium">{item.label}</strong><small className="mt-0.5 block truncate text-[10px] text-muted-foreground">{item.description}</small></span>}</NavLink>; })}
+      </nav>
+      <div className="border-t border-border p-2"><button onClick={() => setSidebarOpen((value) => !value)} className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}{sidebarOpen && "사이드바 접기"}</button></div>
+    </aside>
 
-  const counts = overview?.counts;
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand-mark"><CircleDot size={18} /></div>
-        <div className="brand"><strong>Teoria</strong><span>Semantic Admin</span></div>
-        <div className="global-search"><Search size={15} /><input placeholder="Registry 검색" disabled /><kbd>/</kbd></div>
-        <span className={`release-badge ${registryRelease?.status ?? "draft"}`} title={registryRelease?.checksum ?? undefined}>Registry {registryRelease?.version ?? "Draft"}</span>
-        <button className="theme-toggle" aria-label={`${theme === "dark" ? "라이트" : "다크"} 모드로 전환`} onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
-        <button className={`status ${overview?.validation.status === "valid" ? "ok" : ""}`} onClick={() => setValidationOpen(true)}><Activity size={14} /> Registry {overview?.validation.status ?? "loading"}</button>
-      </header>
+    <header className={`fixed inset-x-0 top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur ${sidebarOpen ? "left-64" : "left-16"}`}>
+      <div className="flex items-center gap-3"><Menu className="size-4 text-muted-foreground md:hidden" /><div><h1 className="text-sm font-semibold tracking-tight">{current.label}</h1><p className="text-[11px] text-muted-foreground">{current.description}</p></div></div>
+      <div className="flex items-center gap-2"><span className="hidden text-[11px] text-muted-foreground sm:inline">Registry {release?.version ?? "draft"}</span><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] ${validation?.status === "valid" ? "border-border text-foreground" : "border-destructive/30 text-destructive"}`}><CheckCircle2 className="size-3" />{validation?.status === "valid" ? "검증됨" : `${validation?.diagnostic_count ?? 0} issues`}</span></div>
+    </header>
 
-      <aside className="sidebar">
-        <nav>
-          <span className="nav-group-label">FOUNDATION</span>
-          <button className={section === "metadata" ? "active" : ""} onClick={() => { setSection("metadata"); setSelectedItem(null); }}><Database size={16} /> Metadata</button>
-          <button className={section === "intelligence" ? "active" : ""} onClick={() => { setSection("intelligence"); setSelectedItem(null); }}><Lightbulb size={16} /> Suggestions</button>
-          <button className={section === "bindings" ? "active" : ""} onClick={() => { setSection("bindings"); setSelectedItem(null); }}><GitFork size={16} /> Bindings</button>
-          <button className={section === "authoring" ? "active" : ""} onClick={() => { setSection("authoring"); setSelectedItem(null); }}><Boxes size={16} /> Ontology Authoring</button>
-          <span className="nav-group-label">REGISTRY</span>
-          <button className={section === "runtime_contracts" ? "active" : ""} onClick={() => setSection("runtime_contracts")}><Network size={16} /> Runtime Registry</button>
-          <button className={section === "capabilities" ? "active" : ""} onClick={() => { setSection("capabilities"); setSelectedItem(null); }}><Braces size={16} /> Capabilities</button>
-          <button className={section === "sources" ? "active" : ""} onClick={() => { setSection("sources"); setSelectedItem(null); }}><Database size={16} /> Sources</button>
-          <button className={section === "mappings" ? "active" : ""} onClick={() => { setSection("mappings"); setSelectedItem(null); }}><GitFork size={16} /> Mappings</button>
-          <button className={section === "lineage" ? "active" : ""} onClick={() => { setSection("lineage"); setSelectedItem(null); }}><Workflow size={16} /> Lineage</button>
-        </nav>
-        {section === "runtime_contracts" && <div className="ontology-list">
-          <span>RUNTIME CONTRACT DOMAINS</span>
-          <button className={selectedRuntimeContract === "all" ? "selected" : ""} onClick={() => setSelectedRuntimeContract("all")}>
-            <i /><div><strong>전체 Runtime Contract</strong><small>{overview?.counts.runtime_object_types ?? 0} objects · {overview?.counts.runtime_link_types ?? 0} links</small></div>
-          </button>
-          {runtimeContracts.map((contract) => (
-            <button key={contract.id} className={contract.id === selectedRuntimeContract ? "selected" : ""} onClick={() => setSelectedRuntimeContract(contract.id)}>
-              <i /><div><strong>{contract.name}</strong><small>{contract.object_count} objects · {contract.link_count} links</small></div>
-            </button>
-          ))}
-        </div>}
-      </aside>
-
-      <main>
-        <section className="overview-row">
-          <MetricCard label="Runtime domains" value={counts?.runtime_contract_domains ?? 0} icon={<Network size={17} />} />
-          <MetricCard label="Object types" value={counts?.runtime_object_types ?? 0} icon={<Boxes size={17} />} />
-          <MetricCard label="Link types" value={counts?.runtime_link_types ?? 0} icon={<GitFork size={17} />} />
-          <MetricCard label="Capabilities" value={counts?.capabilities ?? 0} icon={<Braces size={17} />} />
-        </section>
-        {section === "runtime_contracts" ? <section className="workspace">
-          <div className="workspace-header">
-            <div><span>RUNTIME CONTRACT EXPLORER</span><h1>{graph?.runtime_contract.name ?? "Registry 불러오는 중"}</h1><p>{graph?.runtime_contract.description}</p></div>
-            {graph && <div className="graph-counts"><b>{graph.nodes.length}</b> nodes <b>{graph.edges.length}</b> edges</div>}
-          </div>
-          <div className="canvas-wrap">
-            {error && <div className="error-state">{error}</div>}
-            {!error && graph && <OntologyGraph graph={graph} onSelect={setSelectedItem} />}
-            {!error && !graph && <div className="loading-state">Registry graph를 구성하고 있습니다…</div>}
-          </div>
-        </section> : <section className="workspace">
-          <div className="workspace-header">
-            <div><span>{sectionCopy[section].eyebrow}</span><h1>{sectionCopy[section].title}</h1><p>{sectionCopy[section].description}</p></div>
-            {section !== "intelligence" && section !== "bindings" && <div className="graph-counts"><b>{section === "capabilities" ? capabilities.length : section === "sources" ? sources.length : section === "mappings" ? mappings.length : lineage.length}</b> items</div>}
-          </div>
-          <div className="canvas-wrap">
-            {error ? <div className="error-state">{error}</div> : section === "metadata" ? <MetadataExplorer /> : section === "intelligence" ? <SuggestionReview /> : section === "authoring" ? <OntologyAuthoring /> : section === "bindings" ? <BindingManager /> : section === "capabilities" ? <CapabilitiesView items={capabilities} /> : section === "sources" ? <SourcesView items={sources} /> : section === "mappings" ? <MappingsView items={mappings} /> : <LineageView links={lineage} />}
-          </div>
-        </section>}
-      </main>
-      {selectedItem && <DetailPanel item={selectedItem} onClose={() => setSelectedItem(null)} />}
-      {validationOpen && <div className="validation-backdrop" onMouseDown={() => setValidationOpen(false)}>
-        <section className="validation-dialog" role="dialog" aria-modal="true" aria-labelledby="validation-title" onMouseDown={(event) => event.stopPropagation()}>
-          <header><div><span>REGISTRY DIAGNOSTICS</span><h2 id="validation-title">Registry Validation</h2><p>Semantic Registry의 구조와 교차 계약 검증 결과입니다.</p></div><button className="icon-button" aria-label="닫기" onClick={() => setValidationOpen(false)}><X size={16} /></button></header>
-          <div className="validation-dialog-body">{error ? <div className="error-state">{error}</div> : <ValidationView report={validation} />}</div>
-        </section>
-      </div>}
-    </div>
-  );
+    <main className="h-screen pt-16">
+      {error ? <div className="grid h-full place-items-center"><div className="rounded-lg border border-destructive/30 px-4 py-3 text-sm text-destructive">{error}</div></div> : <Routes>
+        <Route path="/" element={<Navigate to="/admin/ask" replace />} />
+        <Route path="/admin" element={<Navigate to="/admin/ask" replace />} />
+        <Route path="/admin/ask" element={<ContextConsole />} />
+        <Route path="/admin/capabilities" element={<CapabilityStudio capabilities={capabilities} sources={sources} mappings={mappings} lineage={lineage} validation={validation} onOpenBindings={() => navigate("/admin/semantic-bindings")} />} />
+        <Route path="/admin/data-catalog" element={<FramedPage><MetadataExplorer /></FramedPage>} />
+        <Route path="/admin/review-queue" element={<FramedPage><SuggestionReview /></FramedPage>} />
+        <Route path="/admin/semantic-bindings" element={<FramedPage><BindingManager /></FramedPage>} />
+        <Route path="/admin/business-concepts" element={<FramedPage><OntologyAuthoring /></FramedPage>} />
+        <Route path="*" element={<Navigate to="/admin/ask" replace />} />
+      </Routes>}
+    </main>
+  </div>;
 }

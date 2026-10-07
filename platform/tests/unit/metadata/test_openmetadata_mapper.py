@@ -13,6 +13,8 @@ def test_maps_table_columns_and_glossary_terms() -> None:
         "id": "1", "name": "contracts", "fullyQualifiedName": "svc.db.schema.contracts",
         "columns": [{"name": "amount", "dataType": "NUMERIC"}],
         "tags": [{"tagFQN": "계약.계약금액", "source": "Glossary"}, {"tagFQN": "PII", "source": "Classification"}],
+        "testSuite": {"id": "suite-1", "name": "contracts.testSuite"},
     })
     assert result.columns[0]["name"] == "amount"
     assert result.glossary_terms == [{"tagFQN": "계약.계약금액", "source": "Glossary"}]
+    assert result.test_suite == {"id": "suite-1", "name": "contracts.testSuite"}

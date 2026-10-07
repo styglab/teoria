@@ -1,4 +1,11 @@
 _PROCUREMENT_OUTCOME_AWARDS_QUERY = """
+WITH scoped_awards AS MATERIALIZED (
+  SELECT a.*
+  FROM public_procurement.runtime_bid_awards a
+  WHERE a.demand_organization_code=%(organization_code)s
+    AND COALESCE(a.final_award_date,a.opening_at::date) >= %(period_from)s
+    AND COALESCE(a.final_award_date,a.opening_at::date) < %(period_to)s
+)
 SELECT a.award_id,a.bid_notice_id,a.bid_classification_number,a.rebid_number,
        a.notice_name,a.demand_organization_name AS organization_name,
        COALESCE(a.final_award_date,a.opening_at::date) AS award_date,
@@ -9,12 +16,14 @@ SELECT a.award_id,a.bid_notice_id,a.bid_classification_number,a.rebid_number,
        CASE WHEN n.is_latest_in_lineage THEN n.bid_notice_id
             ELSE COALESCE(n.superseded_by_bid_notice_id,n.bid_notice_id) END
          AS representative_bid_notice_id
-FROM public_procurement.runtime_bid_awards a
-LEFT JOIN public_procurement.runtime_bid_notices n
-  ON n.notice_number=a.notice_number AND n.notice_order=a.notice_order
-WHERE a.demand_organization_code=%(organization_code)s
-  AND COALESCE(a.final_award_date,a.opening_at::date) >= %(period_from)s
-  AND COALESCE(a.final_award_date,a.opening_at::date) < %(period_to)s
+FROM scoped_awards a
+LEFT JOIN LATERAL (
+  SELECT n.notice_lineage_id,n.root_bid_notice_id,n.lineage_count,
+         n.is_latest_in_lineage,n.bid_notice_id,n.superseded_by_bid_notice_id
+  FROM public_procurement.runtime_bid_notices n
+  WHERE n.notice_number=a.notice_number AND n.notice_order=a.notice_order
+  LIMIT 1
+) n ON true
 ORDER BY COALESCE(a.final_award_date,a.opening_at::date) DESC,a.award_id DESC
 """
 

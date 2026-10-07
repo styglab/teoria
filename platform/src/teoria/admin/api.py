@@ -17,6 +17,7 @@ from teoria.admin.ontology_authoring_api import create_ontology_authoring_router
 from teoria.admin.context_api import create_context_router
 from teoria.binding.repository import BindingRepository
 from teoria.context import ContextEngine
+from teoria.context.service import ContextExecutionPolicy
 from teoria.context.repository import BundleContextRepository, ContextRepository
 from teoria.context.runtime_client import ContextRuntimeClient
 from teoria.intelligence.repository import SuggestionRepository
@@ -25,6 +26,7 @@ from teoria.ontology.authoring import OntologyAuthoringRepository
 from teoria.ontology.migration import OntologyMigrationManifest, build_migration_report
 from teoria.config import Settings, bootstrap_settings
 from teoria.metadata.openmetadata import OpenMetadataClient, OpenMetadataService
+from teoria.policy import PolicyEvaluator, create_policy_evaluator
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.registry.validation.registry import RegistryValidator
 
@@ -38,9 +40,13 @@ def create_admin_app(
     binding_repository: BindingRepository | None = None,
     suggestion_repository: SuggestionRepository | None = None,
     context_engine: ContextEngine | None = None,
+    policy_evaluator: PolicyEvaluator | None = None,
 ) -> FastAPI:
     resolved_settings = settings or bootstrap_settings()
     authorizer = AdminAuthorizer(resolved_settings)
+    resolved_policy_evaluator = policy_evaluator or create_policy_evaluator(
+        resolved_settings
+    )
     resolved_catalog = catalog or RegistryLoader(resolved_settings.registry_path).load()
     resolved_bid_reader = bid_check_reader or (
         BidCheckReader(resolved_settings.admin_data_database_url)
@@ -87,6 +93,11 @@ def create_admin_app(
                 resolved_settings.context_runtime_api_token,
                 timeout_seconds=resolved_settings.context_runtime_timeout_seconds,
             ) if resolved_settings.context_runtime_api_token else None,
+            ContextExecutionPolicy(
+                max_period_years=resolved_settings.context_max_period_years,
+                max_pages=resolved_settings.context_max_pages,
+            ),
+            resolved_policy_evaluator,
         )
         if runtime_context_repository is not None else None
     )
@@ -99,7 +110,7 @@ def create_admin_app(
         app.add_middleware(
             CORSMiddleware,
             allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173"],
-            allow_methods=["GET", "POST"],
+            allow_methods=["GET", "POST", "PATCH"],
             allow_headers=["*"],
         )
     app.include_router(create_metadata_router(resolved_metadata_service))
@@ -112,10 +123,11 @@ def create_admin_app(
             resolved_suggestion_repository,
             resolved_metadata_service.client if resolved_metadata_service else None,
             resolved_binding_repository,
+            resolved_ontology_authoring_repository,
         ) if resolved_suggestion_repository else None,
         authorizer,
     ))
-    app.include_router(create_context_router(resolved_context_engine))
+    app.include_router(create_context_router(resolved_context_engine, authorizer))
 
     @app.get("/health")
     async def health() -> dict[str, str]:
@@ -153,7 +165,7 @@ def create_admin_app(
             resolved_settings.registry_path.parent
             / "ontology_migrations"
             / "applied"
-            / "2026_10_initial_unification"
+            / "2026_10_bid_notice_stable_key_correction"
             / "ontology_v2.yaml"
         )
         if not manifest_path.exists():

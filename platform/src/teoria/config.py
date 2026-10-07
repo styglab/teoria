@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     context_runtime_api_url: str = "http://localhost:8000"
     context_runtime_api_token: str | None = None
     context_runtime_timeout_seconds: float = Field(default=150.0, gt=0)
+    context_max_period_years: int = Field(default=10, ge=1, le=100)
+    context_max_pages: int = Field(default=100, ge=1, le=10_000)
+    policy_mode: Literal["disabled", "opa"] = "disabled"
+    opa_url: str = "http://localhost:8181"
+    opa_decision_path: str = "teoria/authz/decision"
+    opa_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    opa_control_plane_token: str | None = None
+    opa_bundle_path: Path = Path("/var/lib/teoria/opa/teoria.tar.gz")
     registry_require_published: bool = False
     runtime_artifact_path: Path | None = None
     runtime_artifact_store: Path | None = None

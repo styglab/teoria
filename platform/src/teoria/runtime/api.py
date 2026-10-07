@@ -13,6 +13,12 @@ from pydantic import BaseModel, Field
 from teoria_provider_api.executor import ProviderExecutor
 from teoria_provider_api.secrets import EnvironmentSecretProvider
 from teoria.config import Settings, bootstrap_settings
+from teoria.policy import (
+    PolicyEvaluationError,
+    PolicyEvaluator,
+    PolicyPrincipal,
+    create_policy_evaluator,
+)
 from teoria.registry.artifact import RuntimeBundleLoader, RegistryArtifactStore
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.runtime.capability.presentation import serialize_capability_result
@@ -39,6 +45,7 @@ def create_runtime_app(
     settings: Settings | None = None,
     catalog: RegistryCatalog | None = None,
     runner: CapabilityRunner | None = None,
+    policy_evaluator: PolicyEvaluator | None = None,
 ) -> FastAPI:
     resolved_settings = settings or bootstrap_settings()
     if not resolved_settings.runtime_api_token:
@@ -83,31 +90,86 @@ def create_runtime_app(
             prefix=resolved_settings.runtime_cache_prefix,
         ),
     )
+    resolved_policy_evaluator = policy_evaluator or create_policy_evaluator(
+        resolved_settings
+    )
     app = FastAPI(
         title="Teoria Runtime API",
         version="1.0.0",
         root_path=resolved_settings.runtime_api_root_path,
     )
 
-    def authorize(authorization: str | None = Header(default=None)) -> None:
+    def authorize(
+        authorization: str | None = Header(default=None),
+        actor: str | None = Header(default=None, alias="X-Teoria-Actor"),
+        roles: str | None = Header(default=None, alias="X-Teoria-Roles"),
+        service: str | None = Header(default=None, alias="X-Teoria-Service"),
+    ) -> PolicyPrincipal:
         expected = f"Bearer {resolved_settings.runtime_api_token}"
         if authorization is None or not hmac.compare_digest(authorization, expected):
             raise HTTPException(status_code=401, detail={"code": "unauthorized", "message": "invalid bearer token"})
+        return PolicyPrincipal(
+            actor=actor or "service:runtime-client",
+            roles=frozenset(item.strip() for item in (roles or "").split(",") if item.strip()),
+            service=service or "runtime-client",
+        )
+
+    async def require_policy(
+        *,
+        principal: PolicyPrincipal,
+        action: str,
+        resource: dict[str, Any],
+        context: dict[str, Any] | None = None,
+    ):
+        try:
+            decision = await resolved_policy_evaluator.decide(
+                principal=principal,
+                action=action,
+                resource=resource,
+                context=context,
+            )
+        except PolicyEvaluationError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "policy_unavailable", "message": str(exc)},
+            ) from exc
+        if not decision.allow:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "policy_denied",
+                    "reason": decision.reason,
+                    "decision_id": decision.decision_id,
+                },
+            )
+        return decision
 
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/v1/version", dependencies=[Depends(authorize)])
-    async def version() -> dict[str, Any]:
+    @app.get("/v1/version")
+    async def version(principal: PolicyPrincipal = Depends(authorize)) -> dict[str, Any]:
+        await require_policy(
+            principal=principal,
+            action="runtime.version.read",
+            resource={"type": "runtime"},
+        )
         return {
             "runtime_api": "1",
             "registry": resolved_catalog.release.public_dict() if resolved_catalog.release else {"status": "draft"},
             "runtime_artifact": runtime_bundle.provenance() if runtime_bundle else None,
         }
 
-    @app.get("/v1/capabilities", dependencies=[Depends(authorize)])
-    async def list_capabilities() -> dict[str, list[dict[str, Any]]]:
+    @app.get("/v1/capabilities")
+    async def list_capabilities(
+        principal: PolicyPrincipal = Depends(authorize),
+    ) -> dict[str, list[dict[str, Any]]]:
+        await require_policy(
+            principal=principal,
+            action="capability.discover",
+            resource={"type": "capability_collection", "exposure": "public"},
+        )
         return {
             "capabilities": [
                 {
@@ -131,10 +193,11 @@ def create_runtime_app(
             ]
         }
 
-    @app.post("/v1/capabilities/{capability_id}:execute", dependencies=[Depends(authorize)])
+    @app.post("/v1/capabilities/{capability_id}:execute")
     async def execute_capability(
         capability_id: str,
         request: CapabilityExecutionRequest,
+        principal: PolicyPrincipal = Depends(authorize),
     ) -> dict[str, Any]:
         execution_id = str(uuid4())
         started_at = datetime.now(timezone.utc)
@@ -148,6 +211,19 @@ def create_runtime_app(
                 "replacement_ids": capability.lifecycle.replacement_ids,
                 "sunset_at": capability.lifecycle.sunset_at,
             })
+        policy_decision = await require_policy(
+            principal=principal,
+            action="capability.execute",
+            resource={
+                "type": "capability",
+                "id": capability.id,
+                "kind": capability.kind,
+                "exposure": capability.exposure,
+                "required_permissions": capability.policy.permissions,
+                "effects": capability.effects.model_dump(mode="json"),
+            },
+            context={"inputs": request.inputs},
+        )
         schema = capability_input_schema(resolved_catalog, capability)
         errors = sorted(
             Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(request.inputs),
@@ -196,6 +272,7 @@ def create_runtime_app(
             ],
             "artifact_version": runtime_bundle.version if runtime_bundle else None,
             "artifact_checksum": runtime_bundle.bundle_checksum if runtime_bundle else None,
+            "authorization": policy_decision.model_dump(mode="json"),
         }
         logger.info(
             "runtime capability executed",

@@ -45,4 +45,5 @@ def table_detail(payload: dict[str, Any]) -> TableDetail:
         database_schema=payload.get("databaseSchema"),
         columns=payload.get("columns") or [],
         glossary_terms=[item for item in tags if item.get("source") == "Glossary"],
+        test_suite=payload.get("testSuite"),
     )

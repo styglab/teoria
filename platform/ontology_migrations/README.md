@@ -10,5 +10,8 @@ Application DB에서 게시되어 checksum으로 고정된 immutable Ontology Ar
 대상 Ontology version과 Artifact checksum을 기록하고 `applied/`로 이동한다.
 
 `applied/2026_10_initial_unification/`은 `teoria@0.1.0`부터 `teoria@0.1.2`까지의
-초기 통합 구성, 구형 Ontology 분류, Binding 계획을 보존한다. 일부 파일은 최종
-구성 자체가 아니라 이관 과정의 중간 입력이며 재실행 대상이 아니다.
+초기 통합 구성, 구형 Ontology 분류, Binding 계획을 보존한다.
+`applied/2026_10_bid_notice_context/`와
+`applied/2026_10_bid_notice_stable_key_correction/`은 각각 `teoria@0.1.3` 적용과
+`teoria@0.1.4` Stable Key 교정 기록을 보존한다. 일부 파일은 최종 구성 자체가
+아니라 이관 과정의 중간 입력이며 재실행 대상이 아니다.

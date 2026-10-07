@@ -21,7 +21,7 @@ ONTOLOGY_BLUEPRINT = (
 
 def _published_ontology_from_blueprint() -> dict:
     blueprint = OntologyBlueprint.load(ONTOLOGY_BLUEPRINT)
-    return {
+    result = {
         "content": {
             "objects": [item.model_dump(mode="json") for item in blueprint.objects],
             "relationships": [
@@ -29,6 +29,12 @@ def _published_ontology_from_blueprint() -> dict:
             ],
         }
     }
+    bid_notice = next(item for item in result["content"]["objects"] if item["code"] == "BidNotice")
+    bid_notice["properties"].extend([
+        {"code": "estimatedPrice", "name": "추정가격", "stable_key": "procurement.BidNotice.estimatedPrice", "value_type": "decimal", "unit": "KRW"},
+        {"code": "workType", "name": "업무유형", "stable_key": "procurement.BidNotice.workType", "value_type": "string"},
+    ])
+    return result
 
 
 def test_loader_materializes_capability_version_and_definition_checksum() -> None:
@@ -110,6 +116,8 @@ def test_search_bid_notices_is_compatible_with_target_ontology_blueprint() -> No
         ("property", "procurement.BidNotice.status"),
         ("property", "procurement.Organization.organizationCode"),
         ("property", "procurement.Organization.name"),
+        ("property", "procurement.BidNotice.estimatedPrice"),
+        ("property", "procurement.BidNotice.workType"),
         ("relationship", "procurement.PUBLISHES"),
     }
 
@@ -130,3 +138,42 @@ def test_get_bid_notice_is_compatible_with_target_ontology_blueprint() -> None:
     assert report["semantic_requirements_declared"] is True
     assert report["status"] == "compatible"
     assert report["missing_required"] == []
+
+
+def test_capability_input_binding_rejects_semantic_type_mismatch() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
+    capability = catalog.capabilities["search_bid_notices"]
+    ontology = _published_ontology_from_blueprint()
+    published_at = next(
+        prop
+        for item in ontology["content"]["objects"]
+        for prop in item.get("properties", [])
+        if prop.get("stable_key") == "procurement.BidNotice.publishedAt"
+    )
+    published_at["value_type"] = "boolean"
+    published_at["cardinality"] = "optional"
+
+    report = next(
+        item
+        for item in validate_capability_compatibility(
+            catalog,
+            [ontology],
+            [{
+                "ontology_stable_key": "procurement.BidNotice.publishedAt",
+                "capability_id": capability.id,
+                "target_scope": "input",
+                "field_path": "notice_published_at_from",
+            }],
+        )
+        if item["capability_id"] == capability.id
+    )
+
+    assert report["status"] == "incompatible"
+    assert report["type_mismatches"] == [{
+        "field_path": "notice_published_at_from",
+        "stable_key": "procurement.BidNotice.publishedAt",
+        "expected_type": "boolean",
+        "actual_type": "datetime",
+        "expected_collection": "scalar",
+        "actual_collection": "scalar",
+    }]

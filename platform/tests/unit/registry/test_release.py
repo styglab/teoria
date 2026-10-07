@@ -1,5 +1,6 @@
 import json
 import hashlib
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -36,6 +37,23 @@ def test_publish_keeps_authored_registry_unchanged(tmp_path: Path) -> None:
         (tmp_path / "dist" / "2026.08.05.1" / "manifest.json").read_text()
     )
     assert manifest["version"] == "2026.08.05.1"
+
+
+def test_publish_rejects_uncommitted_registry_without_explicit_provenance(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    root = repository / "registries"
+    root.mkdir(parents=True)
+    (root / "example.yaml").write_text("value: 1\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+
+    with pytest.raises(ValueError, match="uncommitted changes"):
+        publish_registry(
+            root,
+            version="2026.08.05.1",
+            output=tmp_path / "dist",
+        )
 
 
 def test_publish_excludes_legacy_source_release_file(tmp_path: Path) -> None:
@@ -160,6 +178,37 @@ def test_runtime_bundle_loader_rejects_modified_binding_snapshot(tmp_path: Path)
 
     with pytest.raises(RegistryArtifactError, match="checksum"):
         RuntimeBundleLoader(bundle).load()
+
+
+def test_runtime_bundle_rejects_approved_draft_capability_binding(tmp_path: Path) -> None:
+    root = tmp_path / "registries"
+    (root / "core").mkdir(parents=True)
+    (root / "core" / "data_types.yaml").write_text(
+        "registry:\n  version: 1.0.0\n  registered_at: '2026-08-05'\n"
+        "data_types:\n  - id: text\n    name: Text\n    base_type: string\n",
+        encoding="utf-8",
+    )
+    registry_root = tmp_path / "registry_dist"
+    publish_registry(
+        root, version="2026.08.05.1", output=registry_root, git_commit="abc123",
+    )
+
+    with pytest.raises(RegistryArtifactError, match="draft contracts"):
+        RuntimeBundleCompiler().compile(
+            registry_root / "2026.08.05.1",
+            ontologies=[],
+            bindings=[{
+                "status": "approved",
+                "ontology_stable_key": "example.Contract",
+                "target_type": "capability",
+                "target_locator": "capability://search_contracts",
+                "capability_id": "search_contracts",
+                "capability_registry_version": "draft",
+                "capability_contract_version": "draft",
+                "target_version": "draft",
+            }],
+            output=tmp_path / "bundle_dist",
+        )
 
 
 def test_runtime_bundle_loader_keeps_schema_v1_artifacts_replayable(tmp_path: Path) -> None:

@@ -11,6 +11,7 @@ from teoria_provider_api.secrets import EnvironmentSecretProvider
 from teoria.config import Settings, bootstrap_settings
 from teoria.registry.artifact import (
     RegistryArtifactError,
+    RegistryArtifactLoader,
     RegistryArtifactStore,
     RuntimeBundleCompiler,
 )
@@ -154,6 +155,10 @@ def main() -> int:
     capability_binding_parser = subparsers.add_parser("bind-capabilities", help="apply reviewed Ontology-to-Capability bindings")
     capability_binding_parser.add_argument("--manifest", type=Path, required=True)
     capability_binding_parser.add_argument("--registries", type=Path, default=settings.registry_path)
+    capability_binding_parser.add_argument(
+        "--registry-artifact", type=Path,
+        help="published Registry artifact; required when --approve is used",
+    )
     capability_binding_parser.add_argument("--actor", default="system:ontology-migration")
     capability_binding_parser.add_argument("--approve", action="store_true")
     enrichment_parser = subparsers.add_parser("enrich-business-ontology", help="apply reviewed properties and relationships to Ontology v2")
@@ -244,7 +249,11 @@ def main() -> int:
             print("ERROR TEORIA_APP_DATABASE_URL is required")
             return 1
         try:
-            catalog = RegistryLoader(args.registries).load()
+            catalog = (
+                RegistryArtifactLoader(args.registry_artifact).load()
+                if args.registry_artifact is not None
+                else RegistryLoader(args.registries).load()
+            )
             result = apply_capability_binding_manifest(
                 BindingRepository(settings.app_database_url), catalog,
                 CapabilityBindingManifest.load(args.manifest),

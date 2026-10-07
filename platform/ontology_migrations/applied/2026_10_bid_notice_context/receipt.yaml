@@ -1,0 +1,10 @@
+schema_version: "1.0"
+migration_id: 2026_10_bid_notice_context
+ontology_namespace: teoria
+ontology_version: 0.1.3
+ontology_artifact_checksum: 7b41006ddccfc9672d81da9ca0ecbdbb789cd77311f344c3ce1802f33c5906d7
+runtime_bundle_version: 2026.10.07.8
+runtime_bundle_checksum: sha256:67bf6ce3d4ef7183ae19f25104cb47ccb015b897e672fcce4da1f5813184674c
+recorded_git_commit: 69e53bb0437775fd9fafbe0cf03a8e2ed3c36481
+provenance_status: incomplete_dirty_worktree
+note: Runtime bundle에 기록된 commit에 포함되지 않은 Registry 및 migration 입력이 적용되어 후속 correction이 필요하다.

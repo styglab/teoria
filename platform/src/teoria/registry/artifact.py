@@ -83,6 +83,18 @@ class RuntimeBundleCompiler:
         for item in bindings:
             if item.get("status") != "approved":
                 raise RegistryArtifactError("Runtime bundle can contain only approved bindings")
+            if item.get("capability_id"):
+                registry_version = item.get("capability_registry_version")
+                contract_version = item.get("capability_contract_version")
+                if "draft" in {registry_version, contract_version, item.get("target_version")}:
+                    raise RegistryArtifactError(
+                        "approved Capability bindings cannot target draft contracts"
+                    )
+                if registry_version != catalog.release.version:
+                    raise RegistryArtifactError(
+                        "approved Capability binding Registry version does not match "
+                        f"release {catalog.release.version}"
+                    )
         normalized_ontologies = sorted(
             ontologies, key=lambda item: (str(item.get("namespace")), str(item.get("version")))
         )
@@ -101,7 +113,9 @@ class RuntimeBundleCompiler:
                 raise RegistryArtifactError(
                     f"published Ontology artifact checksum mismatch: {item.get('namespace')}"
                 )
-        compatibility = validate_capability_compatibility(catalog, normalized_ontologies)
+        compatibility = validate_capability_compatibility(
+            catalog, normalized_ontologies, normalized_bindings,
+        )
         incompatible = [item for item in compatibility if item["status"] == "incompatible"]
         if incompatible:
             details = ", ".join(

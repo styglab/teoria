@@ -37,6 +37,7 @@ class TableDetail(MetadataEntity):
     database_schema: dict[str, Any] | None = None
     columns: list[dict[str, Any]] = Field(default_factory=list)
     glossary_terms: list[dict[str, Any]] = Field(default_factory=list)
+    test_suite: dict[str, Any] | None = None
 
 
 class MetadataStatus(BaseModel):

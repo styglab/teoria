@@ -1,6 +1,7 @@
 # Custom 
 archive/
 references/
+.artifacts/
 !.agents/skills/extract-bid-eligibility/references/
 !.agents/skills/extract-bid-eligibility/references/**
 

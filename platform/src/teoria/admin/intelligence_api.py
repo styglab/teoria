@@ -23,9 +23,15 @@ class EvidenceInput(BaseModel):
 
 
 class SuggestionInput(BaseModel):
-    target_type: Literal["openmetadata_table", "openmetadata_column"]
+    target_type: Literal[
+        "openmetadata_table", "openmetadata_column", "openmetadata_glossary",
+        "ontology",
+    ]
     target_ref: str
-    suggestion_type: Literal["description", "binding"]
+    suggestion_type: Literal[
+        "description", "binding", "glossary_term", "glossary_term_assignment",
+        "ontology_change", "test_suite", "quality_test",
+    ]
     proposed_value: dict[str, Any]
     confidence: float = Field(ge=0, le=1)
     rationale: str | None = None
@@ -107,11 +113,22 @@ def create_intelligence_router(
     async def review_suggestion(
         suggestion_id: UUID,
         payload: ReviewInput,
-        principal: AdminPrincipal = Depends(authorizer.require("metadata_reviewer", "metadata_admin")),
+        principal: AdminPrincipal = Depends(authorizer.require(
+            "metadata_reviewer", "metadata_admin", "ontology_owner",
+        )),
     ) -> dict:
         if service is None:
             raise HTTPException(status_code=503, detail={"code": "intelligence_service_unavailable"})
         try:
+            suggestion = require_repository().get(suggestion_id)
+            if (
+                suggestion.get("suggestion_type") == "ontology_change"
+                and "ontology_owner" not in principal.roles
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail={"code": "admin_role_required", "required_roles": ["ontology_owner"]},
+                )
             return await service.review_and_apply(
                 suggestion_id, decision=payload.decision,
                 reviewer=principal.actor, comment=payload.comment,
@@ -121,6 +138,10 @@ def create_intelligence_router(
         except ValueError as exc:
             raise HTTPException(status_code=409, detail={"code": "invalid_suggestion_transition", "message": str(exc)}) from exc
         except SuggestionApplicationError as exc:
-            raise HTTPException(status_code=502, detail={"code": "suggestion_application_failed", "message": str(exc)}) from exc
+            status_code = 409 if exc.code == "stale_evidence" else 502
+            raise HTTPException(
+                status_code=status_code,
+                detail={"code": exc.code, "message": str(exc)},
+            ) from exc
 
     return router

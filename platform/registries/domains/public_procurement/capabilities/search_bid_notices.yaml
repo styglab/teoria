@@ -17,6 +17,8 @@ capability:
       - stable_key: procurement.BidNotice.publishedAt
       - stable_key: procurement.BidNotice.deadlineAt
       - stable_key: procurement.BidNotice.status
+      - stable_key: procurement.BidNotice.estimatedPrice
+      - stable_key: procurement.BidNotice.workType
       - stable_key: procurement.Organization.organizationCode
       - stable_key: procurement.Organization.name
     relationships:
