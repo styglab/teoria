@@ -104,6 +104,30 @@ class ProcurementRelationshipGraphReader:
         with psycopg.connect(self._database_url(catalog), row_factory=dict_row) as connection:
             version = self._resolve_version(connection, graph_version)
             parameters["graph_version"] = version["graph_version"]
+            if not any((work_type, large_category, middle_category, field_code)):
+                clusters = [dict(row) for row in connection.execute("""
+                    SELECT cluster_id,work_type,field_code,field_name,
+                           large_category,middle_category,organization_count,
+                           company_count,link_count,contract_count,
+                           total_attributed_contract_amount
+                    FROM public_procurement.procurement_relationship_graph_overviews
+                    WHERE graph_version=%(graph_version)s
+                      AND period_from_year=%(period_from_year)s
+                      AND period_to_year=%(period_to_year)s
+                      AND group_by=%(group_by)s
+                    ORDER BY total_attributed_contract_amount DESC NULLS LAST,
+                             cluster_id
+                """, {**parameters, "group_by": group_by}).fetchall()]
+                totals_row = connection.execute("""
+                    SELECT organization_count,company_count,link_count
+                    FROM public_procurement.procurement_relationship_graph_overviews
+                    WHERE graph_version=%(graph_version)s
+                      AND period_from_year=%(period_from_year)s
+                      AND period_to_year=%(period_to_year)s
+                      AND group_by='total' AND cluster_id='*'
+                """, parameters).fetchone()
+                if clusters and totals_row is not None:
+                    return version, clusters, dict(totals_row)
             grouping = (
                 "aggregate.work_type" if group_by == "work_type"
                 else "aggregate.cluster_id"

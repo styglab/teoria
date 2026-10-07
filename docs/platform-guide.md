@@ -83,6 +83,9 @@ Source, 지속 수집 API는 Connector로 작성한다. [Registry guide](registr
 전체 조달관계 탐색은 `summarize_procurement_relationship_graph`로 게시된 스냅샷의
 업무유형·분야 군집과 전체 크기를 먼저 조회한 뒤,
 `search_procurement_relationship_graph_entities`로 선택한 군집을 페이지 조회한다.
+무필터 overview는 snapshot 게시 시 최근 1년·3년·5년·전체 기간과
+`work_type`·`field` 그룹을 별도 요약 테이블에 사전 계산한다. Runtime은 지원되는
+기간의 overview에서 관계 행을 다시 집계하지 않고 이 요약만 조회한다.
 후속 요청은 overview가 반환한 `graph_version`, 기간과 `cluster_id`를 그대로 전달해야
 하며 cursor도 이 범위를 검증한다. 페이지는 업체 노드를 기준으로 분할하고 해당 업체의
 기관과 모든 링크를 함께 반환한다. 스냅샷은 Pipeline이 매일 생성하며 7일간 보존하므로

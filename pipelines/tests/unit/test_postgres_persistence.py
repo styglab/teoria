@@ -82,6 +82,19 @@ def test_relationship_graph_overview_has_covering_index() -> None:
     assert "total_attributed_contract_amount" in migration
 
 
+def test_relationship_graph_overviews_are_precomputed_with_snapshot_publish() -> None:
+    migration = (
+        Path(__file__).parents[2] / "database" / "migrations"
+        / "071_procurement_relationship_graph_overviews.sql"
+    ).read_text()
+
+    assert "procurement_relationship_graph_overviews" in migration
+    assert "populate_procurement_relationship_graph_overviews" in migration
+    assert "build_procurement_relationship_graph_snapshot" in migration
+    assert "greatest(graph_period_from,graph_period_to - 4)" in migration
+    assert "GRANT SELECT" in migration
+
+
 def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
     connection = MagicMock()
     connection.__enter__.return_value = connection
