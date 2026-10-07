@@ -26,9 +26,9 @@ def test_bid_check_consumer_contract_has_unique_capabilities_and_explicit_status
         "reuse_stable_concepts": True,
         "rationale": contract["ontology_decision"]["rationale"],
     }
-    assert len(identifiers) == 30
+    assert len(identifiers) == 27
     assert len(set(identifiers)) == len(identifiers)
-    assert {item["status"] for item in capabilities} == {"active", "migration_required"}
+    assert {item["status"] for item in capabilities} == {"active"}
 
 
 def test_bid_check_active_capabilities_are_discoverable_and_migrations_are_explicit() -> None:
@@ -64,11 +64,7 @@ def test_bid_check_active_capabilities_are_discoverable_and_migrations_are_expli
     )
     assert catalog.capabilities["assess_company_bid_eligibility"].kind == "decision"
     assert catalog.capabilities["assess_company_bid_eligibilities"].kind == "decision"
-    assert set(migrations) == {
-        "find_similar_bid_notices",
-        "find_bid_relevant_companies",
-        "analyze_bid_organization_field_companies",
-    }
+    assert migrations == {}
     assert set(migrations).isdisjoint(catalog.capabilities)
     assert all(set(replacements) <= set(catalog.capabilities) for replacements in migrations.values())
     retired = contract["retired_capabilities"]
@@ -79,6 +75,9 @@ def test_bid_check_active_capabilities_are_discoverable_and_migrations_are_expli
         "get_women_owned_business_qualification",
         "get_disabled_owned_business_qualification",
         "verify_business_registration",
+        "find_similar_bid_notices",
+        "find_bid_relevant_companies",
+        "analyze_bid_organization_field_companies",
     }
     assert all(item["id"] not in catalog.capabilities for item in retired)
     assert all(

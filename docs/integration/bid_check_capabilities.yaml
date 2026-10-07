@@ -2,6 +2,15 @@ schema_version: "1.0"
 consumer: bid_check
 description: 입찰체크 서비스가 직접 사용하는 Runtime Capability 계약
 retired_capabilities:
+  - id: find_similar_bid_notices
+    replacements: [search_bid_related_projects]
+    reason: 입찰체크 시장 컨텍스트가 최신 관련 계약사업 검색 결과를 사용하도록 전환했다.
+  - id: find_bid_relevant_companies
+    replacements: [search_bid_related_projects]
+    reason: 관련 사업의 계약업체를 입찰체크 adapter에서 집계하도록 전환했다.
+  - id: analyze_bid_organization_field_companies
+    replacements: [analyze_bid_participation_context]
+    reason: 기관·분야 업체 화면을 최신 참여 판단 컨텍스트 결과로 전환했다.
   - id: get_bid_result
     replacements: [search_bid_awards, get_bid_notice_participations]
     reason: 공고별 낙찰과 개찰 참여 조회를 하나로 중복 조합하던 구 계약이다.
@@ -56,21 +65,8 @@ capabilities:
   - {id: get_bid_notice_contracts, area: bid_notice, status: active}
   - {id: get_bid_notice_relationship_context, area: bid_notice, status: active}
   - {id: find_bid_project_lineage, area: bid_notice, status: active}
-  - id: find_similar_bid_notices
-    area: bid_notice
-    status: migration_required
-    replacements: [search_bid_related_projects]
-    note: 기존 제목·규칙 기반 유사도 계약이 제거되었으므로 입력과 결과 의미를 확인한 뒤 전환한다.
-  - id: find_bid_relevant_companies
-    area: bid_notice
-    status: migration_required
-    replacements: [get_bid_notice_relationship_context, get_company_similar_project_experience]
   - {id: analyze_bid_participation_context, area: bid_analysis, status: active}
   - {id: search_bid_related_projects, area: bid_analysis, status: active}
-  - id: analyze_bid_organization_field_companies
-    area: bid_analysis
-    status: migration_required
-    replacements: [get_bid_notice_relationship_context, analyze_organization_procurement_profile, get_organization_company_relationship, get_company_similar_project_experience]
   - {id: search_public_organizations, area: organization, status: active}
   - {id: analyze_organization_procurement_profile, area: organization, status: active}
   - {id: search_procurement_activity, area: organization, status: active}
