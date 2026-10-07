@@ -19,6 +19,8 @@ Provider의 wire field와 code는 원문 표기를 유지한다. 변경 가능�
 ## Source와 Connector 선택
 
 - Capability가 요청 시 직접 호출하는 API는 `platform/registries/sources/`에 둔다.
+- `capability.exposure: public`인 계약만 Runtime discovery와 MCP Tool에 노출한다.
+  다른 Capability가 조합 실행에 사용하는 지원 계약은 `internal`로 유지한다.
 - Prefect만 지속 수집하는 API는 `pipelines/connectors/`에 둔다.
 - 수집 DB를 Runtime이 읽으면 Database Source와 DB-to-Ontology Mapping을 만든다.
 - 같은 API를 Source와 Connector 양쪽에 등록하지 않는다.

@@ -4,10 +4,40 @@ registry:
 
 capability:
   id: search_organization_supplier_entries
+  exposure: public
   name: 기관 공급업체 진입 목록 조회
   description: 선택한 종료 연도의 기관 계약 업체를 신규 관측·재진입·기존으로 분류하고 동일한 업무구분·조달분야 조건으로 조회한다. 분류는 사업 귀속일을 사용하고 모든 contract_date 필드는 변경·차수계약일이 아닌 원계약 사건의 실제 최초 계약일을 반환한다.
   kind: compute
   processor: market_context.search_organization_supplier_entries
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.Organization
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.ProcurementCase
+      - stable_key: procurement.Industry
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractVersion
+      - stable_key: procurement.ContractParty
+      - stable_key: party.BusinessRegistration
+    properties:
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: procurement.BidNotice.publishedAt
+      - stable_key: procurement.ProcurementCase.workType
+      - stable_key: procurement.Industry.industryCode
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Contract.currentAmount
+      - stable_key: procurement.Contract.firstContractDate
+      - stable_key: procurement.ContractVersion.concludedDate
+      - stable_key: procurement.ContractParty.attributedAmount
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+    relationships:
+      - stable_key: procurement.PUBLISHES
+      - stable_key: procurement.HAS_NOTICE
+      - stable_key: procurement.CLASSIFIED_AS_INDUSTRY
+      - stable_key: procurement.HAS_CONTRACT_VERSION
+      - stable_key: procurement.HAS_CONTRACT_PARTY
+      - stable_key: procurement.REPRESENTS_CONTRACTOR
+      - stable_key: procurement.SIGNS
   effects:
     reads:
       - public_procurement.bid_notice

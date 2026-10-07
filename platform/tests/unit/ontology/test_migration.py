@@ -9,7 +9,10 @@ ROOT = Path(__file__).parents[3]
 
 def test_ontology_v2_migration_manifest_covers_every_legacy_object() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
-    manifest = OntologyMigrationManifest.load(ROOT / "ontology_migrations/ontology_v2.yaml")
+    manifest = OntologyMigrationManifest.load(
+        ROOT / "ontology_migrations" / "applied"
+        / "2026_10_initial_unification" / "ontology_v2.yaml"
+    )
 
     report = build_migration_report(catalog, manifest)
 

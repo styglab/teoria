@@ -46,6 +46,20 @@ def test_bid_check_active_capabilities_are_discoverable_and_migrations_are_expli
     assert len(active) == 27
     assert active <= set(catalog.capabilities)
     assert all(catalog.capabilities[item].lifecycle.status == "active" for item in active)
+    assert all(catalog.capabilities[item].exposure == "public" for item in active)
+    assert {
+        item.id for item in catalog.capabilities.values() if item.exposure == "public"
+    } == active
+    assert all(
+        sum((
+            len(catalog.capabilities[item].semantic_requirements.concepts),
+            len(catalog.capabilities[item].semantic_requirements.properties),
+            len(catalog.capabilities[item].semantic_requirements.relationships),
+        )) > 0
+        for item in active
+    )
+    assert catalog.capabilities["assess_company_bid_eligibility"].kind == "decision"
+    assert catalog.capabilities["assess_company_bid_eligibilities"].kind == "decision"
     assert set(migrations) == {
         "find_similar_bid_notices",
         "find_bid_relevant_companies",
@@ -53,4 +67,3 @@ def test_bid_check_active_capabilities_are_discoverable_and_migrations_are_expli
     }
     assert set(migrations).isdisjoint(catalog.capabilities)
     assert all(set(replacements) <= set(catalog.capabilities) for replacements in migrations.values())
-

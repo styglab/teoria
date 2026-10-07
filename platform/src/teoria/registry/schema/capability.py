@@ -209,6 +209,7 @@ class CapabilityDefinition(IdentifiedModel):
     description: str
     version: str = "0.0.0"
     kind: Literal["query", "compute", "decision", "action"] = "query"
+    exposure: Literal["public", "internal"] = "internal"
     processor: str | None = None
     semantic_requirements: CapabilitySemanticRequirements = Field(
         default_factory=CapabilitySemanticRequirements

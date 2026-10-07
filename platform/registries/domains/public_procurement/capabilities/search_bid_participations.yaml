@@ -3,10 +3,35 @@ registry:
   registered_at: "2026-10-02"
 capability:
   id: search_bid_participations
+  exposure: public
   name: 업체 입찰 참여 이력 검색
   description: 업체의 개찰 참여 이력을 명시적 연도·업무구분·공식 조달분류로 필터링하고 확인된 낙찰·계약 결과를 함께 반환한다. 참여 원천은 상위 10위와 낙찰업체 중심이다.
   kind: compute
   processor: market_context.search_company_bid_participations
+  semantic_requirements:
+    concepts:
+      - stable_key: party.BusinessRegistration
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.ProcurementLot
+      - stable_key: procurement.BidParticipation
+      - stable_key: procurement.Award
+      - stable_key: procurement.Contract
+    properties:
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.ProcurementLot.lotId
+      - stable_key: procurement.BidParticipation.participationId
+      - stable_key: procurement.BidParticipation.participatedAt
+      - stable_key: procurement.BidParticipation.rank
+      - stable_key: procurement.BidParticipation.bidAmount
+      - stable_key: procurement.Award.awardId
+      - stable_key: procurement.Contract.contractId
+    relationships:
+      - stable_key: procurement.HAS_LOT
+      - stable_key: procurement.HAS_PARTICIPATION
+      - stable_key: procurement.SUBMITTED_BY
+      - stable_key: procurement.RESULTS_IN_AWARD
+      - stable_key: procurement.RESULTS_IN_CONTRACT
   effects:
     reads: [public_procurement.bid_opening_participation, public_procurement.bid_award, public_procurement.contract]
     produces: [public_procurement.bid_opening_participation]

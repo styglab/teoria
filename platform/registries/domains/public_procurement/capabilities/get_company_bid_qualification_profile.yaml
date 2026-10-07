@@ -4,8 +4,29 @@ registry:
 
 capability:
   id: get_company_bid_qualification_profile
+  exposure: public
   name: 기업 입찰 자격 프로필 조회
   description: 기준일에 유효한 기업 자격과 세부품명별 직접생산확인을 함께 조회한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: party.BusinessEntity
+      - stable_key: party.BusinessRegistration
+      - stable_key: party.Qualification
+      - stable_key: party.Certification
+    properties:
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+      - stable_key: party.Qualification.qualificationId
+      - stable_key: party.Qualification.qualificationType
+      - stable_key: party.Qualification.validFrom
+      - stable_key: party.Qualification.validTo
+      - stable_key: party.Certification.certificationId
+      - stable_key: party.Certification.certificationType
+      - stable_key: party.Certification.validFrom
+      - stable_key: party.Certification.validTo
+    relationships:
+      - stable_key: party.HAS_BUSINESS_REGISTRATION
+      - stable_key: party.HAS_QUALIFICATION
+      - stable_key: party.HAS_CERTIFICATION
   inputs:
     business_registration_number:
       property: company.business_registration.business_registration_number

@@ -7,6 +7,7 @@ from teoria_mcp.tools import CapabilityMCPService
 CAPABILITIES = [
     {
         "id": "find_contracts",
+        "version": "1.2.3",
         "name": "Find contracts",
         "description": "Find contracts by date",
         "returns": ["public_procurement.contract"],
@@ -34,6 +35,8 @@ def test_generates_tools_from_runtime_api_metadata() -> None:
     tool = service.list_tools()[0]
 
     assert tool.name == "find_contracts"
+    assert tool.title == "Find contracts (1.2.3)"
+    assert tool.description.startswith("CapabilityVersion: find_contracts@1.2.3.")
     assert tool.inputSchema["properties"]["date_from"]["format"] == "date"
     assert "_options" in tool.inputSchema["properties"]
 

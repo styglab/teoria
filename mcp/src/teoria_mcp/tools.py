@@ -17,11 +17,13 @@ class CapabilityMCPService:
         tools = []
         for capability in self.capabilities.values():
             returned = ", ".join(capability["returns"])
+            capability_version = f"{capability['id']}@{capability['version']}"
             tools.append(
                 types.Tool(
                     name=capability["id"],
-                    title=capability["name"],
+                    title=f"{capability['name']} ({capability['version']})",
                     description=(
+                        f"CapabilityVersion: {capability_version}. "
                         f"{capability['description']}. 반환 의미 타입: {returned}. "
                         "반환된 온톨로지 속성은 필요한 후속 도구의 입력으로 사용할 수 있다."
                     ),

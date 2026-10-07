@@ -149,7 +149,13 @@ def create_admin_app(
 
     @app.get("/v1/admin/ontology-migration")
     async def ontology_migration() -> dict[str, Any]:
-        manifest_path = resolved_settings.registry_path.parent / "ontology_migrations" / "ontology_v2.yaml"
+        manifest_path = (
+            resolved_settings.registry_path.parent
+            / "ontology_migrations"
+            / "applied"
+            / "2026_10_initial_unification"
+            / "ontology_v2.yaml"
+        )
         if not manifest_path.exists():
             raise HTTPException(status_code=404, detail={"code": "ontology_migration_manifest_not_found"})
         return build_migration_report(
@@ -167,6 +173,7 @@ def create_admin_app(
                     "name": capability.name or capability.id,
                     "description": capability.description,
                     "kind": capability.kind,
+                    "exposure": capability.exposure,
                     "processor": capability.processor,
                     "effects": capability.effects.model_dump(),
                     "inputs": list(capability.inputs),

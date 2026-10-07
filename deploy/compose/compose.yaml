@@ -196,10 +196,11 @@ services:
         condition: service_healthy
 
   app-postgres-migrate:
-    image: teoria-platform-runtime:latest
+    image: teoria-platform-authoring:latest
     build:
       context: ../..
       dockerfile: platform/Dockerfile
+      target: authoring
     command: ["teoria", "migrate-app", "--migrations", "/app/platform/database/migrations"]
     environment:
       TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
@@ -411,10 +412,11 @@ services:
 
   platform-check:
     profiles: ["tools"]
-    image: teoria-platform-runtime:latest
+    image: teoria-platform-authoring:latest
     build:
       context: ../..
       dockerfile: platform/Dockerfile
+      target: authoring
     command: ["teoria", "validate", "/app/platform/registries"]
     volumes:
       - ../../platform/registries:/app/platform/registries:ro
@@ -425,6 +427,7 @@ services:
     build:
       context: ../..
       dockerfile: platform/Dockerfile
+      target: runtime
     restart: unless-stopped
     command: ["teoria-runtime-api"]
     environment:
@@ -456,10 +459,11 @@ services:
       - "8000"
 
   admin-api:
-    image: teoria-platform-runtime:latest
+    image: teoria-platform-authoring:latest
     build:
       context: ../..
       dockerfile: platform/Dockerfile
+      target: authoring
     restart: unless-stopped
     command: ["teoria-admin-api"]
     environment:

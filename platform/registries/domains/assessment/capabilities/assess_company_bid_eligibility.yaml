@@ -4,10 +4,57 @@ registry:
 
 capability:
   id: assess_company_bid_eligibility
+  exposure: public
   name: 기업 입찰 참가자격 평가
   description: 입찰공고의 최신 bid_entry 참가요건과 기업 근거를 비교해 종합 결과를 만들고 다른 단계 요건의 개별 판단도 상세 정보로 보존한다.
-  kind: compute
+  kind: decision
   processor: assessment.evaluate_bid_eligibility
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.BidRequirementSet
+      - stable_key: procurement.BidRequirement
+      - stable_key: party.BusinessRegistration
+      - stable_key: party.TaxpayerStatusObservation
+      - stable_key: party.Qualification
+      - stable_key: party.Certification
+      - stable_key: procurement.Industry
+      - stable_key: procurement.RegisteredIndustry
+      - stable_key: procurement.SupplyProduct
+      - stable_key: procurement.RegisteredSupplyProduct
+      - stable_key: procurement.Sanction
+    properties:
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.BidRequirementSet.requirementSetId
+      - stable_key: procurement.BidRequirementSet.expression
+      - stable_key: procurement.BidRequirement.requirementId
+      - stable_key: procurement.BidRequirement.requirementType
+      - stable_key: procurement.BidRequirement.originalText
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+      - stable_key: party.TaxpayerStatusObservation.businessStatus
+      - stable_key: party.Qualification.qualificationType
+      - stable_key: party.Qualification.validFrom
+      - stable_key: party.Qualification.validTo
+      - stable_key: party.Certification.certificationType
+      - stable_key: party.Certification.validFrom
+      - stable_key: party.Certification.validTo
+      - stable_key: procurement.Industry.industryCode
+      - stable_key: procurement.RegisteredIndustry.validFrom
+      - stable_key: procurement.RegisteredIndustry.validTo
+      - stable_key: procurement.SupplyProduct.productCode
+      - stable_key: procurement.Sanction.validFrom
+      - stable_key: procurement.Sanction.validTo
+    relationships:
+      - stable_key: procurement.HAS_REQUIREMENT_SET
+      - stable_key: procurement.CONTAINS_REQUIREMENT
+      - stable_key: party.HAS_TAXPAYER_STATUS
+      - stable_key: party.HAS_QUALIFICATION
+      - stable_key: party.HAS_CERTIFICATION
+      - stable_key: procurement.REGISTRATION_HAS_INDUSTRY
+      - stable_key: procurement.CLASSIFIED_AS_INDUSTRY
+      - stable_key: procurement.REGISTRATION_HAS_SUPPLY_PRODUCT
+      - stable_key: procurement.CLASSIFIED_AS_SUPPLY_PRODUCT
+      - stable_key: procurement.HAS_SANCTION
   effects:
     reads:
       - company.business_registration

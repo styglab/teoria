@@ -4,8 +4,23 @@ registry:
 
 capability:
   id: get_bid_notice
+  exposure: public
   name: 입찰공고 조회
   description: 나라장터 공고번호와 차수로 입찰공고, 공고기관과 최신 참가요건 조건식을 조회한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.Organization
+    properties:
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.BidNotice.noticeName
+      - stable_key: procurement.BidNotice.publishedAt
+      - stable_key: procurement.BidNotice.deadlineAt
+      - stable_key: procurement.BidNotice.status
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: procurement.Organization.name
+    relationships:
+      - stable_key: procurement.PUBLISHES
   inputs:
     notice_number:
       property: public_procurement.bid_notice.notice_number

@@ -119,6 +119,17 @@ class RegistryValidator(FieldValidationMixin):
             path = catalog.capability_paths[capability_id]
             if path.stem != capability.id:
                 diagnostics.append(Diagnostic("capability_filename_mismatch", f"filename must match capability id '{capability.id}.yaml'", path, location="capability.id"))
+            if capability.exposure == "public" and not any((
+                capability.semantic_requirements.concepts,
+                capability.semantic_requirements.properties,
+                capability.semantic_requirements.relationships,
+            )):
+                diagnostics.append(Diagnostic(
+                    "public_capability_semantics_missing",
+                    "public capability must declare semantic requirements",
+                    path,
+                    location="capability.semantic_requirements",
+                ))
 
             for index, replacement_id in enumerate(capability.lifecycle.replacement_ids):
                 replacement = catalog.capabilities.get(replacement_id)

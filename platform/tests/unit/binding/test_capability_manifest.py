@@ -9,7 +9,7 @@ ROOT = Path(__file__).parents[3]
 
 def test_capability_binding_manifest_references_real_contract_fields() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
-    manifest = CapabilityBindingManifest.load(ROOT / "ontology_migrations" / "capability_bindings_v1.yaml")
+    manifest = CapabilityBindingManifest.load(ROOT / "ontology_migrations" / "applied" / "2026_10_initial_unification" / "capability_bindings_v1.yaml")
 
     assert manifest.validate_catalog(catalog) == []
     assert len(manifest.bindings) == 11
@@ -20,7 +20,7 @@ def test_capability_binding_manifest_references_real_contract_fields() -> None:
 def test_unified_capability_bindings_target_the_teoria_namespace() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
     manifest = CapabilityBindingManifest.load(
-        ROOT / "ontology_migrations" / "teoria_capability_bindings_v1.yaml"
+        ROOT / "ontology_migrations" / "applied" / "2026_10_initial_unification" / "teoria_capability_bindings_v1.yaml"
     )
 
     assert manifest.validate_catalog(catalog) == []

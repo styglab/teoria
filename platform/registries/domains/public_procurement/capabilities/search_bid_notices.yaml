@@ -4,8 +4,23 @@ registry:
 
 capability:
   id: search_bid_notices
+  exposure: public
   name: 입찰공고 검색
   description: 자유어, 게시·마감기간, 업무유형, 조달 분야 계층, 입찰상태, 계약방법과 추정가격으로 정규화된 입찰공고를 페이지 단위 검색한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.Organization
+    properties:
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.BidNotice.noticeName
+      - stable_key: procurement.BidNotice.publishedAt
+      - stable_key: procurement.BidNotice.deadlineAt
+      - stable_key: procurement.BidNotice.status
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: procurement.Organization.name
+    relationships:
+      - stable_key: procurement.PUBLISHES
   inputs:
     query:
       data_type: string

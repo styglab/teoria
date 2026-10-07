@@ -3,10 +3,29 @@ registry:
   registered_at: "2026-10-02"
 capability:
   id: get_bid_notice_participations
+  exposure: public
   name: 공고별 개찰 참여업체 조회
   description: 공고의 보유 개찰 참여업체를 차수별로 반환하고 원천 참가업체 수와 비교해 보존 완전성을 명시한다.
   kind: compute
   processor: market_context.get_bid_notice_participations
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.ProcurementLot
+      - stable_key: procurement.BidParticipation
+      - stable_key: procurement.Award
+    properties:
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.ProcurementLot.lotId
+      - stable_key: procurement.BidParticipation.participationId
+      - stable_key: procurement.BidParticipation.participatedAt
+      - stable_key: procurement.BidParticipation.rank
+      - stable_key: procurement.BidParticipation.bidAmount
+      - stable_key: procurement.Award.awardId
+    relationships:
+      - stable_key: procurement.HAS_LOT
+      - stable_key: procurement.HAS_PARTICIPATION
+      - stable_key: procurement.RESULTS_IN_AWARD
   effects:
     reads: [public_procurement.bid_opening_participation, public_procurement.bid_award]
     produces: [public_procurement.bid_opening_participation]

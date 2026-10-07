@@ -3,10 +3,45 @@ registry:
   registered_at: "2026-10-04"
 capability:
   id: analyze_bid_participation_context
+  exposure: public
   name: 공고 참여 판단 컨텍스트 분석
   description: 현재 공고 게시 직전의 동일 기관·업무구분·공식 조달분야 계약과 낙찰 원천을 분석해 시장 진입, 집중도, 규모, 경쟁 강도, 비교기관 benchmark, 신규·재진입 유사규모 계약 사례와 주요 업체를 반환한다.
   kind: compute
   processor: market_context.analyze_bid_participation_context
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.Organization
+      - stable_key: procurement.ProcurementCase
+      - stable_key: procurement.ProcurementLot
+      - stable_key: procurement.Industry
+      - stable_key: procurement.Award
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractVersion
+      - stable_key: procurement.ContractParty
+      - stable_key: party.BusinessRegistration
+    properties:
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.BidNotice.publishedAt
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: procurement.ProcurementCase.workType
+      - stable_key: procurement.Industry.industryCode
+      - stable_key: procurement.Award.awardId
+      - stable_key: procurement.Award.winningAmount
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Contract.currentAmount
+      - stable_key: procurement.ContractVersion.concludedDate
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+    relationships:
+      - stable_key: procurement.PUBLISHES
+      - stable_key: procurement.HAS_NOTICE
+      - stable_key: procurement.HAS_LOT
+      - stable_key: procurement.CLASSIFIED_AS_INDUSTRY
+      - stable_key: procurement.RESULTS_IN_AWARD
+      - stable_key: procurement.RESULTS_IN_CONTRACT
+      - stable_key: procurement.HAS_CONTRACT_VERSION
+      - stable_key: procurement.HAS_CONTRACT_PARTY
+      - stable_key: procurement.REPRESENTS_CONTRACTOR
   effects:
     reads: [public_procurement.bid_notice, public_procurement.bid_award, public_procurement.contract]
     produces: [public_procurement.bid_participation_context]

@@ -3,8 +3,14 @@ registry:
   registered_at: "2026-09-12"
 capability:
   id: get_bid_participation_findings
+  exposure: public
   name: 입찰 참여정보 조회
   description: 공고별 참여 특이사항·수행 의무·경쟁 제한 검토 신호와 원문 근거를 조회한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.BidNotice
+    properties:
+      - stable_key: procurement.BidNotice.bidNoticeId
   inputs:
     notice_number:
       property: public_procurement.bid_participation_finding.notice_number

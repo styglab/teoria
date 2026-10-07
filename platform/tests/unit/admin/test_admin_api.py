@@ -23,7 +23,7 @@ def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:
 
     release = client.get("/v1/admin/registry-release")
     assert release.status_code == 200
-    assert release.json()["version"] == "2026.10.06.4"
+    assert release.json()["version"] == "2026.10.07.2"
     assert release.json()["status"] == "published"
 
     validation = client.get("/v1/admin/validation")
@@ -37,7 +37,11 @@ def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:
     capabilities = client.get("/v1/admin/capabilities").json()["capabilities"]
     assert any(item["kind"] == "query" and item["steps"] for item in capabilities)
     assessment = next(item for item in capabilities if item["id"] == "assess_company_bid_eligibility")
-    assert assessment["kind"] == "compute"
+    assert assessment["kind"] == "decision"
+    assert assessment["exposure"] == "public"
+    assert next(
+        item for item in capabilities if item["id"] == "get_bid_notices_by_ids"
+    )["exposure"] == "internal"
     assert assessment["steps"] == []
     rules = client.get("/v1/admin/eligibility-rules").json()["eligibility_rules"]
     direct_production = next(item for item in rules if item["id"] == "holds_valid_direct_production_confirmation")

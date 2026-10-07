@@ -4,10 +4,38 @@ registry:
 
 capability:
   id: get_organization_company_relationship
+  exposure: public
   name: 기관·업체 전체 수주관계
   description: 분야 또는 유사사업 판정으로 사건을 제외하지 않고 특정 기관과 업체 사이의 전체 고유 수주사건을 최근순으로 페이지 조회한다. 공고 연결 사건은 게시일, 미연결 계약은 최초 계약일에 귀속하며 최초 계약일과 최신 계약 버전일을 분리한다.
   kind: compute
   processor: market_context.get_organization_company_relationship
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.Organization
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.Award
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractVersion
+      - stable_key: procurement.ContractParty
+      - stable_key: party.BusinessRegistration
+    properties:
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: procurement.BidNotice.publishedAt
+      - stable_key: procurement.Award.awardId
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Contract.currentAmount
+      - stable_key: procurement.Contract.firstContractDate
+      - stable_key: procurement.ContractVersion.concludedDate
+      - stable_key: procurement.ContractParty.attributedAmount
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+    relationships:
+      - stable_key: procurement.PUBLISHES
+      - stable_key: procurement.RESULTS_IN_AWARD
+      - stable_key: procurement.RESULTS_IN_CONTRACT
+      - stable_key: procurement.HAS_CONTRACT_VERSION
+      - stable_key: procurement.HAS_CONTRACT_PARTY
+      - stable_key: procurement.REPRESENTS_CONTRACTOR
+      - stable_key: procurement.SIGNS
   effects:
     reads:
       - public_procurement.bid_notice

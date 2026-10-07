@@ -4,8 +4,23 @@ registry:
 
 capability:
   id: search_companies_by_name
+  exposure: public
   name: 회사명으로 기업 검색
   description: 회사명을 금융위원회 기업개요 조회에 전달하여 일치하는 법인, 소재지 주소 및 사업자등록 정보를 반환한다
+  semantic_requirements:
+    concepts:
+      - stable_key: party.BusinessEntity
+      - stable_key: party.PostalAddress
+      - stable_key: party.BusinessRegistration
+    properties:
+      - stable_key: party.BusinessEntity.businessEntityId
+      - stable_key: party.BusinessEntity.displayName
+      - stable_key: party.PostalAddress.addressId
+      - stable_key: party.PostalAddress.address
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+    relationships:
+      - stable_key: party.HAS_ADDRESS
+      - stable_key: party.HAS_BUSINESS_REGISTRATION
   inputs:
     company_name:
       property: company.legal_entity.legal_name

@@ -4,8 +4,34 @@ registry:
 
 capability:
   id: search_public_procurement_contracts
+  exposure: public
   name: 공공조달 계약 검색
   description: 계약체결 기간, 자유어, 계약·분야 조건으로 공공조달 계약을 페이지 검색하고 현재 페이지의 단독·공동 계약업체와 대표사, 지분율 완전성을 함께 반환한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractVersion
+      - stable_key: procurement.ContractParty
+      - stable_key: procurement.Organization
+      - stable_key: party.BusinessRegistration
+    properties:
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Contract.name
+      - stable_key: procurement.Contract.currentAmount
+      - stable_key: procurement.Contract.status
+      - stable_key: procurement.ContractVersion.unifiedContractNumber
+      - stable_key: procurement.ContractVersion.concludedDate
+      - stable_key: procurement.ContractVersion.amount
+      - stable_key: procurement.ContractParty.contractPartyId
+      - stable_key: procurement.ContractParty.role
+      - stable_key: procurement.ContractParty.sharePercent
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+    relationships:
+      - stable_key: procurement.HAS_CONTRACT_VERSION
+      - stable_key: procurement.HAS_CONTRACT_PARTY
+      - stable_key: procurement.REPRESENTS_CONTRACTOR
+      - stable_key: procurement.SIGNS
   inputs:
     query:
       data_type: string

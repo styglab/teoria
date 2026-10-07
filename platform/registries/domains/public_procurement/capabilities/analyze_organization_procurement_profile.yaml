@@ -3,10 +3,47 @@ registry:
   registered_at: "2026-10-02"
 capability:
   id: analyze_organization_procurement_profile
+  exposure: public
   name: 기관 조달 프로필 분석
   description: 기관 조달관계를 최근 N개 또는 명시한 회계연도 범위로 집계하고 종료 연도 기준 공급업체 진입, 선택 기간 기준 CR5·HHI, 평균 계약금액, 전년 비교, 분야·분기·계약방식 구조를 반환한다. 분야 분포는 업무구분과 독립된 공식 조달분류만 사용하며 display_name, display_level, has_children, selection_filter를 반환한다. 공급업체 진입 분류는 사업 귀속일을 사용하되 contract_date 명칭의 필드는 원계약 사건의 실제 최초 계약일을 사용한다. 공고 연결 사건은 게시일, 미연결 계약은 최초 계약일에 귀속하고 금액은 종료시점까지의 최신 계약 버전을 사용한다. 업체명 검색·정렬·페이지는 업체 관계 목록에만 적용한다.
   kind: compute
   processor: market_context.analyze_organization_procurement_profile
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.Organization
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.ProcurementCase
+      - stable_key: procurement.Industry
+      - stable_key: procurement.BidParticipation
+      - stable_key: procurement.Award
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractVersion
+      - stable_key: procurement.ContractParty
+      - stable_key: party.BusinessRegistration
+    properties:
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: procurement.BidNotice.publishedAt
+      - stable_key: procurement.ProcurementCase.workType
+      - stable_key: procurement.Industry.industryCode
+      - stable_key: procurement.BidParticipation.participationId
+      - stable_key: procurement.Award.awardId
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Contract.currentAmount
+      - stable_key: procurement.Contract.firstContractDate
+      - stable_key: procurement.ContractVersion.concludedDate
+      - stable_key: procurement.ContractParty.attributedAmount
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+    relationships:
+      - stable_key: procurement.PUBLISHES
+      - stable_key: procurement.HAS_NOTICE
+      - stable_key: procurement.CLASSIFIED_AS_INDUSTRY
+      - stable_key: procurement.HAS_PARTICIPATION
+      - stable_key: procurement.RESULTS_IN_AWARD
+      - stable_key: procurement.RESULTS_IN_CONTRACT
+      - stable_key: procurement.HAS_CONTRACT_VERSION
+      - stable_key: procurement.HAS_CONTRACT_PARTY
+      - stable_key: procurement.REPRESENTS_CONTRACTOR
+      - stable_key: procurement.SIGNS
   effects:
     reads: [public_procurement.bid_notice, public_procurement.bid_opening_participation, public_procurement.bid_award, public_procurement.contract]
     produces: [public_procurement.organization_procurement_profile]

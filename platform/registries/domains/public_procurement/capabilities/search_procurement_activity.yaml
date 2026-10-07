@@ -3,10 +3,44 @@ registry:
   registered_at: "2026-10-01"
 capability:
   id: search_procurement_activity
+  exposure: public
   name: 기관·업체 통합 조달 활동 검색
   description: 공고 게시일을 기간 기준으로 공고부터 낙찰·계약까지 통합하고 최신 활동일로 정렬한다. 결과 없는 공고는 게시일부터 마감일까지 open이며 입찰서 제출 시작일은 단계 판정에 사용하지 않는다. 화면 대표 금액은 공고 연결 시 배정예산·추정가격·기초금액 순으로, 미연결 계약은 최신 계약금액으로 반환한다.
   kind: compute
   processor: market_context.search_procurement_activity
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.Organization
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.ProcurementCase
+      - stable_key: procurement.Industry
+      - stable_key: procurement.Award
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractVersion
+      - stable_key: procurement.ContractParty
+      - stable_key: party.BusinessRegistration
+    properties:
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.BidNotice.publishedAt
+      - stable_key: procurement.BidNotice.deadlineAt
+      - stable_key: procurement.BidNotice.status
+      - stable_key: procurement.ProcurementCase.workType
+      - stable_key: procurement.Industry.industryCode
+      - stable_key: procurement.Award.awardId
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Contract.currentAmount
+      - stable_key: procurement.ContractVersion.concludedDate
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+    relationships:
+      - stable_key: procurement.PUBLISHES
+      - stable_key: procurement.HAS_NOTICE
+      - stable_key: procurement.CLASSIFIED_AS_INDUSTRY
+      - stable_key: procurement.RESULTS_IN_AWARD
+      - stable_key: procurement.RESULTS_IN_CONTRACT
+      - stable_key: procurement.HAS_CONTRACT_VERSION
+      - stable_key: procurement.HAS_CONTRACT_PARTY
+      - stable_key: procurement.REPRESENTS_CONTRACTOR
   effects:
     reads: [public_procurement.bid_notice, public_procurement.bid_opening_participation, public_procurement.bid_award, public_procurement.contract]
     produces: [public_procurement.procurement_activity]

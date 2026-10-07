@@ -3,10 +3,42 @@ registry:
   registered_at: "2026-09-28"
 capability:
   id: get_bid_notice_relationship_context
+  exposure: public
   name: 공고 관계 컨텍스트 조회
   description: 현재 공고의 참여·낙찰·계약과 모든 참여업체의 게시연도 포함 최근 N개 회계연도 내 게시일 이전 기관 관계를 배치로 반환한다.
   kind: compute
   processor: market_context.get_bid_notice_relationship_context
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.ProcurementLot
+      - stable_key: procurement.BidParticipation
+      - stable_key: procurement.Award
+      - stable_key: procurement.AwardRecipient
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractParty
+      - stable_key: procurement.Organization
+      - stable_key: party.BusinessRegistration
+    properties:
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.ProcurementLot.lotId
+      - stable_key: procurement.BidParticipation.participationId
+      - stable_key: procurement.Award.awardId
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+    relationships:
+      - stable_key: procurement.HAS_LOT
+      - stable_key: procurement.HAS_PARTICIPATION
+      - stable_key: procurement.SUBMITTED_BY
+      - stable_key: procurement.RESULTS_IN_AWARD
+      - stable_key: procurement.HAS_AWARD_RECIPIENT
+      - stable_key: procurement.REPRESENTS_AWARDEE
+      - stable_key: procurement.RESULTS_IN_CONTRACT
+      - stable_key: procurement.HAS_CONTRACT_PARTY
+      - stable_key: procurement.REPRESENTS_CONTRACTOR
+      - stable_key: procurement.PUBLISHES
+      - stable_key: procurement.SIGNS
   effects:
     reads: [public_procurement.bid_notice, public_procurement.bid_opening_participation, public_procurement.bid_award, public_procurement.contract]
     produces: [public_procurement.bid_notice_relationship_context]

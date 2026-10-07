@@ -4,12 +4,39 @@ registry:
 
 capability:
   id: get_company_detail_context
+  exposure: public
   name: 기업 상세 통합 조회
   description: >-
     사업자 상태와 기업 식별자를 확인하고, 확정된 법인에 한해 기업개요,
     최근 가용 재무정보 및 기업관계를 부분 실패를 허용하여 통합 반환한다.
   kind: compute
   processor: company_identity.get_company_detail_context
+  semantic_requirements:
+    concepts:
+      - stable_key: party.BusinessEntity
+      - stable_key: party.BusinessRegistration
+      - stable_key: party.TaxpayerStatusObservation
+      - stable_key: finance.FinancialStatement
+      - stable_key: finance.FinancialFact
+      - stable_key: party.BusinessEntityRelationship
+    properties:
+      - stable_key: party.BusinessEntity.businessEntityId
+      - stable_key: party.BusinessEntity.displayName
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+      - stable_key: party.TaxpayerStatusObservation.observationId
+      - stable_key: finance.FinancialStatement.statementId
+      - stable_key: finance.FinancialStatement.fiscalYear
+      - stable_key: finance.FinancialFact.financialFactId
+      - stable_key: finance.FinancialFact.value
+      - stable_key: party.BusinessEntityRelationship.relationshipId
+      - stable_key: party.BusinessEntityRelationship.relationshipType
+    relationships:
+      - stable_key: party.HAS_BUSINESS_REGISTRATION
+      - stable_key: party.HAS_TAXPAYER_STATUS
+      - stable_key: finance.HAS_FINANCIAL_STATEMENT
+      - stable_key: finance.CONTAINS_FINANCIAL_FACT
+      - stable_key: party.RELATIONSHIP_FROM
+      - stable_key: party.RELATIONSHIP_TO
   effects:
     reads:
       - company.business_registration

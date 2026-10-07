@@ -8,7 +8,7 @@ ROOT = Path(__file__).parents[3]
 
 def test_business_rule_manifest_covers_identity_amount_and_attribution() -> None:
     manifest = BusinessRuleManifest.load(
-        ROOT / "ontology_migrations" / "teoria_business_rules_v1.yaml"
+        ROOT / "ontology_migrations" / "applied" / "2026_10_initial_unification" / "teoria_business_rules_v1.yaml"
     )
     assert {item.code for item in manifest.rules} == {
         "BID_NOTICE_IDENTITY", "PROCUREMENT_LOT_IDENTITY",

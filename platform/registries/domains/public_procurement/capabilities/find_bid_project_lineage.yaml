@@ -4,10 +4,31 @@ registry:
 
 capability:
   id: find_bid_project_lineage
+  exposure: public
   name: 입찰사업 승계관계 탐색
   description: 구축·고도화·유지관리·차세대·단계사업 후보를 탐색하되 구조화된 근거만으로 확정하지 않고 약한 관계는 related_candidate로 반환한다.
   kind: compute
   processor: market_context.find_bid_project_lineage
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.ProcurementCase
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.ProcurementLot
+      - stable_key: procurement.Award
+      - stable_key: procurement.Contract
+    properties:
+      - stable_key: procurement.ProcurementCase.procurementCaseId
+      - stable_key: procurement.ProcurementCase.name
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.BidNotice.noticeName
+      - stable_key: procurement.BidNotice.publishedAt
+      - stable_key: procurement.Award.awardId
+      - stable_key: procurement.Contract.contractId
+    relationships:
+      - stable_key: procurement.HAS_NOTICE
+      - stable_key: procurement.HAS_LOT
+      - stable_key: procurement.RESULTS_IN_AWARD
+      - stable_key: procurement.RESULTS_IN_CONTRACT
   effects:
     reads:
       - public_procurement.bid_notice

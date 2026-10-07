@@ -4,8 +4,34 @@ registry:
 
 capability:
   id: get_company_procurement_profile
+  exposure: public
   name: 기업 조달자격 프로필 조회
   description: 사업자등록번호 한 번으로 나라장터 조달업체 기본정보, 등록업종, 공급물품과 부정당제재를 통합 조회한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: party.BusinessRegistration
+      - stable_key: procurement.Industry
+      - stable_key: procurement.RegisteredIndustry
+      - stable_key: procurement.SupplyProduct
+      - stable_key: procurement.RegisteredSupplyProduct
+      - stable_key: procurement.Sanction
+      - stable_key: procurement.Organization
+    properties:
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+      - stable_key: procurement.Industry.industryCode
+      - stable_key: procurement.RegisteredIndustry.registrationId
+      - stable_key: procurement.SupplyProduct.productCode
+      - stable_key: procurement.RegisteredSupplyProduct.registrationId
+      - stable_key: procurement.Sanction.sanctionId
+      - stable_key: procurement.Sanction.validFrom
+      - stable_key: procurement.Sanction.validTo
+      - stable_key: procurement.Organization.organizationCode
+    relationships:
+      - stable_key: procurement.REGISTRATION_HAS_INDUSTRY
+      - stable_key: procurement.CLASSIFIED_AS_INDUSTRY
+      - stable_key: procurement.REGISTRATION_HAS_SUPPLY_PRODUCT
+      - stable_key: procurement.CLASSIFIED_AS_SUPPLY_PRODUCT
+      - stable_key: procurement.HAS_SANCTION
   inputs:
     business_registration_number:
       property: public_procurement.procurement_supplier.business_registration_number

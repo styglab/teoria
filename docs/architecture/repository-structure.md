@@ -30,6 +30,10 @@ platform  ──▶ teoria-provider-api ◀── pipelines
 Pipelines를 역으로 import하지 않는다. 미래 사용을 예상한 빈 패키지나
 `common`, `shared`, `utils` 성격의 묶음은 만들지 않는다.
 
+Platform 배포 이미지는 실행 경계에 따라 나눈다. `runtime` target은 Runtime 코드와
+Registry만 포함하고, `authoring` target은 Admin·migration·검증에 필요한
+`ontology_migrations/`, `references/`, `database/`를 추가로 포함한다.
+
 ## 계약 위치
 
 | 목적 | 위치 |

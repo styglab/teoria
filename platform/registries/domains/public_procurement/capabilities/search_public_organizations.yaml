@@ -4,8 +4,15 @@ registry:
 
 capability:
   id: search_public_organizations
+  exposure: public
   name: 공공기관 검색
   description: 기관명·기관코드 자유어와 선택적인 정확한 기관코드·소관구분으로 수집된 공공기관을 페이지 단위 검색한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.Organization
+    properties:
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: procurement.Organization.name
   inputs:
     query:
       data_type: string

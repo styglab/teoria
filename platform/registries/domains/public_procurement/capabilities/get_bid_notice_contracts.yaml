@@ -4,8 +4,33 @@ registry:
 
 capability:
   id: get_bid_notice_contracts
+  exposure: public
   name: 입찰공고 계약 조회
   description: 나라장터 공고번호로 연결된 공공조달 계약과 계약기관 관계를 계약체결일 최신순으로 조회한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.ProcurementLot
+      - stable_key: procurement.Award
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractVersion
+      - stable_key: procurement.Organization
+    properties:
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.ProcurementLot.lotId
+      - stable_key: procurement.Award.awardId
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Contract.name
+      - stable_key: procurement.Contract.currentAmount
+      - stable_key: procurement.ContractVersion.unifiedContractNumber
+      - stable_key: procurement.ContractVersion.concludedDate
+      - stable_key: procurement.Organization.organizationCode
+    relationships:
+      - stable_key: procurement.HAS_LOT
+      - stable_key: procurement.RESULTS_IN_AWARD
+      - stable_key: procurement.RESULTS_IN_CONTRACT
+      - stable_key: procurement.HAS_CONTRACT_VERSION
+      - stable_key: procurement.SIGNS
   inputs:
     notice_number:
       property: public_procurement.contract.notice_number

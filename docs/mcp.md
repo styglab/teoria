@@ -27,7 +27,9 @@ TEORIA_MCP_RUNTIME_API_TOKEN = "development-token"
 
 운영 구조는 `AI Client → MCP Gateway → Runtime HTTP API`다. MCP는 Registry, Source 키와 DB 권한을 갖지 않는다.
 
-Tool은 Ontology Object·Link와 provenance를 반환한다. `_options.include_property_provenance`와 `_options.max_objects`로 응답 범위를 조절한다.
+Tool은 `exposure: public`인 Capability만 발견하며 제목과 설명에 active Artifact의
+CapabilityVersion을 표시한다. Tool은 Ontology Object·Link와 provenance를 반환한다.
+`_options.include_property_provenance`와 `_options.max_objects`로 응답 범위를 조절한다.
 
 Docker 실행:
 

@@ -8,7 +8,7 @@ ROOT = Path(__file__).parents[3]
 
 def test_teoria_business_ontology_blueprint_has_shared_publication_boundary() -> None:
     blueprint = OntologyBlueprint.load(
-        ROOT / "ontology_migrations" / "teoria_business_ontology_v1.yaml"
+        ROOT / "ontology_migrations" / "applied" / "2026_10_initial_unification" / "teoria_business_ontology_v1.yaml"
     )
 
     assert blueprint.namespace == "teoria"
@@ -40,7 +40,7 @@ class _ExistingOntologyRepository:
 
 def test_blueprint_does_not_clone_into_an_existing_ontology() -> None:
     blueprint = OntologyBlueprint.load(
-        ROOT / "ontology_migrations" / "teoria_business_ontology_v1.yaml"
+        ROOT / "ontology_migrations" / "applied" / "2026_10_initial_unification" / "teoria_business_ontology_v1.yaml"
     )
 
     try:

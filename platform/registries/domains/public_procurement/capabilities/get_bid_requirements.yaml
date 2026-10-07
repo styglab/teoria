@@ -4,8 +4,24 @@ registry:
 
 capability:
   id: get_bid_requirements
+  exposure: public
   name: 입찰 참가요건 조회
   description: 나라장터 공고번호와 차수로 최신 완료 추출본의 참가요건과 근거를 조회한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.BidNotice
+      - stable_key: procurement.BidRequirementSet
+      - stable_key: procurement.BidRequirement
+    properties:
+      - stable_key: procurement.BidNotice.bidNoticeId
+      - stable_key: procurement.BidRequirementSet.requirementSetId
+      - stable_key: procurement.BidRequirementSet.expression
+      - stable_key: procurement.BidRequirement.requirementId
+      - stable_key: procurement.BidRequirement.requirementType
+      - stable_key: procurement.BidRequirement.originalText
+    relationships:
+      - stable_key: procurement.HAS_REQUIREMENT_SET
+      - stable_key: procurement.CONTAINS_REQUIREMENT
   inputs:
     notice_number:
       property: public_procurement.bid_requirement.notice_number

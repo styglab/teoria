@@ -116,6 +116,7 @@ class RuntimeBundleCompiler:
                 "id": capability_id,
                 "version": capability.version,
                 "kind": capability.kind,
+                "exposure": capability.exposure,
                 "definition_checksum": catalog.capability_checksums[
                     (capability_id, capability.version)
                 ],

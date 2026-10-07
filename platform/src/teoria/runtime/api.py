@@ -119,6 +119,7 @@ def create_runtime_app(
                     "name": capability.name,
                     "description": capability.description,
                     "kind": capability.kind,
+                    "exposure": capability.exposure,
                     "processor": capability.processor,
                     "effects": capability.effects.model_dump(),
                     "returns": capability.returns,
@@ -126,6 +127,7 @@ def create_runtime_app(
                 }
                 for capability in resolved_catalog.capabilities.values()
                 if capability.lifecycle.status == "active"
+                and capability.exposure == "public"
             ]
         }
 
@@ -137,7 +139,7 @@ def create_runtime_app(
         execution_id = str(uuid4())
         started_at = datetime.now(timezone.utc)
         capability = resolved_catalog.capabilities.get(capability_id)
-        if capability is None:
+        if capability is None or capability.exposure != "public":
             raise HTTPException(status_code=404, detail={"code": "unknown_capability", "message": capability_id})
         if capability.lifecycle.status == "deprecated":
             raise HTTPException(status_code=410, detail={

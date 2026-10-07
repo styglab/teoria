@@ -77,7 +77,8 @@ artifact는 stable concept, property와 relationship을 포함하며 checksum으
 Artifact store의 `active.json` 교체는 atomic rename으로 수행하며 rollback은
 검증된 이전 version을 다시 activate하는 방식으로 처리한다.
 
-Ontology migration manifest는 `platform/ontology_migrations/`에 있다. Object를
+적용 완료된 Ontology migration manifest는 `platform/ontology_migrations/applied/`에
+불변 이력으로 보관한다. Object를
 추가하거나 제거하면 `ontology_v2.yaml` 분류도 갱신하고 다음을 실행한다.
 
 ```bash

@@ -41,11 +41,12 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
         item for item in capabilities.json()["capabilities"]
         if item["id"] == "assess_company_bid_eligibility"
     )
-    assert assessment["kind"] == "compute"
+    assert assessment["kind"] == "decision"
+    assert assessment["exposure"] == "public"
     assert assessment["version"] == "1.2.0"
     assert assessment["definition_checksum"].startswith("sha256:")
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.10.06.4"
+    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.10.07.2"
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -54,7 +55,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.10.06.4"
+    assert response.json()["registry"]["version"] == "2026.10.07.2"
     assert response.json()["capability_version"]["id"] == "search_public_procurement_contracts"
     assert response.json()["capability_version"]["version"] == "1.3.0"
     assert response.json()["execution"]["execution_id"]
@@ -155,29 +156,35 @@ def test_bid_notice_search_discovery_exposes_pagination_and_sort_contract() -> N
     assert invalid.status_code == 422
 
 
-def test_contract_capabilities_expose_root_contract_pagination() -> None:
+def test_public_contract_search_exposes_pagination_and_internal_history_is_hidden() -> None:
+    catalog = RegistryLoader(REGISTRIES).load()
     app = create_runtime_app(
         settings=Settings(runtime_api_token="test-token"),
-        catalog=RegistryLoader(REGISTRIES).load(),
+        catalog=catalog,
         runner=CapturingRunner(),
     )
-    capabilities = TestClient(app).get(
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer test-token"}
+    capabilities = client.get(
         "/v1/capabilities",
-        headers={"Authorization": "Bearer test-token"},
+        headers=headers,
     ).json()["capabilities"]
 
     contract_search = next(
         item for item in capabilities if item["id"] == "search_public_procurement_contracts"
     )["input_schema"]["properties"]
-    company_history = next(
-        item for item in capabilities
-        if item["id"] == "get_company_public_procurement_contracts"
-    )["input_schema"]["properties"]
-
     assert contract_search["sort"]["enum"] == ["concluded_desc", "amount_desc"]
     assert contract_search["page_size"]["maximum"] == 100
-    assert company_history["sort"]["enum"] == ["contract_desc"]
-    assert company_history["page"]["default"] == 1
+    assert "get_company_public_procurement_contracts" not in {
+        item["id"] for item in capabilities
+    }
+    assert catalog.capabilities["get_company_public_procurement_contracts"].exposure == "internal"
+    response = client.post(
+        "/v1/capabilities/get_company_public_procurement_contracts:execute",
+        headers=headers,
+        json={"inputs": {"business_registration_number": "1234567890"}},
+    )
+    assert response.status_code == 404
 
 
 def test_public_organization_search_discovery_contract() -> None:

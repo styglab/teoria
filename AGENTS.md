@@ -57,7 +57,7 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - Published Ontology revision은 직접 수정하지 않는다. 변경은 Published version에서 새 Draft를 생성해 검토·승인·게시한다.
 - Authoring DB 모델을 Runtime contract로 직접 사용하지 않는다. Runtime은 Published version에서 생성된 immutable artifact를 사용한다.
 - Production Runtime이 `platform/registries/`나 authoring DB를 직접 읽는 경로를 추가하지 않는다. `TEORIA_RUNTIME_ARTIFACT_PATH` 또는 `TEORIA_RUNTIME_ARTIFACT_STORE`로 checksum 검증된 versioned artifact만 적재한다.
-- 기존 YAML Ontology Object를 추가·제거하면 `platform/ontology_migrations/ontology_v2.yaml` 분류도 함께 갱신하고 `teoria ontology-migration-report`를 실행한다.
+- 기존 YAML Ontology Object를 추가·제거하는 새 이관은 `platform/ontology_migrations/pending/<migration>/ontology_v2.yaml` 분류를 함께 작성하고 명시적인 `--manifest`로 `teoria ontology-migration-report`를 실행한다. `applied/` 이력은 수정하지 않는다.
 - 운영 환경에서는 `TEORIA_ADMIN_AUTH_MODE=bearer`와 별도 Admin token을 사용한다. 개발용 disabled mode를 외부에 노출하지 않는다.
 
 Application DB migration을 변경하면 새 순번 migration만 추가하고 이미 적용된 SQL을 변경하지 않는다. 다음을 함께 검증한다.
