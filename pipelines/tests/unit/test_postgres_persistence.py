@@ -109,6 +109,30 @@ def test_relationship_graph_retention_protects_latest_and_prunes_stale_builds() 
     assert "procurement_relationship_graph_work_type_entities_idx" in migration
 
 
+def test_relationship_graph_retention_is_overridden_to_latest_only() -> None:
+    migration = (
+        Path(__file__).parents[2] / "database" / "migrations"
+        / "073_retain_latest_procurement_relationship_graph.sql"
+    ).read_text()
+
+    assert "published_retention interval DEFAULT interval '0 seconds'" in migration
+    assert "graph_version IS DISTINCT FROM latest_published_version" in migration
+    assert "published_version, interval '0 seconds'" in migration
+    assert "published_retention must not be negative" in migration
+
+
+def test_relationship_graph_retention_is_overridden_to_one_day() -> None:
+    migration = (
+        Path(__file__).parents[2] / "database" / "migrations"
+        / "074_retain_one_day_procurement_relationship_graph.sql"
+    ).read_text()
+
+    assert "published_retention interval DEFAULT interval '1 day'" in migration
+    assert "graph_version IS DISTINCT FROM latest_published_version" in migration
+    assert "published_version, interval '1 day'" in migration
+    assert "published_retention must be at least 1 day" in migration
+
+
 def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
     connection = MagicMock()
     connection.__enter__.return_value = connection
