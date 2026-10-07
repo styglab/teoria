@@ -226,14 +226,71 @@ class ProcurementRelationshipGraphReader:
         with psycopg.connect(self._database_url(catalog), row_factory=dict_row) as connection:
             version = self._resolve_version(connection, graph_version)
             parameters["graph_version"] = version["graph_version"]
-            totals = dict(connection.execute("""
-                SELECT count(DISTINCT organization_code) AS organization_count,
-                       count(DISTINCT company_number) AS company_count,
-                       count(DISTINCT (organization_code,company_number)) AS link_count
-                FROM public_procurement.procurement_relationship_graph_aggregates
-                WHERE graph_version=%(graph_version)s AND cluster_id=%(cluster_id)s
-                  AND contract_year BETWEEN %(period_from_year)s AND %(period_to_year)s
-            """, parameters).fetchone())
+            overview_cluster = connection.execute("""
+                SELECT group_by,organization_count,company_count,link_count
+                FROM public_procurement.procurement_relationship_graph_overviews
+                WHERE graph_version=%(graph_version)s
+                  AND period_from_year=%(period_from_year)s
+                  AND period_to_year=%(period_to_year)s
+                  AND cluster_id=%(cluster_id)s
+                  AND group_by IN ('field','work_type')
+                ORDER BY CASE group_by WHEN 'field' THEN 0 ELSE 1 END
+                LIMIT 1
+            """, parameters).fetchone()
+            if overview_cluster is not None:
+                cluster_scope = str(overview_cluster["group_by"])
+            else:
+                work_type_match = connection.execute("""
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM public_procurement.procurement_relationship_graph_aggregates
+                        WHERE graph_version=%(graph_version)s
+                          AND work_type=%(cluster_id)s
+                          AND contract_year BETWEEN %(period_from_year)s
+                                                AND %(period_to_year)s
+                    ) AS matches
+                """, parameters).fetchone()
+                cluster_scope = (
+                    "work_type"
+                    if work_type_match and work_type_match["matches"]
+                    else "field"
+                )
+            aggregate_cluster_filter = (
+                "work_type=%(cluster_id)s"
+                if cluster_scope == "work_type"
+                else "cluster_id=%(cluster_id)s"
+            )
+            if cluster_scope == "work_type":
+                physical_cluster_ids = [
+                    str(row["cluster_id"])
+                    for row in connection.execute("""
+                        SELECT DISTINCT cluster_id
+                        FROM public_procurement.procurement_relationship_graph_aggregates
+                        WHERE graph_version=%(graph_version)s
+                          AND work_type=%(cluster_id)s
+                          AND contract_year BETWEEN %(period_from_year)s
+                                                AND %(period_to_year)s
+                        ORDER BY cluster_id
+                    """, parameters).fetchall()
+                ]
+            else:
+                physical_cluster_ids = [cluster_id]
+            parameters["physical_cluster_ids"] = physical_cluster_ids
+            if overview_cluster is not None:
+                totals = {
+                    key: overview_cluster[key]
+                    for key in ("organization_count", "company_count", "link_count")
+                }
+            else:
+                totals = dict(connection.execute(f"""
+                    SELECT count(DISTINCT organization_code) AS organization_count,
+                           count(DISTINCT company_number) AS company_count,
+                           count(DISTINCT (organization_code,company_number)) AS link_count
+                    FROM public_procurement.procurement_relationship_graph_aggregates
+                    WHERE graph_version=%(graph_version)s AND {aggregate_cluster_filter}
+                      AND contract_year BETWEEN %(period_from_year)s
+                                            AND %(period_to_year)s
+                """, parameters).fetchone())
             companies = [dict(row) for row in connection.execute("""
                 SELECT node_id AS business_registration_number,
                        max(node_name) AS company_name,
@@ -246,7 +303,8 @@ class ProcurementRelationshipGraphReader:
                             WHEN bool_and(amount_completeness='unknown') THEN 'unknown'
                             ELSE 'partial' END AS amount_completeness
                 FROM public_procurement.procurement_relationship_graph_nodes
-                WHERE graph_version=%(graph_version)s AND cluster_id=%(cluster_id)s
+                WHERE graph_version=%(graph_version)s
+                  AND cluster_id=ANY(%(physical_cluster_ids)s::text[])
                   AND node_type='company'
                   AND contract_year BETWEEN %(period_from_year)s AND %(period_to_year)s
                   AND (%(after_company_number)s::text IS NULL
@@ -261,7 +319,7 @@ class ProcurementRelationshipGraphReader:
             if not company_numbers:
                 return version, [], [], totals, False
             link_parameters = {**parameters, "company_numbers": company_numbers}
-            links = [dict(row) for row in connection.execute("""
+            links = [dict(row) for row in connection.execute(f"""
                 WITH metrics AS (
                     SELECT organization_code,max(organization_name) AS organization_name,
                            company_number,max(company_name) AS company_name,
@@ -275,7 +333,7 @@ class ProcurementRelationshipGraphReader:
                                 WHEN bool_and(amount_completeness='unknown') THEN 'unknown'
                                 ELSE 'partial' END AS amount_completeness
                     FROM public_procurement.procurement_relationship_graph_aggregates
-                    WHERE graph_version=%(graph_version)s AND cluster_id=%(cluster_id)s
+                    WHERE graph_version=%(graph_version)s AND {aggregate_cluster_filter}
                       AND contract_year BETWEEN %(period_from_year)s AND %(period_to_year)s
                       AND company_number=ANY(%(company_numbers)s::text[])
                     GROUP BY organization_code,company_number
@@ -284,7 +342,7 @@ class ProcurementRelationshipGraphReader:
                              AS company_roles
                     FROM public_procurement.procurement_relationship_graph_aggregates aggregate
                     CROSS JOIN LATERAL unnest(aggregate.company_roles) role
-                    WHERE graph_version=%(graph_version)s AND cluster_id=%(cluster_id)s
+                    WHERE graph_version=%(graph_version)s AND {aggregate_cluster_filter}
                       AND contract_year BETWEEN %(period_from_year)s AND %(period_to_year)s
                       AND company_number=ANY(%(company_numbers)s::text[])
                     GROUP BY organization_code,company_number
@@ -294,7 +352,7 @@ class ProcurementRelationshipGraphReader:
                 ORDER BY company_number,organization_code
             """, link_parameters).fetchall()]
             organization_ids = sorted({str(item["organization_code"]) for item in links})
-            organizations = [dict(row) for row in connection.execute("""
+            organizations = [dict(row) for row in connection.execute(f"""
                 WITH metrics AS (
                     SELECT node_id AS organization_code,
                            max(node_name) AS organization_name,
@@ -307,7 +365,8 @@ class ProcurementRelationshipGraphReader:
                                 WHEN bool_and(amount_completeness='unknown') THEN 'unknown'
                                 ELSE 'partial' END AS amount_completeness
                     FROM public_procurement.procurement_relationship_graph_nodes
-                    WHERE graph_version=%(graph_version)s AND cluster_id=%(cluster_id)s
+                    WHERE graph_version=%(graph_version)s
+                      AND cluster_id=ANY(%(physical_cluster_ids)s::text[])
                       AND node_type='organization'
                       AND contract_year BETWEEN %(period_from_year)s AND %(period_to_year)s
                       AND node_id=ANY(%(organization_ids)s::text[])
@@ -317,7 +376,8 @@ class ProcurementRelationshipGraphReader:
                     FROM (
                         SELECT organization_code,company_number
                         FROM public_procurement.procurement_relationship_graph_aggregates
-                        WHERE graph_version=%(graph_version)s AND cluster_id=%(cluster_id)s
+                        WHERE graph_version=%(graph_version)s
+                          AND {aggregate_cluster_filter}
                           AND contract_year
                               BETWEEN %(period_from_year)s AND %(period_to_year)s
                           AND organization_code=ANY(%(organization_ids)s::text[])

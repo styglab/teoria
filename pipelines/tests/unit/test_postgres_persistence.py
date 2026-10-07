@@ -95,6 +95,20 @@ def test_relationship_graph_overviews_are_precomputed_with_snapshot_publish() ->
     assert "GRANT SELECT" in migration
 
 
+def test_relationship_graph_retention_protects_latest_and_prunes_stale_builds() -> None:
+    migration = (
+        Path(__file__).parents[2] / "database" / "migrations"
+        / "072_procurement_relationship_graph_retention.sql"
+    ).read_text()
+
+    assert "prune_procurement_relationship_graph_versions" in migration
+    assert "published_retention interval DEFAULT interval '7 days'" in migration
+    assert "graph_version IS DISTINCT FROM latest_published_version" in migration
+    assert "status='building'" in migration
+    assert "building_retention interval DEFAULT interval '1 day'" in migration
+    assert "procurement_relationship_graph_work_type_entities_idx" in migration
+
+
 def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
     connection = MagicMock()
     connection.__enter__.return_value = connection

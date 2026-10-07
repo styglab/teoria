@@ -91,6 +91,14 @@ Source, 지속 수집 API는 Connector로 작성한다. [Registry guide](registr
 기관과 모든 링크를 함께 반환한다. 스냅샷은 Pipeline이 매일 생성하며 7일간 보존하므로
 Runtime은 화면 요청마다 원본 계약을 다시 집계하지 않는다. 두 응답 모두 분류되지 않은
 계약이 관계 ledger에 포함되지 않는다는 완전성 상태를 명시한다.
+`group_by=work_type`의 `cluster_id`는 업무유형(예: `service`)을 뜻하며 상세 조회는
+해당 업무유형의 모든 분야 군집을 합쳐 반환한다. `group_by=field`의 `cluster_id`는
+물리 분야 군집(예: `service:81112002`)과 일치한다.
+
+그래프 버전은 매일 게시 후 자동 정리한다. 게시된 버전은 cursor 안정성을 위해
+7일 동안 보존하고 최신 게시 버전은 기간과 관계없이 항상 보호한다. 완료되지 않은
+`building` 버전은 1일 후 정리하며, 버전 삭제 시 상세·노드·overview 행도 외래키
+cascade로 함께 제거된다.
 
 ### API/MCP 사용자
 

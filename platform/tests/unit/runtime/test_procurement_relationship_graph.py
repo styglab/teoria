@@ -3,12 +3,14 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
 from teoria.registry.loader import RegistryLoader
 from teoria.runtime.capability.runner import CapabilityExecutionError
 from teoria.runtime.market_context.relationship_graph import (
+    ProcurementRelationshipGraphReader,
     execute_procurement_relationship_graph_entities,
     execute_procurement_relationship_graph_summary,
 )
@@ -64,6 +66,96 @@ class EntityReader:
             {"organization_count": 12, "company_count": 48, "link_count": 93},
             not parameters["after_company_number"],
         )
+
+
+class _Rows:
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self.rows = rows
+
+    def fetchone(self) -> dict[str, Any] | None:
+        return self.rows[0] if self.rows else None
+
+    def fetchall(self) -> list[dict[str, Any]]:
+        return self.rows
+
+
+class _WorkTypeGraphConnection:
+    def __init__(self) -> None:
+        self.queries: list[str] = []
+
+    def __enter__(self) -> _WorkTypeGraphConnection:
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        return None
+
+    def execute(self, query: str, _parameters: Any = None) -> _Rows:
+        self.queries.append(query)
+        if "procurement_relationship_graph_versions" in query:
+            return _Rows([{"graph_version": VERSION, "status": "published"}])
+        if "procurement_relationship_graph_overviews" in query:
+            return _Rows([{
+                "group_by": "work_type", "organization_count": 12,
+                "company_count": 48, "link_count": 93,
+            }])
+        if "SELECT DISTINCT cluster_id" in query:
+            return _Rows([
+                {"cluster_id": "service:81112002"},
+                {"cluster_id": "service:81112199"},
+            ])
+        if "node_id AS business_registration_number" in query:
+            return _Rows([{
+                "business_registration_number": "1111111111",
+                "company_name": "업체", "contract_count": 3,
+                "total_attributed_contract_amount": 100,
+                "known_amount_count": 3, "first_contract_date": date(2022, 1, 1),
+                "latest_contract_date": date(2026, 1, 1),
+                "amount_completeness": "complete",
+            }])
+        if "company_roles" in query:
+            return _Rows([{
+                "organization_code": "O1", "organization_name": "기관",
+                "company_number": "1111111111", "company_name": "업체",
+                "contract_count": 3, "total_attributed_contract_amount": 100,
+                "known_amount_count": 3, "first_contract_date": date(2022, 1, 1),
+                "latest_contract_date": date(2026, 1, 1),
+                "amount_completeness": "complete", "company_roles": ["sole"],
+            }])
+        if "connected_company_count" in query:
+            return _Rows([{
+                "organization_code": "O1", "organization_name": "기관",
+                "contract_count": 3, "total_contract_amount": 100,
+                "known_amount_count": 3, "first_contract_date": date(2022, 1, 1),
+                "latest_contract_date": date(2026, 1, 1),
+                "amount_completeness": "complete", "connected_company_count": 1,
+            }])
+        raise AssertionError(query)
+
+
+def test_entity_reader_expands_work_type_cluster_to_physical_field_clusters() -> None:
+    connection = _WorkTypeGraphConnection()
+    reader = ProcurementRelationshipGraphReader(
+        {"TEORIA_RUNTIME_DATA_DATABASE_URL": "postgresql://unused"}
+    )
+    catalog = RegistryLoader(REGISTRIES).load()
+
+    with patch(
+        "teoria.runtime.market_context.relationship_graph.psycopg.connect",
+        return_value=connection,
+    ):
+        _version, nodes, links, totals, has_more = reader.entities(
+            catalog, graph_version=VERSION.isoformat(), cluster_id="service",
+            period_from_year=2022, period_to_year=2026,
+            after_company_number=None, page_size=1,
+        )
+
+    assert totals == {"organization_count": 12, "company_count": 48, "link_count": 93}
+    assert len(nodes) == 2
+    assert len(links) == 1
+    assert has_more is False
+    joined_queries = "\n".join(connection.queries)
+    assert "work_type=%(cluster_id)s" in joined_queries
+    assert "cluster_id=ANY(%(physical_cluster_ids)s::text[])" in joined_queries
 
 
 @pytest.mark.asyncio
