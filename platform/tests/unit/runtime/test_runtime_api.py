@@ -46,7 +46,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     assert assessment["version"] == "1.2.0"
     assert assessment["definition_checksum"].startswith("sha256:")
     assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
-    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.10.07.2"
+    assert client.get("/v1/version", headers=headers).json()["registry"]["version"] == "2026.10.07.4"
 
     response = client.post(
         "/v1/capabilities/search_public_procurement_contracts:execute",
@@ -55,7 +55,7 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "search_public_procurement_contracts"
-    assert response.json()["registry"]["version"] == "2026.10.07.2"
+    assert response.json()["registry"]["version"] == "2026.10.07.4"
     assert response.json()["capability_version"]["id"] == "search_public_procurement_contracts"
     assert response.json()["capability_version"]["version"] == "1.3.0"
     assert response.json()["execution"]["execution_id"]
@@ -156,7 +156,7 @@ def test_bid_notice_search_discovery_exposes_pagination_and_sort_contract() -> N
     assert invalid.status_code == 422
 
 
-def test_public_contract_search_exposes_pagination_and_internal_history_is_hidden() -> None:
+def test_public_contract_capabilities_expose_pagination_and_internal_history_is_hidden() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
     app = create_runtime_app(
         settings=Settings(runtime_api_token="test-token"),
@@ -175,12 +175,12 @@ def test_public_contract_search_exposes_pagination_and_internal_history_is_hidde
     )["input_schema"]["properties"]
     assert contract_search["sort"]["enum"] == ["concluded_desc", "amount_desc"]
     assert contract_search["page_size"]["maximum"] == 100
-    assert "get_company_public_procurement_contracts" not in {
+    assert "get_company_public_procurement_contracts" in {
         item["id"] for item in capabilities
     }
-    assert catalog.capabilities["get_company_public_procurement_contracts"].exposure == "internal"
+    assert catalog.capabilities["get_company_public_procurement_contracts"].exposure == "public"
     response = client.post(
-        "/v1/capabilities/get_company_public_procurement_contracts:execute",
+        "/v1/capabilities/get_company_bid_history:execute",
         headers=headers,
         json={"inputs": {"business_registration_number": "1234567890"}},
     )
