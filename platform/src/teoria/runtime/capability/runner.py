@@ -187,6 +187,27 @@ class CapabilityRunner:
             if capability.processor == "market_context.analyze_company_procurement_profile":
                 from teoria.runtime.market_context.processor import execute_company_procurement_profile
                 return await execute_company_procurement_profile(catalog, capability_id, inputs)
+            if capability.processor == "market_context.analyze_procurement_relationship_context":
+                from teoria.runtime.market_context.processor import (
+                    execute_procurement_relationship_context,
+                )
+                return await execute_procurement_relationship_context(
+                    catalog, capability_id, inputs,
+                )
+            if capability.processor == "market_context.summarize_procurement_relationship_graph":
+                from teoria.runtime.market_context.relationship_graph import (
+                    execute_procurement_relationship_graph_summary,
+                )
+                return await execute_procurement_relationship_graph_summary(
+                    catalog, capability_id, inputs,
+                )
+            if capability.processor == "market_context.search_procurement_relationship_graph_entities":
+                from teoria.runtime.market_context.relationship_graph import (
+                    execute_procurement_relationship_graph_entities,
+                )
+                return await execute_procurement_relationship_graph_entities(
+                    catalog, capability_id, inputs,
+                )
             if capability.processor == "market_context.search_organization_supplier_entries":
                 from teoria.runtime.market_context.processor import (
                     execute_organization_supplier_entry_search,

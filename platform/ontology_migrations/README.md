@@ -15,3 +15,7 @@ Application DB에서 게시되어 checksum으로 고정된 immutable Ontology Ar
 `applied/2026_10_bid_notice_stable_key_correction/`은 각각 `teoria@0.1.3` 적용과
 `teoria@0.1.4` Stable Key 교정 기록을 보존한다. 일부 파일은 최종 구성 자체가
 아니라 이관 과정의 중간 입력이며 재실행 대상이 아니다.
+
+`pending/2026_10_procurement_relationship_context/`는 신규 기관·업체 2단계 조달관계,
+전체 관계 그래프 요약과 버전 고정 페이지 응답을 Business Ontology가 아닌 Runtime
+projection으로 분류한다.

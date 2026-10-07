@@ -17,7 +17,7 @@ def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:
     overview = client.get("/v1/admin/overview")
     assert overview.status_code == 200
     assert overview.json()["counts"]["runtime_contract_domains"] == 3
-    assert overview.json()["counts"]["runtime_object_types"] == 41
+    assert overview.json()["counts"]["runtime_object_types"] == 44
     assert overview.json()["counts"]["eligibility_rules"] == 12
     assert overview.json()["validation"]["status"] == "valid"
 

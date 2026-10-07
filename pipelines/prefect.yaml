@@ -90,6 +90,21 @@ deployments:
       name: teoria-ingestion
       work_queue_name: default
 
+  - name: pps-procurement-relationship-graph-publish
+    version: 1.0.0
+    description: 기관·업체 조달관계의 불변 일별 집계 스냅샷을 발행하고 cursor 조회용 graph_version을 고정한다.
+    entrypoint: teoria_pipelines.flows.pps_contracts.publish_pps_procurement_relationship_graph
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    schedules:
+      - cron: "30 3 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
   - name: pps-bid-result-incremental
     version: 1.1.0
     description: 최근 3일의 최종낙찰과 해당 공고의 개찰 참여업체 결과를 4시간마다 갱신한다.

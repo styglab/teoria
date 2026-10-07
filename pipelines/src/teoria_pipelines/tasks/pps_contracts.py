@@ -214,6 +214,17 @@ def refresh_contract_event_ledger(batch_size: int = 5) -> int:
     return refreshed
 
 
+@task(name="조달관계 그래프 스냅샷 발행", retries=1, retry_delay_seconds=300,
+      viz_return_value="graph-version")
+def publish_procurement_relationship_graph() -> str:
+    store = _store()
+    with psycopg.connect(store.database_url, autocommit=True) as connection:
+        graph_version = connection.execute(
+            "SELECT public_procurement.publish_procurement_relationship_graph()"
+        ).fetchone()[0]
+    return graph_version.isoformat()
+
+
 @task(name="완료 Operation 확인", viz_return_value=None)
 def get_completed_operation(pipeline_id: str, window: CollectionWindow,
                             operation_id: str) -> LoadSummary | None:

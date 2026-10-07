@@ -45,6 +45,43 @@ def test_contract_operation_progress_migration_cleans_stale_runs_and_dates() -> 
     assert "opening_at = NULL" in migration
 
 
+def test_contract_relationship_context_has_company_first_lookup_index() -> None:
+    migration = (
+        Path(__file__).parents[2] / "database" / "migrations"
+        / "068_optimize_contract_relationship_company_lookup.sql"
+    ).read_text()
+
+    assert "contract_event_company_ledger_company_date_idx" in migration
+    assert "company_number, first_contract_date, organization_code" in " ".join(
+        migration.split()
+    )
+
+
+def test_relationship_graph_snapshot_is_versioned_and_retained_for_cursor_stability() -> None:
+    migration = (
+        Path(__file__).parents[2] / "database" / "migrations"
+        / "069_procurement_relationship_graph_snapshots.sql"
+    ).read_text()
+
+    assert "procurement_relationship_graph_versions" in migration
+    assert "procurement_relationship_graph_aggregates" in migration
+    assert "procurement_relationship_graph_nodes" in migration
+    assert "publish_procurement_relationship_graph()" in migration
+    assert "graph_version < published_version - interval '7 days'" in migration
+    assert "WHERE status='published'" in migration
+
+
+def test_relationship_graph_overview_has_covering_index() -> None:
+    migration = (
+        Path(__file__).parents[2] / "database" / "migrations"
+        / "070_optimize_procurement_relationship_graph_overview.sql"
+    ).read_text()
+
+    assert "procurement_relationship_graph_overview_cover_idx" in migration
+    assert "organization_code, company_number" in " ".join(migration.split())
+    assert "total_attributed_contract_amount" in migration
+
+
 def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
     connection = MagicMock()
     connection.__enter__.return_value = connection

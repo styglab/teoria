@@ -1,5 +1,5 @@
 registry:
-  version: 2.14.0
+  version: 2.16.0
   registered_at: "2026-08-08"
 
 runtime_contract:
@@ -47,6 +47,38 @@ runtime_contract:
       properties:
         - {id: company_procurement_profile_id, name: 업체 조달 프로필 식별자, description: 사업자등록번호, data_type: string}
         - {id: relationship_count, name: 거래기관 수, description: 관찰기간에 활동한 고유 기관 수, data_type: integer}
+
+    - id: procurement_relationship_context
+      name: 기관·업체 조달관계 컨텍스트
+      description: 기관 또는 업체를 기준으로 동일 필터를 적용해 1·2단계 직접 계약관계를 제한된 노드와 링크로 집계한 Runtime projection
+      primary_key: procurement_relationship_context_id
+      properties:
+        - {id: procurement_relationship_context_id, name: 조달관계 컨텍스트 식별자, description: 기준 유형과 기준 코드를 결합한 값, data_type: string}
+        - {id: seed_type, name: 기준 유형, description: organization 또는 company, data_type: string}
+        - {id: seed_id, name: 기준 코드, description: 기관코드 또는 사업자등록번호, data_type: string}
+        - {id: organization_count, name: 반환 기관 수, description: 절단 적용 후 반환된 고유 기관 수, data_type: integer}
+        - {id: company_count, name: 반환 업체 수, description: 절단 적용 후 반환된 고유 업체 수, data_type: integer}
+        - {id: link_count, name: 반환 관계 수, description: 절단 적용 후 반환된 고유 기관·업체 직접 계약관계 수, data_type: integer}
+
+    - id: procurement_relationship_graph_summary
+      name: 조달관계 그래프 요약
+      description: 불변 graph_version에서 기간·분야별 전체 규모와 군집을 제공하는 Runtime projection
+      primary_key: procurement_relationship_graph_summary_id
+      properties:
+        - {id: procurement_relationship_graph_summary_id, name: 그래프 요약 식별자, description: graph_version, data_type: string}
+        - {id: graph_version, name: 그래프 버전, description: 여러 cursor 페이지에서 동일 데이터 시점을 고정하는 게시 시각, data_type: string}
+        - {id: cluster_count, name: 군집 수, description: 선택한 group_by 기준으로 반환된 군집 수, data_type: integer}
+
+    - id: procurement_relationship_graph_entities
+      name: 조달관계 그래프 개체 페이지
+      description: graph_version·군집·기간이 고정된 업체 소유 cursor 페이지와 연결 기관·관계를 제공하는 Runtime projection
+      primary_key: procurement_relationship_graph_entities_id
+      properties:
+        - {id: procurement_relationship_graph_entities_id, name: 그래프 개체 페이지 식별자, description: graph_version과 cluster_id 결합값, data_type: string}
+        - {id: graph_version, name: 그래프 버전, description: 페이지 전체가 공유하는 불변 스냅샷 버전, data_type: string}
+        - {id: cluster_id, name: 군집 식별자, description: 업무유형 또는 업무유형과 공식 분야코드를 결합한 값, data_type: string}
+        - {id: returned_node_count, name: 반환 노드 수, description: 업체 페이지와 연결 기관을 합한 노드 수, data_type: integer}
+        - {id: returned_link_count, name: 반환 링크 수, description: 해당 업체 페이지가 소유하는 직접 계약관계 수, data_type: integer}
 
     - id: bid_notice_relationship_context
       name: 공고 관계 컨텍스트
