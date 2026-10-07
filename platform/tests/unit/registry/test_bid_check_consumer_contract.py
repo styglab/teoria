@@ -71,3 +71,24 @@ def test_bid_check_active_capabilities_are_discoverable_and_migrations_are_expli
     }
     assert set(migrations).isdisjoint(catalog.capabilities)
     assert all(set(replacements) <= set(catalog.capabilities) for replacements in migrations.values())
+    retired = contract["retired_capabilities"]
+    assert {item["id"] for item in retired} == {
+        "get_bid_result",
+        "get_company_bid_history",
+        "get_demand_organization",
+        "get_women_owned_business_qualification",
+        "get_disabled_owned_business_qualification",
+        "verify_business_registration",
+    }
+    assert all(item["id"] not in catalog.capabilities for item in retired)
+    assert all(
+        set(item["replacements"]) <= set(catalog.capabilities) for item in retired
+    )
+    support = {
+        capability_id
+        for capability_ids in contract["internal_support_capabilities"].values()
+        for capability_id in capability_ids
+    }
+    assert support == {
+        item.id for item in catalog.capabilities.values() if item.exposure == "internal"
+    }

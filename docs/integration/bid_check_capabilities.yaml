@@ -1,6 +1,46 @@
 schema_version: "1.0"
 consumer: bid_check
 description: 입찰체크 서비스가 직접 사용하는 Runtime Capability 계약
+retired_capabilities:
+  - id: get_bid_result
+    replacements: [search_bid_awards, get_bid_notice_participations]
+    reason: 공고별 낙찰과 개찰 참여 조회를 하나로 중복 조합하던 구 계약이다.
+  - id: get_company_bid_history
+    replacements: [search_bid_awards, search_bid_participations]
+    reason: 기업별 낙찰과 참여 검색을 하나로 중복 조합하던 구 계약이다.
+  - id: get_demand_organization
+    replacements: [search_public_organizations]
+    reason: Provider 등록일 기반 구 조회이며 최신 기관 검색 계약으로 대체한다.
+  - id: get_women_owned_business_qualification
+    replacements: [get_company_bid_qualification_profile]
+    reason: 기업 입찰자격 프로필이 동일 자격과 직접생산확인을 함께 제공한다.
+  - id: get_disabled_owned_business_qualification
+    replacements: [get_company_bid_qualification_profile]
+    reason: 기업 입찰자격 프로필이 동일 자격과 직접생산확인을 함께 제공한다.
+  - id: verify_business_registration
+    replacements: [get_business_registration_status]
+    reason: 입찰평가는 사업자 상태조회만 사용하며 별도 진위확인 Capability 실행 경로가 없다.
+internal_support_capabilities:
+  assessment:
+    - get_bid_notices_by_ids
+    - get_bid_requirements_by_notice_ids
+    - get_business_registration_status
+    - get_company_qualifications
+    - get_direct_production_confirmations
+    - get_procurement_supplier
+    - get_procurement_supplier_industries
+    - get_procurement_supplier_products
+    - get_procurement_supplier_sanctions
+    - verify_innobiz_company
+    - verify_mainbiz_company
+    - verify_venture_company
+  company_identity:
+    - get_company_profile
+    - get_company_financials
+    - get_company_relationships
+    - resolve_company_identifiers
+  market_context:
+    - get_company_similar_project_experience
 ontology_decision:
   change_required: true
   strategy: new_draft_from_published

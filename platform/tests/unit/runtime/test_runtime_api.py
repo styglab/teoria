@@ -180,7 +180,7 @@ def test_public_contract_capabilities_expose_pagination_and_internal_history_is_
     }
     assert catalog.capabilities["get_company_public_procurement_contracts"].exposure == "public"
     response = client.post(
-        "/v1/capabilities/get_company_bid_history:execute",
+        "/v1/capabilities/get_bid_notices_by_ids:execute",
         headers=headers,
         json={"inputs": {"business_registration_number": "1234567890"}},
     )

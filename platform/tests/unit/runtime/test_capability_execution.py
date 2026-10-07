@@ -159,41 +159,6 @@ def test_missing_collection_response_path_is_an_empty_result() -> None:
     assert result.links == []
 
 
-def test_binds_composite_verification_input_to_source_request() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
-    capability = catalog.capabilities["verify_business_registration"]
-
-    bound = CapabilityBinder().bind(
-        catalog,
-        capability,
-        capability.steps[0],
-        {
-            "businesses": [
-                {
-                    "business_registration_number": "0000000000",
-                    "opened_date": date(2020, 1, 2),
-                    "representative_name": "홍길동",
-                    "business_name": "테스트상사",
-                },
-                {
-                    "business_registration_number": "1111111111",
-                    "opened_date": date(2021, 3, 4),
-                    "representative_name": "김테스트",
-                },
-            ]
-        },
-    )
-
-    assert bound == {
-        "body": {
-            "businesses": [
-                {"b_no": "0000000000", "start_dt": "20200102", "p_nm": "홍길동", "b_nm": "테스트상사"},
-                {"b_no": "1111111111", "start_dt": "20210304", "p_nm": "김테스트"},
-            ]
-        }
-    }
-
-
 @pytest.mark.asyncio
 async def test_runs_capability_and_decodes_ontology_objects() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()

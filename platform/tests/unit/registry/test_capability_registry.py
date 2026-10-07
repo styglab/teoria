@@ -46,15 +46,6 @@ def test_capabilities_load_and_references_are_valid() -> None:
         "teoria_public_procurement.bid_participation_findings",
         "teoria_public_procurement.bid_participation_finding_evidence",
     ]
-    bid_result = catalog.capabilities["get_bid_result"]
-    assert [step.call for step in bid_result.steps] == [
-        "teoria_public_procurement.bid_awards",
-        "teoria_public_procurement.bid_opening_participants",
-    ]
-    assert "public_procurement.bid_award" in bid_result.returns
-    assert "public_procurement.bid_opening_participation" in bid_result.returns
-    company_history = catalog.capabilities["get_company_bid_history"]
-    assert [step.id for step in company_history.steps] == ["awards", "participations"]
     assert catalog.capabilities["search_bid_awards"].steps[0].call == (
         "teoria_public_procurement.bid_awards"
     )
@@ -64,21 +55,6 @@ def test_capabilities_load_and_references_are_valid() -> None:
     assert catalog.capabilities["get_bid_notice_participations"].processor == (
         "market_context.get_bid_notice_participations"
     )
-
-
-def test_capability_inputs_are_semantic_ontology_references() -> None:
-    catalog = RegistryLoader(REGISTRIES).load()
-
-    verification = catalog.capabilities["verify_business_registration"]
-    businesses = verification.inputs["businesses"]
-    assert businesses.collection == "list"
-    assert businesses.fields["business_registration_number"].property == (
-        "company.business_registration.business_registration_number"
-    )
-    representative = businesses.fields["representative_name"]
-    assert representative.property is None
-    assert representative.data_type == "string"
-    assert representative.field.endswith("request.body.businesses[].p_nm")
 
 
 def test_capability_kind_distinguishes_compute_results_from_persisted_actions() -> None:

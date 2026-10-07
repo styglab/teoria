@@ -412,35 +412,6 @@ def test_bid_notice_contracts_binds_exact_notice_number_and_pagination() -> None
     }
 
 
-def test_company_bid_history_binds_business_number_to_each_relation() -> None:
-    catalog = RegistryLoader(REGISTRIES).load()
-    capability = catalog.capabilities["get_company_bid_history"]
-
-    award_query = CapabilityBinder().bind(
-        catalog, capability, capability.steps[0],
-        {"business_registration_number": "1234567890"},
-    )
-    participation_query = CapabilityBinder().bind(
-        catalog, capability, capability.steps[1],
-        {"business_registration_number": "1234567890"},
-    )
-
-    assert award_query["filters"] == [{
-        "field": "winner_business_registration_number",
-        "operator": "eq",
-        "value": "1234567890",
-    }]
-    assert participation_query["filters"] == [{
-        "field": "business_registration_number",
-        "operator": "eq",
-        "value": "1234567890",
-    }]
-    assert award_query["pagination"]["root_field"] == "award_id"
-    assert participation_query["pagination"]["root_field"] == "participation_id"
-    assert award_query["pagination"]["count_distinct"] is False
-    assert participation_query["pagination"]["count_distinct"] is False
-
-
 def test_bid_participation_search_uses_compute_processor() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
     capability = catalog.capabilities["search_bid_participations"]
