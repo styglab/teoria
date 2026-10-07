@@ -4,8 +4,29 @@ registry:
 
 capability:
   id: get_company_public_procurement_contracts
+  exposure: public
   name: 기업 공공조달 계약 조회
   description: 사업자등록번호로 기업의 공공조달 계약 참여, 역할, 공동도급 방식과 지분율을 계약 단위 페이지로 조회한다.
+  semantic_requirements:
+    concepts:
+      - stable_key: party.BusinessRegistration
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractVersion
+      - stable_key: procurement.ContractParty
+    properties:
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Contract.name
+      - stable_key: procurement.Contract.currentAmount
+      - stable_key: procurement.ContractVersion.unifiedContractNumber
+      - stable_key: procurement.ContractVersion.concludedDate
+      - stable_key: procurement.ContractParty.contractPartyId
+      - stable_key: procurement.ContractParty.role
+      - stable_key: procurement.ContractParty.sharePercent
+    relationships:
+      - stable_key: procurement.HAS_CONTRACT_VERSION
+      - stable_key: procurement.HAS_CONTRACT_PARTY
+      - stable_key: procurement.REPRESENTS_CONTRACTOR
   inputs:
     business_registration_number:
       data_type: business_registration_number

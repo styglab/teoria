@@ -47,9 +47,13 @@ def test_bid_check_active_capabilities_are_discoverable_and_migrations_are_expli
     assert active <= set(catalog.capabilities)
     assert all(catalog.capabilities[item].lifecycle.status == "active" for item in active)
     assert all(catalog.capabilities[item].exposure == "public" for item in active)
+    mcp_contract_capabilities = {
+        "get_public_procurement_contract",
+        "get_company_public_procurement_contracts",
+    }
     assert {
         item.id for item in catalog.capabilities.values() if item.exposure == "public"
-    } == active
+    } == active | mcp_contract_capabilities
     assert all(
         sum((
             len(catalog.capabilities[item].semantic_requirements.concepts),
