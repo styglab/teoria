@@ -26,9 +26,6 @@ objects:
   public_procurement.procurement_outcome: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 낙찰·계약 통합 결과 응답}
   public_procurement.organization_procurement_profile: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 기관 프로필 집계 응답}
   public_procurement.company_procurement_profile: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 업체 프로필 집계 응답}
-  public_procurement.procurement_relationship_context: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 기관 또는 업체 기준의 1·2단계 직접 계약관계 집계 응답}
-  public_procurement.procurement_relationship_graph_summary: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 불변 그래프 버전의 전체 규모와 군집 요약 응답}
-  public_procurement.procurement_relationship_graph_entities: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 그래프 버전과 군집이 고정된 cursor 개체 페이지 응답}
   public_procurement.bid_notice_relationship_context: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 공고 관계 컨텍스트 응답}
   public_procurement.bid_participation_context: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 입찰 인사이트 집계 응답}
   public_procurement.company_similar_project_experience: {classification: RUNTIME_PROJECTION, migration_status: runtime_contract, rationale: 유사사업 경험 조회 응답}

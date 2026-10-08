@@ -72,36 +72,6 @@ Runtime Object, Mapping과 Capability를 Domain Registry에 정의한다. 직접
 Source, 지속 수집 API는 Connector로 작성한다. [Registry guide](registry/README.md)와
 [Source authoring](registry/source-authoring.md)을 따른다.
 
-기관·업체의 1·2단계 직접 계약관계는
-`analyze_procurement_relationship_context`를 사용한다. 이 Capability는 기관 또는
-업체를 기준으로 시작하며 단계마다 같은 기간·업무유형·조달분류 필터를 적용한다.
-기존 프로필 Capability를 노드별로 반복 호출하지 않고 관계 ledger를 단계별 set query로
-조회한다. 업체와 링크 금액은 귀속금액만 사용하며 누락값을 총계약금액으로 대체하지 않는다.
-분야 필터가 없는 조회는 분류 코드가 없는 계약이 관계 ledger에 포함되지 않음을
-`data_completeness`에 명시한다.
-
-전체 조달관계 탐색은 `summarize_procurement_relationship_graph`로 게시된 스냅샷의
-업무유형·분야 군집과 전체 크기를 먼저 조회한 뒤,
-`search_procurement_relationship_graph_entities`로 선택한 군집을 페이지 조회한다.
-무필터 overview는 snapshot 게시 시 최근 1년·3년·5년·전체 기간과
-`work_type`·`field` 그룹을 별도 요약 테이블에 사전 계산한다. Runtime은 지원되는
-기간의 overview에서 관계 행을 다시 집계하지 않고 이 요약만 조회한다.
-후속 요청은 overview가 반환한 `graph_version`, 기간과 `cluster_id`를 그대로 전달해야
-하며 cursor도 이 범위를 검증한다. 페이지는 업체 노드를 기준으로 분할하고 해당 업체의
-기관과 모든 링크를 함께 반환한다. 스냅샷은 Pipeline이 매일 생성하며 최근 24시간의
-게시 버전과 최신 버전을 보존하므로
-Runtime은 화면 요청마다 원본 계약을 다시 집계하지 않는다. 두 응답 모두 분류되지 않은
-계약이 관계 ledger에 포함되지 않는다는 완전성 상태를 명시한다.
-`group_by=work_type`의 `cluster_id`는 업무유형(예: `service`)을 뜻하며 상세 조회는
-해당 업무유형의 모든 분야 군집을 합쳐 반환한다. `group_by=field`의 `cluster_id`는
-물리 분야 군집(예: `service:81112002`)과 일치한다.
-
-그래프 버전은 매일 게시 후 자동 정리하며 최근 24시간의 게시 버전과 최신 게시 버전을
-보존한다. 24시간을 초과한 버전의 상세·노드·overview 행은 외래키 cascade로 함께
-제거되고, 완료되지 않은 `building` 버전도 1일 후 정리된다. cursor는 해당
-`graph_version`이 남아 있는 동안 유효하므로 클라이언트는 24시간 안에 페이지 조회를
-완료해야 한다.
-
 ### API/MCP 사용자
 
 배포된 Runtime의 `/v1/capabilities`에서 사용할 수 있는 Capability와 입력 schema를

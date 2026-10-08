@@ -26,5 +26,5 @@ def test_capability_coverage_reports_bound_and_unbound_contract_fields() -> None
     )
     assert item["status"] == "partial"
     assert item["outputs"]["bound"] == 1
-    assert report["summary"]["capability_count"] == 49
+    assert report["summary"]["capability_count"] == 46
     assert report["summary"]["capability_bound_count"] == 1

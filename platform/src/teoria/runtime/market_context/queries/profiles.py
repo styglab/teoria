@@ -53,33 +53,6 @@ WHERE ledger.first_contract_date >= %(history_from)s AND ledger.first_contract_d
   AND (%(field_code)s::text IS NULL OR ledger.field_code=%(field_code)s)
 """
 
-_PROCUREMENT_RELATIONSHIP_CONTEXT_QUERY = """
-SELECT ledger.organization_code,ledger.organization_name,
-       ledger.contract_event_id,ledger.unified_contract_number,
-       ledger.first_contract_date,ledger.latest_contract_version_date,
-       ledger.contract_version_count,ledger.company_number,ledger.company_name,
-       ledger.company_role,ledger.share_percent,ledger.attributed_contract_amount,
-       ledger.amount_completeness,ledger.contract_amount,ledger.work_type,
-       ledger.field_code,ledger.field_name,ledger.large_category,
-       ledger.middle_category,ledger.normalized_notice_number,ledger.refreshed_at
-FROM public_procurement.contract_event_company_ledger ledger
-WHERE ledger.first_contract_date >= %(period_from)s
-  AND ledger.first_contract_date < %(period_to)s
-  AND (%(work_type)s::text IS NULL OR ledger.work_type=%(work_type)s)
-  AND (%(large_category)s::text IS NULL OR ledger.large_category=%(large_category)s)
-  AND (%(middle_category)s::text IS NULL OR ledger.middle_category=%(middle_category)s)
-  AND (%(field_code)s::text IS NULL OR ledger.field_code=%(field_code)s)
-  AND (
-    (cardinality(%(organization_codes)s::text[]) > 0
-     AND ledger.organization_code=ANY(%(organization_codes)s::text[]))
-    OR
-    (cardinality(%(company_numbers)s::text[]) > 0
-     AND ledger.company_number=ANY(%(company_numbers)s::text[]))
-  )
-ORDER BY ledger.organization_code,ledger.company_number,
-         ledger.first_contract_date,ledger.contract_event_id
-"""
-
 _BID_CONTEXT_PEER_COMPETITION_QUERY = """
 SELECT n.demand_organization_code AS organization_code,
        concat_ws(':',a.notice_number,a.notice_order,a.bid_classification_number,a.rebid_number)
@@ -318,4 +291,3 @@ FROM relationship_events
 WHERE activity_date IS NOT NULL
 GROUP BY company_number
 """
-

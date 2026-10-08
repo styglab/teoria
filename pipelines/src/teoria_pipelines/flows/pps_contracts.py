@@ -18,7 +18,6 @@ from teoria_pipelines.tasks import (
     fail_pipeline_run,
     get_completed_operation,
     normalize_contracts,
-    publish_procurement_relationship_graph,
     record_backfill_gap,
     refresh_contract_event_ledger,
     resolve_backfill_gap,
@@ -236,8 +235,3 @@ def _sum_summaries(summaries: list[LoadSummary]) -> LoadSummary:
 @flow(name="계약 사건 사전집계 갱신")
 def refresh_pps_contract_event_ledger(batch_size: int = 5) -> int:
     return refresh_contract_event_ledger(batch_size)
-
-
-@flow(name="조달관계 그래프 스냅샷 발행")
-def publish_pps_procurement_relationship_graph() -> str:
-    return publish_procurement_relationship_graph()

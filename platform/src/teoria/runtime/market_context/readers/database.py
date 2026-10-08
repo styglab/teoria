@@ -458,39 +458,6 @@ class ProcurementProfileReader:
             ).fetchall()]
 
 
-class ProcurementRelationshipContextReader:
-    def __init__(self, environment: Mapping[str, str] | None = None) -> None:
-        self.environment = environment if environment is not None else os.environ
-
-    def find(
-        self, catalog: RegistryCatalog, *, organization_codes: list[str],
-        company_numbers: list[str], period_from: date, period_to: date,
-        work_type: str | None, large_category: str | None,
-        middle_category: str | None, field_code: str | None,
-    ) -> list[dict[str, Any]]:
-        """Load one relationship frontier without issuing a query per node."""
-        source = catalog.sources["teoria_public_procurement"].source
-        database_url = self.environment.get(source.access.connection_env)
-        if not database_url:
-            raise RuntimeError(
-                f"missing database credential environment variable: {source.access.connection_env}"
-            )
-        parameters = {
-            "organization_codes": organization_codes,
-            "company_numbers": company_numbers,
-            "period_from": period_from,
-            "period_to": period_to,
-            "work_type": work_type,
-            "large_category": large_category,
-            "middle_category": middle_category,
-            "field_code": field_code,
-        }
-        with psycopg.connect(database_url, row_factory=dict_row) as connection:
-            return [dict(row) for row in connection.execute(
-                _PROCUREMENT_RELATIONSHIP_CONTEXT_QUERY, parameters,
-            ).fetchall()]
-
-
 class ProcurementOutcomeReader:
     def __init__(self, environment: Mapping[str, str] | None = None) -> None:
         self.environment = environment if environment is not None else os.environ

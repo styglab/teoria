@@ -69,9 +69,6 @@ capabilities:
   - {id: search_bid_related_projects, area: bid_analysis, status: active}
   - {id: search_public_organizations, area: organization, status: active}
   - {id: analyze_organization_procurement_profile, area: organization, status: active}
-  - {id: analyze_procurement_relationship_context, area: organization, status: active}
-  - {id: summarize_procurement_relationship_graph, area: organization, status: active}
-  - {id: search_procurement_relationship_graph_entities, area: organization, status: active}
   - {id: search_procurement_activity, area: organization, status: active}
   - {id: search_procurement_outcomes, area: organization, status: active}
   - {id: search_organization_supplier_entries, area: organization, status: active}

@@ -57,80 +57,18 @@ def test_contract_relationship_context_has_company_first_lookup_index() -> None:
     )
 
 
-def test_relationship_graph_snapshot_is_versioned_and_retained_for_cursor_stability() -> None:
+def test_relationship_graph_cleanup_drops_snapshot_data_and_functions() -> None:
     migration = (
         Path(__file__).parents[2] / "database" / "migrations"
-        / "069_procurement_relationship_graph_snapshots.sql"
+        / "075_drop_procurement_relationship_graph.sql"
     ).read_text()
 
+    assert "DROP TABLE IF EXISTS" in migration
     assert "procurement_relationship_graph_versions" in migration
     assert "procurement_relationship_graph_aggregates" in migration
     assert "procurement_relationship_graph_nodes" in migration
-    assert "publish_procurement_relationship_graph()" in migration
-    assert "graph_version < published_version - interval '7 days'" in migration
-    assert "WHERE status='published'" in migration
-
-
-def test_relationship_graph_overview_has_covering_index() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "070_optimize_procurement_relationship_graph_overview.sql"
-    ).read_text()
-
-    assert "procurement_relationship_graph_overview_cover_idx" in migration
-    assert "organization_code, company_number" in " ".join(migration.split())
-    assert "total_attributed_contract_amount" in migration
-
-
-def test_relationship_graph_overviews_are_precomputed_with_snapshot_publish() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "071_procurement_relationship_graph_overviews.sql"
-    ).read_text()
-
     assert "procurement_relationship_graph_overviews" in migration
-    assert "populate_procurement_relationship_graph_overviews" in migration
-    assert "build_procurement_relationship_graph_snapshot" in migration
-    assert "greatest(graph_period_from,graph_period_to - 4)" in migration
-    assert "GRANT SELECT" in migration
-
-
-def test_relationship_graph_retention_protects_latest_and_prunes_stale_builds() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "072_procurement_relationship_graph_retention.sql"
-    ).read_text()
-
-    assert "prune_procurement_relationship_graph_versions" in migration
-    assert "published_retention interval DEFAULT interval '7 days'" in migration
-    assert "graph_version IS DISTINCT FROM latest_published_version" in migration
-    assert "status='building'" in migration
-    assert "building_retention interval DEFAULT interval '1 day'" in migration
-    assert "procurement_relationship_graph_work_type_entities_idx" in migration
-
-
-def test_relationship_graph_retention_is_overridden_to_latest_only() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "073_retain_latest_procurement_relationship_graph.sql"
-    ).read_text()
-
-    assert "published_retention interval DEFAULT interval '0 seconds'" in migration
-    assert "graph_version IS DISTINCT FROM latest_published_version" in migration
-    assert "published_version, interval '0 seconds'" in migration
-    assert "published_retention must not be negative" in migration
-
-
-def test_relationship_graph_retention_is_overridden_to_one_day() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "074_retain_one_day_procurement_relationship_graph.sql"
-    ).read_text()
-
-    assert "published_retention interval DEFAULT interval '1 day'" in migration
-    assert "graph_version IS DISTINCT FROM latest_published_version" in migration
-    assert "published_version, interval '1 day'" in migration
-    assert "published_retention must be at least 1 day" in migration
+    assert "publish_procurement_relationship_graph" in migration
 
 
 def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:

@@ -9,7 +9,6 @@ from .database import (
     ProcurementActivityReader,
     ProcurementOutcomeReader,
     ProcurementProfileReader,
-    ProcurementRelationshipContextReader,
     SimilarBidNoticeReader,
 )
 
@@ -22,6 +21,5 @@ __all__ = [
     "ProcurementActivityReader",
     "ProcurementOutcomeReader",
     "ProcurementProfileReader",
-    "ProcurementRelationshipContextReader",
     "SimilarBidNoticeReader",
 ]

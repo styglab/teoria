@@ -1,7 +1,6 @@
 """Thin Prefect flows grouped by data domain."""
 from teoria_pipelines.flows.openmetadata import sync_openmetadata_postgres
 from teoria_pipelines.flows.pps_contracts import (
-    publish_pps_procurement_relationship_graph,
     refresh_pps_contract_event_ledger,
     retry_pps_contract_backfill_gaps,
     sync_pps_contract_window,
@@ -33,7 +32,6 @@ __all__ = [
     "sync_pps_contracts",
     "retry_pps_contract_backfill_gaps",
     "refresh_pps_contract_event_ledger",
-    "publish_pps_procurement_relationship_graph",
     "sync_pps_bid_result_window",
     "sync_pps_bid_results_backfill",
     "enrich_pps_bid_opening_participants",
