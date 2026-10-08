@@ -184,8 +184,11 @@ async def retry_pps_contract_backfill_gaps(
     source_pipeline_id: str = BACKFILL_PIPELINE_ID,
     batch_size: int = 1,
     retry_days: int = 1,
+    max_attempts: int = 15,
 ) -> list[LoadSummary]:
-    gaps = claim_backfill_gaps(source_pipeline_id, batch_size, retry_days)
+    gaps = claim_backfill_gaps(
+        source_pipeline_id, batch_size, retry_days, max_attempts
+    )
     summaries: list[LoadSummary] = []
     for gap in gaps:
         start = gap["window_start"]

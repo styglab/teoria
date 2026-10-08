@@ -71,6 +71,22 @@ def test_relationship_graph_cleanup_drops_snapshot_data_and_functions() -> None:
     assert "publish_procurement_relationship_graph" in migration
 
 
+def test_backfill_gap_claim_stops_after_maximum_attempts() -> None:
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    connection.execute.return_value.fetchall.return_value = []
+
+    with patch("teoria_pipelines.persistence.postgres_store.base.psycopg.connect",
+               return_value=connection):
+        PostgresStore("postgresql://unused").claim_backfill_gaps(
+            "pps_contract_backfill_2021_2026", 1, retry_days=1, max_attempts=15,
+        )
+
+    sql, parameters = connection.execute.call_args.args
+    assert "attempts<%s" in sql
+    assert parameters == ("pps_contract_backfill_2021_2026", 15, 1, 1)
+
+
 def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
     connection = MagicMock()
     connection.__enter__.return_value = connection

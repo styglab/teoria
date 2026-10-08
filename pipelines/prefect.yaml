@@ -214,8 +214,8 @@ deployments:
       work_queue_name: default
 
   - name: pps-contract-backfill
-    version: 1.4.0
-    description: 계약정보를 역순 Backfill하며 실패한 날짜·Operation은 결손 큐로 격리해 전체 진행을 계속한다.
+    version: 1.5.0
+    description: 계약정보를 실행당 7일씩 역순 Backfill하며 실패한 날짜·Operation은 결손 큐로 격리해 전체 진행을 계속한다.
     entrypoint: teoria_pipelines.flows.pps_contracts.sync_pps_contract_backfill
     concurrency_limit:
       limit: 1
@@ -225,7 +225,7 @@ deployments:
       start_date: "2021-01-01"
       end_date: "2026-09-13"
       pipeline_root: /app/pipelines
-      batch_days: 1
+      batch_days: 7
     schedules:
       - cron: "20 4 * * *"
         timezone: Asia/Seoul
@@ -235,8 +235,8 @@ deployments:
       work_queue_name: default
 
   - name: pps-contract-backfill-gap-retry
-    version: 1.0.0
-    description: 계약 Backfill 결손 Operation을 작은 페이지 크기로 매일 재시도한다.
+    version: 1.1.0
+    description: 계약 Backfill 결손 Operation을 작은 페이지 크기로 최대 15회까지 매일 재시도한다.
     entrypoint: teoria_pipelines.flows.pps_contracts.retry_pps_contract_backfill_gaps
     concurrency_limit:
       limit: 1
@@ -246,6 +246,7 @@ deployments:
       source_pipeline_id: pps_contract_backfill_2021_2026
       batch_size: 1
       retry_days: 1
+      max_attempts: 15
     schedules:
       - cron: "20 5 * * *"
         timezone: Asia/Seoul
@@ -338,19 +339,19 @@ deployments:
       work_queue_name: default
 
   - name: pps-bid-opening-backfill-enrichment
-    version: 2.0.0
-    description: 최근 5개년 개찰 참여업체를 최신 건부터 과거 방향으로 지속 보강한다.
+    version: 2.1.0
+    description: 최근 5개년 개찰 참여업체를 5분마다 최대 180개 공고씩 최신 건부터 과거 방향으로 지속 보강한다.
     entrypoint: teoria_pipelines.flows.pps_bid_results.enrich_pps_bid_opening_participants
     concurrency_limit:
       limit: 1
       collision_strategy: CANCEL_NEW
     parameters:
       pipeline_root: /app/pipelines
-      batch_size: 60
+      batch_size: 180
       lease_minutes: 30
       queue_mode: backfill
     schedules:
-      - cron: "2-59/10 * * * *"
+      - cron: "1-59/5 * * * *"
         timezone: Asia/Seoul
         active: true
     work_pool:

@@ -125,8 +125,11 @@ def record_backfill_gap(pipeline_id: str, window: CollectionWindow,
 
 @task(name="Backfill 결손 재시도 대상 선택", viz_return_value=[])
 def claim_backfill_gaps(pipeline_id: str, batch_size: int = 1,
-                        retry_days: int = 1) -> list[dict]:
-    return _store().claim_backfill_gaps(pipeline_id, batch_size, retry_days)
+                        retry_days: int = 1,
+                        max_attempts: int = 15) -> list[dict]:
+    return _store().claim_backfill_gaps(
+        pipeline_id, batch_size, retry_days, max_attempts
+    )
 
 
 @task(name="Backfill 결손 해결", viz_return_value=None)

@@ -154,18 +154,20 @@ class BasePostgresStore:
             )
 
     def claim_backfill_gaps(self, pipeline_id: str, limit: int,
-                            retry_days: int = 1) -> list[dict[str, Any]]:
+                            retry_days: int = 1,
+                            max_attempts: int = 15) -> list[dict[str, Any]]:
         with psycopg.connect(self.database_url) as connection:
             rows = connection.execute(
                 "WITH candidates AS (SELECT pipeline_id,window_start,window_end,operation_id "
                 "FROM ingestion.pipeline_backfill_gaps WHERE pipeline_id=%s "
-                "AND resolved_at IS NULL AND next_retry_at<=now() ORDER BY window_start DESC "
+                "AND resolved_at IS NULL AND attempts<%s AND next_retry_at<=now() "
+                "ORDER BY window_start DESC "
                 "FOR UPDATE SKIP LOCKED LIMIT %s) UPDATE ingestion.pipeline_backfill_gaps g "
                 "SET attempts=g.attempts+1,next_retry_at=now()+(%s * interval '1 day'),updated_at=now() "
                 "FROM candidates c WHERE g.pipeline_id=c.pipeline_id AND g.window_start=c.window_start "
                 "AND g.window_end=c.window_end AND g.operation_id=c.operation_id "
                 "RETURNING g.pipeline_id,g.window_start,g.window_end,g.operation_id,g.attempts",
-                (pipeline_id, limit, retry_days),
+                (pipeline_id, max_attempts, limit, retry_days),
             ).fetchall()
         keys = ("pipeline_id", "window_start", "window_end", "operation_id", "attempts")
         return [dict(zip(keys, row, strict=True)) for row in rows]
