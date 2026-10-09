@@ -39,6 +39,19 @@ Capability 응답의 object와 link에는 type, identity와 provenance가 포함
 객체가 없다는 사실만으로 자격 상태를 추론하지 말고 Capability가 정의한 outcome,
 오류와 데이터 기준일을 함께 확인한다.
 
+## 기관·업체 계약 집계 표시
+
+기관·업체 조달 프로필의 계약 통계는
+[`analyze_organization_procurement_profile`](../../platform/registries/domains/public_procurement/capabilities/analyze_organization_procurement_profile.yaml)과
+[`analyze_company_procurement_profile`](../../platform/registries/domains/public_procurement/capabilities/analyze_company_procurement_profile.yaml)을 사용한다.
+산정 규칙의 단일 원본은 [공공조달 계약 집계 기준](../domains/public_procurement/contract_aggregation.md)이다.
+
+입찰체크는 응답의 `analysis_basis`와 `summary.amount_completeness`,
+`summary.missing_first_contract_date_count`를 함께 해석해야 한다. 계약 추이에는 최근
+변경일이 아니라 최초 계약일을 사용하고, 다음 안내를 계약 건수·금액과 함께 표시한다.
+
+> 계약 건수는 최초 계약일 기준이며, 금액은 조회 종료일 현재의 최신 계약금액입니다.
+
 ## Ontology 경계
 
 입찰체크 Ontology는 기존 Published version을 직접 사용하거나 수정하지 않는다.

@@ -1044,15 +1044,14 @@ def _filter_profile_rows(
 
 def _contract_project_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
     """Identify one logical contract relationship independently of its versions."""
+    event_key = str(row.get("event_key") or "").strip()
     notice_id = str(row.get("bid_notice_id") or "").strip()
-    project_id = notice_id if notice_id and not notice_id.startswith("contract:") else str(
-        row.get("event_key") or notice_id
-    )
+    contract_event_id = event_key or notice_id
     return (
         str(row.get("organization_code") or ""),
         str(row.get("company_number") or ""),
         str(row.get("work_type") or "unknown"),
-        project_id,
+        contract_event_id,
     )
 
 
@@ -1071,6 +1070,25 @@ def _collapse_profile_contract_versions(rows: list[dict[str, Any]]) -> list[dict
             or row.get("activity_date") or date.min
         ))
         collapsed = dict(latest)
+        first_contract_dates = [
+            (
+                row["first_contract_date"]
+                if "first_contract_date" in row
+                else row.get("activity_date")
+            )
+            for row in versions
+            if (
+                row.get("first_contract_date") is not None
+                or (
+                    "first_contract_date" not in row
+                    and row.get("activity_date") is not None
+                )
+            )
+        ]
+        first_contract_date = min(first_contract_dates) if first_contract_dates else None
+        collapsed["first_contract_date"] = first_contract_date
+        collapsed["activity_date"] = first_contract_date
+        collapsed["attribution_date_basis"] = "first_contract_date"
         collapsed["contract_version_count"] = sum(
             int(row.get("contract_version_count") or 1) for row in versions
         )
@@ -1157,6 +1175,9 @@ def _drilldown_field_distribution(
 def _profile_aggregate(
     rows: list[dict[str, Any]], *, relationship_dimension: str,
     require_contract_relationship: bool = False,
+    notice_rows: list[dict[str, Any]] | None = None,
+    period_from: date | None = None,
+    period_to: date | None = None,
 ) -> tuple[
     dict[str, Any], list[dict[str, Any]], list[dict[str, Any]],
     list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]],
@@ -1168,8 +1189,8 @@ def _profile_aggregate(
     field_totals: dict[str, dict[str, Any]] = {}
     project_type_totals: dict[str, dict[str, Any]] = {}
     work_type_totals: dict[str, dict[str, Any]] = {}
-    notice_ids = set()
-    classified_notice_ids = set()
+    notice_dates: dict[str, date] = {}
+    classified_notice_ids: set[str] = set()
     participant_event_keys: set[tuple[str, str]] = set()
     confirmed_participant_event_keys: set[tuple[str, str]] = set()
     successful_participant_event_keys: set[tuple[str, str]] = set()
@@ -1181,6 +1202,35 @@ def _profile_aggregate(
     organizations = set()
     total_amount = Decimal("0")
     amount_statuses: list[str] = []
+
+    def year_bucket(value: date) -> dict[str, Any]:
+        return yearly.setdefault(value.year, {
+            "year": value.year, "notice_ids": set(), "company_ids": set(),
+            "participation_keys": set(), "confirmed_participation_keys": set(),
+            "successful_participation_keys": set(),
+            "award_event_keys": set(), "contract_event_keys": set(),
+            "attributed_contract_amount": Decimal("0"), "amount_statuses": [],
+        })
+
+    def register_notice(row: dict[str, Any]) -> None:
+        notice_id = str(row.get("bid_notice_id") or "").strip()
+        published = row.get("notice_published_date")
+        if isinstance(published, datetime):
+            published = published.date()
+        if not notice_id or not isinstance(published, date):
+            return
+        if period_from is not None and published < period_from:
+            return
+        if period_to is not None and published >= period_to:
+            return
+        current = notice_dates.get(notice_id)
+        notice_dates[notice_id] = min(current, published) if current else published
+        if _procurement_field_identity(row):
+            classified_notice_ids.add(notice_id)
+
+    for notice_row in notice_rows or []:
+        register_notice(notice_row)
+
     for row in rows:
         key = str(row.get(key_field) or "")
         if not key:
@@ -1255,7 +1305,7 @@ def _profile_aggregate(
                 successful_participant_event_keys.add(participant_key)
                 relationship["successful_participation_count"] += 1
                 year_item["successful_participation_count"] += 1
-        notice_ids.add(str(row["bid_notice_id"]))
+        register_notice(row)
         companies.add(str(row.get("company_number") or ""))
         organizations.add(str(row.get("organization_code") or ""))
         relationship["representative_notices"].append({
@@ -1268,9 +1318,7 @@ def _profile_aggregate(
             "latest_contract_version_date": row.get("latest_contract_version_date"),
         })
         field_identity = _procurement_field_identity(row)
-        if field_identity:
-            classified_notice_ids.add(str(row["bid_notice_id"]))
-        else:
+        if not field_identity:
             field_identity = {
                 "code": None, "name": None, "large_category": "미분류",
                 "middle_category": None, "detailed_items": [], "source": "unclassified",
@@ -1354,19 +1402,11 @@ def _profile_aggregate(
         if activity_type == "contract" and amount is not None:
             work["attributed_contract_amount"] += Decimal(str(amount))
 
-        global_year = yearly.setdefault(activity_date.year, {
-            "year": activity_date.year, "notice_ids": set(), "company_ids": set(),
-            "participation_keys": set(), "confirmed_participation_keys": set(),
-            "successful_participation_keys": set(),
-            "award_event_keys": set(), "contract_event_keys": set(),
-            "attributed_contract_amount": Decimal("0"), "amount_statuses": [],
-        })
-        global_year["notice_ids"].add(str(row["bid_notice_id"]))
-        if not require_contract_relationship or activity_type == "contract":
-            global_year["company_ids"].add(str(row.get("company_number") or ""))
+        global_year = year_bucket(activity_date)
         if activity_type == "award":
             global_year["award_event_keys"].add(str(row["event_key"]))
         elif activity_type == "contract":
+            global_year["company_ids"].add(str(row.get("company_number") or ""))
             global_year["contract_event_keys"].add(str(row["event_key"]))
             global_year["amount_statuses"].append(completeness)
             if amount is not None:
@@ -1378,6 +1418,9 @@ def _profile_aggregate(
                 global_year["confirmed_participation_keys"].add(participant_key)
             if row.get("participation_successful"):
                 global_year["successful_participation_keys"].add(participant_key)
+
+    for notice_id, published in notice_dates.items():
+        year_bucket(published)["notice_ids"].add(notice_id)
 
     relationship_items = []
     for relationship in relationships.values():
@@ -1487,7 +1530,7 @@ def _profile_aggregate(
         )
         field_items.append(value)
     summary = {
-        "notice_count": len(notice_ids), "participation_count": len(participant_event_keys),
+        "notice_count": len(notice_dates), "participation_count": len(participant_event_keys),
         "result_confirmed_participation_count": len(confirmed_participant_event_keys),
         "successful_participation_count": len(successful_participant_event_keys),
         "award_event_count": len(award_event_keys),
@@ -1503,7 +1546,7 @@ def _profile_aggregate(
         "amount_completeness": _amount_completeness(amount_statuses),
         "classified_notice_count": len(classified_notice_ids),
         "field_classification_completeness": (
-            "complete" if notice_ids and classified_notice_ids == notice_ids
+            "complete" if notice_dates and classified_notice_ids == set(notice_dates)
             else "partial" if classified_notice_ids else "unknown"
         ),
     }
@@ -2081,6 +2124,12 @@ async def _execute_procurement_profile(
         field_code=field_code, work_type=work_type,
     )
     rows = _collapse_profile_contract_versions(rows)
+    missing_first_contract_date_count = len({
+        str(row.get("event_key") or row.get("bid_notice_id") or "")
+        for row in rows
+        if row.get("activity_type") == "contract"
+        and row.get("first_contract_date") is None
+    } - {""})
     profile_rows = [
         row for row in rows if row.get("activity_date") and row["activity_date"] >= period_from
     ]
@@ -2125,10 +2174,13 @@ async def _execute_procurement_profile(
         _profile_aggregate(
             profile_rows, relationship_dimension=dimension,
             require_contract_relationship=profile_type == "organization",
+            notice_rows=notice_rows if profile_type == "organization" else None,
+            period_from=period_from, period_to=period_to,
         )
     )
     if profile_type == "organization":
         summary["company_count_basis"] = "contracted_companies"
+    summary["missing_first_contract_date_count"] = missing_first_contract_date_count
     if incumbent_share is not None:
         summary["rolling_12m_supplier_entry"] = incumbent_share
     if supplier_entry is not None:
@@ -2203,6 +2255,8 @@ async def _execute_procurement_profile(
     missing_reasons = []
     if summary["amount_completeness"] != "complete":
         missing_reasons.append("some_contract_amounts_not_attributable")
+    if missing_first_contract_date_count:
+        missing_reasons.append("some_contract_events_missing_first_contract_date")
     identity = (
         {"code": organization_code, "name": next((row.get("organization_name") for row in profile_rows if row.get("organization_name")), None)}
         if profile_type == "organization" else
@@ -2255,8 +2309,15 @@ async def _execute_procurement_profile(
             "period_type": period_type,
             "amount_basis": "attributed_contract_amount",
             "event_deduplication": "award_contract_linked_and_contract_versions_merged",
-            "event_attribution": "notice_published_at_or_first_contract_date",
+            "event_attribution": "contract_first_contract_date",
             "contract_amount_version": "latest_at_or_before_period_end",
+            "contract_event_date_basis": "first_contract_date",
+            "contract_amount_basis": "latest_version_at_or_before_period_end",
+            "contract_amount_year_attribution": "first_contract_year",
+            "contract_version_deduplication": "merged_by_contract_event",
+            "notice_year_basis": "notice_published_at",
+            "award_year_basis": "final_award_date_or_opening_at",
+            "contract_year_basis": "first_contract_date",
             "field_filter": {
                 "large_category": large_category,
                 "middle_category": middle_category,

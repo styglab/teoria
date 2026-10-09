@@ -1,11 +1,11 @@
 registry:
-  version: 1.11.0
+  version: 1.13.0
   registered_at: "2026-10-02"
 capability:
   id: analyze_company_procurement_profile
   exposure: public
   name: 업체 조달 프로필 분석
-  description: 업체 조달관계를 최근 N개 또는 명시한 회계연도 범위로 집계하며 확인 가능한 참여 결과의 성공률, 기관별 종료 연도 공급업체 진입 상태, 조달분류 기반 분야, 제목 기반 사업유형, 물품·용역·공사 등 업무구분을 분리한다. 분야 분포는 업무구분을 분야명으로 만들지 않으며 display_name과 selection_filter를 그대로 탐색에 사용할 수 있게 반환한다. organization_query는 전체 집계에는 영향을 주지 않고 집계된 거래기관 목록과 페이지네이션에만 적용한다.
+  description: 업체 조달관계를 최근 N개 또는 명시한 회계연도 범위로 집계하며 확인 가능한 참여 결과의 성공률, 기관별 종료 연도 공급업체 진입 상태, 조달분류 기반 분야, 제목 기반 사업유형, 물품·용역·공사 등 업무구분을 분리한다. 연도별 공고는 게시일, 낙찰은 최종낙찰일 또는 개찰일, 계약 건수·금액·업체 수는 최초 계약일에 귀속한다. 계약사건은 버전을 병합하고 금액은 조회 종료일 이전 최신 계약 버전을 사용한다. 최초 계약일이 없는 계약사건은 기간 집계에 포함하지 않고 missing_first_contract_date_count로 반환한다. organization_query는 전체 집계에는 영향을 주지 않고 집계된 거래기관 목록과 페이지네이션에만 적용한다.
   kind: compute
   processor: market_context.analyze_company_procurement_profile
   semantic_requirements:

@@ -1023,7 +1023,7 @@ async def test_procurement_profile_merges_contract_versions_by_project() -> None
                 "amount_completeness": "complete",
             } for event_key, activity_date, amount in (
                 ("C1", date(2023, 1, 1), Decimal("80")),
-                ("C2", date(2025, 1, 1), Decimal("100")),
+                ("C1", date(2025, 1, 1), Decimal("100")),
             )]
 
     result = await execute_organization_procurement_profile(
@@ -1046,12 +1046,169 @@ async def test_procurement_profile_merges_contract_versions_by_project() -> None
         "amount_completeness": "complete",
     }]
     representative = relationship["representative_notices"][0]
-    assert representative["attribution_date"] == date(2023, 1, 1)
+    assert representative["attribution_date"] == date(2023, 2, 1)
     assert representative["first_contract_date"] == date(2023, 2, 1)
     assert representative["latest_contract_version_date"] == date(2025, 1, 1)
     assert result.outcome["summary"]["contract_event_count"] == 1
     assert result.outcome["summary"]["contract_version_count"] == 2
     assert result.outcome["summary"]["unique_project_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_procurement_profile_uses_first_contract_year_and_reports_missing_date() -> None:
+    class Reader:
+        def activities(self, catalog, **kwargs):
+            common = {
+                "activity_type": "contract",
+                "bid_notice_id": "N1:000",
+                "notice_name": "장기 정보시스템 계약",
+                "organization_code": "ORG-1",
+                "organization_name": "기관",
+                "company_number": "1111111111",
+                "company_name": "업체",
+                "procurement_classification_number": "81111899",
+                "procurement_classification_name": "정보시스템유지관리서비스",
+                "procurement_large_classification_name": "ICT 서비스",
+                "procurement_middle_classification_name": "정보시스템 운영",
+                "work_type": "service",
+                "attributed_contract_amount": Decimal("120"),
+                "event_amount": Decimal("120"),
+                "amount_completeness": "complete",
+                "contract_version_count": 1,
+            }
+            return [
+                {
+                    **common,
+                    "event_key": "CONTRACT-1",
+                    "activity_date": date(2022, 11, 1),
+                    "attribution_date_basis": "notice_published_at",
+                    "first_contract_date": date(2023, 2, 1),
+                    "latest_contract_version_date": date(2025, 6, 1),
+                },
+                {
+                    **common,
+                    "event_key": "CONTRACT-MISSING-DATE",
+                    "activity_date": date(2024, 3, 1),
+                    "attribution_date_basis": "notice_published_at",
+                    "first_contract_date": None,
+                    "latest_contract_version_date": None,
+                },
+            ]
+
+    result = await execute_organization_procurement_profile(
+        RegistryLoader(REGISTRIES).load(),
+        "analyze_organization_procurement_profile",
+        {
+            "organization_code": "ORG-1",
+            "period_from_year": 2023,
+            "period_to_year": 2025,
+        },
+        reader=Reader(),
+    )
+
+    assert result.outcome["summary"]["contract_event_count"] == 1
+    assert result.outcome["summary"]["missing_first_contract_date_count"] == 1
+    assert result.outcome["summary"]["total_attributed_contract_amount"] == 120
+    assert "some_contract_events_missing_first_contract_date" in result.outcome[
+        "data_completeness"
+    ]["missing_reasons"]
+    assert result.outcome["yearly_activity"][0]["year"] == 2023
+    assert result.outcome["yearly_activity"][0]["attributed_contract_amount"] == 120
+    assert result.outcome["company_relationships"][0]["latest_contract_date"] == date(
+        2025, 6, 1
+    )
+    assert result.outcome["analysis_basis"] | {
+        "contract_event_date_basis": "first_contract_date",
+        "contract_amount_basis": "latest_version_at_or_before_period_end",
+        "contract_amount_year_attribution": "first_contract_year",
+        "contract_version_deduplication": "merged_by_contract_event",
+    } == result.outcome["analysis_basis"]
+
+
+@pytest.mark.asyncio
+async def test_procurement_profile_yearly_metrics_use_separate_date_bases() -> None:
+    classification = {
+        "procurement_classification_number": "81111599",
+        "procurement_classification_name": "정보시스템개발서비스",
+        "procurement_large_classification_name": "ICT 서비스",
+        "procurement_middle_classification_name": "SW 및 시스템 개발",
+        "work_type": "service",
+    }
+
+    class Reader:
+        def activities(self, catalog, **kwargs):
+            common = {
+                "bid_notice_id": "N1:000", "notice_name": "연도 기준 검증",
+                "notice_published_date": date(2023, 3, 1),
+                "organization_code": "ORG-1", "organization_name": "기관",
+                "company_number": "1111111111", "company_name": "업체",
+                "event_amount": None, "attributed_contract_amount": None,
+                "amount_completeness": "unknown", **classification,
+            }
+            return [
+                {
+                    **common, "activity_type": "participation", "event_key": "N1:000",
+                    "activity_date": date(2023, 3, 1),
+                    "attribution_date_basis": "notice_published_at",
+                    "result_confirmed": True, "participation_successful": True,
+                },
+                {
+                    **common, "activity_type": "award", "event_key": "N1:000:0:0",
+                    "activity_date": date(2024, 4, 1),
+                    "attribution_date_basis": "final_award_date_or_opening_at",
+                    "result_confirmed": True, "participation_successful": True,
+                },
+                {
+                    **common, "activity_type": "contract", "event_key": "C1",
+                    "activity_date": date(2025, 5, 1),
+                    "first_contract_date": date(2025, 5, 1),
+                    "latest_contract_version_date": date(2025, 6, 1),
+                    "attribution_date_basis": "first_contract_date",
+                    "event_amount": Decimal("130"),
+                    "attributed_contract_amount": Decimal("130"),
+                    "amount_completeness": "complete", "contract_version_count": 2,
+                },
+            ]
+
+        def notice_publications(self, catalog, **kwargs):
+            return [
+                {
+                    "bid_notice_id": "N1:000", "notice_name": "연도 기준 검증",
+                    "notice_published_date": date(2023, 3, 1), **classification,
+                },
+                {
+                    "bid_notice_id": "N2:000", "notice_name": "활동 없는 공고",
+                    "notice_published_date": date(2024, 7, 1), **classification,
+                },
+            ]
+
+    result = await execute_organization_procurement_profile(
+        RegistryLoader(REGISTRIES).load(),
+        "analyze_organization_procurement_profile",
+        {
+            "organization_code": "ORG-1",
+            "period_from_year": 2023,
+            "period_to_year": 2025,
+        },
+        reader=Reader(),
+    )
+
+    yearly = {item["year"]: item for item in result.outcome["yearly_activity"]}
+    assert result.outcome["summary"]["notice_count"] == 2
+    assert sum(item["notice_count"] for item in yearly.values()) == 2
+    assert yearly[2023]["notice_count"] == 1
+    assert yearly[2024]["notice_count"] == 1
+    assert yearly[2024]["award_event_count"] == 1
+    assert yearly[2025]["contract_event_count"] == 1
+    assert yearly[2025]["attributed_contract_amount"] == 130
+    assert yearly[2025]["company_count"] == 1
+    assert yearly[2023]["company_count"] == 0
+    assert yearly[2024]["company_count"] == 0
+    assert result.outcome["analysis_basis"] | {
+        "notice_year_basis": "notice_published_at",
+        "award_year_basis": "final_award_date_or_opening_at",
+        "contract_year_basis": "first_contract_date",
+    } == result.outcome["analysis_basis"]
 
 
 @pytest.mark.asyncio

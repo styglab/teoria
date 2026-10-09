@@ -10,7 +10,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv run --locked --package teoria-provider pytest packages/provider/tests
+      - run: uv run --locked --package teoria-provider-api pytest packages/provider_api/tests
+
+  admin-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform/admin_ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: platform/admin_ui/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
 
   platform:
     runs-on: ubuntu-latest
@@ -72,6 +88,7 @@ jobs:
           TEORIA_OBJECT_STORAGE_ACCESS_KEY: validation
           TEORIA_OBJECT_STORAGE_ENDPOINT: http://object-storage.invalid
           TEORIA_OBJECT_STORAGE_SECRET_KEY: validation
+          TEORIA_OPA_CONTROL_PLANE_TOKEN: validation
           TEORIA_PREFECT_PASSWORD: validation
           TEORIA_PREFECT_USERNAME: validation
           TEORIA_RUNTIME_API_TOKEN: validation
@@ -82,6 +99,7 @@ jobs:
           TEORIA_OBJECT_STORAGE_ACCESS_KEY: validation
           TEORIA_OBJECT_STORAGE_ENDPOINT: http://object-storage.invalid
           TEORIA_OBJECT_STORAGE_SECRET_KEY: validation
+          TEORIA_OPA_CONTROL_PLANE_TOKEN: validation
           TEORIA_PREFECT_PASSWORD: validation
           TEORIA_PREFECT_USERNAME: validation
           TEORIA_RUNTIME_API_TOKEN: validation

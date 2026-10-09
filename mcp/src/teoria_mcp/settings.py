@@ -15,6 +15,8 @@ class MCPSettings(BaseSettings):
     runtime_api_url: str
     runtime_api_token: str
     runtime_timeout_seconds: float = Field(default=150.0, gt=0)
+    runtime_max_attempts: int = Field(default=3, ge=1)
+    runtime_retry_backoff_seconds: float = Field(default=0.25, ge=0)
 
 
 def bootstrap_mcp_settings(*, cwd: Path | None = None) -> MCPSettings:

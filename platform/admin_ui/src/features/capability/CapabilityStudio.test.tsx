@@ -15,4 +15,5 @@ test("shows one capability with readiness and next actions", async () => {
   expect(screen.getByText("데이터 준비도")).toBeInTheDocument();
   await waitFor(() => expect(screen.getByText("2/3 Capability·입출력 의미 연결")).toBeInTheDocument());
   expect(screen.getByText("Bindings 열기")).toBeInTheDocument();
+  expect(screen.queryByText("릴리스 준비 완료")).not.toBeInTheDocument();
 });

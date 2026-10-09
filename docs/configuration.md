@@ -67,6 +67,8 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_MCP_RUNTIME_API_URL` | 없음 | Remote Runtime URL |
 | `TEORIA_MCP_RUNTIME_API_TOKEN` | 없음 | MCP가 사용하는 Runtime API token |
 | `TEORIA_MCP_RUNTIME_TIMEOUT_SECONDS` | `150` | Runtime API 호출 timeout |
+| `TEORIA_MCP_RUNTIME_MAX_ATTEMPTS` | `3` | MCP capability discovery의 일시 장애 포함 최대 시도 횟수 |
+| `TEORIA_MCP_RUNTIME_RETRY_BACKOFF_SECONDS` | `0.25` | MCP discovery 재시도의 최초 지수 backoff 초 |
 
 로컬 Compose 암호 변수는 `deploy/compose/.env.example`을 따른다. 공유·운영 환경에서는 managed secret으로 덮어쓴다.
 `TEORIA_RUNTIME_API_TOKEN`, `TEORIA_OPA_CONTROL_PLANE_TOKEN`과

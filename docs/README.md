@@ -20,6 +20,7 @@ Git 이력에서 확인하며 현재 규칙처럼 복제하지 않는다.
 - [Deployment](../deploy/README.md)
 - [Admin UI](admin-ui.md)와 [MCP](mcp.md)
 - [입찰체크 연동](integration/bid-check-service.md)
+- [공공조달 계약 집계 기준](domains/public_procurement/contract_aggregation.md)
 - [기업-공고 참가 가능성 vertical 검증](company_bid_eligibility_vertical_verification.md)
 - [Source authoring skill](skills/source-registry-author.md)
 - [Metadata asset 분석 skill](skills/analyze_metadata_asset.md)

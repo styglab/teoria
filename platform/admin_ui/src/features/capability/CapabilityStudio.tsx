@@ -45,12 +45,12 @@ export function CapabilityStudio({ capabilities, sources, mappings, lineage, val
   const semanticValue = selectedCoverage ? Math.round((semanticBound / Math.max(semanticTotal, 1)) * 100) : 0;
   const dataValue = selected?.steps.length ? Math.round((relatedSources.length / new Set(selected.steps.map((step) => step.split(".")[0])).size) * 100) : 100;
   const executionValue = validation?.status === "valid" ? 100 : 35;
-  const releaseValue = Math.round((semanticValue + dataValue + executionValue) / 3);
+  const automatedReadinessValue = Math.round((semanticValue + dataValue + executionValue) / 3);
   const readiness: Readiness[] = [
     { label: "의미 준비도", value: semanticValue, state: semanticValue === 100 ? "ready" : semanticValue === 0 ? "blocked" : "attention", detail: selectedCoverage ? `${semanticBound}/${semanticTotal} Capability·입출력 의미 연결` : coverageError ? "Binding coverage를 불러올 수 없습니다" : "Binding coverage 확인 중" },
     { label: "데이터 준비도", value: dataValue, state: dataValue === 100 ? "ready" : "attention", detail: selected?.steps.length ? `${relatedSources.length}개 Source · ${selected.steps.length}개 실행 단계` : "외부 데이터가 필요 없는 계산 기능" },
     { label: "실행 준비도", value: executionValue, state: executionValue === 100 ? "ready" : "blocked", detail: validation?.status === "valid" ? "Registry 교차 계약 검증 통과" : `${validation?.diagnostic_count ?? 0}개 진단을 해결해야 합니다` },
-    { label: "릴리스 준비도", value: releaseValue, state: releaseValue === 100 ? "ready" : releaseValue < 50 ? "blocked" : "attention", detail: releaseValue === 100 ? "bundle 발행 전 최종 검토 가능" : "미완료 항목을 검토하세요" },
+    { label: "자동 계약 점검", value: automatedReadinessValue, state: automatedReadinessValue === 100 ? "attention" : automatedReadinessValue < 50 ? "blocked" : "attention", detail: automatedReadinessValue === 100 ? "정적 계약 통과 · 대표 질문 종단 검증 필요" : "미완료 계약 항목을 검토하세요" },
   ];
 
   if (!capabilities.length) return <div className="loading-state">등록된 Capability가 없습니다.</div>;
@@ -64,7 +64,7 @@ export function CapabilityStudio({ capabilities, sources, mappings, lineage, val
 
     {selected && <section className="capability-workbench">
       <div className="capability-guide"><strong>Capability 검증 순서</strong><span>업무 의미 확인</span><ChevronRight size={13} /><span>데이터 근거 확인</span><ChevronRight size={13} /><Button size="sm" variant="ghost" onClick={onOpenBindings}>Binding 검토</Button><ChevronRight size={13} /><span>실행 결과 검증</span></div>
-      <header className="capability-hero"><div><div className="hero-badges"><Badge>{selected.kind ?? "capability"}</Badge><Badge variant={releaseValue === 100 ? "success" : "outline"}>{releaseValue === 100 ? "릴리스 준비 완료" : "준비 중"}</Badge></div><h2>{selected.name}</h2><code>{selected.id}</code><p>{selected.description || "설명이 아직 없습니다. 사용자가 내리는 결정과 제공할 근거를 작성하세요."}</p></div><div className="hero-actions"><Button variant="outline" onClick={() => setActiveTab("checks")}>검토 항목 보기</Button><Button disabled title="릴리스 발행 workflow는 후속 단계에서 연결합니다"><ShieldCheck size={15} />릴리스</Button></div></header>
+      <header className="capability-hero"><div><div className="hero-badges"><Badge>{selected.kind ?? "capability"}</Badge><Badge variant="outline">{automatedReadinessValue === 100 ? "사용자 검증 필요" : "준비 중"}</Badge></div><h2>{selected.name}</h2><code>{selected.id}</code><p>{selected.description || "설명이 아직 없습니다. 사용자가 내리는 결정과 제공할 근거를 작성하세요."}</p></div><div className="hero-actions"><Button variant="outline" onClick={() => setActiveTab("checks")}>검토 항목 보기</Button><Button disabled title="대표 질문 종단 검증과 승인 전에는 릴리스할 수 없습니다"><ShieldCheck size={15} />릴리스</Button></div></header>
 
       <div className="readiness-grid">{readiness.map((item) => <ReadinessCard key={item.label} item={item} />)}</div>
 
@@ -73,7 +73,7 @@ export function CapabilityStudio({ capabilities, sources, mappings, lineage, val
         <TabsContent value="overview">
           <div className="studio-grid two-columns">
             <Card><CardHeader><CardTitle>기능 계약</CardTitle><CardDescription>사용자가 제공하는 값과 Runtime이 반환하는 결과입니다.</CardDescription></CardHeader><CardContent className="contract-columns"><ContractList label="입력" items={selected.inputs} empty="입력 없음" /><ContractList label="출력" items={selected.returns} empty="출력 없음" /></CardContent></Card>
-            <Card><CardHeader><CardTitle>다음 작업</CardTitle><CardDescription>릴리스 가능 상태까지 사람이 처리해야 할 항목입니다.</CardDescription></CardHeader><CardContent className="next-actions">{semanticValue < 100 && <div><GitFork size={15} /><span><strong>의미 연결 검토</strong><small>{semanticTotal - semanticBound}개 Capability 또는 필드가 미연결 상태입니다.</small></span><Button size="sm" variant="outline" onClick={onOpenBindings}>Bindings 열기</Button></div>}{dataValue < 100 && <div><Database size={15} /><span><strong>데이터 계약 확인</strong><small>실행 단계가 참조하는 Source를 확인할 수 없습니다.</small></span></div>}{executionValue < 100 && <div><AlertTriangle size={15} /><span><strong>Registry 진단 해결</strong><small>{validation?.diagnostic_count ?? 0}개 교차 계약 오류가 있습니다.</small></span></div>}{releaseValue === 100 && <div><Check size={15} /><span><strong>릴리스 준비 완료</strong><small>승인자에게 bundle 발행 검토를 요청할 수 있습니다.</small></span></div>}</CardContent></Card>
+            <Card><CardHeader><CardTitle>다음 작업</CardTitle><CardDescription>운영 검증 상태까지 사람이 처리해야 할 항목입니다.</CardDescription></CardHeader><CardContent className="next-actions">{semanticValue < 100 && <div><GitFork size={15} /><span><strong>의미 연결 검토</strong><small>{semanticTotal - semanticBound}개 Capability 또는 필드가 미연결 상태입니다.</small></span><Button size="sm" variant="outline" onClick={onOpenBindings}>Bindings 열기</Button></div>}{dataValue < 100 && <div><Database size={15} /><span><strong>데이터 계약 확인</strong><small>실행 단계가 참조하는 Source를 확인할 수 없습니다.</small></span></div>}{executionValue < 100 && <div><AlertTriangle size={15} /><span><strong>Registry 진단 해결</strong><small>{validation?.diagnostic_count ?? 0}개 교차 계약 오류가 있습니다.</small></span></div>}{automatedReadinessValue === 100 && <div><Check size={15} /><span><strong>대표 질문 종단 검증</strong><small>실데이터·metadata quality·부분 실패를 검증한 뒤 운영 준비 상태를 승인하세요.</small></span></div>}</CardContent></Card>
           </div>
         </TabsContent>
         <TabsContent value="semantics">

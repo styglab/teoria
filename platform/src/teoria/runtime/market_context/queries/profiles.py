@@ -134,10 +134,10 @@ WITH scoped_contract_numbers AS MATERIALIZED (
            n.work_type,n.notice_published_at::date AS notice_published_date,
            n.contract_method_name,
            a.winner_business_registration_number AS company_number,a.winner_name AS company_name,
-           n.notice_published_at::date AS activity_date,
+           COALESCE(a.final_award_date,a.opening_at::date) AS activity_date,
            a.winning_amount AS event_amount,NULL::numeric AS attributed_contract_amount,
            'unknown'::text AS amount_completeness,
-           'notice_published_at'::text AS attribution_date_basis,
+           'final_award_date_or_opening_at'::text AS attribution_date_basis,
            NULL::date AS first_contract_date,
            NULL::date AS latest_contract_version_date,
            NULL::integer AS contract_version_count,
@@ -149,8 +149,8 @@ WITH scoped_contract_numbers AS MATERIALIZED (
     WHERE (%(organization_code)s::text IS NULL OR a.demand_organization_code=%(organization_code)s)
       AND (cardinality(%(company_numbers)s::text[])=0
            OR a.winner_business_registration_number=ANY(%(company_numbers)s::text[]))
-      AND n.notice_published_at >= %(period_from)s
-      AND n.notice_published_at < %(period_to)s
+      AND COALESCE(a.final_award_date,a.opening_at::date) >= %(period_from)s
+      AND COALESCE(a.final_award_date,a.opening_at::date) < %(period_to)s
 ), contract_versions AS MATERIALIZED (
     SELECT scoped.organization_code,c.*,
            COALESCE(NULLIF(c.confirmed_contract_number,''),
@@ -161,7 +161,7 @@ WITH scoped_contract_numbers AS MATERIALIZED (
                 ELSE NULLIF(c.notice_number,'') END AS normalized_notice_number
     FROM scoped_contract_numbers scoped
     JOIN public_procurement.contracts c USING (unified_contract_number)
-    WHERE c.concluded_date < %(period_to)s
+    WHERE c.concluded_date < %(period_to)s OR c.concluded_date IS NULL
 ), contract_groups AS (
     SELECT organization_code,contract_event_key,
            min(concluded_date) AS first_contract_date,
@@ -177,7 +177,8 @@ WITH scoped_contract_numbers AS MATERIALIZED (
     FROM contract_versions v
     JOIN contract_groups g USING (organization_code,contract_event_key)
     ORDER BY v.organization_code,v.contract_event_key,
-             v.concluded_date DESC,v.updated_at DESC,v.unified_contract_number DESC
+             v.concluded_date DESC NULLS LAST,v.updated_at DESC,
+             v.unified_contract_number DESC
 ), latest_contracts AS (
     SELECT
            'contract'::text AS activity_type,
@@ -198,7 +199,7 @@ WITH scoped_contract_numbers AS MATERIALIZED (
            n.notice_published_at::date AS notice_published_date,
            COALESCE(c.contract_method_name,n.contract_method_name) AS contract_method_name,
            cs.business_registration_number AS company_number,cs.supplier_name AS company_name,
-           COALESCE(n.notice_published_at::date,c.first_contract_date) AS activity_date,
+           c.first_contract_date AS activity_date,
            c.current_contract_amount AS event_amount,
            CASE WHEN COALESCE(c.current_contract_amount_currency,'KRW')<>'KRW'
                      OR c.current_contract_amount IS NULL THEN NULL
@@ -210,8 +211,7 @@ WITH scoped_contract_numbers AS MATERIALIZED (
                      OR c.current_contract_amount IS NULL THEN 'unknown'
                 WHEN cs.participation_share_rate IS NOT NULL OR supplier_count.count=1
                   THEN 'complete' ELSE 'partial' END AS amount_completeness,
-           CASE WHEN n.notice_published_at IS NOT NULL THEN 'notice_published_at'
-                ELSE 'first_contract_date' END AS attribution_date_basis,
+           'first_contract_date'::text AS attribution_date_basis,
            c.first_contract_date,c.latest_contract_version_date,
            c.contract_version_count,c.contract_version_dates,
            true AS result_confirmed,true AS participation_successful
@@ -232,8 +232,13 @@ WITH scoped_contract_numbers AS MATERIALIZED (
     ) supplier_count
     WHERE (cardinality(%(company_numbers)s::text[])=0
            OR cs.business_registration_number=ANY(%(company_numbers)s::text[]))
-      AND COALESCE(n.notice_published_at::date,c.first_contract_date) >= %(period_from)s
-      AND COALESCE(n.notice_published_at::date,c.first_contract_date) < %(period_to)s
+      AND (
+        c.first_contract_date IS NULL
+        OR (
+          c.first_contract_date >= %(period_from)s
+          AND c.first_contract_date < %(period_to)s
+        )
+      )
 )
 SELECT * FROM participation
 UNION ALL SELECT * FROM awards

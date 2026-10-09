@@ -17,6 +17,8 @@ async def run_stdio() -> None:
         settings.runtime_api_url,
         settings.runtime_api_token,
         timeout_seconds=settings.runtime_timeout_seconds,
+        max_attempts=settings.runtime_max_attempts,
+        retry_backoff_seconds=settings.runtime_retry_backoff_seconds,
     )
     service = CapabilityMCPService(await client.list_capabilities(), client)
     server = Server("teoria")

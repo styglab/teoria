@@ -72,6 +72,10 @@ Runtime Object, Mapping과 Capability를 Domain Registry에 정의한다. 직접
 Source, 지속 수집 API는 Connector로 작성한다. [Registry guide](registry/README.md)와
 [Source authoring](registry/source-authoring.md)을 따른다.
 
+공공조달 기관·업체 프로필의 계약 건수, 변경계약 병합, 연도 귀속과 공동수급 금액은
+[공공조달 계약 집계 기준](domains/public_procurement/contract_aggregation.md)을 따른다.
+이 규칙은 첫 vertical의 Domain 규칙이며 Platform 공통 집계 규칙으로 간주하지 않는다.
+
 ### API/MCP 사용자
 
 배포된 Runtime의 `/v1/capabilities`에서 사용할 수 있는 Capability와 입력 schema를
