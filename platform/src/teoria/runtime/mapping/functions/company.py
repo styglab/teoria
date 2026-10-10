@@ -1,6 +1,32 @@
 from __future__ import annotations
 
+import re
 from datetime import date
+from decimal import Decimal, InvalidOperation
+
+
+_KOREAN_TENURE_PATTERN = re.compile(
+    r"^(?:(?P<years>\d+)\s*년)?\s*(?:(?P<months>\d+)\s*개월)?$"
+)
+
+
+def parse_korean_tenure_years(
+    value: str | int | float | Decimal | None,
+) -> Decimal | None:
+    """Convert an FSC tenure value such as ``5년 5개월`` to decimal years."""
+    if value is None or str(value).strip() == "":
+        return None
+    normalized = str(value).replace(",", "").strip()
+    try:
+        return Decimal(normalized)
+    except InvalidOperation:
+        match = _KOREAN_TENURE_PATTERN.fullmatch(normalized)
+        if match is None or not any(match.groupdict().values()):
+            raise ValueError(f"unsupported employee tenure value: {value!r}")
+        years = Decimal(match.group("years") or 0)
+        months = Decimal(match.group("months") or 0)
+        return (years + months / Decimal(12)).quantize(Decimal("0.000001"))
+
 
 def normalize_representative_names(value: str | None) -> list[str]:
     if not value:

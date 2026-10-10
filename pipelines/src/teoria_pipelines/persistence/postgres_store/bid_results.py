@@ -47,10 +47,85 @@ class BidResultStoreMixin:
                     "rebid_number", "business_registration_number",
                 ),
             )
+            self._upsert_many(
+                connection,
+                "public_procurement.bid_notice_outcomes",
+                batch.notice_outcomes,
+                (
+                    "notice_number", "notice_order", "bid_classification_number",
+                    "rebid_number",
+                ),
+            )
         return LoadSummary(
             awards=len(batch.awards),
             opening_participants=len(batch.opening_participants),
+            notice_outcomes=len(batch.notice_outcomes),
         )
+
+    def select_pending_bid_notice_outcomes(
+        self, execution_id: UUID, limit: int,
+    ) -> list[RawProviderRecord]:
+        now = datetime.now(timezone.utc)
+        with psycopg.connect(self.database_url) as connection:
+            rows = connection.execute(
+                "SELECT n.notice_number,n.source_record_hash "
+                "FROM public_procurement.bid_notice_latest_versions latest "
+                "JOIN public_procurement.bid_notices n "
+                "ON n.notice_number=latest.notice_number "
+                "AND n.notice_order=latest.notice_order "
+                "LEFT JOIN ingestion.bid_notice_outcome_collection_status checked "
+                "ON checked.notice_number=n.notice_number "
+                "WHERE n.opening_at<now() AND n.opening_at>=now()-interval '5 years' "
+                "AND n.notice_kind_name<>'취소공고' "
+                "AND NOT EXISTS (SELECT 1 FROM public_procurement.bid_awards award "
+                "WHERE award.notice_number=n.notice_number) "
+                "AND (checked.notice_number IS NULL OR "
+                "checked.notice_source_record_hash<>n.source_record_hash) "
+                "ORDER BY n.opening_at DESC NULLS LAST,n.notice_number DESC LIMIT %s",
+                (limit,),
+            ).fetchall()
+        today = now.date()
+        return [
+            RawProviderRecord(
+                raw_record_id=uuid4(), execution_id=execution_id,
+                connector_id="pps_bid_result_api",
+                operation_id="list_failing_opening_results",
+                window=CollectionWindow(today, today), fetched_at=now,
+                source_record_hash=source_record_hash,
+                payload={"bidNtceNo": notice_number},
+            )
+            for notice_number, source_record_hash in rows
+        ]
+
+    def mark_bid_notice_outcomes_checked(
+        self, notices: Iterable[RawProviderRecord], outcomes: Iterable[RawProviderRecord],
+    ) -> int:
+        counts: dict[str, int] = {}
+        for record in outcomes:
+            notice_number = str(record.payload.get("bidNtceNo") or "").strip()
+            counts[notice_number] = counts.get(notice_number, 0) + 1
+        values = [
+            (
+                str(record.payload.get("bidNtceNo") or "").strip(),
+                record.source_record_hash,
+                counts.get(str(record.payload.get("bidNtceNo") or "").strip(), 0),
+            )
+            for record in notices
+            if str(record.payload.get("bidNtceNo") or "").strip()
+        ]
+        if not values:
+            return 0
+        with psycopg.connect(self.database_url) as connection:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    "INSERT INTO ingestion.bid_notice_outcome_collection_status "
+                    "(notice_number,notice_source_record_hash,outcome_count) "
+                    "VALUES (%s,%s,%s) ON CONFLICT (notice_number) DO UPDATE SET "
+                    "notice_source_record_hash=EXCLUDED.notice_source_record_hash,"
+                    "outcome_count=EXCLUDED.outcome_count,checked_at=now()",
+                    values,
+                )
+        return len(values)
 
     def select_bid_awards_for_opening(
         self, records: Iterable[RawProviderRecord]

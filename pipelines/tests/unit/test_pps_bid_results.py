@@ -14,6 +14,7 @@ from teoria_pipelines.loader import PipelineLoader
 from teoria_pipelines.models import CollectionWindow, RawProviderRecord
 from teoria_pipelines.normalization import (
     normalize_bid_award_record,
+    normalize_failed_opening_record,
     normalize_opening_participant_record,
 )
 from teoria_pipelines.tasks.pps_bid_results import (
@@ -42,10 +43,10 @@ def test_bid_result_connector_and_pipeline_are_complete() -> None:
     assert operations == {
         "list_goods_bid_awards", "list_construction_bid_awards",
         "list_service_bid_awards", "list_foreign_bid_awards",
-        "list_completed_opening_results",
+        "list_completed_opening_results", "list_failing_opening_results",
     }
     assert catalog.pipelines["pps_bid_result_ingestion"].sink.relations == [
-        "bid_awards", "bid_opening_participants"
+        "bid_awards", "bid_opening_participants", "bid_notice_outcomes"
     ]
     assert PipelineValidator().validate(catalog) == []
 
@@ -114,6 +115,22 @@ def test_normalizes_opening_participant_scores() -> None:
     assert result["opening_rank"] == 1
     assert result["technical_evaluation_score"] == Decimal("81.5")
     assert result["bid_at"].utcoffset().total_seconds() == 9 * 3600
+
+
+def test_normalizes_source_confirmed_failed_opening() -> None:
+    record = _record("list_failing_opening_results", {
+        "opengRsltDivNm": "유찰", "bidNtceNo": "R26BK01748548",
+        "bidNtceOrd": "000", "bidClsfcNo": "0", "rbidNo": "000",
+        "nobidRsn": "단독입찰",
+    })
+
+    result = normalize_failed_opening_record(record)
+
+    assert result["outcome_status"] == "failed"
+    assert result["reason"] == "단독입찰"
+    assert result["status_source"] == (
+        "pps_bid_result_api.list_failing_opening_results"
+    )
 
 
 class _CapturingClient(PPSBidResultClient):

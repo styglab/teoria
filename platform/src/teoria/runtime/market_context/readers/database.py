@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Mapping
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import Any
 
 import psycopg
@@ -14,6 +14,55 @@ from teoria.registry.loader import RegistryCatalog
 from ..queries import *  # noqa: F403
 
 SIMILARITY_CANDIDATE_LIMIT = 300
+
+
+def _enrich_procurement_classification(
+    connection: Any, rows: list[dict[str, Any]],
+) -> None:
+    """Apply the same provider-backed hierarchy fallback to activity rows."""
+    missing_codes = sorted({
+        str(row["procurement_classification_number"])
+        for row in rows
+        if row.get("procurement_classification_number")
+        and not row.get("procurement_large_classification_name")
+        and not row.get("procurement_middle_classification_name")
+    })
+    if missing_codes:
+        hierarchy = {
+            str(row["procurement_classification_number"]): dict(row)
+            for row in connection.execute(
+                _PROCUREMENT_CLASSIFICATION_HIERARCHY_QUERY,
+                {"classification_numbers": missing_codes},
+            ).fetchall()
+        }
+        for row in rows:
+            item = hierarchy.get(str(row.get("procurement_classification_number") or ""))
+            if not item:
+                continue
+            for key in (
+                "procurement_large_classification_name",
+                "procurement_middle_classification_name", "purchase_items",
+            ):
+                if not row.get(key):
+                    row[key] = item.get(key)
+    notice_fields = {
+        str(row["bid_notice_id"]): row for row in rows
+        if row.get("procurement_classification_number")
+    }
+    for row in rows:
+        if row.get("procurement_classification_number"):
+            continue
+        field = notice_fields.get(str(row.get("bid_notice_id") or ""))
+        if not field:
+            continue
+        for key in (
+            "procurement_classification_number",
+            "procurement_classification_name",
+            "procurement_large_classification_name",
+            "procurement_middle_classification_name", "purchase_items",
+        ):
+            row[key] = field.get(key)
+
 
 class SimilarBidNoticeReader:
     def __init__(self, environment: Mapping[str, str] | None = None) -> None:
@@ -283,48 +332,7 @@ class ProcurementProfileReader:
                     "period_to": period_to,
                 },
             ).fetchall()]
-            missing_codes = sorted({
-                str(row["procurement_classification_number"])
-                for row in rows
-                if row.get("procurement_classification_number")
-                and not row.get("procurement_large_classification_name")
-                and not row.get("procurement_middle_classification_name")
-            })
-            if missing_codes:
-                hierarchy = {
-                    str(row["procurement_classification_number"]): dict(row)
-                    for row in connection.execute(
-                        _PROCUREMENT_CLASSIFICATION_HIERARCHY_QUERY,
-                        {"classification_numbers": missing_codes},
-                    ).fetchall()
-                }
-                for row in rows:
-                    item = hierarchy.get(str(row.get("procurement_classification_number") or ""))
-                    if not item:
-                        continue
-                    for key in (
-                        "procurement_large_classification_name",
-                        "procurement_middle_classification_name", "purchase_items",
-                    ):
-                        if not row.get(key):
-                            row[key] = item.get(key)
-            notice_fields = {
-                str(row["bid_notice_id"]): row for row in rows
-                if row.get("procurement_classification_number")
-            }
-            for row in rows:
-                if row.get("procurement_classification_number"):
-                    continue
-                field = notice_fields.get(str(row["bid_notice_id"]))
-                if not field:
-                    continue
-                for key in (
-                    "procurement_classification_number",
-                    "procurement_classification_name",
-                    "procurement_large_classification_name",
-                    "procurement_middle_classification_name", "purchase_items",
-                ):
-                    row[key] = field.get(key)
+            _enrich_procurement_classification(connection, rows)
             return rows
 
     def notice_publications(
@@ -512,23 +520,13 @@ class ProcurementActivityReader:
             notices = [dict(row) for row in connection.execute(
                 _PROCUREMENT_ACTIVITY_NOTICES_QUERY, params,
             ).fetchall()]
-            # Outcomes can happen after the publication cohort's end year.
-            outcome_params = {
-                "organization_code": organization_code,
-                "period_from": period_from,
-                "period_to": date.today() + timedelta(days=1),
-            }
             awards = [dict(row) for row in connection.execute(
-                _PROCUREMENT_OUTCOME_AWARDS_QUERY, outcome_params,
+                _PROCUREMENT_OUTCOME_AWARDS_QUERY, params,
             ).fetchall()]
-            # Read the complete available contract history so unlinked original
-            # contracts can be assigned by their first contract date.
-            contract_params = {
-                **outcome_params, "period_from": date(2000, 1, 1),
-            }
             contracts = [dict(row) for row in connection.execute(
-                _PROCUREMENT_OUTCOME_CONTRACTS_QUERY, contract_params,
+                _PROCUREMENT_ACTIVITY_CONTRACTS_QUERY, params,
             ).fetchall()]
+            _enrich_procurement_classification(connection, contracts)
             participated_notice_ids: set[str] = set()
             if company_number:
                 participated_notice_ids = {

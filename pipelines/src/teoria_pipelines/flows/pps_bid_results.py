@@ -21,12 +21,15 @@ from teoria_pipelines.tasks.pps_bid_results import (
     PIPELINE_ID,
     combine_bid_result_batches,
     combine_bid_result_summaries,
+    claim_notice_outcome_candidates,
     claim_opening_enrichment,
     enqueue_opening_enrichment,
     extract_bid_award_operation,
+    extract_failing_results,
     extract_opening_participants,
     finish_opening_enrichment,
     mark_opening_awards_checked,
+    mark_notice_outcomes_checked,
     normalize_bid_results,
     replace_opening_participants,
     select_competitive_opening_participants,
@@ -119,6 +122,33 @@ async def enrich_pps_bid_opening_participants(
         loaded = replace_opening_participants(result.successful_awards, normalized)
         mark_opening_awards_checked(result.successful_awards, result.openings, loaded)
         finish_opening_enrichment(result)
+        return complete_pipeline_run(execution_id, loaded)
+    except BaseException as exc:
+        fail_pipeline_run(execution_id, type(exc).__name__)
+        raise
+
+
+@flow(name="나라장터 유찰 상태 보강")
+async def enrich_pps_bid_notice_outcomes(
+    pipeline_root: str = "/app/pipelines", batch_size: int = 100,
+) -> LoadSummary:
+    prefect_run_id = flow_run.get_id()
+    execution_id = UUID(prefect_run_id) if prefect_run_id else uuid4()
+    today = date.today()
+    window = CollectionWindow(today, today)
+    started_execution_id = start_pipeline_run(
+        execution_id, "pps_bid_notice_outcome_enrichment", window,
+    )
+    try:
+        candidates = claim_notice_outcome_candidates(started_execution_id, batch_size)
+        if not candidates.records:
+            return complete_pipeline_run(execution_id, LoadSummary())
+        result = await extract_failing_results(
+            started_execution_id, window, candidates, pipeline_root,
+        )
+        normalized = normalize_bid_results(result.outcomes, 0)
+        loaded = upsert_bid_results(normalized)
+        mark_notice_outcomes_checked(result)
         return complete_pipeline_run(execution_id, loaded)
     except BaseException as exc:
         fail_pipeline_run(execution_id, type(exc).__name__)

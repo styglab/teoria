@@ -95,6 +95,23 @@ def xml_response(items: list[dict]) -> ExecutionResponse:
     )
 
 
+def xml_no_data_response(code: str = "90") -> ExecutionResponse:
+    return ExecutionResponse(
+        status_code=200,
+        content_type="application/xml",
+        headers={},
+        body={
+            "response": {
+                "HeaderValueList": {
+                    "resultCode": code,
+                    "resultMsg": "매칭데이터가 존재하지 않습니다.",
+                },
+            },
+        },
+        elapsed_ms=1.0,
+    )
+
+
 @pytest.mark.asyncio
 async def test_gets_company_and_direct_production_qualifications() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
@@ -139,6 +156,25 @@ async def test_gets_company_and_direct_production_qualifications() -> None:
         "business_registration_has_qualification",
         "business_registration_has_direct_production_confirmation",
     }
+
+
+@pytest.mark.asyncio
+async def test_company_qualification_profile_treats_declared_provider_no_data_as_empty() -> None:
+    catalog = RegistryLoader(ROOT / "registries").load()
+    executor = FakeExecutor([xml_no_data_response() for _ in range(3)])
+
+    result = await CapabilityRunner(executor).run(
+        catalog,
+        "get_company_bid_qualification_profile",
+        {
+            "business_registration_number": "1348108473",
+            "reference_date": date(2026, 10, 10),
+        },
+    )
+
+    assert len(executor.requests) == 3
+    assert result.objects == []
+    assert result.links == []
 
 
 def test_missing_collection_response_path_is_an_empty_result() -> None:

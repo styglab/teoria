@@ -30,9 +30,28 @@ def normalize_bid_result_batch(batch: ExtractedBatch) -> NormalizedBidResultBatc
             result.awards.append(normalize_bid_award_record(record))
         elif record.operation_id == "list_completed_opening_results":
             result.opening_participants.append(normalize_opening_participant_record(record))
+        elif record.operation_id == "list_failing_opening_results":
+            result.notice_outcomes.append(normalize_failed_opening_record(record))
         else:
             raise BidResultNormalizationError(f"unsupported operation '{record.operation_id}'")
     return result
+
+
+def normalize_failed_opening_record(record: RawProviderRecord) -> dict[str, Any]:
+    value = record.payload
+    result_type = _text(value.get("opengRsltDivNm"))
+    if result_type != "유찰":
+        raise BidResultNormalizationError(
+            f"unexpected failing opening result type {result_type!r}"
+        )
+    return {
+        **_notice_key(value, record.operation_id),
+        "outcome_status": "failed",
+        "reason": _text(value.get("nobidRsn")),
+        "status_source": "pps_bid_result_api.list_failing_opening_results",
+        "status_confirmed_at": record.fetched_at,
+        "source_record_hash": record.source_record_hash,
+    }
 
 
 def normalize_bid_award_record(record: RawProviderRecord) -> dict[str, Any]:

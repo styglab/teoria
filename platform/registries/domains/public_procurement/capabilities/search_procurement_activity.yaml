@@ -1,11 +1,11 @@
 registry:
-  version: 1.2.0
-  registered_at: "2026-10-01"
+  version: 1.9.0
+  registered_at: "2026-10-10"
 capability:
   id: search_procurement_activity
   exposure: public
   name: 기관·업체 통합 조달 활동 검색
-  description: 공고 게시일을 기간 기준으로 공고부터 낙찰·계약까지 통합하고 최신 활동일로 정렬한다. 결과 없는 공고는 게시일부터 마감일까지 open이며 입찰서 제출 시작일은 단계 판정에 사용하지 않는다. 화면 대표 금액은 공고 연결 시 배정예산·추정가격·기초금액 순으로, 미연결 계약은 최신 계약금액으로 반환한다.
+  description: 공고·낙찰·계약의 생애주기 활동을 단계별 사건일로 검색한다. 공고 단계는 게시일, 낙찰 단계는 최종낙찰일 또는 개찰일, 계약 단계는 최초 계약일을 기간 기준으로 사용한다. 계약 버전은 기관 조달 프로필과 동일한 계약사건 키로 병합하고 기본 flat 모드의 계약 단계에서는 계약사건별 한 레코드를 반환한다. notice_grouped 모드는 필터를 적용한 뒤 연결 활동을 bid_notice_id로 묶고 미연결 계약은 계약사건 기준으로 묶어 그룹 단위 상태 집계와 페이지네이션을 제공한다. 그룹의 contracts에는 원천 총계약금액·금차계약금액과 근거 수준을 명시한 계약 계보 정보를 포함한다. 공식 계약상세 URL의 계약번호·변경차수가 확정계약번호와 일치하면 변경계약 계보를 confirmed로 반환하고 최신 변경본만 가족 유효금액에 포함한다. 서로 다른 계약 가족의 장기계속 계보는 별도 contract_series로 표현하며 공통 원천 식별자가 없는 관계는 inferred로 유지한다. 장기계속 관계 또는 가족 금액이 unresolved이면 여러 가족의 금액을 effective_contract_amount로 합산하지 않고 최신 확인 가족 금액만 별도 필드로 제공한다. 계약명에서 추출한 차수와 공고 내 가족 관계는 confirmed가 아니라 inferred로 반환한다. 계약 단계의 분야는 기관 조달 프로필과 동일한 원천 분류 및 분류 계층 보완 정책을 사용한다. 결과 없는 공고는 게시일부터 마감일까지 open이며 입찰서 제출 시작일은 단계 판정에 사용하지 않는다.
   kind: compute
   processor: market_context.search_procurement_activity
   semantic_requirements:
@@ -56,9 +56,13 @@ capability:
     large_category: {data_type: string}
     middle_category: {data_type: string}
     field_code: {data_type: string}
+    view_mode:
+      data_type: string
+      enum: [flat, notice_grouped]
+      default: flat
     stage:
       data_type: string
-      enum: [all, scheduled, open, closed, award, contract, failed_or_cancelled]
+      enum: [all, scheduled, open, closed, award, contract, failed, cancelled]
       default: all
     page: {data_type: integer, default: 1, minimum: 1}
     page_size: {data_type: integer, default: 20, minimum: 1, maximum: 100}

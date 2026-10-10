@@ -1,6 +1,6 @@
 registry:
-  version: 2.17.0
-  registered_at: "2026-08-08"
+  version: 2.19.0
+  registered_at: "2026-10-10"
 
 runtime_contract:
   id: public_procurement
@@ -13,9 +13,11 @@ runtime_contract:
       primary_key: activity_id
       properties:
         - {id: activity_id, name: 조달 활동 식별자, description: 공고 식별자 또는 공고 미연결 원계약 식별자, data_type: string}
+        - {id: activity_group_id, name: 조달 활동 그룹 식별자, description: notice_grouped 모드에서 bid_notice_id 또는 미연결 계약사건 키로 생성한 그룹 식별자, data_type: string}
         - {id: bid_notice_id, name: 입찰공고 식별자, description: 연결된 공고 식별자, data_type: string}
         - {id: notice_name, name: 공고·계약명, description: 공고명 또는 공고 미연결 계약명, data_type: string}
-        - {id: stage, name: 조달 단계, description: scheduled·open·closed·award·contract·failed_or_cancelled, data_type: string}
+        - {id: stage, name: 조달 단계, description: scheduled·open·closed·award·contract·failed·cancelled, data_type: string}
+        - {id: latest_stage, name: 그룹 최신 조달 단계, description: notice_grouped 모드에서 contract·award·cancelled·failed·closed·open·scheduled 우선순위로 결정한 그룹 대표 단계, data_type: string}
         - {id: latest_activity_date, name: 최신 활동일, description: 최신 계약일·낙찰일·공고 게시일 순으로 결정한 정렬 기준일, data_type: date}
         - {id: project_amount, name: 화면 대표 사업금액, description: 공고 연결 시 배정예산·추정가격·기초금액 순으로 선택하고 미연결 계약은 최신 계약금액을 사용하는 원천 금액, data_type: monetary_amount}
         - {id: project_amount_basis, name: 대표 사업금액 기준, description: allocated_budget·estimated_price·base_amount·contract_amount 중 대표 금액의 원천 기준, data_type: string}
@@ -140,6 +142,18 @@ runtime_contract:
         - {id: opening_at, name: 개찰시각, description: 입찰 개찰 예정 시각, data_type: datetime}
         - {id: bid_status, name: 입찰상태, description: 시작·마감시각과 마감시각이 없을 때의 개찰시각을 기준으로 정규화한 scheduled·open·closed·unknown 상태, data_type: string}
         - {id: notice_status, name: 공고 생명주기 상태, description: 동일 공고번호의 최신 차수와 공고종류를 기준으로 정규화한 active·cancelled·superseded 상태, data_type: string}
+        - {id: current_status, name: 현재 조달 상태, description: 구조화 원천으로 확인한 scheduled·open·closed·awarded·contracted·failed·cancelled 상태, data_type: string}
+        - {id: current_status_label, name: 현재 조달 상태명, description: 현재 조달 상태의 사용자 표시명, data_type: string}
+        - {id: cancellation_reason, name: 취소 사유, description: 취소공고 원천의 변경공고사유, data_type: string}
+        - {id: cancellation_at, name: 취소 확인시각, description: 취소공고가 게시되거나 변경된 시각, data_type: datetime}
+        - {id: failure_reason, name: 유찰 사유, description: 조달청 유찰 결과 원천의 유찰사유, data_type: string}
+        - {id: failure_at, name: 유찰 개찰시각, description: 유찰 결과와 연결된 공고의 개찰시각, data_type: datetime}
+        - {id: status_source, name: 상태 근거 원천, description: 현재 상태를 확정하거나 시간 기준으로 산정한 원천, data_type: string}
+        - {id: status_confirmed_at, name: 상태 확인시각, description: 원천 상태를 마지막으로 확인한 시각, data_type: datetime}
+        - {id: original_notice_id, name: 원공고 식별자, description: 정정·취소 계보의 최초 공고 식별자, data_type: string}
+        - {id: current_notice_id, name: 현재 공고 식별자, description: 계보에서 가장 최근 공고 식별자, data_type: string}
+        - {id: revision_number, name: 정정 순번, description: 계보 게시순서를 0부터 센 정정 순번, data_type: integer}
+        - {id: is_latest_revision, name: 최신 정정 여부, description: 해당 공고가 계보의 최신 공고인지 여부, data_type: boolean}
         - {id: notice_organization_code, name: 공고기관코드, description: 입찰공고를 게시한 기관의 코드, data_type: string}
         - {id: notice_organization_name, name: 공고기관명, description: 입찰공고를 게시한 기관의 명칭, data_type: string}
         - {id: demand_organization_code, name: 수요기관코드, description: 입찰 대상 사업의 수요기관 코드, data_type: string}

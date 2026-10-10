@@ -310,6 +310,10 @@ class CapabilityRunner:
                     )
                 if include_raw_responses:
                     raw_responses.append(response)
+                if self.response_validator.is_no_data(
+                    catalog, source_id, operation_id, response,
+                ):
+                    break
                 outcome = capability.outcome
                 outcome_field = outcome.response_field if outcome and outcome.type == "exact_match_presence" else (
                     outcome.period_field if outcome and outcome.type == "active_period_presence" else None

@@ -73,22 +73,15 @@ ORDER BY company_number, activity_date DESC NULLS LAST, bid_notice_id,
 """
 
 _PROCUREMENT_CLASSIFICATION_HIERARCHY_QUERY = """
-SELECT requested.procurement_classification_number,
-       hierarchy.procurement_large_classification_name,
-       hierarchy.procurement_middle_classification_name,
-       hierarchy.purchase_items
-FROM unnest(%(classification_numbers)s::text[])
-  AS requested(procurement_classification_number)
-CROSS JOIN LATERAL (
-    SELECT n.procurement_large_classification_name,
-           n.procurement_middle_classification_name,n.purchase_items
-    FROM public_procurement.bid_notices n
-    WHERE n.procurement_classification_number=requested.procurement_classification_number
-      AND (n.procurement_large_classification_name IS NOT NULL
-           OR n.procurement_middle_classification_name IS NOT NULL)
-    ORDER BY n.notice_published_at DESC
-    LIMIT 1
-) hierarchy
+SELECT DISTINCT ON (n.procurement_classification_number)
+       n.procurement_classification_number,
+       n.procurement_large_classification_name,
+       n.procurement_middle_classification_name,n.purchase_items
+FROM public_procurement.bid_notices n
+WHERE n.procurement_classification_number=ANY(%(classification_numbers)s::text[])
+  AND (n.procurement_large_classification_name IS NOT NULL
+       OR n.procurement_middle_classification_name IS NOT NULL)
+ORDER BY n.procurement_classification_number,n.notice_published_at DESC
 """
 
 _COMPANY_PARTICIPATIONS_QUERY = """
@@ -138,5 +131,4 @@ WHERE target.business_registration_number=%(company_number)s
   AND target.participation_date >= %(period_from)s
   AND target.participation_date < %(period_to)s
 """
-
 

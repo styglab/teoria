@@ -90,3 +90,9 @@ Capability 목록을 그대로 노출하는 수준을 넘어 semantic discovery�
 Ontology canvas, 범용 graph editor, 자동 승인, OpenMetadata entity 복제, Airflow
 추가, 다중 workflow engine은 위 vertical slice의 운영 가치가 검증되기 전에는
 구축하지 않는다.
+
+공공조달의 버전형 분야 분류체계는 별도 Domain 기능으로 구축한다. 그 전까지 물품과
+공사는 원천 공식 분류번호·분류명의 단일 단계를 사용하고, 코드 접두어로 상위 계층을
+추정하지 않는다. 수집원, 기간 유효 분류와 최신 체계 재분류의 완료 조건은
+[공공조달 분야 분류 기준과 확장 계획](domains/public_procurement/procurement_classification.md)을
+따른다.

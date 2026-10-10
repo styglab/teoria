@@ -8,6 +8,22 @@ from teoria_provider_api.schema import FieldDefinition, ProviderDefinition
 
 
 class ProviderResponseValidator:
+    def is_no_data(self, definition: ProviderDefinition, operation_id: str,
+                   response: ExecutionResponse) -> bool:
+        operation = next(item for item in definition.operations if item.id == operation_id)
+        control = operation.response.control
+        if control is None:
+            return False
+        try:
+            record = self._resolve_record_path(response.body, control.record_path)
+        except (KeyError, TypeError):
+            return False
+        return any(
+            str(record.get(condition.field)) == condition.equals
+            for condition in control.no_data
+            if isinstance(record, dict)
+        )
+
     def validate(self, definition: ProviderDefinition, operation_id: str, response: ExecutionResponse, *,
                  data_types: Mapping[str, Any] | None = None, path: Path | None = None) -> list[Diagnostic]:
         diagnostics: list[Diagnostic] = []
@@ -24,6 +40,8 @@ class ProviderResponseValidator:
             try:
                 actual = self._resolve_record_path(response.body, control.record_path)[control.success.field]
                 if str(actual) != control.success.equals:
+                    if self.is_no_data(definition, operation_id, response):
+                        return diagnostics
                     diagnostics.append(Diagnostic("source_operation_failed", f"expected {control.success.field}={control.success.equals!r}, got {actual!r}", contract_path, location=f"{location}.control"))
                     return diagnostics
             except (KeyError, TypeError) as exc:

@@ -39,7 +39,11 @@ def field_identity(row: dict[str, Any]) -> dict[str, Any] | None:
         return {
             "code": code,
             "name": name or None,
-            "large_category": None,
+            # Until the versioned product taxonomy is available, expose the
+            # official detailed product as the single goods category.  This
+            # mirrors construction and prevents classified goods from being
+            # folded into the unclassified bucket in mixed-work-type views.
+            "large_category": name or None,
             "middle_category": None,
             "detailed_items": purchase_items,
             "source": "purchase_item",

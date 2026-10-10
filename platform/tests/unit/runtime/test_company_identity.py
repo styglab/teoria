@@ -3,7 +3,10 @@ from types import SimpleNamespace
 import pytest
 
 from teoria.runtime.capability.runner import CapabilityResult
-from teoria.runtime.company_identity.processor import execute_company_identifier_resolution
+from teoria.runtime.company_identity.processor import (
+    _is_cacheable_detail_result,
+    execute_company_identifier_resolution,
+)
 from teoria.runtime.mapping.materializer import MaterializedLink, MaterializedObject
 
 
@@ -98,3 +101,11 @@ async def test_does_not_expose_name_only_candidate_as_resolved():
     assert result.objects == []
     assert result.outcome["resolution_status"] == "unresolved"
     assert result.outcome["warnings"] == ["exact_business_number_match_not_found"]
+
+
+def test_detail_context_caches_only_confirmed_identifier_resolution() -> None:
+    assert _is_cacheable_detail_result({"resolution_status": "confirmed"}, []) is True
+    assert _is_cacheable_detail_result({"resolution_status": "unresolved"}, []) is False
+    assert _is_cacheable_detail_result(
+        {"resolution_status": "confirmed"}, [{"section": "financials"}],
+    ) is False

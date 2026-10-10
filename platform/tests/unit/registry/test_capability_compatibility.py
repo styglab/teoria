@@ -99,7 +99,7 @@ def test_search_bid_notices_is_compatible_with_target_ontology_blueprint() -> No
         if item["capability_id"] == capability.id
     )
 
-    assert capability.version == "1.7.0"
+    assert capability.version == "1.8.0"
     assert report["semantic_requirements_declared"] is True
     assert report["status"] == "compatible"
     assert report["missing_required"] == []
@@ -134,7 +134,7 @@ def test_get_bid_notice_is_compatible_with_target_ontology_blueprint() -> None:
         if item["capability_id"] == capability.id
     )
 
-    assert capability.version == "1.0.0"
+    assert capability.version == "1.1.0"
     assert report["semantic_requirements_declared"] is True
     assert report["status"] == "compatible"
     assert report["missing_required"] == []

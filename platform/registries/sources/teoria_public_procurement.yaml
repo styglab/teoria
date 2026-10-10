@@ -1,6 +1,6 @@
 registry:
-  version: 1.5.0
-  registered_at: "2026-10-02"
+  version: 1.6.0
+  registered_at: "2026-10-10"
 
 source:
   id: teoria_public_procurement
@@ -156,6 +156,23 @@ source:
         - {id: created_at, name: DB 생성일시, data_type: datetime}
         - {id: updated_at, name: DB 수정일시, data_type: datetime}
 
+    - id: bid_notice_outcomes
+      name: 입찰공고 개찰 결과 상태
+      relation: public_procurement.bid_notice_outcomes
+      primary_key: [notice_number, notice_order, bid_classification_number, rebid_number]
+      fields:
+        - {id: notice_number, name: 공고번호, data_type: string}
+        - {id: notice_order, name: 공고차수, data_type: string}
+        - {id: bid_classification_number, name: 입찰분류번호, data_type: string}
+        - {id: rebid_number, name: 재입찰번호, data_type: string}
+        - {id: outcome_status, name: 개찰 결과 상태, data_type: string}
+        - {id: reason, name: 결과 사유, data_type: string}
+        - {id: status_source, name: 상태 근거 원천, data_type: string}
+        - {id: status_confirmed_at, name: 상태 확인시각, data_type: datetime}
+        - {id: source_record_hash, name: 원천 레코드 해시, data_type: string}
+        - {id: created_at, name: DB 생성일시, data_type: datetime}
+        - {id: updated_at, name: DB 수정일시, data_type: datetime}
+
     - id: bid_opening_participants
       name: 입찰 개찰 경쟁 참여업체 결과 (상위 10위 및 낙찰업체)
       relation: public_procurement.runtime_bid_opening_participants
@@ -239,6 +256,18 @@ source:
         - {id: opening_at, name: 개찰시각, data_type: datetime}
         - {id: bid_status, name: 입찰상태, data_type: string}
         - {id: notice_status, name: 공고 생명주기 상태, data_type: string}
+        - {id: current_status, name: 현재 조달 상태, data_type: string}
+        - {id: current_status_label, name: 현재 조달 상태명, data_type: string}
+        - {id: cancellation_reason, name: 취소 사유, data_type: string}
+        - {id: cancellation_at, name: 취소 확인시각, data_type: datetime}
+        - {id: failure_reason, name: 유찰 사유, data_type: string}
+        - {id: failure_at, name: 유찰 개찰시각, data_type: datetime}
+        - {id: status_source, name: 상태 근거 원천, data_type: string}
+        - {id: status_confirmed_at, name: 상태 확인시각, data_type: datetime}
+        - {id: original_notice_id, name: 원공고 식별자, data_type: string}
+        - {id: current_notice_id, name: 현재 공고 식별자, data_type: string}
+        - {id: revision_number, name: 정정 순번, data_type: integer}
+        - {id: is_latest_revision, name: 최신 정정 여부, data_type: boolean}
         - {id: notice_organization_code, name: 공고기관코드, data_type: string}
         - {id: notice_organization_name, name: 공고기관명, data_type: string}
         - {id: demand_organization_code, name: 수요기관코드, data_type: string}

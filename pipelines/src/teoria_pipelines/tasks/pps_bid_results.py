@@ -14,6 +14,7 @@ from teoria_pipelines.models import (
     ExtractedBatch,
     LoadSummary,
     NormalizedBidResultBatch,
+    NoticeOutcomeResultBatch,
     OpeningResultBatch,
 )
 from teoria_pipelines.normalization import normalize_bid_result_batch
@@ -96,6 +97,36 @@ async def extract_opening_participants(execution_id: UUID, window: CollectionWin
                                        awards: ExtractedBatch, pipeline_root: str) -> OpeningResultBatch:
     return await _client(pipeline_root).fetch_opening_results(
         execution_id, window, awards.records
+    )
+
+
+@task(name="유찰 상태 미확인 공고 선별", viz_return_value=VIZ_EXTRACTED)
+def claim_notice_outcome_candidates(
+    execution_id: UUID, batch_size: int = 100,
+) -> ExtractedBatch:
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    today = date.today()
+    return ExtractedBatch(
+        execution_id, CollectionWindow(today, today),
+        _store().select_pending_bid_notice_outcomes(execution_id, batch_size),
+    )
+
+
+@task(name="공고별 유찰 결과 수집", retries=1, retry_delay_seconds=300)
+async def extract_failing_results(
+    execution_id: UUID, window: CollectionWindow, notices: ExtractedBatch,
+    pipeline_root: str,
+) -> NoticeOutcomeResultBatch:
+    return await _client(pipeline_root).fetch_failing_results(
+        execution_id, window, notices.records,
+    )
+
+
+@task(name="유찰 조회 완료상태 저장")
+def mark_notice_outcomes_checked(result: NoticeOutcomeResultBatch) -> int:
+    return _store().mark_bid_notice_outcomes_checked(
+        result.successful_notices.records, result.outcomes.records,
     )
 
 

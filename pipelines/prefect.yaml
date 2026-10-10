@@ -338,6 +338,24 @@ deployments:
       name: teoria-ingestion
       work_queue_name: default
 
+  - name: pps-bid-notice-outcome-enrichment
+    version: 1.0.0
+    description: 낙찰이 확인되지 않은 개찰 공고를 조달청 유찰 목록으로 확인해 확정 상태와 사유를 보강한다.
+    entrypoint: teoria_pipelines.flows.pps_bid_results.enrich_pps_bid_notice_outcomes
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 100
+    schedules:
+      - cron: "3-59/5 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
   - name: pps-bid-opening-backfill-enrichment
     version: 2.1.0
     description: 최근 5개년 개찰 참여업체를 5분마다 최대 180개 공고씩 최신 건부터 과거 방향으로 지속 보강한다.

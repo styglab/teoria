@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -10,6 +11,7 @@ from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import psycopg
 from psycopg.rows import dict_row
@@ -1756,7 +1758,10 @@ def _supplier_entry(
             "company_number": company_number, "company_name": named,
             "entry_status": status, "entry_status_name": status_names[status],
             "target_year_contract_count": len(event_keys),
-            "target_year_attributed_contract_amount": _number(sum(target_amounts, Decimal("0"))),
+            "target_year_attributed_contract_amount": (
+                _number(sum(target_amounts, Decimal("0")))
+                if target_amounts else None
+            ),
             "amount_completeness": _amount_completeness([
                 str(row.get("amount_completeness") or "unknown") for row in target_rows
             ]),
@@ -1822,6 +1827,91 @@ def _supplier_entry(
         ][:5],
     }
     return summary, companies
+
+
+def _organization_entry(
+    rows: list[dict[str, Any]], *, target_year: int, period_to: date,
+    history_available_from: date | None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Classify a company's target-year contracting organizations.
+
+    The entry policy is intentionally the same as the organization-to-supplier
+    direction: target-year contracts establish the relationship, contracts in
+    the three prior calendar years make it incumbent, older observed contracts
+    make it reentering, and no earlier observable contract makes it first
+    observed.
+    """
+    projected_rows = []
+    for row in rows:
+        organization_code = str(row.get("organization_code") or "").strip()
+        if row.get("activity_type") != "contract" or not organization_code:
+            continue
+        projected_rows.append({
+            **row,
+            "company_number": organization_code,
+            "company_name": row.get("organization_name"),
+        })
+    supplier_summary, supplier_items = _supplier_entry(
+        projected_rows,
+        target_year=target_year,
+        period_to=period_to,
+        history_available_from=history_available_from,
+    )
+    summary = {
+        "target_year": supplier_summary["target_year"],
+        "period_from": supplier_summary["period_from"],
+        "period_to": supplier_summary["period_to"],
+        "lookback_from": supplier_summary["lookback_from"],
+        "lookback_to": supplier_summary["lookback_to"],
+        "lookback_years": supplier_summary["lookback_years"],
+        "basis": supplier_summary["basis"],
+        "first_observed_organization_count": supplier_summary[
+            "first_observed_company_count"
+        ],
+        "reentering_organization_count": supplier_summary[
+            "reentering_company_count"
+        ],
+        "incumbent_organization_count": supplier_summary[
+            "incumbent_company_count"
+        ],
+        "total_organization_count": supplier_summary["total_company_count"],
+        "first_observed_organization_rate": supplier_summary[
+            "first_observed_company_rate"
+        ],
+        "reentering_organization_rate": supplier_summary[
+            "reentering_company_rate"
+        ],
+        "entry_and_reentry_organization_count": supplier_summary[
+            "entry_and_reentry_company_count"
+        ],
+        "entry_and_reentry_rate": supplier_summary["entry_and_reentry_rate"],
+        "history_available_from": supplier_summary["history_available_from"],
+        "history_complete_for_lookback": supplier_summary[
+            "history_complete_for_lookback"
+        ],
+        "history_complete_for_first_observed": supplier_summary[
+            "history_complete_for_first_observed"
+        ],
+        "minimum_sample_size": supplier_summary["minimum_sample_size"],
+        "sample_sufficient": supplier_summary["sample_sufficient"],
+    }
+    items = [{
+        "organization_code": item["company_number"],
+        "organization_name": item["company_name"],
+        "organization_entry_status": item["entry_status"],
+        "organization_entry_status_name": item["entry_status_name"],
+        "target_year_contract_count": item["target_year_contract_count"],
+        "target_year_attributed_contract_amount": item[
+            "target_year_attributed_contract_amount"
+        ],
+        "amount_completeness": item["amount_completeness"],
+        "target_year_first_contract_date": item["target_year_first_contract_date"],
+        "target_year_latest_contract_date": item["target_year_latest_contract_date"],
+        "first_observed_contract_date": item["first_observed_contract_date"],
+        "previous_contract_date": item["previous_contract_date"],
+        "reentry_contract_date": item["reentry_contract_date"],
+    } for item in supplier_items]
+    return summary, items
 
 
 def _contract_method_group(value: Any) -> tuple[str, str]:
@@ -2010,6 +2100,31 @@ async def _execute_procurement_profile(
         period_from, period_to, period_years, period_type,
         period_from_year, period_to_year,
     ) = _resolve_profile_period(inputs, capability_id=capability_id)
+    organization_entry_target_year = (period_to - timedelta(days=1)).year
+    organization_entry_status = None
+    if profile_type == "company":
+        organization_entry_target_year = int(
+            inputs.get("target_year", organization_entry_target_year)
+        )
+        organization_entry_status = inputs.get("organization_entry_status")
+        if organization_entry_status not in {
+            None, "first_observed", "reentering", "incumbent",
+        }:
+            raise CapabilityExecutionError(
+                "invalid_organization_entry_status",
+                f"unsupported organization_entry_status '{organization_entry_status}'",
+                capability_id=capability_id,
+            )
+        if not (
+            period_from.year
+            <= organization_entry_target_year
+            <= (period_to - timedelta(days=1)).year
+        ):
+            raise CapabilityExecutionError(
+                "invalid_target_year",
+                "target_year must be within the selected profile period",
+                capability_id=capability_id,
+            )
     page = int(inputs.get("page", 1))
     page_size = int(inputs.get("page_size", 20))
     requested_sort = inputs.get("sort")
@@ -2051,10 +2166,15 @@ async def _execute_procurement_profile(
     )
     entry_period_from = _shift_years(entry_period_to, -1)
     entry_history_from = date(entry_period_from.year - 5, 1, 1)
+    organization_entry_history_from = (
+        date(2000, 1, 1) if profile_type == "company" else entry_history_from
+    )
     # The rolling supplier metric must use the same contract-version population
     # regardless of the profile's requested start year.  Fetch its full fixed
     # history window before collapsing amended/installment contracts.
-    source_period_from = min(period_from, entry_history_from)
+    source_period_from = min(
+        period_from, entry_history_from, organization_entry_history_from,
+    )
     organization_code = (
         str(inputs["organization_code"]) if profile_type == "organization" else None
     )
@@ -2222,6 +2342,42 @@ async def _execute_procurement_profile(
         field_distribution, level=field_distribution_level, work_type=work_type,
         large_category=large_category, middle_category=middle_category,
     )
+    organization_entry = None
+    if profile_type == "company":
+        organization_entry, organization_entries = _organization_entry(
+            rows,
+            target_year=organization_entry_target_year,
+            period_to=period_to,
+            history_available_from=organization_entry_history_from,
+        )
+        entries_by_organization = {
+            item["organization_code"]: item for item in organization_entries
+        }
+        for relationship in relationships:
+            entry = entries_by_organization.get(
+                str(relationship.get("organization_code") or "")
+            )
+            relationship["organization_entry_status"] = (
+                entry["organization_entry_status"] if entry else None
+            )
+            relationship["organization_entry"] = entry
+            # Compatibility for consumers that already use the relationship-level
+            # supplier_entry object in the reverse company-to-organization view.
+            relationship["supplier_entry"] = ({
+                "target_year": organization_entry_target_year,
+                "entry_status": entry["organization_entry_status"],
+                "entry_status_name": entry["organization_entry_status_name"],
+                "previous_contract_date": entry["previous_contract_date"],
+                "history_complete_for_lookback": organization_entry[
+                    "history_complete_for_lookback"
+                ],
+            } if entry else None)
+        summary["organization_entry"] = organization_entry
+        if organization_entry_status:
+            relationships = [
+                item for item in relationships
+                if item.get("organization_entry_status") == organization_entry_status
+            ]
     sort_fields = {
         "contract_amount": "total_attributed_contract_amount",
         "contract_count": "contract_event_count",
@@ -2332,6 +2488,14 @@ async def _execute_procurement_profile(
             "work_type": work_type,
             "company_query": company_query or None,
             "organization_query": organization_query or None,
+            "organization_entry_target_year": (
+                organization_entry_target_year if profile_type == "company" else None
+            ),
+            "organization_entry_status": organization_entry_status,
+            "organization_entry_definition": (
+                "target_year_contract_and_prior_observable_contract_history"
+                if profile_type == "company" else None
+            ),
             "company_relationship_sort": {
                 "contract_amount": "contract_amount_desc",
                 "contract_count": "contract_count_desc",
@@ -2366,28 +2530,7 @@ async def _execute_procurement_profile(
         if inputs.get("_include_supplier_entry_companies"):
             outcome["_supplier_entry_companies"] = supplier_entry_companies
     if profile_type == "company":
-        target_year = (period_to - timedelta(days=1)).year
-        for relationship in relationships:
-            organization_rows = [
-                row for row in rows
-                if str(row.get("organization_code") or "")
-                == str(relationship.get("organization_code") or "")
-                and row.get("activity_date") and row["activity_date"] >= entry_history_from
-            ]
-            entry_summary, entry_companies = _supplier_entry(
-                organization_rows, target_year=target_year, period_to=period_to,
-                history_available_from=entry_history_from,
-            )
-            company_entry = entry_companies[0] if entry_companies else None
-            relationship["supplier_entry"] = ({
-                "target_year": target_year,
-                "entry_status": company_entry["entry_status"],
-                "entry_status_name": company_entry["entry_status_name"],
-                "previous_contract_date": company_entry["previous_contract_date"],
-                "history_complete_for_lookback": entry_summary[
-                    "history_complete_for_lookback"
-                ],
-            } if company_entry else None)
+        outcome["organization_entry"] = organization_entry
         outcome["recent_activity"] = sorted(
             [{
                 "bid_notice_id": row["bid_notice_id"], "notice_name": row.get("notice_name"),
@@ -2469,7 +2612,7 @@ async def execute_organization_supplier_entry_search(
     sort = str(inputs.get("sort", "contract_amount_desc"))
     if sort not in {
         "contract_amount_desc", "contract_count_desc", "first_contract_desc",
-        "company_name_asc",
+        "latest_contract_desc", "company_name_asc",
     }:
         raise CapabilityExecutionError(
             "invalid_sort", f"unsupported sort '{sort}'", capability_id=capability_id,
@@ -2491,13 +2634,53 @@ async def execute_organization_supplier_entry_search(
     items = list(outcome.pop("_supplier_entry_companies", []))
     if status != "all":
         items = [item for item in items if item["entry_status"] == status]
+    company_query = " ".join(
+        str(inputs.get("company_query") or "").split()
+    ).casefold()
+    if company_query:
+        company_number_query = "".join(
+            character for character in company_query if character.isdigit()
+        )
+        items = [
+            item for item in items
+            if company_query in " ".join(
+                str(item.get("company_name") or "").split()
+            ).casefold()
+            or company_query in str(item.get("company_number") or "").casefold()
+            or (
+                company_number_query
+                and company_number_query in "".join(
+                    character for character in str(item.get("company_number") or "")
+                    if character.isdigit()
+                )
+            )
+        ]
     if sort == "company_name_asc":
-        items.sort(key=lambda item: (str(item.get("company_name") or ""), item["company_number"]))
+        items.sort(key=lambda item: (
+            " ".join(str(item.get("company_name") or "").split()).casefold(),
+            item["company_number"],
+        ))
+    elif sort in {"first_contract_desc", "latest_contract_desc"}:
+        key = (
+            "target_year_first_contract_date"
+            if sort == "first_contract_desc"
+            else "target_year_latest_contract_date"
+        )
+        items.sort(key=lambda item: (
+            item.get(key) is None,
+            -(item[key].toordinal() if item.get(key) else 0),
+            item["company_number"],
+        ))
     else:
-        key = {"contract_amount_desc": "target_year_attributed_contract_amount",
-               "contract_count_desc": "target_year_contract_count",
-               "first_contract_desc": "target_year_first_contract_date"}[sort]
-        items.sort(key=lambda item: item.get(key) or 0, reverse=True)
+        key = {
+            "contract_amount_desc": "target_year_attributed_contract_amount",
+            "contract_count_desc": "target_year_contract_count",
+        }[sort]
+        items.sort(key=lambda item: (
+            item.get(key) is None,
+            -(item.get(key) or 0),
+            item["company_number"],
+        ))
     page, page_size = int(inputs.get("page", 1)), int(inputs.get("page_size", 20))
     total_items = len(items); offset = (page - 1) * page_size
     analysis_basis = {key: supplier_entry.get(key) for key in (
@@ -2507,6 +2690,12 @@ async def execute_organization_supplier_entry_search(
     analysis_basis.update({key: inputs.get(key) for key in (
         "entry_status", "work_type", "large_category", "middle_category", "field_code",
     )})
+    analysis_basis.update({
+        "company_query": company_query or None,
+        "sort": sort,
+        "search_applied_before_pagination": True,
+        "supplier_entry_summary_query_independent": True,
+    })
     return CapabilityResult(capability_id=capability_id, objects=profile.objects, outcome={
         "organization": outcome.get("organization"), "supplier_entry": supplier_entry,
         "items": items[offset:offset + page_size],
@@ -2995,6 +3184,758 @@ async def execute_procurement_outcome_search(
     )
 
 
+_PROCUREMENT_ACTIVITY_STAGE_PRIORITY = {
+    "scheduled": 0,
+    "open": 1,
+    "closed": 2,
+    "failed": 3,
+    "cancelled": 4,
+    "award": 5,
+    "contract": 6,
+}
+
+_CONTRACT_PHASE_PATTERN = re.compile(
+    r"(?:\(|\b)(?:장기\s*)?(?:제\s*)?(\d+)\s*차(?:\)|\b)"
+)
+_CONTRACT_FAMILY_MARKER_PATTERN = re.compile(
+    r"\(\s*(?:장기\s*)?(?:제\s*)?\d+\s*차\s*\)|\(\s*총괄\s*\)",
+)
+
+
+def _contract_structure(value: Any) -> str:
+    normalized = str(value or "").strip()
+    if normalized == "장기":
+        return "long_term_continuing"
+    if normalized == "계속비":
+        return "installment"
+    if normalized == "신규":
+        return "single"
+    return "unknown"
+
+
+def _contract_phase_number(contract_name: Any) -> int | None:
+    match = _CONTRACT_PHASE_PATTERN.search(str(contract_name or ""))
+    return int(match.group(1)) if match else None
+
+
+def _contract_family_name(contract_name: Any) -> str | None:
+    value = _CONTRACT_FAMILY_MARKER_PATTERN.sub(" ", str(contract_name or ""))
+    value = " ".join(value.casefold().split())
+    return value or None
+
+
+def _contract_event_identity(source: dict[str, Any]) -> dict[str, Any]:
+    for field in (
+        "confirmed_contract_number",
+        "contract_reference_number",
+        "unified_contract_number",
+    ):
+        value = str(source.get(field) or "").strip()
+        if value:
+            return {"field": field, "value": value}
+    return {"field": None, "value": None}
+
+
+def _contract_source_numbers(source: dict[str, Any]) -> dict[str, Any]:
+    return {
+        field: source.get(field)
+        for field in (
+            "confirmed_contract_number",
+            "contract_reference_number",
+            "unified_contract_number",
+        )
+    }
+
+
+def _official_contract_change_identity(
+    source: dict[str, Any],
+) -> dict[str, Any] | None:
+    detail_url = str(source.get("contract_detail_url") or "").strip()
+    if not detail_url:
+        return None
+    parameters = parse_qs(urlparse(detail_url).query)
+    contract_number = str((parameters.get("ctrtNo") or [""])[0]).strip()
+    change_order = str((parameters.get("ctrtChgOrd") or [""])[0]).strip()
+    if not contract_number or not change_order.isdigit():
+        return None
+    combined = f"{contract_number}{change_order}"
+    source_numbers = {
+        str(source.get("confirmed_contract_number") or "").strip(),
+        str(source.get("contract_reference_number") or "").strip(),
+    }
+    if combined not in source_numbers:
+        return None
+    return {
+        "contract_number": contract_number,
+        "change_order": int(change_order),
+        "change_order_raw": change_order,
+        "evidence_field": "contract_detail_url_query",
+    }
+
+
+def _decorate_contract_amount(
+    contract: dict[str, Any], source: dict[str, Any],
+) -> None:
+    source_total = _number(source.get("total_amount"))
+    current_amount = contract.get("current_contract_amount")
+    structure = contract.get("contract_structure")
+    if source_total not in {None, 0}:
+        total_amount = source_total
+        total_basis = "source_total_amount"
+    elif structure == "single" and current_amount not in {None, 0}:
+        total_amount = current_amount
+        total_basis = "current_contract_amount_for_single_contract"
+    else:
+        total_amount = None
+        total_basis = (
+            "source_total_zero_treated_as_unavailable"
+            if source_total == 0 else "source_total_missing"
+        )
+    contract.update({
+        "total_contract_amount": total_amount,
+        "total_contract_amount_basis": total_basis,
+        "phase_contract_amount": current_amount,
+        "amount_tax_basis": "unknown",
+    })
+
+
+def _decorate_contract_lineage(
+    contracts: list[dict[str, Any]], *, bid_notice_id: str | None,
+) -> None:
+    """Add evidence-labelled family metadata without asserting title-based identity."""
+    candidates: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    official_families: dict[str, list[dict[str, Any]]] = {}
+    for contract in contracts:
+        source = contract.get("_lineage_source") or {}
+        structure = _contract_structure(source.get("long_term_continuation_type"))
+        contract["contract_structure"] = structure
+        contract["phase_number"] = _contract_phase_number(source.get("contract_name"))
+        _decorate_contract_amount(contract, source)
+        family_name = _contract_family_name(source.get("contract_name"))
+        contract["_series_candidate"] = {
+            "bid_notice_id": bid_notice_id,
+            "contract_structure": structure,
+            "normalized_contract_name": family_name,
+            "long_term_continuation_type": source.get(
+                "long_term_continuation_type"
+            ),
+            "request_number": source.get("request_number"),
+        }
+        official_identity = _official_contract_change_identity(source)
+        contract["_official_contract_identity"] = official_identity
+        if official_identity is not None:
+            official_families.setdefault(
+                str(official_identity["contract_number"]), []
+            ).append(contract)
+        if structure in {"long_term_continuing", "installment"} and family_name:
+            candidates.setdefault((structure, family_name), []).append(contract)
+
+    decorated_members: set[int] = set()
+    for contract_number, members in official_families.items():
+        members.sort(key=lambda value: (
+            int((value.get("_official_contract_identity") or {})["change_order"]),
+            value.get("first_contract_date") or date.max,
+            str(value.get("contract_event_id") or ""),
+        ))
+        original = next((
+            member for member in members
+            if (member.get("_official_contract_identity") or {}).get("change_order") == 0
+        ), None)
+        original_id = original.get("contract_event_id") if original else None
+        for index, member in enumerate(members):
+            source = member.get("_lineage_source") or {}
+            identity = member.get("_official_contract_identity")
+            decorated_members.add(id(member))
+            is_original = int(identity["change_order"]) == 0
+            is_current = index == len(members) - 1
+            effective_amount = member.get("total_contract_amount")
+            previous = members[index - 1] if index > 0 else None
+            previous_identity = (
+                previous.get("_official_contract_identity") if previous else None
+            )
+            next_member = members[index + 1] if index + 1 < len(members) else None
+            next_identity = (
+                next_member.get("_official_contract_identity") if next_member else None
+            )
+            member.update({
+                "contract_family_id": f"contract-family:source:{contract_number}",
+                "contract_record_type": "original" if is_original else "amendment",
+                "parent_contract_event_id": (
+                    previous.get("contract_event_id")
+                    if previous is not None
+                    and int(previous_identity["change_order"]) + 1
+                    == int(identity["change_order"])
+                    else None
+                ),
+                "original_contract_event_id": original_id,
+                "is_current_record": is_current,
+                "superseded_by_contract_event_id": (
+                    next_member.get("contract_event_id")
+                    if next_member is not None
+                    and int(identity["change_order"]) + 1
+                    == int(next_identity["change_order"])
+                    else None
+                ),
+                "amount_record_type": (
+                    "initial_total" if is_original else "current_total"
+                ),
+                "effective_contract_amount": effective_amount,
+                "include_in_family_total": is_current and effective_amount is not None,
+                "relationship_status": "confirmed",
+                "relationship_basis": {
+                    "contract_event_identity": _contract_event_identity(source),
+                    "source_contract_numbers": _contract_source_numbers(source),
+                    "source_contract_family": {
+                        **identity,
+                        "confirmed_number_matches_contract_number_and_change_order": True,
+                    },
+                    "amount_basis": member.get("total_contract_amount_basis"),
+                    "family_inference": None,
+                },
+            })
+
+    for (structure, family_name), members in candidates.items():
+        members = [member for member in members if id(member) not in decorated_members]
+        if len(members) < 2:
+            continue
+        family_evidence = "|".join((str(bid_notice_id or ""), structure, family_name))
+        family_id = "contract-family:inferred:" + hashlib.sha256(
+            family_evidence.encode("utf-8")
+        ).hexdigest()[:20]
+        original = min(
+            members,
+            key=lambda value: (
+                0 if "총괄" in str(
+                    (value.get("_lineage_source") or {}).get("contract_name") or ""
+                ) else 1,
+                value.get("phase_number") if value.get("phase_number") is not None else 10**9,
+                value.get("first_contract_date") or date.max,
+                str(value.get("contract_event_id") or ""),
+            ),
+        )
+        original_id = original.get("contract_event_id")
+        phase_sequences: dict[int, list[dict[str, Any]]] = {}
+        for member in members:
+            phase_number = member.get("phase_number")
+            if phase_number is not None:
+                phase_sequences.setdefault(int(phase_number), []).append(member)
+        for phase_members in phase_sequences.values():
+            phase_members.sort(key=lambda value: (
+                value.get("first_contract_date") or date.max,
+                str(value.get("contract_event_id") or ""),
+            ))
+        chronological_members = sorted(members, key=lambda value: (
+            value.get("first_contract_date") or date.max,
+            str(value.get("contract_event_id") or ""),
+        ))
+        latest_member = chronological_members[-1]
+        for member in members:
+            source = member.get("_lineage_source") or {}
+            member.pop("_official_contract_identity", None)
+            decorated_members.add(id(member))
+            phase_members = phase_sequences.get(member.get("phase_number"), [])
+            phase_index = (
+                phase_members.index(member) if member in phase_members else None
+            )
+            if member is original:
+                record_type = "original"
+                parent_id = None
+                parent_link_basis = None
+            elif phase_index is not None and phase_index > 0:
+                record_type = "amendment"
+                parent_id = phase_members[phase_index - 1].get("contract_event_id")
+                parent_link_basis = "same_inferred_family_and_phase_chronology"
+            elif member.get("phase_number") is not None:
+                record_type = "phase"
+                parent_id = original_id
+                parent_link_basis = "same_inferred_family_with_phase_marker"
+            else:
+                record_type = "unknown"
+                parent_id = original_id
+                parent_link_basis = "same_inferred_family_chronology"
+            same_phase_next = None
+            if phase_index is not None and phase_index + 1 < len(phase_members):
+                same_phase_next = phase_members[phase_index + 1].get(
+                    "contract_event_id"
+                )
+            is_current = member is latest_member
+            effective_amount = (
+                member.get("total_contract_amount") if is_current else None
+            )
+            member.update({
+                "contract_family_id": family_id,
+                "contract_record_type": record_type,
+                "parent_contract_event_id": parent_id,
+                "original_contract_event_id": original_id,
+                "is_current_record": is_current,
+                "superseded_by_contract_event_id": same_phase_next,
+                "amount_record_type": (
+                    "current_total" if effective_amount is not None
+                    else "phase_amount" if member.get("phase_number") is not None
+                    else "unknown"
+                ),
+                "effective_contract_amount": (
+                    effective_amount
+                    if effective_amount is not None
+                    else member.get("phase_contract_amount")
+                ),
+                "include_in_family_total": effective_amount is not None,
+                "relationship_status": "inferred",
+                "relationship_basis": {
+                    "contract_event_identity": _contract_event_identity(source),
+                    "source_contract_numbers": _contract_source_numbers(source),
+                    "family_inference": {
+                        "bid_notice_id": bid_notice_id,
+                        "long_term_continuation_type": source.get(
+                            "long_term_continuation_type"
+                        ),
+                        "normalized_contract_name": family_name,
+                        "phase_marker": member.get("phase_number"),
+                        "parent_link_basis": parent_link_basis,
+                    },
+                    "amount_basis": member.get("total_contract_amount_basis"),
+                },
+            })
+
+    for contract in contracts:
+        source = contract.pop("_lineage_source", {}) or {}
+        contract.pop("_official_contract_identity", None)
+        if id(contract) in decorated_members:
+            continue
+        event_id = contract.get("contract_event_id")
+        structure = contract.get("contract_structure")
+        independent = structure == "single" and event_id is not None
+        effective_amount = (
+            contract.get("total_contract_amount") if independent else None
+        )
+        contract.update({
+            "contract_family_id": f"contract-family:{event_id}" if event_id else None,
+            "contract_record_type": "independent" if independent else "unknown",
+            "parent_contract_event_id": None,
+            "original_contract_event_id": event_id if independent else None,
+            "is_current_record": True,
+            "superseded_by_contract_event_id": None,
+            "amount_record_type": "current_total" if independent else "unknown",
+            "effective_contract_amount": effective_amount,
+            "include_in_family_total": independent and effective_amount is not None,
+            "relationship_status": "confirmed" if independent else "unknown",
+            "relationship_basis": {
+                "contract_event_identity": _contract_event_identity(source),
+                "source_contract_numbers": _contract_source_numbers(source),
+                "long_term_continuation_type": source.get(
+                    "long_term_continuation_type"
+                ),
+                "amount_basis": contract.get("total_contract_amount_basis"),
+                "family_inference": None,
+            },
+        })
+
+    _decorate_contract_series(contracts, bid_notice_id=bid_notice_id)
+
+
+def _decorate_contract_series(
+    contracts: list[dict[str, Any]], *, bid_notice_id: str | None,
+) -> None:
+    """Describe cross-family continuation candidates without asserting identity."""
+    families: dict[str, list[dict[str, Any]]] = {}
+    for contract in contracts:
+        family_id = str(
+            contract.get("contract_family_id")
+            or f"unresolved:{contract.get('contract_event_id')}"
+        )
+        families.setdefault(family_id, []).append(contract)
+
+    family_profiles: dict[str, dict[str, Any]] = {}
+    candidates: dict[tuple[str, str], list[str]] = {}
+    for family_id, members in families.items():
+        ordered = sorted(members, key=lambda value: (
+            value.get("first_contract_date") or date.max,
+            str(value.get("contract_event_id") or ""),
+        ))
+        current = next(
+            (member for member in members if member.get("is_current_record")),
+            ordered[-1],
+        )
+        candidate = current.get("_series_candidate") or {}
+        entry = ordered[0]
+        profile = {
+            "family_id": family_id,
+            "members": members,
+            "current": current,
+            "candidate": candidate,
+            "entry_total": entry.get("total_contract_amount"),
+            "current_effective_amount": current.get("effective_contract_amount"),
+            "first_contract_date": ordered[0].get("first_contract_date"),
+        }
+        family_profiles[family_id] = profile
+        structure = str(candidate.get("contract_structure") or "")
+        family_name = str(candidate.get("normalized_contract_name") or "")
+        if structure in {"long_term_continuing", "installment"} and family_name:
+            candidates.setdefault((structure, family_name), []).append(family_id)
+
+    decorated_families: set[str] = set()
+    for (structure, family_name), family_ids in candidates.items():
+        if len(family_ids) < 2:
+            continue
+        ordered_profiles = sorted(
+            (family_profiles[family_id] for family_id in family_ids),
+            key=lambda value: (
+                value.get("first_contract_date") or date.max,
+                value["family_id"],
+            ),
+        )
+        evidence = "|".join((str(bid_notice_id or ""), structure, family_name))
+        series_id = "contract-series:inferred:" + hashlib.sha256(
+            evidence.encode("utf-8")
+        ).hexdigest()[:20]
+        original_family_id = ordered_profiles[0]["family_id"]
+        for index, profile in enumerate(ordered_profiles):
+            family_id = profile["family_id"]
+            decorated_families.add(family_id)
+            previous = ordered_profiles[index - 1] if index > 0 else None
+            previous_amount = (
+                previous.get("current_effective_amount") if previous else None
+            )
+            entry_total = profile.get("entry_total")
+            relationship_basis = {
+                "bid_notice_id": bid_notice_id,
+                "long_term_continuation_type": profile["candidate"].get(
+                    "long_term_continuation_type"
+                ),
+                "normalized_contract_name": family_name,
+                "source_request_number": profile["candidate"].get(
+                    "request_number"
+                ),
+                "authoritative_series_identifier": None,
+                "previous_family_effective_amount": previous_amount,
+                "current_family_entry_total": entry_total,
+                "previous_total_matches_current_entry_total": (
+                    previous_amount is not None
+                    and entry_total is not None
+                    and previous_amount == entry_total
+                ),
+            }
+            for member in profile["members"]:
+                member.update({
+                    "contract_series_id": series_id,
+                    "previous_contract_family_id": (
+                        previous["family_id"] if previous else None
+                    ),
+                    "original_contract_family_id": original_family_id,
+                    "family_relationship_type": (
+                        "continuation" if previous else "unknown"
+                    ),
+                    "family_relationship_status": "inferred",
+                    "family_relationship_basis": relationship_basis,
+                })
+
+    for family_id, profile in family_profiles.items():
+        if family_id in decorated_families:
+            for member in profile["members"]:
+                member.pop("_series_candidate", None)
+            continue
+        for member in profile["members"]:
+            member.pop("_series_candidate", None)
+            if member.get("contract_structure") == "single":
+                member.update({
+                    "contract_series_id": None,
+                    "previous_contract_family_id": None,
+                    "original_contract_family_id": family_id,
+                    "family_relationship_type": "independent",
+                    "family_relationship_status": "confirmed",
+                    "family_relationship_basis": {
+                        "contract_structure": "single",
+                        "authoritative_series_identifier": None,
+                    },
+                })
+            else:
+                member.update({
+                    "contract_series_id": None,
+                    "previous_contract_family_id": None,
+                    "original_contract_family_id": family_id,
+                    "family_relationship_type": "unknown",
+                    "family_relationship_status": "unresolved",
+                    "family_relationship_basis": {
+                        "bid_notice_id": bid_notice_id,
+                        "authoritative_series_identifier": None,
+                        "reason": "no_cross_family_source_identifier",
+                    },
+                })
+
+
+def _contract_family_summary(contracts: list[dict[str, Any]]) -> dict[str, Any]:
+    families: dict[str, list[dict[str, Any]]] = {}
+    for contract in contracts:
+        family_id = str(
+            contract.get("contract_family_id")
+            or f"unresolved:{contract.get('contract_event_id')}"
+        )
+        families.setdefault(family_id, []).append(contract)
+    included = [
+        contract for contract in contracts
+        if contract.get("include_in_family_total")
+        and contract.get("effective_contract_amount") is not None
+    ]
+    unresolved_family = any(
+        not any(member.get("include_in_family_total") for member in members)
+        or sum(bool(member.get("include_in_family_total")) for member in members) != 1
+        or any(member.get("relationship_status") == "unknown" for member in members)
+        or any(
+            member.get("contract_record_type") == "amendment"
+            and member.get("original_contract_event_id") is None
+            for member in members
+        )
+        for members in families.values()
+    )
+    series_families: dict[str, set[str]] = {}
+    for family_id, members in families.items():
+        series_id = next((
+            str(member.get("contract_series_id"))
+            for member in members if member.get("contract_series_id")
+        ), None)
+        if series_id:
+            series_families.setdefault(series_id, set()).add(family_id)
+    unresolved_series = any(
+        len(family_ids) > 1 and any(
+            member.get("contract_series_id") == series_id
+            and member.get("family_relationship_status") != "confirmed"
+            for member in contracts
+        )
+        for series_id, family_ids in series_families.items()
+    )
+    unresolved = unresolved_family or unresolved_series
+    inferred = any(
+        contract.get("relationship_status") == "inferred"
+        for contract in contracts
+    )
+    status = (
+        "unresolved" if unresolved else
+        "partially_confirmed" if inferred else
+        "confirmed"
+    )
+    included_family_ids = {
+        str(contract.get("contract_family_id")) for contract in included
+    }
+    included_event_ids = list(dict.fromkeys(
+        str(contract.get("contract_event_id"))
+        for contract in included if contract.get("contract_event_id")
+    ))
+    confirmed_amounts = [
+        contract for contract in included
+        if contract.get("relationship_status") == "confirmed"
+    ]
+    latest_confirmed = max(
+        confirmed_amounts,
+        key=lambda value: (
+            value.get("latest_contract_version_date")
+            or value.get("first_contract_date") or date.min,
+            str(value.get("contract_event_id") or ""),
+        ),
+        default=None,
+    )
+    effective_amount = (
+        None if unresolved else
+        sum(contract["effective_contract_amount"] for contract in included)
+        if included else None
+    )
+    effective_event_id = (
+        included[0].get("contract_event_id")
+        if not unresolved and len(included) == 1 else None
+    )
+    aggregation_reason = (
+        "long_term_continuation_relationship_unresolved"
+        if unresolved_series else
+        "contract_family_relationship_unresolved"
+        if unresolved_family else
+        "inferred_contract_family_relationship"
+        if inferred else
+        "confirmed_contract_family_aggregation"
+        if included else
+        "no_confirmed_contract_amount"
+    )
+    return {
+        "effective_contract_amount": effective_amount,
+        "effective_contract_event_id": effective_event_id,
+        "included_contract_event_ids": included_event_ids,
+        "latest_confirmed_contract_amount": (
+            latest_confirmed.get("effective_contract_amount")
+            if latest_confirmed else None
+        ),
+        "latest_confirmed_contract_event_id": (
+            latest_confirmed.get("contract_event_id")
+            if latest_confirmed else None
+        ),
+        "contract_family_count": len(families),
+        "included_contract_family_count": len(included_family_ids),
+        "amount_aggregation_status": status,
+        "amount_aggregation_reason": aggregation_reason,
+    }
+
+
+def _notice_group_id(record: dict[str, Any]) -> str:
+    bid_notice_id = str(record.get("bid_notice_id") or "").strip()
+    if bid_notice_id:
+        return f"notice:{bid_notice_id}"
+    contract = record.get("contract") or {}
+    contract_key = str(
+        contract.get("contract_event_id")
+        or contract.get("unified_contract_number")
+        or ""
+    ).strip()
+    if contract_key:
+        return f"contract:{contract_key}"
+    award = record.get("award") or {}
+    award_key = str(award.get("award_id") or "").strip()
+    if award_key:
+        return f"award:{award_key}"
+    return f"activity:{record['activity_id']}"
+
+
+def _group_procurement_activity_records(
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    for record in records:
+        group_id = _notice_group_id(record)
+        group = groups.setdefault(group_id, {
+            "activity_group_id": group_id,
+            "bid_notice_id": record.get("bid_notice_id"),
+            "notice_linkage": record.get("notice_linkage"),
+            "notice": None,
+            "_records": [],
+            "_awards": {},
+            "_contracts": {},
+        })
+        group["_records"].append(record)
+
+        source_notice = record.get("notice")
+        if group["notice"] is None and (
+            source_notice is not None or record.get("bid_notice_id")
+        ):
+            source_notice = source_notice or {}
+            amount_candidates = (
+                ("allocated_budget", "배정예산"),
+                ("estimated_price", "추정가격"),
+                ("base_amount", "기초금액"),
+            )
+            project_amount, amount_basis, amount_basis_name = next((
+                (source_notice.get(basis), basis, basis_name)
+                for basis, basis_name in amount_candidates
+                if source_notice.get(basis) is not None
+            ), (None, None, None))
+            group["notice"] = {
+                "notice_name": record.get("notice_name"),
+                "published_at": source_notice.get("published_at"),
+                "bid_begin_at": source_notice.get("bid_begin_at"),
+                "deadline_at": source_notice.get("deadline_at"),
+                "status": source_notice.get("status"),
+                "notice_status": source_notice.get("notice_status"),
+                "current_status": source_notice.get("current_status"),
+                "current_status_label": source_notice.get("current_status_label"),
+                "cancellation_reason": source_notice.get("cancellation_reason"),
+                "cancellation_at": source_notice.get("cancellation_at"),
+                "failure_reason": source_notice.get("failure_reason"),
+                "failure_at": source_notice.get("failure_at"),
+                "status_source": source_notice.get("status_source"),
+                "status_confirmed_at": source_notice.get("status_confirmed_at"),
+                "original_notice_id": source_notice.get("original_notice_id"),
+                "current_notice_id": source_notice.get("current_notice_id"),
+                "revision_number": source_notice.get("revision_number"),
+                "is_latest_revision": source_notice.get("is_latest_revision"),
+                "work_type": record.get("work_type"),
+                "project_amount": project_amount,
+                "project_amount_basis": amount_basis,
+                "project_amount_basis_name": amount_basis_name,
+            }
+
+        for award in record.get("awards") or []:
+            award_key = str(award.get("award_id") or "").strip() or json.dumps(
+                award, sort_keys=True, default=str,
+            )
+            group["_awards"][award_key] = dict(award)
+
+        for contract in record.get("contracts") or []:
+            contract_key = str(
+                contract.get("contract_event_id")
+                or contract.get("unified_contract_number")
+                or ""
+            ).strip()
+            if not contract_key:
+                continue
+            grouped_contract = dict(contract)
+            grouped_contract["latest_contract_version_date"] = grouped_contract.pop(
+                "contract_date", None,
+            )
+            grouped_contract["current_contract_amount"] = grouped_contract.pop(
+                "contract_amount", None,
+            )
+            group["_contracts"][contract_key] = grouped_contract
+
+    grouped_records = []
+    for group in groups.values():
+        records_in_group = group.pop("_records")
+        representative = max(
+            records_in_group,
+            key=lambda item: (
+                _PROCUREMENT_ACTIVITY_STAGE_PRIORITY.get(str(item.get("stage")), -1),
+                item.get("latest_activity_date") or date.min,
+                str(item.get("activity_id") or ""),
+            ),
+        )
+        latest_stage = str(representative["stage"])
+        same_stage_dates = [
+            item.get("latest_activity_date")
+            for item in records_in_group
+            if item.get("stage") == latest_stage and item.get("latest_activity_date")
+        ]
+        awards = list(group.pop("_awards").values())
+        awards.sort(
+            key=lambda value: (
+                value.get("award_date") or date.min,
+                str(value.get("award_id") or ""),
+            ),
+            reverse=True,
+        )
+        contracts = list(group.pop("_contracts").values())
+        _decorate_contract_lineage(
+            contracts, bid_notice_id=group.get("bid_notice_id"),
+        )
+        contracts.sort(
+            key=lambda value: (
+                value.get("first_contract_date") or date.min,
+                str(value.get("contract_event_id") or ""),
+            ),
+            reverse=True,
+        )
+        contract_family_summary = _contract_family_summary(contracts)
+        group.update({
+            "latest_stage": latest_stage,
+            "latest_stage_name": representative.get("stage_name"),
+            "latest_activity_date": max(same_stage_dates) if same_stage_dates else None,
+            "notice_name": representative.get("notice_name"),
+            "organization_code": representative.get("organization_code"),
+            "organization_name": representative.get("organization_name"),
+            "work_type": representative.get("work_type"),
+            "field_code": representative.get("field_code"),
+            "field_name": representative.get("field_name"),
+            "large_category": representative.get("large_category"),
+            "middle_category": representative.get("middle_category"),
+            "awards": awards,
+            "contracts": contracts,
+            "result_summary": {
+                "award_count": len(awards),
+                "contract_event_count": len(contracts),
+                "contract_version_count": sum(
+                    int(contract.get("contract_version_count") or 0)
+                    for contract in contracts
+                ),
+                **contract_family_summary,
+            },
+        })
+        grouped_records.append(group)
+    return grouped_records
+
+
 async def execute_procurement_activity_search(
     catalog: RegistryCatalog, capability_id: str, inputs: dict[str, Any], *,
     reader: ProcurementActivityReader | None = None,
@@ -3011,6 +3952,7 @@ async def execute_procurement_activity_search(
     page = int(inputs.get("page", 1))
     page_size = int(inputs.get("page_size", 20))
     requested_stage = str(inputs.get("stage", "all"))
+    view_mode = str(inputs.get("view_mode", "flat"))
     sort = str(inputs.get("sort", "latest_activity_desc"))
     query = " ".join(str(inputs.get("query") or "").split()).casefold()
     work_type = str(inputs.get("work_type") or "").strip() or None
@@ -3050,6 +3992,18 @@ async def execute_procurement_activity_search(
                 "deadline_at": row.get("bid_deadline_at"),
                 "status": row.get("bid_status"),
                 "notice_status": row.get("notice_status"),
+                "current_status": row.get("current_status"),
+                "current_status_label": row.get("current_status_label"),
+                "cancellation_reason": row.get("cancellation_reason"),
+                "cancellation_at": row.get("cancellation_at"),
+                "failure_reason": row.get("failure_reason"),
+                "failure_at": row.get("failure_at"),
+                "status_source": row.get("status_source"),
+                "status_confirmed_at": row.get("status_confirmed_at"),
+                "original_notice_id": row.get("original_notice_id"),
+                "current_notice_id": row.get("current_notice_id"),
+                "revision_number": row.get("revision_number"),
+                "is_latest_revision": row.get("is_latest_revision"),
                 "allocated_budget": _number(row.get("allocated_budget")),
                 "estimated_price": _number(row.get("estimated_price")),
                 "base_amount": _number(row.get("base_amount")),
@@ -3060,6 +4014,7 @@ async def execute_procurement_activity_search(
             "large_category": row.get("large_category"),
             "middle_category": row.get("middle_category"),
             "_notice_status": row.get("notice_status"),
+            "_current_status": row.get("current_status"),
             "_bid_status": row.get("bid_status"),
         }
         notice_to_activity[str(row["bid_notice_id"])] = activity_id
@@ -3077,11 +4032,24 @@ async def execute_procurement_activity_search(
     }
 
     for row in award_rows:
-        activity = activities.get(notice_to_activity.get(
-            str(row["bid_notice_id"]), str(row["bid_notice_id"])
-        ))
+        linked_id = str(row.get("bid_notice_id") or "") or None
+        activity = activities.get(notice_to_activity.get(linked_id, linked_id))
         if activity is None:
-            continue
+            activity_id = f"award:{row['award_id']}"
+            organization_name = organization_name or row.get("organization_name")
+            activity = activities.setdefault(activity_id, {
+                "activity_id": activity_id, "bid_notice_id": linked_id,
+                "notice_name": row.get("notice_name"),
+                "notice_linkage": "linked" if linked_id else "unlinked",
+                "organization_code": organization_code,
+                "organization_name": row.get("organization_name"),
+                "notice": None, "awards": [], "contracts": [],
+                "work_type": row.get("work_type"), "field_code": row.get("field_code"),
+                "field_name": row.get("field_name"),
+                "large_category": row.get("large_category"),
+                "middle_category": row.get("middle_category"),
+                "_notice_status": None, "_bid_status": None,
+            })
         activity["awards"].append({
             "award_id": row.get("award_id"),
             "bid_classification_number": row.get("bid_classification_number"),
@@ -3095,36 +4063,46 @@ async def execute_procurement_activity_search(
         })
 
     contract_versions: dict[str, list[dict[str, Any]]] = {}
+    contract_classifications: dict[str, dict[str, Any]] = {}
     for row in contract_rows:
         contract_versions.setdefault(str(row["contract_event_id"]), []).append(row)
     for contract_event_id, versions in contract_versions.items():
         dated_versions = [row for row in versions if row.get("contract_date")]
         if not dated_versions:
             continue
-        first_contract_date = min(row["contract_date"] for row in dated_versions)
+        first_contract_date = next((
+            row["first_contract_date"] for row in versions
+            if row.get("first_contract_date")
+        ), min(row["contract_date"] for row in dated_versions))
+        if not period_from <= first_contract_date < period_to:
+            continue
         latest_contract_date = max(row["contract_date"] for row in dated_versions)
         latest_versions = [
             row for row in dated_versions if row["contract_date"] == latest_contract_date
         ]
         representative = latest_versions[0]
+        identity = _procurement_field_identity(representative)
+        contract_classification = {
+            "work_type": representative.get("work_type"),
+            "field_code": identity.get("code") if identity else None,
+            "field_name": identity.get("name") if identity else None,
+            "large_category": identity.get("large_category") if identity else None,
+            "middle_category": identity.get("middle_category") if identity else None,
+        }
+        contract_classifications[contract_event_id] = contract_classification
         linked_id = str(representative.get("bid_notice_id") or "") or None
         activity = activities.get(notice_to_activity.get(linked_id, linked_id)) if linked_id else None
         if activity is None:
-            if linked_id or not period_from <= first_contract_date < period_to:
-                continue
             activity_id = f"contract:{contract_event_id}"
             organization_name = organization_name or representative.get("organization_name")
             activity = activities.setdefault(activity_id, {
-                "activity_id": activity_id, "bid_notice_id": None,
+                "activity_id": activity_id, "bid_notice_id": linked_id,
                 "notice_name": representative.get("notice_name"),
-                "notice_linkage": "unlinked", "organization_code": organization_code,
+                "notice_linkage": "linked" if linked_id else "unlinked",
+                "organization_code": organization_code,
                 "organization_name": representative.get("organization_name"),
                 "notice": None, "awards": [], "contracts": [],
-                "work_type": representative.get("work_type"),
-                "field_code": representative.get("field_code"),
-                "field_name": representative.get("field_name"),
-                "large_category": representative.get("large_category"),
-                "middle_category": representative.get("middle_category"),
+                **contract_classification,
                 "_notice_status": None, "_bid_status": None,
             })
         contractors_by_key: dict[str, dict[str, Any]] = {}
@@ -3146,11 +4124,34 @@ async def execute_procurement_activity_search(
             "first_contract_date": first_contract_date,
             "contract_date": latest_contract_date,
             "contract_amount": _number(representative.get("contract_amount")),
-            "contract_version_count": len({
-                row.get("unified_contract_number") for row in versions
-            }),
+            "contract_version_count": int(
+                representative.get("contract_version_count")
+                or len({row.get("unified_contract_number") for row in versions})
+            ),
             "lead_contractor": lead, "contractor_count": len(contractors),
             "contractors": contractors,
+            "_lineage_source": {
+                "unified_contract_number": representative.get(
+                    "unified_contract_number"
+                ),
+                "confirmed_contract_number": representative.get(
+                    "confirmed_contract_number"
+                ),
+                "contract_reference_number": representative.get(
+                    "contract_reference_number"
+                ),
+                "contract_name": representative.get("contract_name"),
+                "long_term_continuation_type": representative.get(
+                    "long_term_continuation_type"
+                ),
+                "request_number": representative.get("request_number"),
+                "contract_detail_url": representative.get("contract_detail_url"),
+                "total_amount": representative.get("total_amount"),
+                "total_amount_currency": representative.get("total_amount_currency"),
+                "current_contract_amount_currency": representative.get(
+                    "current_contract_amount_currency"
+                ),
+            },
         })
 
     filtered_before_stage = []
@@ -3163,7 +4164,7 @@ async def execute_procurement_activity_search(
         )
         activity["award"] = activity["awards"][0] if activity["awards"] else None
         activity["contract"] = activity["contracts"][0] if activity["contracts"] else None
-        if activity["notice_linkage"] == "linked":
+        if activity["notice_linkage"] == "linked" and activity["notice"] is not None:
             notice_amounts = activity["notice"]
             amount_candidates = (
                 ("allocated_budget", "배정예산"),
@@ -3181,6 +4182,12 @@ async def execute_procurement_activity_search(
                 "contract_amount",
                 "계약금액",
             )
+        elif activity["award"] is not None:
+            selected_amount = (
+                activity["award"].get("winning_amount"),
+                "winning_amount",
+                "낙찰금액",
+            )
         else:
             selected_amount = (None, None, None)
         (
@@ -3193,11 +4200,15 @@ async def execute_procurement_activity_search(
         elif activity["award"]:
             stage = "award"
             latest_activity_date = activity["award"]["award_date"]
-        elif activity.pop("_notice_status") == "cancelled":
-            stage = "failed_or_cancelled"
-            latest_activity_date = activity["notice"]["published_at"]
+        elif activity.get("_current_status") in {"cancelled", "failed"}:
+            stage = str(activity["_current_status"])
+            latest_activity_date = (
+                activity["notice"].get("cancellation_at")
+                if stage == "cancelled"
+                else activity["notice"].get("failure_at")
+            ) or activity["notice"]["published_at"]
         else:
-            activity.pop("_bid_status")
+            activity.pop("_bid_status", None)
             published_at = activity["notice"]["published_at"]
             deadline_at = activity["notice"]["deadline_at"]
             published_moment = (
@@ -3221,70 +4232,130 @@ async def execute_procurement_activity_search(
             )
             latest_activity_date = published_at
         activity.pop("_notice_status", None)
+        activity.pop("_current_status", None)
         activity.pop("_bid_status", None)
         activity["stage"] = stage
         activity["stage_name"] = {
             "scheduled": "예정", "open": "진행", "closed": "마감",
             "award": "낙찰", "contract": "계약",
-            "failed_or_cancelled": "유찰·취소",
+            "failed": "유찰", "cancelled": "취소",
         }[stage]
         activity["latest_activity_date"] = (
             latest_activity_date.date()
             if isinstance(latest_activity_date, datetime) else latest_activity_date
         )
-        if work_type and activity.get("work_type") != work_type:
+        filtered_before_stage.append(activity)
+
+    expanded_records = []
+    for activity in filtered_before_stage:
+        if activity["contracts"]:
+            for contract in activity["contracts"]:
+                record = {
+                    **activity,
+                    **contract_classifications.get(contract["contract_event_id"], {}),
+                    "activity_id": f"contract:{contract['contract_event_id']}",
+                    "stage": "contract", "stage_name": "계약",
+                    "contracts": [contract], "contract": contract,
+                    "latest_activity_date": contract["first_contract_date"],
+                    "project_amount": contract.get("contract_amount"),
+                    "project_amount_basis": "contract_amount",
+                    "project_amount_basis_name": "계약금액",
+                }
+                expanded_records.append(record)
+        elif activity["awards"]:
+            for award in activity["awards"]:
+                record = {
+                    **activity,
+                    "activity_id": f"award:{award['award_id']}",
+                    "stage": "award", "stage_name": "낙찰",
+                    "awards": [award], "award": award,
+                    "latest_activity_date": award["award_date"],
+                    "project_amount": award.get("winning_amount"),
+                    "project_amount_basis": "winning_amount",
+                    "project_amount_basis_name": "낙찰금액",
+                }
+                expanded_records.append(record)
+        else:
+            expanded_records.append(activity)
+
+    filtered_records = []
+    for record in expanded_records:
+        if work_type and record.get("work_type") != work_type:
             continue
-        if large_category and _normalized_category(activity.get("large_category")) != large_category:
+        if large_category and _normalized_category(
+            record.get("large_category")
+        ) != large_category:
             continue
-        if middle_category and _normalized_category(activity.get("middle_category")) != middle_category:
+        if middle_category and _normalized_category(
+            record.get("middle_category")
+        ) != middle_category:
             continue
-        if field_code and str(activity.get("field_code") or "") != field_code:
+        if field_code and str(record.get("field_code") or "") != field_code:
             continue
         if company_number:
-            matched_company = activity.get("activity_id") in participated_activity_ids
-            matched_company = matched_company or any(
-                award.get("winner_business_registration_number") == company_number
-                for award in activity["awards"]
-            ) or any(
-                contractor.get("business_registration_number") == company_number
-                for contract in activity["contracts"]
-                for contractor in contract["contractors"]
-            )
+            if record["stage"] == "contract":
+                matched_company = any(
+                    contractor.get("business_registration_number") == company_number
+                    for contractor in record["contract"]["contractors"]
+                )
+            elif record["stage"] == "award":
+                matched_company = (
+                    record["award"].get("winner_business_registration_number")
+                    == company_number
+                )
+            else:
+                matched_company = (
+                    notice_to_activity.get(str(record.get("bid_notice_id") or ""))
+                    in participated_activity_ids
+                )
             if not matched_company:
                 continue
         if query:
             searchable = " ".join(str(value or "") for value in (
-                activity.get("notice_name"), activity.get("bid_notice_id"),
-                activity.get("activity_id"),
-                *(award.get("winner_name") for award in activity["awards"]),
-                *(contractor.get("company_name") for contract in activity["contracts"]
+                record.get("notice_name"), record.get("bid_notice_id"),
+                record.get("activity_id"),
+                *(award.get("winner_name") for award in record["awards"]),
+                *(contractor.get("company_name") for contract in record["contracts"]
                   for contractor in contract["contractors"]),
             )).casefold()
             if query not in searchable:
                 continue
-        filtered_before_stage.append(activity)
+        filtered_records.append(record)
 
+    if view_mode == "notice_grouped":
+        response_records = _group_procurement_activity_records(filtered_records)
+    else:
+        for record in filtered_records:
+            for contract in record.get("contracts") or []:
+                contract.pop("_lineage_source", None)
+        response_records = filtered_records
+    stage_property = "latest_stage" if view_mode == "notice_grouped" else "stage"
+    id_property = "activity_group_id" if view_mode == "notice_grouped" else "activity_id"
     stage_counts = {
-        value: sum(item["stage"] == value for item in filtered_before_stage)
+        value: sum(item[stage_property] == value for item in response_records)
         for value in (
-            "scheduled", "open", "closed", "award", "contract", "failed_or_cancelled",
+            "scheduled", "open", "closed", "award", "contract", "failed", "cancelled",
         )
     }
-    stage_counts["all"] = len(filtered_before_stage)
+    stage_counts["all"] = len(response_records)
     linkage_counts = {
         "linked": sum(
-            item["notice_linkage"] == "linked" for item in filtered_before_stage
+            item["notice_linkage"] == "linked" for item in response_records
         ),
         "unlinked": sum(
-            item["notice_linkage"] == "unlinked" for item in filtered_before_stage
+            item["notice_linkage"] == "unlinked" for item in response_records
         ),
     }
     filtered = (
-        filtered_before_stage if requested_stage == "all"
-        else [item for item in filtered_before_stage if item["stage"] == requested_stage]
+        response_records if requested_stage == "all"
+        else [item for item in response_records if item[stage_property] == requested_stage]
     )
     filtered.sort(
-        key=lambda item: (item["latest_activity_date"], item["activity_id"]), reverse=True,
+        key=lambda item: (
+            item.get("latest_activity_date") or date.min,
+            str(item[id_property]),
+        ),
+        reverse=True,
     )
     total_items = len(filtered)
     offset = (page - 1) * page_size
@@ -3296,19 +4367,28 @@ async def execute_procurement_activity_search(
     observed_at = datetime.now(timezone.utc)
     objects = []
     for item in page_items:
-        properties = {key: item.get(key) for key in (
-            "activity_id", "bid_notice_id", "notice_name", "stage", "latest_activity_date",
-            "project_amount", "project_amount_basis", "project_amount_basis_name",
-        )}
+        properties = {
+            id_property: item.get(id_property),
+            "bid_notice_id": item.get("bid_notice_id"),
+            "notice_name": item.get("notice_name"),
+            stage_property: item.get(stage_property),
+            "latest_activity_date": item.get("latest_activity_date"),
+        }
+        if view_mode == "notice_grouped":
+            properties["activity_id"] = item.get("activity_group_id")
+        if view_mode == "flat":
+            properties.update({key: item.get(key) for key in (
+                "project_amount", "project_amount_basis", "project_amount_basis_name",
+            )})
         provenance = Provenance(
             kind="execution", source="teoria_runtime",
             operation=f"market_context.{capability_id}",
             mapping="public_procurement_market_context", observed_at=observed_at,
-            record_keys=[str(item["activity_id"])],
+            record_keys=[str(item[id_property])],
         )
         objects.append(MaterializedObject(
             ontology="public_procurement", object_type="procurement_activity",
-            object_id=str(item["activity_id"]), properties=properties,
+            object_id=str(item[id_property]), properties=properties,
             provenance=[provenance],
             property_provenance={key: [provenance] for key in properties},
         ))
@@ -3318,13 +4398,33 @@ async def execute_procurement_activity_search(
             "organization": {"code": organization_code, "name": organization_name},
             "items": page_items, "stage_counts": stage_counts,
             "linkage_counts": linkage_counts, "pagination": pagination,
+            **({
+                "grouping_basis": {
+                    "linked_group_key": "bid_notice_id",
+                    "unlinked_group_key": (
+                        "contract_event_id_or_unified_contract_number"
+                    ),
+                    "contract_version_deduplication": "merged_by_contract_event",
+                    "stage_count_basis": "activity_group",
+                    "contract_amount_basis": (
+                        "latest_version_at_or_before_period_end"
+                    ),
+                    "contract_family_basis": (
+                        "official_contract_number_and_change_order_then_evidence_labelled_inference"
+                    ),
+                    "family_amount_aggregation": (
+                        "one_effective_current_record_per_contract_family"
+                    ),
+                },
+            } if view_mode == "notice_grouped" else {}),
             "analysis_basis": {
                 "period_from": period_from, "period_to": period_to - timedelta(days=1),
                 "period_from_year": from_year, "period_to_year": to_year,
                 "period_type": period_type,
-                "period_basis": "notice_published_at",
-                "linked_activity_period_basis": "notice_published_at",
-                "unlinked_contract_period_basis": "first_contract_date",
+                "period_basis": "stage_event_date",
+                "notice_stage_period_basis": "notice_published_at",
+                "award_stage_period_basis": "final_award_date_or_opening_at",
+                "contract_stage_period_basis": "first_contract_date",
                 "sort_basis": "latest_activity_date", "sort": sort,
                 "stage_as_of": stage_as_of,
                 "stage_policy": "publication_to_deadline",
@@ -3341,7 +4441,17 @@ async def execute_procurement_activity_search(
                     "field_code": field_code,
                 },
                 "query": query or None, "stage": requested_stage,
-                "deduplication": "notice_lifecycle_with_original_contract_merge",
+                "view_mode": view_mode,
+                "stage_record_model": (
+                    "notice_group_latest_lifecycle_stage"
+                    if view_mode == "notice_grouped"
+                    else "latest_lifecycle_stage_event"
+                ),
+                "deduplication": {
+                    "notice": "latest_notice_lineage",
+                    "award": "award_event_id",
+                    "contract": "merged_by_contract_event",
+                },
             },
             "registry_version": catalog.release.version if catalog.release else "unpublished",
             "timings": {"total_ms": round((time.perf_counter() - started) * 1000, 3)},
@@ -4515,6 +5625,17 @@ def _title_project_comparison(
 
 
 def _procurement_field_identity(row: dict[str, Any]) -> dict[str, Any] | None:
+    if any(row.get(key) for key in ("field_code", "field_name", "large_category")):
+        normalized = dict(row)
+        for source, target in (
+            ("field_code", "procurement_classification_number"),
+            ("field_name", "procurement_classification_name"),
+            ("large_category", "procurement_large_classification_name"),
+            ("middle_category", "procurement_middle_classification_name"),
+        ):
+            if not normalized.get(target):
+                normalized[target] = normalized.get(source)
+        return field_identity(normalized)
     return field_identity(row)
 
 

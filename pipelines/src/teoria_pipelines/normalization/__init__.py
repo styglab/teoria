@@ -11,6 +11,7 @@ from teoria_pipelines.normalization.pps_bid_notices import (
 from teoria_pipelines.normalization.pps_bid_results import (
     BidResultNormalizationError,
     normalize_bid_award_record,
+    normalize_failed_opening_record,
     normalize_bid_result_batch,
     normalize_opening_participant_record,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "normalize_contract_record",
     "BidResultNormalizationError",
     "normalize_bid_award_record",
+    "normalize_failed_opening_record",
     "normalize_bid_result_batch",
     "normalize_opening_participant_record",
 ]

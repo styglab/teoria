@@ -74,10 +74,11 @@ class BasePostgresStore:
             connection.execute(
                 "UPDATE ingestion.pipeline_runs SET status='completed', finished_at=now(), "
                 "raw_record_count=%s, contract_count=%s, notice_count=%s, document_count=%s, "
-                "award_count=%s, opening_participant_count=%s "
+                "award_count=%s, opening_participant_count=%s, notice_outcome_count=%s "
                 "WHERE execution_id=%s",
                 (summary.raw_records, summary.contracts, summary.notices,
-                 summary.documents, summary.awards, summary.opening_participants, execution_id),
+                 summary.documents, summary.awards, summary.opening_participants,
+                 summary.notice_outcomes, execution_id),
             )
 
     def fail_run(self, execution_id: UUID, error_code: str) -> None:

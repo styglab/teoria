@@ -1,6 +1,6 @@
 registry:
-  version: 1.7.0
-  registered_at: "2026-09-29"
+  version: 1.8.0
+  registered_at: "2026-10-10"
 
 capability:
   id: search_bid_notices
@@ -66,6 +66,9 @@ capability:
       property: public_procurement.bid_notice.notice_status
       enum: [active, cancelled, superseded]
       default: active
+    current_status:
+      property: public_procurement.bid_notice.current_status
+      enum: [scheduled, open, closed, awarded, contracted, failed, cancelled]
     lineage_mode:
       data_type: string
       field: teoria_public_procurement.bid_notices.lineage_modes

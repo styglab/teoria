@@ -75,6 +75,9 @@ Source, 지속 수집 API는 Connector로 작성한다. [Registry guide](registr
 공공조달 기관·업체 프로필의 계약 건수, 변경계약 병합, 연도 귀속과 공동수급 금액은
 [공공조달 계약 집계 기준](domains/public_procurement/contract_aggregation.md)을 따른다.
 이 규칙은 첫 vertical의 Domain 규칙이며 Platform 공통 집계 규칙으로 간주하지 않는다.
+물품·용역·공사의 현재 분야 표시 기준과 향후 버전형 분류체계의 범위는
+[공공조달 분야 분류 기준과 확장 계획](domains/public_procurement/procurement_classification.md)에
+정의한다.
 
 ### API/MCP 사용자
 

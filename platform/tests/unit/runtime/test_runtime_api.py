@@ -166,6 +166,10 @@ def test_bid_notice_search_discovery_exposes_pagination_and_sort_contract() -> N
         "active", "cancelled", "superseded",
     ]
     assert properties["notice_status"]["default"] == "active"
+    assert properties["current_status"]["enum"] == [
+        "scheduled", "open", "closed", "awarded", "contracted", "failed",
+        "cancelled",
+    ]
     assert properties["notice_organization_code"]["type"] == "string"
     assert properties["demand_organization_code"]["type"] == "string"
     assert properties["large_category"]["type"] == "string"
@@ -276,6 +280,41 @@ def test_bid_notice_contracts_discovery_requires_notice_number() -> None:
     )
     assert response.status_code == 200
     assert response.json()["capability"] == "get_bid_notice_contracts"
+
+
+def test_company_profile_discovery_accepts_organization_entry_filters() -> None:
+    app = create_runtime_app(
+        settings=Settings(runtime_api_token="test-token"),
+        catalog=RegistryLoader(REGISTRIES).load(),
+        runner=CapturingRunner(),
+    )
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer test-token"}
+    capabilities = client.get("/v1/capabilities", headers=headers).json()["capabilities"]
+    profile = next(
+        item for item in capabilities
+        if item["id"] == "analyze_company_procurement_profile"
+    )
+    properties = profile["input_schema"]["properties"]
+
+    assert profile["version"] == "1.14.0"
+    assert properties["target_year"] == {
+        "type": "integer", "minimum": 2000, "maximum": 2100,
+    }
+    assert properties["organization_entry_status"]["enum"] == [
+        "first_observed", "reentering", "incumbent",
+    ]
+
+    response = client.post(
+        "/v1/capabilities/analyze_company_procurement_profile:execute",
+        headers=headers,
+        json={"inputs": {
+            "business_registration_number": "1111111111",
+            "target_year": 2026,
+            "organization_entry_status": "first_observed",
+        }},
+    )
+    assert response.status_code == 200
 
 
 def test_runtime_api_can_require_a_published_registry() -> None:

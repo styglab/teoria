@@ -228,3 +228,41 @@ def test_response_validator_accepts_omitted_records_only_when_total_is_zero() ->
     validator = ProviderResponseValidator()
     assert validator.validate(definition, "list_records", empty) == []
     assert validator.validate(definition, "list_records", non_empty)[0].code == "record_path_not_found"
+
+
+def test_response_validator_accepts_declared_no_data_control_without_records() -> None:
+    definition = ProviderDefinition.model_validate({
+        "id": "provider",
+        "provider": {"organization": "Provider"},
+        "type": "api",
+        "specification": {"format": "manual", "version": "1.0"},
+        "access": {"base_url": "https://example.test"},
+        "components": {"objects": [{
+            "id": "record",
+            "fields": [{"id": "recordId", "data_type": "string"}],
+        }]},
+        "operations": [{
+            "id": "list_records",
+            "method": "GET",
+            "path": "/records",
+            "response": {
+                "content_type": "application/json",
+                "http_status": 200,
+                "control": {
+                    "record_path": "response.header",
+                    "success": {"field": "resultCode", "equals": "00"},
+                    "no_data": [{"field": "resultCode", "equals": "90"}],
+                },
+                "data": {"record_path": "response.items[]", "ref": "record"},
+            },
+        }],
+    })
+    empty = ExecutionResponse(
+        status_code=200, content_type="application/json", headers={},
+        body={"response": {"header": {"resultCode": "90"}}}, elapsed_ms=1,
+    )
+
+    validator = ProviderResponseValidator()
+
+    assert validator.is_no_data(definition, "list_records", empty) is True
+    assert validator.validate(definition, "list_records", empty) == []

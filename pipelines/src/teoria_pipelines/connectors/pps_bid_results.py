@@ -21,6 +21,7 @@ from teoria_pipelines.loader import PipelineLoader
 from teoria_pipelines.models import (
     CollectionWindow,
     ExtractedBatch,
+    NoticeOutcomeResultBatch,
     OpeningResultBatch,
     RawProviderRecord,
 )
@@ -153,6 +154,55 @@ class PPSBidResultClient:
             len(keys), len(successful_awards.records), len(failed_awards.records),
         )
         return OpeningResultBatch(openings, successful_awards, failed_awards)
+
+    async def fetch_failing_results(
+        self, execution_id: UUID, window: CollectionWindow,
+        notice_records: Iterable[RawProviderRecord],
+    ) -> NoticeOutcomeResultBatch:
+        notices_by_number = {
+            str(record.payload.get("bidNtceNo") or "").strip(): record
+            for record in notice_records
+            if str(record.payload.get("bidNtceNo") or "").strip()
+        }
+        semaphore = asyncio.Semaphore(self.opening_concurrency)
+
+        async def fetch_one(
+            notice_number: str,
+        ) -> tuple[str, ExtractedBatch | None]:
+            async with semaphore:
+                try:
+                    async with asyncio.timeout(self.opening_request_timeout_seconds):
+                        batch = await self._fetch_pages(
+                            execution_id, window, "list_failing_opening_results",
+                            {"bidNtceNo": notice_number},
+                        )
+                        return notice_number, batch
+                except (ProviderExecutionError, ConnectorResponseError, TimeoutError) as exc:
+                    LOGGER.warning(
+                        "failing opening lookup isolated notice=%s error=%s",
+                        notice_number, type(exc).__name__,
+                    )
+                    return notice_number, None
+
+        self._opening_rate_limiter_active = True
+        try:
+            async with self.executor:
+                results = await asyncio.gather(*(
+                    fetch_one(notice_number) for notice_number in sorted(notices_by_number)
+                ))
+        finally:
+            self._opening_rate_limiter_active = False
+        outcomes = ExtractedBatch(execution_id=execution_id, window=window)
+        successful = ExtractedBatch(execution_id=execution_id, window=window)
+        failed = ExtractedBatch(execution_id=execution_id, window=window)
+        for notice_number, batch in results:
+            if batch is None:
+                failed.records.append(notices_by_number[notice_number])
+                continue
+            successful.records.append(notices_by_number[notice_number])
+            outcomes.records.extend(batch.records)
+            outcomes.pages += batch.pages
+        return NoticeOutcomeResultBatch(outcomes, successful, failed)
 
     async def _fetch_pages(
         self, execution_id: UUID, window: CollectionWindow,

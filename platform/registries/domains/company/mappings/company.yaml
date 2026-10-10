@@ -1,6 +1,6 @@
 registry:
-  version: 2.0.0
-  registered_at: "2026-07-30"
+  version: 2.1.0
+  registered_at: "2026-10-10"
 
 mapping:
   id: company
@@ -69,7 +69,7 @@ mapping:
         decode: common.to_integer
     legal_entity.average_employee_tenure_years:
       - field: fsc_company_basic.get_company_overview.response.empeAvgCnwkTermCtt
-        decode: common.to_number
+        decode: company.parse_korean_tenure_years
     legal_entity.average_employee_salary_amount:
       - field: fsc_company_basic.get_company_overview.response.enpPn1AvgSlryAmt
         decode: common.to_number

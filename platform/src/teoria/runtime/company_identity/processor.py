@@ -351,11 +351,17 @@ async def execute_company_detail_context(
         links=links,
         outcome=outcome,
     )
-    if not errors:
+    if _is_cacheable_detail_result(resolution, errors):
         await runner.cache.set(cache_key, result, _DETAIL_CACHE_TTL_SECONDS)
     if lock_token is not None:
         await runner.cache.release_lock(cache_key, lock_token)
     return result
+
+
+def _is_cacheable_detail_result(
+    resolution: dict[str, Any], errors: list[dict[str, Any]],
+) -> bool:
+    return not errors and resolution.get("resolution_status") == "confirmed"
 
 
 async def _safe_run(

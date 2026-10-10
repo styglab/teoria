@@ -1,6 +1,6 @@
 registry:
-  version: 1.0.0
-  registered_at: "2026-09-14"
+  version: 1.1.0
+  registered_at: "2026-10-10"
 
 connector:
   id: pps_bid_result_api
@@ -47,6 +47,15 @@ connector:
           - {id: techEvlNaturVal, name: 기술평가원점수, data_type: string}
           - {id: techEvlVal, name: 기술평가점수, data_type: string}
           - {id: totalEvlAmtVal, name: 종합평가점수, data_type: string}
+      - id: failed_opening_result
+        name: 유찰 결과
+        fields:
+          - {id: opengRsltDivNm, name: 개찰결과구분명, data_type: string, values: [{value: 유찰}]}
+          - {id: bidNtceNo, name: 입찰공고번호, data_type: string}
+          - {id: bidNtceOrd, name: 입찰공고차수, data_type: string}
+          - {id: bidClsfcNo, name: 입찰분류번호, data_type: string}
+          - {id: rbidNo, name: 재입찰번호, data_type: string}
+          - {id: nobidRsn, name: 유찰사유, data_type: string}
       - id: bid_award
         name: 최종낙찰 결과
         fields:
@@ -264,3 +273,37 @@ connector:
         data:
           record_path: response.body.items[]
           ref: completed_opening_result
+
+    - id: list_failing_opening_results
+      name: 개찰결과 유찰 목록 조회
+      method: GET
+      idempotent: true
+      path: /getOpengResultListInfoFailing
+      description: 입찰공고번호로 조달청이 유찰로 확정한 개찰결과와 유찰사유를 조회한다.
+      pagination:
+        type: page_number
+        page: {request: query.pageNo}
+        page_size: {request: query.numOfRows}
+        total_count: response.body.totalCount
+      request:
+        query:
+          fields:
+            - {id: numOfRows, name: 한 페이지 결과 수, data_type: integer}
+            - {id: pageNo, name: 페이지 번호, data_type: integer}
+            - id: type
+              name: 타입
+              data_type: string
+              default: json
+              values: [{value: json}, {value: xml}]
+            - {id: bidNtceNo, name: 입찰공고번호, data_type: string}
+            - {id: bidNtceOrd, name: 입찰공고차수, data_type: string}
+            - {id: bidClsfcNo, name: 입찰분류번호, data_type: string}
+            - {id: rbidNo, name: 재입찰번호, data_type: string}
+          required: [numOfRows, pageNo, bidNtceNo]
+      response:
+        content_type: application/json
+        http_status: 200
+        control: *award_control
+        data:
+          record_path: response.body.items[]
+          ref: failed_opening_result

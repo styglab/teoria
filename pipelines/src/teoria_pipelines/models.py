@@ -46,6 +46,15 @@ class OpeningResultBatch:
 
 
 @dataclass(slots=True)
+class NoticeOutcomeResultBatch:
+    """Failure outcomes plus notice lookups classified by request success."""
+
+    outcomes: ExtractedBatch
+    successful_notices: ExtractedBatch
+    failed_notices: ExtractedBatch
+
+
+@dataclass(slots=True)
 class NormalizedBatch:
     contracts: list[dict[str, Any]] = field(default_factory=list)
     suppliers: list[dict[str, Any]] = field(default_factory=list)
@@ -67,6 +76,7 @@ class LoadSummary:
     industries: int = 0
     awards: int = 0
     opening_participants: int = 0
+    notice_outcomes: int = 0
 
 
 @dataclass(slots=True)
@@ -81,6 +91,7 @@ class NormalizedBidNoticeBatch:
 class NormalizedBidResultBatch:
     awards: list[dict[str, Any]] = field(default_factory=list)
     opening_participants: list[dict[str, Any]] = field(default_factory=list)
+    notice_outcomes: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

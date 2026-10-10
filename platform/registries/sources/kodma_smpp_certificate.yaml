@@ -1,6 +1,6 @@
 registry:
-  version: 1.0.0
-  registered_at: "2026-08-07"
+  version: 1.1.0
+  registered_at: "2026-10-10"
 
 source:
   id: kodma_smpp_certificate
@@ -75,6 +75,11 @@ source:
         control: &control
           record_path: response.HeaderValueList
           success: {field: resultCode, equals: "00"}
+          # 기술문서는 03을 데이터 없음으로 정의하지만 운영 API는 같은 의미로
+          # resultMsg="매칭데이터가 존재하지 않습니다."와 함께 90도 반환한다.
+          no_data:
+            - {field: resultCode, equals: "03"}
+            - {field: resultCode, equals: "90"}
           fields:
             - {id: resultCode, name: 결과코드, data_type: string}
             - {id: resultMsg, name: 결과메세지, data_type: string}

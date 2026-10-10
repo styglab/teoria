@@ -13,5 +13,12 @@ class SourceResponseValidator:
         return ProviderResponseValidator().validate(registry.source, operation_id, response,
             data_types=catalog.data_types, path=catalog.source_paths[source_id])
 
+    def is_no_data(self, catalog: RegistryCatalog, source_id: str, operation_id: str,
+                   response: ExecutionResponse) -> bool:
+        registry = catalog.sources[source_id]
+        return ProviderResponseValidator().is_no_data(
+            registry.source, operation_id, response,
+        )
+
 
 __all__ = ["SourceResponseValidator"]

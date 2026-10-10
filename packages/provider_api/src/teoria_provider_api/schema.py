@@ -174,6 +174,7 @@ class SuccessCondition(ContractModel):
 class ResponseControl(FieldContainer):
     record_path: str
     success: SuccessCondition
+    no_data: list[SuccessCondition] = Field(default_factory=list)
 
 
 class Response(ContractModel):
