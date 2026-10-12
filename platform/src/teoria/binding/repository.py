@@ -475,8 +475,15 @@ class BindingRepository:
     def review_binding(self, binding_id: UUID, *, decision: str, reviewer: str, comment: str | None) -> dict[str, Any]:
         next_status = {"approve": "approved", "reject": "rejected", "deprecate": "deprecated"}[decision]
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+            if decision == "approve":
+                connection.execute(
+                    "SELECT o.ontology_id FROM ontology.ontologies o "
+                    "JOIN ontology.concepts c USING (ontology_id) "
+                    "JOIN binding.ontology_bindings b ON b.ontology_concept_id=c.concept_id "
+                    "WHERE b.binding_id=%s FOR UPDATE OF o", (binding_id,)
+                )
             existing = connection.execute(
-                "SELECT status FROM binding.ontology_bindings WHERE binding_id=%s FOR UPDATE", (binding_id,)
+                "SELECT status,ontology_ref_type,ontology_concept_id FROM binding.ontology_bindings WHERE binding_id=%s FOR UPDATE", (binding_id,)
             ).fetchone()
             if existing is None:
                 raise KeyError(str(binding_id))
@@ -484,6 +491,11 @@ class BindingRepository:
             if decision not in allowed.get(existing["status"], set()):
                 raise ValueError(f"Cannot {decision} binding in {existing['status']} status")
             if decision == "approve":
+                owner = connection.execute("SELECT ontology_id FROM ontology.concepts WHERE concept_id=%s", (existing["ontology_concept_id"],)).fetchone()
+                if owner is None:
+                    raise ValueError("Binding has no stable ontology concept")
+                revision = self._resolve_published_revision(connection, ontology_ref_type=existing["ontology_ref_type"], ontology_ref_id=None, ontology_concept_id=existing["ontology_concept_id"])
+                connection.execute("UPDATE binding.ontology_bindings SET ontology_ref_id=%s WHERE binding_id=%s", (revision["revision_id"],binding_id))
                 published = connection.execute(
                     """SELECT CASE ob.ontology_ref_type
                              WHEN 'property' THEN EXISTS (

@@ -7,7 +7,16 @@
 
 - 프로젝트와 저장소 권위 경계
 - Source·Mapping·Capability Runtime과 HTTP API
+- Registry 업무 Domain 소유권과 Runtime 계약 namespace를 분리한 계약 배치
+- 업무 Domain·Runtime 계약을 구분한 Admin 집계와 표시명
+- Ontology 게시 트랜잭션·단일 Published version 제약 및 Application DB 동시성 검증
+- 공공조달 참여 분석의 한국시간 개찰 연도·차수별 집계, 수집 상태와 상위 10위 보존 범위
+- Suggestion 적용 실행권·이력·성공 기록과 외부 쓰기 없는 결과 복구
+- 분석 Reader 기능별 분리와 프로필·참여 Data DB 행 타입 검증
 - Connector·Prefect 수집 및 Data DB
+- 개찰 응답 완전성 검증과 상위 10위·낙찰자 저장 업체 집합의 완료 판정
+- 수집 기능별 Flow·Task·client·정규화 패키지와 실행 관리 분리,
+  참가자격 추출의 모델 실행·근거 검증·의미 보정 분리
 - Ontology version lifecycle과 Registry·Published Ontology·Approved Binding을
   함께 고정하는 checksum 기반 Runtime bundle
 - Semantic Binding review 기록과 Metadata Intelligence suggestion
@@ -15,6 +24,11 @@
   (OpenMetadata description·Glossary·quality test, Binding Draft, Ontology Draft)
 - OpenMetadata integration과 Admin UI
 - Runtime API만 호출하는 MCP gateway
+- Domain별 processor 등록과 query 후처리, 공공조달 query handler를 분리한
+  Runtime·Context orchestration
+- 공공조달 시장 분석의 기능별 하위 폴더와 참가자격 실행·근거·캐시·결과 분리,
+  Domain의 조달 데이터·참가자격 검증,
+  Admin 서비스 조립과 기능별 Router 분리
 - Context `plan`·`execute` 분리와 OPA 정책 결정점의 첫 vertical 계약
 - 서명·versioned OPA Bundle 배포, readiness, decision/status audit 수집
 - Capability input Binding의 Ontology–Runtime type·collection 호환성 검사
@@ -34,6 +48,11 @@ rollback은 검증된 이전 bundle을 다시 활성화하는 방식이다.
 - 계획에 사용한 concept, capability, source와 artifact version을 설명한다.
 - 접근권한과 시간 범위를 실행 전에 검증한다.
 - 부분 실패와 불확실성을 결과에 보존한다.
+
+현재 공고 검색과 계약금액 질문의 해석·집계는 공공조달 패키지에 분리되어 있다.
+이 구조는 범용 자연어 planner의 완료를 뜻하지 않는다. 다른 실제 업무 Domain을
+추가할 때 공통 Runner·Context Engine 수정 없이 handler를 연결할 수 있는지
+검증하고, 그때 확인된 재사용만 공통 계약에 반영한다.
 
 ### 2. 검증된 Capability와 사용자 평가
 

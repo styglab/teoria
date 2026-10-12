@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from teoria.admin.api import create_admin_app
-from teoria.config import Settings
+from teoria.settings import Settings
 from teoria.metadata.models import MetadataEntity, MetadataPage, MetadataStatus, MetadataTargetRef, TableDetail
 from teoria.registry.loader import RegistryLoader
 

@@ -7,7 +7,7 @@ import psycopg
 import pytest
 
 from teoria_pipelines.models import CollectionWindow, ExtractedBatch, RawProviderRecord
-from teoria_pipelines.normalization import normalize_contract_batch
+from teoria_pipelines.domains.public_procurement.contracts.normalization import normalize_contract_batch
 from teoria_pipelines.persistence import PostgresStore
 
 
@@ -151,3 +151,43 @@ def test_same_raw_payload_is_deduplicated_across_pipeline_executions() -> None:
 
     assert payload_count == 1
     assert observation_count == 2
+
+
+def test_opening_completion_matches_selected_business_numbers() -> None:
+    from teoria_pipelines.domains.public_procurement.bid_results.normalization import normalize_bid_result_batch
+    from teoria_pipelines.domains.public_procurement.bid_results.selection import select_participants
+    store = PostgresStore(DATABASE_URL or '')
+    execution_id = uuid4()
+    window = CollectionWindow(date(2026, 10, 12), date(2026, 10, 12))
+    store.start_run(execution_id, 'opening_completion_regression', window)
+    key = {'bidNtceNo': f'TEST-OPENING-{execution_id.hex}', 'bidNtceOrd': '000', 'bidClsfcNo': '1', 'rbidNo': '000'}
+    def record(operation, payload, source_hash):
+        return RawProviderRecord(uuid4(), execution_id, 'pps_bid_result_api', operation, window,
+                                 datetime.now(timezone.utc), source_hash, {**key, **payload})
+    award = record('list_service_bid_awards', {'prtcptCnum': '7', 'bidwinnrBizno': '1000000001'}, 'award-coverage')
+    awards = ExtractedBatch(execution_id, window, [award])
+    openings = ExtractedBatch(execution_id, window, [record('list_completed_opening_results',
+        {'prcbdrBizno': f'{1000000000+i}', 'opengRank': str(i if i <= 5 else 0)}, f'participant-{i}')
+        for i in range(1, 8)])
+    store.upsert_bid_results(normalize_bid_result_batch(awards))
+    store.enqueue_bid_opening_enrichment(awards.records)
+    store.replace_bid_opening_participants(awards.records, normalize_bid_result_batch(select_participants(awards, openings)))
+    store.mark_bid_openings_checked(awards.records, openings.records, execution_id)
+    store.finish_bid_opening_enrichment(awards.records, [])
+    with psycopg.connect(DATABASE_URL) as c:
+        row = c.execute("SELECT q.status,c.participant_count,cardinality(c.selected_business_numbers) FROM ingestion.bid_opening_enrichment_queue q JOIN ingestion.bid_opening_collection_status c USING(notice_number,notice_order,bid_classification_number,rebid_number) WHERE q.notice_number=%s", (key['bidNtceNo'],)).fetchone()
+        assert row == ('completed', 7, 5)
+        # Equal counts with a wrong identity must not pass.
+        c.execute("UPDATE public_procurement.bid_opening_participants SET business_registration_number='9999999999' WHERE notice_number=%s AND business_registration_number='1000000002'", (key['bidNtceNo'],))
+    store.finish_bid_opening_enrichment(awards.records, [])
+    with psycopg.connect(DATABASE_URL) as c:
+        assert c.execute("SELECT status FROM ingestion.bid_opening_enrichment_queue WHERE notice_number=%s", (key['bidNtceNo'],)).fetchone()[0] == 'retry_wait'
+        c.execute("UPDATE ingestion.bid_opening_collection_status SET selected_business_numbers=NULL WHERE notice_number=%s", (key['bidNtceNo'],))
+    store.finish_bid_opening_enrichment(awards.records, [])
+    with psycopg.connect(DATABASE_URL) as c:
+        assert c.execute("SELECT status FROM ingestion.bid_opening_enrichment_queue WHERE notice_number=%s", (key['bidNtceNo'],)).fetchone()[0] == 'retry_wait'
+    with psycopg.connect(DATABASE_URL) as c:
+        c.execute("UPDATE ingestion.bid_opening_enrichment_queue SET award_source_record_hash='changed-award',status='pending' WHERE notice_number=%s", (key['bidNtceNo'],))
+    store.finish_bid_opening_enrichment(awards.records, [])
+    with psycopg.connect(DATABASE_URL) as c:
+        assert c.execute("SELECT status FROM ingestion.bid_opening_enrichment_queue WHERE notice_number=%s", (key['bidNtceNo'],)).fetchone()[0] == 'pending'

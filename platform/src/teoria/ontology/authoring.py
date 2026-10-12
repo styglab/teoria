@@ -75,7 +75,7 @@ class OntologyAuthoringRepository:
 
     def create_draft(self, namespace: str, *, version: str, actor: str, based_on_version_id: UUID | None = None) -> dict[str, Any]:
         with psycopg.connect(self.database_url, row_factory=dict_row) as conn:
-            ontology = conn.execute("SELECT * FROM ontology.ontologies WHERE namespace=%s", (namespace,)).fetchone()
+            ontology = conn.execute("SELECT * FROM ontology.ontologies WHERE namespace=%s FOR UPDATE", (namespace,)).fetchone()
             if ontology is None:
                 raise KeyError(namespace)
             base = conn.execute(
@@ -86,6 +86,8 @@ class OntologyAuthoringRepository:
             ).fetchone()
             if base is None:
                 raise ValueError("A valid base version is required")
+            if base["status"] not in {"published", "deprecated"}:
+                raise ValueError("Drafts must be based on an immutable published version")
             new_id = uuid4()
             row = conn.execute(
                 """INSERT INTO ontology.ontology_versions
@@ -135,27 +137,30 @@ class OntologyAuthoringRepository:
 
     def get_version(self, version_id: UUID) -> dict[str, Any]:
         with psycopg.connect(self.database_url, row_factory=dict_row) as conn:
-            version = conn.execute("SELECT v.*,o.namespace,o.name AS ontology_name FROM ontology.ontology_versions v JOIN ontology.ontologies o USING (ontology_id) WHERE ontology_version_id=%s", (version_id,)).fetchone()
-            if version is None: raise KeyError(str(version_id))
-            objects = conn.execute("""SELECT bo.*,c.stable_key FROM ontology.business_objects bo
-              JOIN ontology.concepts c USING (concept_id)
-              WHERE bo.ontology_version_id=%s ORDER BY bo.code""", (version_id,)).fetchall()
-            result = _jsonable(dict(version)); result["objects"] = []
-            for raw in objects:
-                item = _jsonable(dict(raw))
-                item["properties"] = [_jsonable(dict(p)) for p in conn.execute("""SELECT p.*,c.stable_key
-                  FROM ontology.object_properties p JOIN ontology.concepts c USING (concept_id)
-                  WHERE p.business_object_id=%s ORDER BY p.code""", (raw["business_object_id"],)).fetchall()]
-                result["objects"].append(item)
-            for key, table in (("relationships","relationship_types"),("rules","business_rules"),("metrics","metrics")):
-                result[key] = [_jsonable(dict(x)) for x in conn.execute(f"""SELECT x.*,c.stable_key
-                  FROM ontology.{table} x JOIN ontology.concepts c USING (concept_id)
-                  WHERE x.ontology_version_id=%s ORDER BY x.code""", (version_id,)).fetchall()]
-            return result
+            return self._get_version(conn, version_id)
+
+    def _get_version(self, conn, version_id: UUID) -> dict[str, Any]:
+        version = conn.execute("SELECT v.*,o.namespace,o.name AS ontology_name FROM ontology.ontology_versions v JOIN ontology.ontologies o USING (ontology_id) WHERE ontology_version_id=%s", (version_id,)).fetchone()
+        if version is None: raise KeyError(str(version_id))
+        objects = conn.execute("""SELECT bo.*,c.stable_key FROM ontology.business_objects bo
+          JOIN ontology.concepts c USING (concept_id)
+          WHERE bo.ontology_version_id=%s ORDER BY bo.code""", (version_id,)).fetchall()
+        result = _jsonable(dict(version)); result["objects"] = []
+        for raw in objects:
+            item = _jsonable(dict(raw))
+            item["properties"] = [_jsonable(dict(p)) for p in conn.execute("""SELECT p.*,c.stable_key
+              FROM ontology.object_properties p JOIN ontology.concepts c USING (concept_id)
+              WHERE p.business_object_id=%s ORDER BY p.code""", (raw["business_object_id"],)).fetchall()]
+            result["objects"].append(item)
+        for key, table in (("relationships","relationship_types"),("rules","business_rules"),("metrics","metrics")):
+            result[key] = [_jsonable(dict(x)) for x in conn.execute(f"""SELECT x.*,c.stable_key
+              FROM ontology.{table} x JOIN ontology.concepts c USING (concept_id)
+              WHERE x.ontology_version_id=%s ORDER BY x.code""", (version_id,)).fetchall()]
+        return result
 
     def add_item(self, version_id: UUID, *, kind: str, payload: dict[str, Any], actor: str) -> dict[str, Any]:
         with psycopg.connect(self.database_url, row_factory=dict_row) as conn:
-            version = conn.execute("SELECT v.*,o.namespace FROM ontology.ontology_versions v JOIN ontology.ontologies o USING (ontology_id) WHERE ontology_version_id=%s FOR UPDATE",(version_id,)).fetchone()
+            version = self._lock_version(conn, version_id)
             if version is None: raise KeyError(str(version_id))
             if version["status"] != "draft": raise ValueError("Only draft ontology versions are editable")
             stable_key = payload.get("stable_key") or f"{version['namespace']}.{payload['code']}"
@@ -209,7 +214,7 @@ class OntologyAuthoringRepository:
 
     @staticmethod
     def _require_draft(conn, version_id: UUID) -> None:
-        row=conn.execute("SELECT status FROM ontology.ontology_versions WHERE ontology_version_id=%s",(version_id,)).fetchone()
+        row=OntologyAuthoringRepository._lock_version(conn, version_id)
         if row is None: raise KeyError(str(version_id))
         if row["status"] != "draft": raise ValueError("Only draft ontology versions are editable")
 
@@ -250,7 +255,12 @@ class OntologyAuthoringRepository:
         raise ValueError(f"Unsupported ontology item kind: {kind}")
 
     def validate(self, version_id: UUID) -> dict[str, Any]:
-        version = self.get_version(version_id)
+        with psycopg.connect(self.database_url, row_factory=dict_row) as conn:
+            self._lock_version(conn, version_id)
+            return self._validate(conn, version_id)
+
+    def _validate(self, conn, version_id: UUID) -> dict[str, Any]:
+        version = self._get_version(conn, version_id)
         diagnostics: list[dict[str, str]] = []
         object_ids = {x["business_object_id"] for x in version["objects"]}
         for rel in version["relationships"]:
@@ -259,26 +269,29 @@ class OntologyAuthoringRepository:
         for obj in version["objects"]:
             if not obj["properties"]:
                 diagnostics.append({"code":"object_has_no_properties","path":obj["code"],"severity":"warning"})
-        impact = self.binding_impact(version_id)
+        impact = self._binding_impact(conn, version_id)
         diagnostics.extend({"code":"bound_concept_missing","path":x["stable_key"],"severity":"error"} for x in impact["incompatible_bindings"])
         errors = [x for x in diagnostics if x.get("severity", "error") == "error"]
         return {"status":"valid" if not errors else "invalid","diagnostic_count":len(diagnostics),"diagnostics":diagnostics,"binding_impact":impact}
 
     def binding_impact(self, version_id: UUID) -> dict[str, Any]:
         with psycopg.connect(self.database_url, row_factory=dict_row) as conn:
-            rows = conn.execute("""WITH selected_ontology AS (
-              SELECT ontology_id FROM ontology.ontology_versions WHERE ontology_version_id=%s
-            ), members AS (
-              SELECT concept_id FROM ontology.business_objects WHERE ontology_version_id=%s UNION
-              SELECT p.concept_id FROM ontology.object_properties p JOIN ontology.business_objects b USING (business_object_id) WHERE b.ontology_version_id=%s UNION
-              SELECT concept_id FROM ontology.relationship_types WHERE ontology_version_id=%s UNION
-              SELECT concept_id FROM ontology.business_rules WHERE ontology_version_id=%s UNION
-              SELECT concept_id FROM ontology.metrics WHERE ontology_version_id=%s)
-              SELECT DISTINCT ob.binding_id,c.stable_key,ob.status FROM binding.ontology_bindings ob
-              JOIN ontology.concepts c ON c.concept_id=ob.ontology_concept_id
-              JOIN selected_ontology so ON so.ontology_id=c.ontology_id
-              LEFT JOIN members m ON m.concept_id=ob.ontology_concept_id
-              WHERE ob.status='approved' AND m.concept_id IS NULL""", (version_id,)*6).fetchall()
+            return self._binding_impact(conn, version_id)
+
+    def _binding_impact(self, conn, version_id: UUID) -> dict[str, Any]:
+        rows = conn.execute("""WITH selected_ontology AS (
+          SELECT ontology_id FROM ontology.ontology_versions WHERE ontology_version_id=%s
+        ), members AS (
+          SELECT concept_id FROM ontology.business_objects WHERE ontology_version_id=%s UNION
+          SELECT p.concept_id FROM ontology.object_properties p JOIN ontology.business_objects b USING (business_object_id) WHERE b.ontology_version_id=%s UNION
+          SELECT concept_id FROM ontology.relationship_types WHERE ontology_version_id=%s UNION
+          SELECT concept_id FROM ontology.business_rules WHERE ontology_version_id=%s UNION
+          SELECT concept_id FROM ontology.metrics WHERE ontology_version_id=%s)
+          SELECT DISTINCT ob.binding_id,c.stable_key,ob.status FROM binding.ontology_bindings ob
+          JOIN ontology.concepts c ON c.concept_id=ob.ontology_concept_id
+          JOIN selected_ontology so ON so.ontology_id=c.ontology_id
+          LEFT JOIN members m ON m.concept_id=ob.ontology_concept_id
+          WHERE ob.status='approved' AND m.concept_id IS NULL""", (version_id,)*6).fetchall()
         return {"compatible":not rows,"incompatible_binding_count":len(rows),"incompatible_bindings":[_jsonable(dict(x)) for x in rows]}
 
     def transition(self, version_id: UUID, *, action: str, actor: str, comment: str | None = None) -> dict[str, Any]:
@@ -290,11 +303,11 @@ class OntologyAuthoringRepository:
             ("published", "deprecate"): "deprecated",
         }
         with psycopg.connect(self.database_url, row_factory=dict_row) as conn:
-            current = conn.execute("SELECT * FROM ontology.ontology_versions WHERE ontology_version_id=%s FOR UPDATE", (version_id,)).fetchone()
+            current = self._lock_version(conn, version_id)
             if current is None: raise KeyError(str(version_id))
             next_status = transitions.get((current["status"], action))
             if next_status is None: raise ValueError(f"Cannot {action} version in {current['status']} status")
-            if action in {"submit","approve"} and self.validate(version_id)["status"] != "valid": raise ValueError("Ontology version validation failed")
+            if action in {"submit","approve"} and self._validate(conn, version_id)["status"] != "valid": raise ValueError("Ontology version validation failed")
             if action == "deprecate":
                 active_bindings = conn.execute(
                     """SELECT count(*) AS count
@@ -314,21 +327,32 @@ class OntologyAuthoringRepository:
         return _jsonable(dict(row))
 
     def publish(self, version_id: UUID, *, actor: str) -> dict[str, Any]:
-        validation = self.validate(version_id)
-        if validation["status"] != "valid": raise ValueError("Ontology version validation failed")
-        content = self.get_version(version_id)
-        artifact_body = {key:content[key] for key in ("namespace","version","objects","relationships","rules","metrics")}
-        encoded = json.dumps(artifact_body, ensure_ascii=False, sort_keys=True, separators=(",",":"), default=str)
-        checksum = hashlib.sha256(encoded.encode()).hexdigest()
         with psycopg.connect(self.database_url, row_factory=dict_row) as conn:
-            current = conn.execute("SELECT * FROM ontology.ontology_versions WHERE ontology_version_id=%s FOR UPDATE", (version_id,)).fetchone()
-            if current is None: raise KeyError(str(version_id))
-            if current["status"] != "approved": raise ValueError("Only approved ontology versions can be published")
+            current = self._lock_version(conn, version_id)
+            if current["status"] != "approved":
+                raise ValueError("Only approved ontology versions can be published")
+            if self._validate(conn, version_id)["status"] != "valid":
+                raise ValueError("Ontology version validation failed")
+            content = self._get_version(conn, version_id)
+            artifact_body = {key: content[key] for key in ("namespace", "version", "objects", "relationships", "rules", "metrics")}
+            encoded = json.dumps(artifact_body, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+            checksum = hashlib.sha256(encoded.encode()).hexdigest()
             conn.execute("UPDATE ontology.ontology_versions SET status='deprecated' WHERE ontology_id=%s AND status='published'", (current["ontology_id"],))
             row = conn.execute("UPDATE ontology.ontology_versions SET status='published',published_at=now() WHERE ontology_version_id=%s RETURNING *", (version_id,)).fetchone()
             artifact = conn.execute("INSERT INTO ontology.runtime_artifacts VALUES (%s,%s,'json','1.0',%s,%s::jsonb,%s,now()) RETURNING artifact_id,checksum,schema_version,created_at", (uuid4(),version_id,checksum,encoded,actor)).fetchone()
             self._audit(conn,version_id,None,"published",actor,{"status":"approved"},{"status":"published","checksum":checksum})
-        result=_jsonable(dict(row)); result["artifact"]=_jsonable(dict(artifact)); return result
+        result = _jsonable(dict(row))
+        result["artifact"] = _jsonable(dict(artifact))
+        return result
+
+    @staticmethod
+    def _lock_version(conn, version_id: UUID):
+        owner = conn.execute("SELECT ontology_id FROM ontology.ontology_versions WHERE ontology_version_id=%s", (version_id,)).fetchone()
+        if owner is None:
+            raise KeyError(str(version_id))
+        # Serialize different versions of the same ontology before locking a revision.
+        conn.execute("SELECT ontology_id FROM ontology.ontologies WHERE ontology_id=%s FOR UPDATE", (owner["ontology_id"],))
+        return conn.execute("SELECT v.*,o.namespace FROM ontology.ontology_versions v JOIN ontology.ontologies o USING (ontology_id) WHERE ontology_version_id=%s FOR UPDATE OF v", (version_id,)).fetchone()
 
     def diff(self, version_id: UUID, against: UUID) -> dict[str, Any]:
         left, right = self.get_version(against), self.get_version(version_id)

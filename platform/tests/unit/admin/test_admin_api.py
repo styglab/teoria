@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from teoria.admin.api import create_admin_app
-from teoria.config import Settings
+from teoria.settings import Settings
 from teoria.registry.loader import RegistryLoader
 
 
@@ -17,6 +17,8 @@ def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:
     overview = client.get("/v1/admin/overview")
     assert overview.status_code == 200
     assert overview.json()["counts"]["runtime_contract_domains"] == 3
+    assert overview.json()["counts"]["runtime_contracts"] == 3
+    assert overview.json()["counts"]["business_domains"] == 2
     assert overview.json()["counts"]["runtime_object_types"] == 41
     assert overview.json()["counts"]["eligibility_rules"] == 12
     assert overview.json()["validation"]["status"] == "valid"

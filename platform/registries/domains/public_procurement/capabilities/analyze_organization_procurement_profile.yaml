@@ -1,11 +1,11 @@
 registry:
-  version: 1.24.0
-  registered_at: "2026-10-02"
+  version: 1.25.0
+  registered_at: "2026-10-12"
 capability:
   id: analyze_organization_procurement_profile
   exposure: public
   name: 기관 조달 프로필 분석
-  description: 기관 조달관계를 최근 N개 또는 명시한 회계연도 범위로 집계하고 종료 연도 기준 공급업체 진입, 선택 기간 기준 CR5·HHI, 평균 계약금액, 전년 비교, 분야·분기·계약방식 구조를 반환한다. 분야 분포는 업무구분과 독립된 공식 조달분류만 사용하며 display_name, display_level, has_children, selection_filter를 반환한다. 연도별 공고는 게시일, 낙찰은 최종낙찰일 또는 개찰일, 계약 건수·금액·업체 수는 최초 계약일에 귀속한다. 계약사건은 버전을 병합하고 금액은 조회 종료일 이전 최신 계약 버전을 사용한다. 최초 계약일이 없는 계약사건은 기간 집계에 포함하지 않고 missing_first_contract_date_count로 반환한다. 업체명 검색·정렬·페이지는 업체 관계 목록에만 적용한다.
+  description: 기관 조달관계를 최근 N개 또는 명시한 회계연도 범위로 집계하고 종료 연도 기준 공급업체 진입, 선택 기간 기준 CR5·HHI, 평균 계약금액, 전년 비교, 분야·분기·계약방식 구조를 반환한다. 분야 분포는 업무구분과 독립된 공식 조달분류만 사용하며 display_name, display_level, has_children, selection_filter를 반환한다. 연도별 공고는 게시일, 참여와 낙찰은 개찰일, 계약 건수·금액·업체 수는 최초 계약일에 귀속한다. 계약사건은 버전을 병합하고 금액은 조회 종료일 이전 최신 계약 버전을 사용한다. 최초 계약일이 없는 계약사건은 기간 집계에 포함하지 않고 missing_first_contract_date_count로 반환한다. 업체명 검색·정렬·페이지는 업체 관계 목록에만 적용한다. 참여·독립 낙찰은 한국시간 개찰 연도와 공고·공고차수·분류·재입찰차수 단위로 집계한다. participation_analysis는 관측된 참여 중 최종 결과가 확인된 표본의 성공률·분자·분모, 별도 낙찰 실적, 수집 상태 및 상위 10위와 응답에 있는 최종 낙찰업체의 보존 범위를 반환하며 전체 참여 성공률을 추정하지 않는다.
   kind: compute
   processor: market_context.analyze_organization_procurement_profile
   semantic_requirements:

@@ -6,7 +6,7 @@ from openpyxl import Workbook
 
 import pytest
 
-from teoria_pipelines.document_parsers import (
+from teoria_pipelines.domains.public_procurement.bid_eligibility.documents import (
     UnsupportedDocumentError,
     parse_document,
     sanitize_document_content,
@@ -75,7 +75,7 @@ def test_xls_ole_container_uses_spreadsheet_converter(monkeypatch) -> None:
         workbook.save(f"{output_dir}/document.xlsx")
         return subprocess.CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr("teoria_pipelines.document_parsers._run_converter", fake_run)
+    monkeypatch.setattr("teoria_pipelines.domains.public_procurement.bid_eligibility.documents._run_converter", fake_run)
     parser, result = parse_document(
         b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"xls", "조건.XLS", "application/vnd.ms-excel"
     )
@@ -125,7 +125,7 @@ def test_hwp_uses_pyhwp_before_libreoffice(monkeypatch) -> None:
             stream.write("입찰참가자격\n\n중소기업 확인서")
         return subprocess.CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr("teoria_pipelines.document_parsers._run_converter", fake_run)
+    monkeypatch.setattr("teoria_pipelines.domains.public_procurement.bid_eligibility.documents._run_converter", fake_run)
     parser, result = parse_document(
         b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"data", "공고.hwp", None
     )
@@ -143,7 +143,7 @@ def test_ole_signature_takes_precedence_over_incorrect_hwpx_extension(monkeypatc
             stream.write("실제 바이너리 HWP")
         return subprocess.CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr("teoria_pipelines.document_parsers._run_converter", fake_run)
+    monkeypatch.setattr("teoria_pipelines.domains.public_procurement.bid_eligibility.documents._run_converter", fake_run)
     parser, result = parse_document(
         b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"data", "잘못된확장자.hwpx", None
     )
@@ -168,7 +168,7 @@ def test_hwp_falls_back_to_libreoffice(monkeypatch) -> None:
             writer.write(stream)
         return subprocess.CompletedProcess(command, 0, "", "")
 
-    monkeypatch.setattr("teoria_pipelines.document_parsers._run_converter", fake_run)
+    monkeypatch.setattr("teoria_pipelines.domains.public_procurement.bid_eligibility.documents._run_converter", fake_run)
     with pytest.raises(UnsupportedDocumentError, match="hwp_requires_ocr"):
         parse_document(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"data", "공고.hwp", None)
     assert calls == ["hwp5txt", "soffice"]

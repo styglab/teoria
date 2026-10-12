@@ -27,7 +27,11 @@ def test_loads_current_registries() -> None:
     }
     assert "business_registration_number" in catalog.data_types
     assert set(catalog.runtime_contracts) == {"assessment", "company", "public_procurement"}
-    assert all(path.name == "runtime_contract.yaml" for path in catalog.runtime_contract_paths.values())
+    assert all(path.parent.name == "runtime_contracts" and path.stem == contract_id
+               for contract_id, path in catalog.runtime_contract_paths.items())
+    assert catalog.runtime_contract_paths["assessment"].parent.parent.name == "public_procurement"
+    assert all(catalog.capability_paths[capability_id].parent.parent.name == "public_procurement"
+               for capability_id in ("assess_company_bid_eligibility", "assess_company_bid_eligibilities"))
     assert "business_operating_status_kr" in catalog.value_sets
     assert "holds_valid_direct_production_confirmation" in catalog.eligibility_rules
     assert catalog.eligibility_rules["is_valid_women_owned_business"].evaluator == "qualification_valid"

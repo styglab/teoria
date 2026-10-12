@@ -6,6 +6,30 @@
 Connector → Extract → Raw → Normalize → Upsert → Checkpoint
 ```
 
+## 코드 위치
+
+```text
+src/teoria_pipelines/
+├── domains/public_procurement/
+│   ├── contracts/       계약 수집
+│   ├── bid_notices/     공고·첨부문서 수집
+│   ├── bid_results/     개찰·낙찰 수집
+│   ├── industries/      업종 사전 수집
+│   └── bid_eligibility/ 문서 파싱·참가자격 추출
+├── metadata/           OpenMetadata ingestion Job
+├── execution/          수집 실행·Raw 저장·checkpoint Task
+├── checkpoints/        수집 범위·재개 정책
+├── persistence/        DB·Object Storage 접근
+└── flows/              기존 배포 경로 호환 import
+```
+
+각 수집 기능은 `flows.py`, `tasks.py`, `client.py`, `normalization.py`를 함께 둔다.
+참가자격은 `extraction.py`, `validation.py`, `repair/`에 모델 실행·근거 검증·의미
+보정을 나누며 기존 추출 버전과 fingerprint를 유지한다.
+외부 API 계약 YAML은 `pipelines/connectors/`, 원문은 `references/`, 검증 사례는
+`verification_cases/`, 수집 설정은 `definitions/`, SQL은 `database/migrations/`에 둔다.
+새 배포는 기능별 Flow 경로를 사용하며 기존 경로도 같은 Flow 객체를 반환한다.
+
 ## 검증
 
 ```bash
@@ -15,6 +39,11 @@ uv run --locked --package teoria-pipelines --group validation \
   teoria-pipelines validate-integration pipelines \
   --platform-registries platform/registries
 ```
+
+DB 통합 테스트는 운영과 분리한 PostgreSQL에 `teoria_data` database와
+`teoria_pipeline`, `teoria_runtime` role을 준비한 뒤
+`TEORIA_TEST_DATA_DATABASE_URL`을 지정해 `pytest tests/integration`을 실행한다.
+기존 migration의 DB 권한 계약이 `teoria_data`를 참조하므로 CI도 같은 이름을 사용한다.
 
 ## PPS 계약 Flow
 

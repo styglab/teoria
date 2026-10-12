@@ -10,7 +10,12 @@ from yaml.constructor import ConstructorError
 from yaml.resolver import BaseResolver
 
 from teoria_pipelines.diagnostics import Diagnostic
-from teoria_pipelines.schema import ConnectorRegistry, PipelineDefinition, PipelineRegistry, ProviderReference
+from teoria_pipelines.schema import (
+    ConnectorRegistry,
+    PipelineDefinition,
+    PipelineRegistry,
+    ProviderReference,
+)
 
 
 class UniqueKeyLoader(yaml.SafeLoader):

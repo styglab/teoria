@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from teoria.config import Settings
+from teoria.settings import Settings
 from teoria.registry.loader import RegistryLoader
 from teoria.runtime.api import create_runtime_app
 from teoria.runtime.capability.runner import CapabilityResult
@@ -297,7 +297,7 @@ def test_company_profile_discovery_accepts_organization_entry_filters() -> None:
     )
     properties = profile["input_schema"]["properties"]
 
-    assert profile["version"] == "1.14.0"
+    assert profile["version"] == "1.15.0"
     assert properties["target_year"] == {
         "type": "integer", "minimum": 2000, "maximum": 2100,
     }

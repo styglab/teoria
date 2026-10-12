@@ -6,12 +6,8 @@ import pytest
 
 from teoria.registry.loader import RegistryLoader
 from teoria.registry.validation.registry import RegistryValidator
-from teoria.runtime.mapping.functions.common import format_date_yyyymmdd, format_year, parse_date
-from teoria.runtime.mapping.functions.company import (
-    combine_korean_address,
-    normalize_representative_names,
-    parse_korean_tenure_years,
-)
+from teoria.runtime.mapping.transforms.common import format_date_yyyymmdd, format_year, parse_date
+from teoria.runtime.mapping.transforms.company import combine_korean_address, normalize_representative_names, parse_korean_tenure_years
 
 
 REGISTRIES = Path(__file__).parents[3] / "registries"

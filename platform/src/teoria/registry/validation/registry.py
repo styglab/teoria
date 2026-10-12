@@ -1,3 +1,4 @@
+from collections.abc import Callable, Iterable
 from importlib import import_module
 from inspect import Parameter, signature
 from pathlib import Path
@@ -14,6 +15,9 @@ from teoria.registry.validation.fields import (
 from teoria_provider_api.validator import ProviderContractValidator
 
 class RegistryValidator(FieldValidationMixin):
+    def __init__(self, *, domain_validators: Iterable[Callable[[RegistryCatalog], list[Diagnostic]]] = ()) -> None:
+        self.domain_validators = tuple(domain_validators)
+
     def validate(
         self,
         catalog: RegistryCatalog,
@@ -41,31 +45,9 @@ class RegistryValidator(FieldValidationMixin):
         validate_runtime_contracts(catalog, diagnostics)
         self._validate_mappings(catalog, diagnostics)
         self._validate_capabilities(catalog, diagnostics)
-        self._validate_eligibility_rules(catalog, diagnostics)
+        for validator in self.domain_validators:
+            diagnostics.extend(validator(catalog))
         return diagnostics
-
-    def _validate_eligibility_rules(self, catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
-        known_evaluators = {
-            "business_status_active", "procurement_supplier_registered",
-            "industry_registration_matches", "participation_region_matches",
-            "qualification_valid", "company_scale_qualification_valid",
-            "product_certificate_valid", "consortium_participation_allowed",
-            "product_registration_matches", "no_active_sanction",
-        }
-        for rule_id, rule in catalog.eligibility_rules.items():
-            path = catalog.eligibility_rule_paths[rule_id]
-            if rule.evaluator not in known_evaluators:
-                diagnostics.append(Diagnostic("unknown_rule_evaluator", f"unknown rule evaluator '{rule.evaluator}'", path, location=f"eligibility_rules.{rule_id}.evaluator"))
-            self._check_duplicates([item.id for item in rule.arguments], "rule_argument", path, diagnostics, f"eligibility_rules.{rule_id}.arguments")
-            for argument in rule.arguments:
-                if argument.data_type not in RUNTIME_CONTRACT_BUILTIN_DATA_TYPES and argument.data_type not in catalog.data_types:
-                    diagnostics.append(Diagnostic("unknown_data_type", f"unknown data type '{argument.data_type}'", path, location=f"eligibility_rules.{rule_id}.arguments.{argument.id}.data_type"))
-            for index, reference in enumerate(rule.required_facts):
-                parts = reference.split(".")
-                ontology = catalog.runtime_contracts.get(parts[0]) if len(parts) == 3 else None
-                obj = next((item for item in ontology.object_types if item.id == parts[1]), None) if ontology else None
-                if obj is None or parts[2] not in {item.id for item in obj.properties}:
-                    diagnostics.append(Diagnostic("unknown_rule_fact", f"unknown ontology property '{reference}'", path, location=f"eligibility_rules.{rule_id}.required_facts.{index}"))
 
     def validate_api_definition(self, source: Any, catalog: RegistryCatalog, path: Path, *, root: str) -> list[Diagnostic]:
         """Validate a provider API contract owned outside the Semantic Registry."""
@@ -335,7 +317,7 @@ class RegistryValidator(FieldValidationMixin):
                         if not codec_path:
                             continue
                         transform_module, function_name = codec_path.rsplit(".", 1)
-                        module_name = f"teoria.runtime.mapping.functions.{transform_module}"
+                        module_name = f"teoria.runtime.mapping.transforms.{transform_module}"
                         try:
                             function = getattr(import_module(module_name), function_name)
                             if not callable(function):
@@ -481,7 +463,7 @@ class RegistryValidator(FieldValidationMixin):
             return
         try:
             module_name, function_name = codec_path.rsplit(".", 1)
-            function = getattr(import_module(f"teoria.runtime.mapping.functions.{module_name}"), function_name)
+            function = getattr(import_module(f"teoria.runtime.mapping.transforms.{module_name}"), function_name)
             hints = get_type_hints(function)
             return_categories = self._annotation_categories(hints.get("return"))
             expected_return = target_category if is_decode else (source_categories[0] if len(source_categories) == 1 else None)

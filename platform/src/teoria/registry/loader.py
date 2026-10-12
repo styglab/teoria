@@ -143,6 +143,10 @@ class RegistryLoader:
                         value_sets[definition.id] = definition
 
         runtime_contract_paths_to_load = list((self.root / "runtime_contracts").glob("*.yaml"))
+        runtime_contract_paths_to_load.extend(
+            (self.root / "domains").glob("*/runtime_contracts/*.yaml")
+        )
+        # Replay previously published registries without rewriting their paths.
         runtime_contract_paths_to_load.extend((self.root / "domains").glob("*/runtime_contract.yaml"))
         for path in sorted(runtime_contract_paths_to_load):
             document = self._parse(path, diagnostics)

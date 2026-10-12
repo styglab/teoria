@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
+from dataclasses import dataclass
 from uuid import UUID
 
+from teoria.intelligence.application import ApplicationClaim, ApplicationStateError
 from teoria.intelligence.repository import SuggestionRepository
 from teoria.binding.repository import BindingRepository
 from teoria.intelligence.binding_candidates import rank_binding_candidates
@@ -13,6 +16,15 @@ class SuggestionApplicationError(RuntimeError):
     def __init__(self, message: str, *, code: str = "suggestion_application_failed") -> None:
         self.code = code
         super().__init__(message)
+
+
+@dataclass
+class _ApplicationSession:
+    claim: ApplicationClaim
+    finished: bool = False
+
+
+_application_session: ContextVar[_ApplicationSession | None] = ContextVar("suggestion_application_session", default=None)
 
 
 class SuggestionService:
@@ -82,22 +94,41 @@ class SuggestionService:
             evidence=evidence,
         )
 
-    async def review_and_apply(
-        self,
-        suggestion_id: UUID,
-        *,
-        decision: str,
-        reviewer: str,
-        comment: str | None,
-    ) -> dict:
+    async def review_and_apply(self, suggestion_id: UUID, *, decision: str, reviewer: str, comment: str | None) -> dict:
         current = self.repository.get(suggestion_id)
+        if decision == "approve" and current.get("status") == "applied":
+            return current
         if decision == "approve" and current.get("suggestion_type") == "binding":
             await self._validate_binding_evidence(current)
-        suggestion = self.repository.review(
-            suggestion_id, decision=decision, reviewer=reviewer, comment=comment
-        )
+        if decision == "approve" and current.get("status") in {"approved", "failed"}:
+            suggestion = current
+        else:
+            suggestion = self.repository.review(suggestion_id, decision=decision, reviewer=reviewer, comment=comment)
         if decision != "approve":
             return suggestion
+        return await self._apply_approved(suggestion, reviewer=reviewer)
+
+    async def _apply_approved(self, suggestion: dict, *, reviewer: str) -> dict:
+        kind = suggestion["suggestion_type"]
+        target = "teoria_binding" if kind == "binding" else "teoria_ontology" if kind == "ontology_change" else "openmetadata"
+        try:
+            claim = self.repository.start_application(UUID(str(suggestion["suggestion_id"])), target_system=target, actor=reviewer)
+        except ApplicationStateError as exc:
+            if exc.code == "application_already_applied":
+                return self.repository.get(UUID(str(suggestion["suggestion_id"])))
+            raise SuggestionApplicationError(str(exc), code=exc.code) from exc
+        session = _ApplicationSession(claim)
+        token = _application_session.set(session)
+        try:
+            return await self._dispatch_suggestion(suggestion, reviewer=reviewer)
+        except (SuggestionApplicationError, ValueError, KeyError) as exc:
+            if not session.finished:
+                self._finish_application(suggestion["suggestion_id"], applied=False, error_code=getattr(exc, "code", "application_failed"))
+            raise
+        finally:
+            _application_session.reset(token)
+
+    async def _dispatch_suggestion(self, suggestion: dict, *, reviewer: str) -> dict:
         if suggestion["suggestion_type"] == "binding":
             return await self._apply_binding_suggestion(suggestion, reviewer=reviewer)
         if suggestion["suggestion_type"] == "glossary_term_assignment":
@@ -112,23 +143,80 @@ class SuggestionService:
             return await self._apply_quality_test(suggestion)
         if suggestion["suggestion_type"] == "description":
             return await self._apply_description(suggestion)
-        self.repository.finish_application(
-            suggestion_id, applied=False, error_code="unsupported_suggestion_type"
+        self._finish_application(
+            suggestion["suggestion_id"], applied=False, error_code="unsupported_suggestion_type"
         )
         raise SuggestionApplicationError(
             f"Unsupported suggestion type: {suggestion['suggestion_type']}"
         )
 
+
+    def _mark_effect_started(self) -> None:
+        session = _application_session.get()
+        if session is None:
+            raise SuggestionApplicationError("Application claim is required", code="application_claim_lost")
+        self.repository.mark_effect_started(session.claim)
+
+    def _finish_application(self, suggestion_id, **values) -> None:
+        session = _application_session.get()
+        if session is None:
+            raise SuggestionApplicationError("Application claim is required", code="application_claim_lost")
+        if values["applied"]:
+            self.repository.record_effect_result(session.claim, values["external_change_ref"])
+        self.repository.finish_application(UUID(str(suggestion_id)), claim_token=session.claim.token, **values)
+        session.finished = True
+
+    async def reconcile_application(self, suggestion_id: UUID, *, actor: str) -> dict:
+        suggestion = self.repository.get(suggestion_id)
+        if suggestion["status"] == "applied":
+            return suggestion
+        application = self.repository.get_application(suggestion_id)
+        if not application:
+            raise SuggestionApplicationError("No application exists", code="application_not_found")
+        if application["lease_active"] and application["status"] == "applying":
+            raise SuggestionApplicationError("Application is running", code="application_in_progress")
+        external_ref = application.get("external_change_ref")
+        verified = bool(application.get("effect_succeeded_at") and external_ref)
+        proposed = suggestion["proposed_value"]
+        if not verified and suggestion["suggestion_type"] in {"description", "glossary_term_assignment"}:
+            expected_value = proposed.get(
+                "description" if suggestion["suggestion_type"] == "description" else "glossary_term_fqn"
+            )
+            if not application.get("effect_started_at") or not isinstance(expected_value, str) or not expected_value.strip():
+                raise SuggestionApplicationError(
+                    "No valid attempted effect exists to reconcile", code="application_reconciliation_required"
+                )
+            if self.metadata_client is None:
+                raise SuggestionApplicationError("OpenMetadata is unavailable")
+            table_id = proposed.get("table_id") or suggestion["target_ref"].removeprefix("openmetadata://table/")
+            table = await self.metadata_client.get(f"v1/tables/{table_id}", params={"fields": "columns"})
+            if suggestion["target_type"] == "openmetadata_column":
+                target = next((c for c in table.get("columns", []) if c.get("name") == proposed.get("column_name")), None)
+                if target is None:
+                    raise SuggestionApplicationError("Target column is missing", code="application_target_missing")
+            else:
+                target = table
+            if suggestion["suggestion_type"] == "description":
+                verified = target.get("description") == expected_value.strip()
+            else:
+                verified = any(t.get("source") == "Glossary" and t.get("tagFQN") == proposed.get("glossary_term_fqn") for t in target.get("tags", []))
+            entity_type = "column" if suggestion["target_type"] == "openmetadata_column" else "table"
+            external_ref = f"openmetadata://{entity_type}/{target.get('fullyQualifiedName') or proposed.get('column_fqn') or table_id}@{table.get('version', '')}"
+        if not verified:
+            raise SuggestionApplicationError("The existing effect needs independent verification; another write is blocked", code="application_reconciliation_required")
+        self.repository.reconcile_application(suggestion_id, claim_token=application.get("claim_token"), external_change_ref=external_ref, actor=actor)
+        return self.repository.get(suggestion_id)
+
     async def _apply_description(self, suggestion: dict) -> dict:
         if self.metadata_client is None:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False,
                 error_code="openmetadata_disabled",
             )
             raise SuggestionApplicationError("OpenMetadata write-back is disabled")
         description = suggestion["proposed_value"].get("description")
         if not isinstance(description, str) or not description.strip():
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False,
                 error_code="invalid_description",
             )
@@ -139,12 +227,11 @@ class SuggestionService:
         if target_type == "openmetadata_table" and not table_id:
             table_id = suggestion["target_ref"].removeprefix("openmetadata://table/")
         if not isinstance(table_id, str) or not table_id:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False,
                 error_code="invalid_target_ref",
             )
             raise SuggestionApplicationError("A valid OpenMetadata table ID is required")
-        self.repository.start_application(suggestion["suggestion_id"])
         try:
             if target_type == "openmetadata_column":
                 table = await self.metadata_client.get(
@@ -154,6 +241,7 @@ class SuggestionService:
                 table = await self.metadata_client.get(f"v1/tables/{table_id}")
             if target_type == "openmetadata_table":
                 self._require_current_version(table, proposed.get("source_version"))
+                self._mark_effect_started()
                 updated = await self.metadata_client.update_table_description(
                     table_id, description.strip(),
                     has_description=bool(table.get("description")),
@@ -179,6 +267,7 @@ class SuggestionService:
                     expected_description=proposed.get("source_description"),
                     has_expected_description="source_description" in proposed,
                 )
+                self._mark_effect_started()
                 updated = await self.metadata_client.update_column_description(
                     table_id, column_index=column_index, description=description.strip(),
                     has_description=bool(column.get("description")),
@@ -193,17 +282,17 @@ class SuggestionService:
                     f"Unsupported description target: {target_type}"
                 )
         except OpenMetadataError as exc:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False, error_code=exc.code
             )
             raise SuggestionApplicationError(str(exc)) from exc
         except SuggestionApplicationError as exc:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False,
                 error_code=exc.code,
             )
             raise
-        self.repository.finish_application(
+        self._finish_application(
             suggestion["suggestion_id"],
             applied=True,
             external_change_ref=(
@@ -222,15 +311,15 @@ class SuggestionService:
             raise SuggestionApplicationError(
                 "Glossary, name and description are required"
             )
-        self.repository.start_application(suggestion["suggestion_id"])
         try:
+            self._mark_effect_started()
             created = await self.metadata_client.create_glossary_term(payload)
         except OpenMetadataError as exc:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False, error_code=exc.code
             )
             raise SuggestionApplicationError(str(exc)) from exc
-        self.repository.finish_application(
+        self._finish_application(
             suggestion["suggestion_id"], applied=True,
             external_change_ref=(
                 "openmetadata://glossary_term/"
@@ -251,8 +340,8 @@ class SuggestionService:
             raise SuggestionApplicationError(
                 "Quality test requires name, testDefinition and entityLink"
             )
-        self.repository.start_application(suggestion["suggestion_id"])
         try:
+            self._mark_effect_started()
             created = await self.metadata_client.create_test_case(payload)
             created_id = created.get("id")
             if not created_id:
@@ -262,16 +351,16 @@ class SuggestionService:
                 )
             verified = await self.metadata_client.get_test_case(str(created_id))
         except OpenMetadataError as exc:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False, error_code=exc.code
             )
             raise SuggestionApplicationError(str(exc), code=exc.code) from exc
         except SuggestionApplicationError as exc:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False, error_code=exc.code
             )
             raise
-        self.repository.finish_application(
+        self._finish_application(
             suggestion["suggestion_id"], applied=True,
             external_change_ref=(
                 f"openmetadata://test_case/{verified.get('fullyQualifiedName') or verified.get('id')}"
@@ -293,8 +382,8 @@ class SuggestionService:
             or not payload["name"].strip()
         ):
             raise SuggestionApplicationError("Quality test suite requires a name")
-        self.repository.start_application(suggestion["suggestion_id"])
         try:
+            self._mark_effect_started()
             created = await self.metadata_client.create_test_suite(payload)
             created_id = created.get("id")
             if not created_id:
@@ -304,16 +393,16 @@ class SuggestionService:
                 )
             verified = await self.metadata_client.get_test_suite(str(created_id))
         except OpenMetadataError as exc:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False, error_code=exc.code
             )
             raise SuggestionApplicationError(str(exc), code=exc.code) from exc
         except SuggestionApplicationError as exc:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False, error_code=exc.code
             )
             raise
-        self.repository.finish_application(
+        self._finish_application(
             suggestion["suggestion_id"], applied=True,
             external_change_ref=(
                 f"openmetadata://test_suite/{verified.get('fullyQualifiedName') or verified.get('id')}"
@@ -339,11 +428,9 @@ class SuggestionService:
             raise SuggestionApplicationError(
                 "Ontology namespace, version, operation and kind are required"
             )
-        self.repository.start_application(
-            suggestion["suggestion_id"], target_system="teoria_ontology"
-        )
         try:
             base_id = proposed.get("based_on_version_id")
+            self._mark_effect_started()
             draft = self.ontology_repository.create_draft(
                 namespace, version=version, actor=reviewer,
                 based_on_version_id=UUID(base_id) if base_id else None,
@@ -365,12 +452,12 @@ class SuggestionService:
                     f"Unsupported ontology operation: {operation}"
                 )
         except (KeyError, ValueError, SuggestionApplicationError) as exc:
-            self.repository.finish_application(
+            self._finish_application(
                 suggestion["suggestion_id"], applied=False,
                 error_code="ontology_draft_failed",
             )
             raise SuggestionApplicationError(str(exc)) from exc
-        self.repository.finish_application(
+        self._finish_application(
             suggestion["suggestion_id"], applied=True,
             external_change_ref=f"teoria://ontology/draft/{draft_id}",
         )
@@ -420,7 +507,6 @@ class SuggestionService:
         term_fqn = proposed.get("glossary_term_fqn")
         if not all(isinstance(value, str) and value for value in (table_id, column_name, term_fqn)):
             raise SuggestionApplicationError("Table, column and glossary term are required")
-        self.repository.start_application(suggestion["suggestion_id"])
         try:
             table = await self.metadata_client.get(f"v1/tables/{table_id}", params={"fields": "columns"})
             current_version = str(table.get("version")) if table.get("version") is not None else None
@@ -436,17 +522,18 @@ class SuggestionService:
             already_assigned = any(
                 item.get("source") == "Glossary" and item.get("tagFQN") == term_fqn for item in tags
             )
+            self._mark_effect_started()
             updated = await self.metadata_client.assign_column_glossary_term(
                 table_id, column_index=column_index, term_fqn=term_fqn,
                 already_assigned=already_assigned,
             )
         except OpenMetadataError as exc:
-            self.repository.finish_application(suggestion["suggestion_id"], applied=False, error_code=exc.code)
+            self._finish_application(suggestion["suggestion_id"], applied=False, error_code=exc.code)
             raise SuggestionApplicationError(str(exc)) from exc
         except SuggestionApplicationError:
-            self.repository.finish_application(suggestion["suggestion_id"], applied=False, error_code="invalid_glossary_assignment")
+            self._finish_application(suggestion["suggestion_id"], applied=False, error_code="invalid_glossary_assignment")
             raise
-        self.repository.finish_application(
+        self._finish_application(
             suggestion["suggestion_id"], applied=True,
             external_change_ref=f"openmetadata://column/{proposed.get('column_fqn', column_name)}@{updated.get('version', '')}",
         )
@@ -456,8 +543,8 @@ class SuggestionService:
         if self.metadata_client is None or self.binding_repository is None:
             raise SuggestionApplicationError("Metadata and binding services are required")
         proposed = suggestion["proposed_value"]
-        self.repository.start_application(suggestion["suggestion_id"], target_system="teoria_binding")
         try:
+            self._mark_effect_started()
             binding = self.binding_repository.create_openmetadata_binding(
                 ontology_ref_type=proposed["ontology_ref_type"],
                 ontology_ref_id=None,
@@ -476,9 +563,9 @@ class SuggestionService:
                 created_by=reviewer,
             )
         except Exception as exc:
-            self.repository.finish_application(suggestion["suggestion_id"], applied=False, error_code="binding_draft_failed")
+            self._finish_application(suggestion["suggestion_id"], applied=False, error_code="binding_draft_failed")
             raise SuggestionApplicationError(str(exc)) from exc
-        self.repository.finish_application(
+        self._finish_application(
             suggestion["suggestion_id"], applied=True,
             external_change_ref=f"teoria://binding/{binding['binding_id']}",
         )

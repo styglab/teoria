@@ -10,7 +10,7 @@ import psycopg
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from teoria.config import Settings, bootstrap_settings
+from teoria.settings import Settings, bootstrap_settings
 
 
 class PolicyTelemetryRepository(Protocol):

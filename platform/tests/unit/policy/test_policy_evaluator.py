@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from teoria.config import Settings
+from teoria.settings import Settings
 from teoria.policy import (
     DisabledPolicyEvaluator,
     OpaPolicyEvaluator,

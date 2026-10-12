@@ -1,20 +1,9 @@
-from __future__ import annotations
+"""Compatibility path; canonical implementation: teoria.admin.property_context_api."""
 
-from fastapi import APIRouter, HTTPException
+from importlib import import_module as _import_module
 
-from teoria.binding.repository import BindingRepository
+_implementation = _import_module('teoria.admin.property_context_api')
+__all__ = [name for name in vars(_implementation) if not name.startswith('__')]
+globals().update({name: getattr(_implementation, name) for name in __all__})
 
-
-def create_semantic_router(repository: BindingRepository | None) -> APIRouter:
-    router = APIRouter(prefix="/v1/admin/semantic", tags=["semantic"])
-
-    @router.get("/properties/{namespace}/{object_code}/{property_code}")
-    def property_context(namespace: str, object_code: str, property_code: str) -> dict:
-        if repository is None:
-            raise HTTPException(status_code=503, detail={"code": "app_database_unavailable"})
-        result = repository.get_property_context(namespace, object_code, property_code)
-        if result is None:
-            raise HTTPException(status_code=404, detail={"code": "ontology_property_not_found"})
-        return result
-
-    return router
+create_semantic_router = _implementation.create_property_context_router

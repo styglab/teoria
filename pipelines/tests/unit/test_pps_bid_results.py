@@ -6,18 +6,18 @@ from uuid import uuid4
 
 import pytest
 
-from teoria_pipelines.connectors.pps_bid_results import (
+from teoria_pipelines.domains.public_procurement.bid_results.client import (
     PPSBidResultClient,
-    _opening_page_completes_storage_contract,
+    _validate_opening_winner,
 )
 from teoria_pipelines.loader import PipelineLoader
 from teoria_pipelines.models import CollectionWindow, RawProviderRecord
-from teoria_pipelines.normalization import (
+from teoria_pipelines.domains.public_procurement.bid_results.normalization import (
     normalize_bid_award_record,
     normalize_failed_opening_record,
     normalize_opening_participant_record,
 )
-from teoria_pipelines.tasks.pps_bid_results import (
+from teoria_pipelines.domains.public_procurement.bid_results.tasks import (
     select_competitive_opening_participants,
     split_opening_award_chunks,
 )
@@ -286,28 +286,51 @@ def test_rejects_non_positive_competitive_rank_limit() -> None:
         select_competitive_opening_participants.fn(empty, empty, 0)
 
 
-def test_opening_pagination_stops_after_top_ten_and_winner_are_covered() -> None:
-    payloads = [
-        {"prcbdrBizno": f"{rank:010d}", "opengRank": str(rank)}
-        for rank in range(1, 12)
-    ]
-
-    assert _opening_page_completes_storage_contract(
-        payloads, winner_business_number="0000000001", maximum_rank=10,
-    )
-
-
-def test_opening_pagination_continues_until_winner_is_seen() -> None:
-    payloads = [
-        {"prcbdrBizno": f"{rank:010d}", "opengRank": str(rank)}
-        for rank in range(1, 12)
-    ]
-
-    assert not _opening_page_completes_storage_contract(
-        payloads, winner_business_number="9999999999", maximum_rank=10,
-    )
+def test_opening_response_requires_known_winner() -> None:
+    from teoria_pipelines.domains.public_procurement.provider_response import ConnectorResponseError
+    records = [_record("list_completed_opening_results", {"prcbdrBizno": "1234567890", "opengRank": "0"})]
+    _validate_opening_winner(records, "1234567890")
+    with pytest.raises(ConnectorResponseError, match="omitted the known winner"):
+        _validate_opening_winner(records, "9999999999")
 
 
 def test_opening_rate_limit_methods_remain_on_client() -> None:
     assert callable(PPSBidResultClient._wait_for_opening_rate_slot)
     assert callable(PPSBidResultClient._penalize_opening_rate)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('scenario', ['complete', 'truncated', 'repeated', 'changed_total', 'missing_winner', 'wrong_key'])
+async def test_opening_source_coverage_is_verified_before_success(scenario) -> None:
+    from teoria_provider_api.models import ExecutionResponse
+    from teoria_pipelines.domains.public_procurement.provider_response import ConnectorResponseError
+    catalog = PipelineLoader(PIPELINES).load()
+    registry = catalog.connectors['pps_bid_result_api']
+    class Executor:
+        async def execute(self, request):
+            page = request.query['pageNo']
+            participant = {'bidNtceNo': 'coverage-test', 'bidNtceOrd': '000', 'bidClsfcNo': '1',
+                           'rbidNo': '000', 'prcbdrBizno': str(1000000000+page), 'opengRank': str(page)}
+            if scenario == 'repeated':
+                participant.update(prcbdrBizno='1000000001', opengRank='1')
+            if scenario == 'wrong_key':
+                participant['bidNtceNo'] = 'other-notice'
+            total = 3 if scenario == 'changed_total' and page == 2 else 2
+            items = [] if scenario == 'truncated' else [participant]
+            return ExecutionResponse(status_code=200, content_type='application/json', headers={},
+                body={'response': {'header': {'resultCode': '00', 'resultMsg': 'OK'},
+                                   'body': {'items': items, 'totalCount': total}}}, elapsed_ms=1)
+    client = PPSBidResultClient(registry.connector, path=catalog.connector_paths['pps_bid_result_api'],
+                                executor=Executor(), page_size=1)
+    query = {'bidNtceNo': 'coverage-test', 'bidNtceOrd': '000', 'bidClsfcNo': '1', 'rbidNo': '000'}
+    async def fetch():
+        return await client._fetch_pages(uuid4(), CollectionWindow(date(2026,10,12),date(2026,10,12)),
+            'list_completed_opening_results', query,
+            opening_winner_business_number='9999999999' if scenario == 'missing_winner' else '1000000001',
+            opening_maximum_rank=10)
+    if scenario == 'complete':
+        batch = await fetch()
+        assert len(batch.records) == 2 and batch.pages == 2
+    else:
+        with pytest.raises(ConnectorResponseError):
+            await fetch()

@@ -36,6 +36,29 @@ jobs:
       - run: uv run --locked --package teoria-platform pytest platform/tests
       - run: uv run --locked --package teoria-platform teoria validate platform/registries
 
+  platform-app-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: teoria_app
+          POSTGRES_USER: teoria_test
+          POSTGRES_PASSWORD: teoria_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U teoria_test -d teoria_app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEORIA_TEST_APP_DATABASE_URL: postgresql://teoria_test:teoria_test@localhost:5432/teoria_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --locked --package teoria-platform pytest platform/tests/integration
+
   pipelines:
     runs-on: ubuntu-latest
     steps:
@@ -50,18 +73,18 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_DB: teoria_test
+          POSTGRES_DB: teoria_data
           POSTGRES_USER: teoria_test
           POSTGRES_PASSWORD: teoria_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U teoria_test -d teoria_test"
+          --health-cmd "pg_isready -U teoria_test -d teoria_data"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
     env:
-      TEORIA_TEST_DATA_DATABASE_URL: postgresql://teoria_test:teoria_test@localhost:5432/teoria_test
+      TEORIA_TEST_DATA_DATABASE_URL: postgresql://teoria_test:teoria_test@localhost:5432/teoria_data
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

@@ -28,8 +28,8 @@ Capability는 다음과 같다.
 | 지표 | 연도 기준 | 중복 제거 단위 |
 |---|---|---|
 | `notice_count` | `notice_published_at` | `bid_notice_id` |
-| `participation_count` | 공고 게시일 | 관계 대상과 참여사건 키의 조합 |
-| `award_event_count` | `final_award_date`, 없으면 `opening_at` | 낙찰사건 키 |
+| `participation_count` | 한국시간 개찰일; 없으면 최종낙찰일·입찰시각 순서 | 업체 + 공고번호 + 공고차수 + 분류번호 + 재입찰차수 |
+| `award_event_count` | 한국시간 `opening_at`, 없으면 `final_award_date` | 공고번호 + 공고차수 + 분류번호 + 재입찰차수 |
 | `contract_event_count` | 최초 계약일 | 계약사건 키 |
 | `attributed_contract_amount` | 최초 계약일 | 계약사건별 업체 귀속금액 |
 | `company_count` | 최초 계약일 | 해당 연도 계약업체의 사업자등록번호 |
@@ -362,3 +362,34 @@ sum(stage_counts[scheduled, open, closed, award, contract, failed, cancelled])
 
 최소 회귀 사례는 변경계약의 최초 연도 귀속, 조회 종료일 이후 버전 제외, 공동수급
 배분, 최초 계약일 누락, 동일 공고의 복수 계약사건이다.
+
+## 참여 분석과 수집 상태
+
+기관·업체 프로필의 `outcome.participation_analysis`를 참여 실적 표시 계약으로
+사용한다. `summary`와 `yearly_activity`는 같은 업체·입찰 사건 집합에서
+`observed_participation_count`, `result_confirmed_participation_count`,
+`observed_award_count`를 집계한다. `observed_success_rate`는 마지막 두 값의
+비율이며 분자·분모도 `success_rate_numerator`와 `success_rate_denominator`로
+반환한다. 최종 낙찰업체가 비어 있는 결과는 확정된 탈락으로 처리하지 않는다.
+
+`independent_award_event_count`는 참여 기록 수집 여부와 무관한 별도 낙찰
+실적이다. 이를 성공률의 분자로 사용하지 않는다. 기존 `summary`·
+`yearly_activity`의 `award_event_count`도 이 별도 낙찰 실적이며, 기존 응답
+구조의 호환을 유지한다. 참여 카드에는 새 분석의 `observed_award_count`를
+사용해야 한다. 계약금액은 계속 최초 계약 연도로 집계하므로 낙찰금액과 구분한다.
+
+수집 대기·실행·재시도 상태는 `collection_status=collecting`과
+`collection_status_label=수집 중`으로 제공한다. 이 상태에서 관측된 참여가
+없으면 표시용 `participation_count`는 `null`, 관측 건수는 0, 성공률은 `null`이다.
+`complete`는 알려진 입찰 사건의 **보존 대상** 수집 완료만 의미한다. 실패와
+확인할 수 없는 상태는 각각 `failed`·`unknown`이며 완료로 추정하지 않는다.
+상태는 Data DB의 제한된 조회 view로 제공하고 Runtime에는 `ingestion` 스키마
+조회 권한을 부여하지 않는다.
+
+현재 보존 범위는 개찰 순위 1~10위와 원천 응답에 있는 최종 낙찰업체다.
+`basis.maximum_opening_rank=10`,
+`retain_available_final_winner_regardless_of_rank=true`,
+`all_participants_retained=false`로 범위를 제공한다. 10위 밖 참여를 알 수 없으므로
+`overall_success_rate`는 항상 `null`이며 알려진 낙찰 공고의 수집 완료만으로
+업체 전체 참여 이력의 완전성을 주장하지 않는다. 도움말과 화면 표시는
+입찰체크에서 구현한다.

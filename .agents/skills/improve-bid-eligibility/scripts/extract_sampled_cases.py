@@ -11,10 +11,8 @@ from pathlib import Path
 
 from teoria_pipelines.persistence import PostgresStore
 from teoria_pipelines.settings import bootstrap_pipeline_settings
-from teoria_pipelines.bid_eligibility.tasks import (
-    EXTRACTION_VERSION,
-    extract_bid_eligibility_notice,
-)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.extraction import EXTRACTION_VERSION
+from teoria_pipelines.domains.public_procurement.bid_eligibility.tasks import extract_bid_eligibility_notice
 
 
 def _keys(sample: dict) -> list[tuple[str, str]]:

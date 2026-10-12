@@ -10,7 +10,7 @@ from teoria.runtime.source.request_builder import RequestBuildError, SourceReque
 from teoria.runtime.source.response_validator import SourceResponseValidator
 from teoria.registry.diagnostics import Diagnostic
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
-from teoria.registry.validation.registry import RegistryValidator
+from teoria.registry.composition import create_registry_validator
 from teoria.registry.verification.source.state import SourceVerificationState
 
 
@@ -36,7 +36,7 @@ def create_source_verification_graph(services: SourceVerificationServices | None
     async def validate_structure(state: SourceVerificationState) -> dict[str, Any]:
         try:
             catalog = RegistryLoader(state["registry_root"]).load()
-            diagnostics = RegistryValidator().validate(catalog, source_id=state.get("source_id"))
+            diagnostics = create_registry_validator().validate(catalog, source_id=state.get("source_id"))
         except RegistryLoadError as exc:
             diagnostics = exc.diagnostics
         return {

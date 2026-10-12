@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from teoria_provider_api.executor import ProviderExecutor
 from teoria_provider_api.secrets import EnvironmentSecretProvider
-from teoria.config import Settings, bootstrap_settings
+from teoria.settings import Settings, bootstrap_settings
 from teoria.policy import (
     PolicyEvaluationError,
     PolicyEvaluator,

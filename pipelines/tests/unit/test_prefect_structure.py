@@ -7,16 +7,16 @@ from unittest.mock import MagicMock, patch
 import yaml
 import pytest
 
-from teoria_pipelines.bid_eligibility.expression import compile_eligibility_facts
-from teoria_pipelines.flows.pps_contracts import (
+from teoria_pipelines.domains.public_procurement.bid_eligibility.expression import compile_eligibility_facts
+from teoria_pipelines.domains.public_procurement.contracts.flows import (
     retry_pps_contract_backfill_gaps,
     sync_pps_contract_backfill,
     sync_pps_contract_incremental,
     sync_pps_contract_window,
     sync_pps_contracts,
 )
-from teoria_pipelines.tasks.pps_contracts import extract_contract_operation
-from teoria_pipelines.flows.pps_bid_notices import (
+from teoria_pipelines.domains.public_procurement.contracts.tasks import extract_contract_operation
+from teoria_pipelines.domains.public_procurement.bid_notices.flows import (
     purge_expired_pps_bid_documents,
     sync_pps_bid_documents,
     sync_pps_bid_notice_backfill,
@@ -24,43 +24,60 @@ from teoria_pipelines.flows.pps_bid_notices import (
     sync_pps_bid_notice_window,
     sync_pps_bid_notices,
 )
-from teoria_pipelines.bid_eligibility.tasks import _ensure_codex_authenticated
-from teoria_pipelines.flows.bid_eligibility import _extraction_summary, extract_pps_bid_eligibility
-from teoria_pipelines.bid_eligibility.tasks import (
+from teoria_pipelines.domains.public_procurement.bid_eligibility.tasks import _ensure_codex_authenticated
+from teoria_pipelines.domains.public_procurement.bid_eligibility.flows import (
+    _extraction_summary,
+    extract_pps_bid_eligibility,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.normalization import (
     _citation_text,
     _citation_similarity,
-    _bind_standard_rules,
     _consolidate_requirements,
     _ellipsis_fragments_match,
+    _validate_semantic_normalization,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.rules import _bind_standard_rules
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repair.evidence import (
     _reconcile_document_citations,
     _reconcile_original_text,
     _reconcile_proposition_spans,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repair.requirements import (
     _repair_requirement_fields,
     _repair_non_atomic_propositions,
     _repair_requirement_semantics,
-    _repair_absorbed_alternative_branches,
     _repair_unresolved_candidates,
     _prune_redundant_aggregate_unresolved,
     _prune_resolved_unresolved_candidates,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repair.alternatives import (
+    _repair_absorbed_alternative_branches,
+    _repair_explicit_performance_review_alternative,
+    _hydrate_structured_requirement_attributes,
+    _preserve_company_scale_alternatives,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repair.manual_gates import (
     _preserve_certificate_borrowing_invalid_bid,
     _preserve_shared_representative_invalid_bid,
     _preserve_compound_debarment_disqualification,
     _preserve_legal_administration_disqualification,
-    _repair_explicit_performance_review_alternative,
     _preserve_omitted_manual_eligibility,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.extraction import (
     _skill_instructions,
     _runtime_extraction_instructions,
     _is_transient_codex_failure,
     _input_fingerprint,
     _allocate_document_char_budgets,
-    _structured_api_result,
     _deterministic_document_facts,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.structured import (
+    _structured_api_result,
     _structured_license_candidates,
-    _hydrate_structured_requirement_attributes,
-    _preserve_company_scale_alternatives,
-    _prune_unsupported_cross_source_evidence,
-    _validate_citations,
-    _validate_semantic_normalization,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repair.scope import _prune_unsupported_cross_source_evidence
+from teoria_pipelines.domains.public_procurement.bid_eligibility.validation import _validate_citations
+from teoria_pipelines.domains.public_procurement.bid_eligibility.tasks import (
     extract_bid_eligibility_notice,
     normalize_structured_bid_eligibility_notice,
 )
@@ -274,14 +291,16 @@ from teoria_pipelines.persistence.postgres import (
 
 
 PIPELINES = Path(__file__).parents[2]
-from teoria_pipelines.tasks.pps_contracts import (
+from teoria_pipelines.execution.tasks import (
     complete_pipeline_run,
     combine_extracted_batches,
+    save_raw_records,
+    update_checkpoint,
+)
+from teoria_pipelines.domains.public_procurement.contracts.tasks import (
     determine_collection_window,
     extract_contract_operation,
     normalize_contracts,
-    save_raw_records,
-    update_checkpoint,
     upsert_contracts,
 )
 
@@ -435,7 +454,7 @@ def test_operation_task_retries_once_after_five_minutes() -> None:
 
 def test_codex_authentication_uses_cached_chatgpt_login() -> None:
     with patch(
-        "teoria_pipelines.bid_eligibility.tasks.subprocess.run",
+        "teoria_pipelines.domains.public_procurement.bid_eligibility.tasks.subprocess.run",
         return_value=CompletedProcess(["codex", "login", "status"], 0),
     ) as run:
         _ensure_codex_authenticated()
@@ -445,7 +464,7 @@ def test_codex_authentication_uses_cached_chatgpt_login() -> None:
 
 def test_codex_authentication_failure_has_login_instruction() -> None:
     with patch(
-        "teoria_pipelines.bid_eligibility.tasks.subprocess.run",
+        "teoria_pipelines.domains.public_procurement.bid_eligibility.tasks.subprocess.run",
         return_value=CompletedProcess(["codex", "login", "status"], 1),
     ):
         try:
@@ -802,7 +821,7 @@ def test_extraction_review_rolls_up_requirement_and_unresolved_state() -> None:
 
 def test_extraction_skill_separates_eligibility_stages_and_proofs() -> None:
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
-    with patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root):
+    with patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT", skill_root):
         policy = _skill_instructions()
 
     assert "bid entry, qualification review, or contracting" in policy
@@ -828,7 +847,7 @@ def test_extraction_skill_separates_eligibility_stages_and_proofs() -> None:
 
 def test_runtime_extraction_policy_removes_duplicate_skill_overview() -> None:
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
-    with patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root):
+    with patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT", skill_root):
         full = _skill_instructions()
         runtime = _runtime_extraction_instructions()
 
@@ -839,7 +858,7 @@ def test_runtime_extraction_policy_removes_duplicate_skill_overview() -> None:
 
 
 def test_runtime_prompt_keeps_explicit_eligibility_score_cutoff() -> None:
-    source = Path(PIPELINES / "src/teoria_pipelines/bid_eligibility/tasks.py").read_text()
+    source = Path(PIPELINES / "src/teoria_pipelines/domains/public_procurement/bid_eligibility/extraction.py").read_text()
 
     assert "적격업체 여부를 직접 결정하는 명시적 최저 총점" in source
 
@@ -2882,11 +2901,11 @@ async def test_write_free_extraction_never_persists_outputs_or_failures() -> Non
     )
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
     with (
-        patch("teoria_pipelines.bid_eligibility.tasks._resources", return_value=(store, storage)),
-        patch("teoria_pipelines.bid_eligibility.tasks.bootstrap_pipeline_settings",
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction._resources", return_value=(store, storage)),
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.bootstrap_pipeline_settings",
               return_value=settings),
-        patch("teoria_pipelines.bid_eligibility.tasks.subprocess.run", return_value=process),
-        patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root),
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.subprocess.run", return_value=process),
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT", skill_root),
     ):
         result = await extract_bid_eligibility_notice.fn(notice, persist=False)
 
@@ -2924,11 +2943,11 @@ async def test_simple_document_extraction_skips_codex_and_compiles_result() -> N
     }
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
     with (
-        patch("teoria_pipelines.bid_eligibility.tasks._resources", return_value=(store, storage)),
-        patch("teoria_pipelines.bid_eligibility.tasks.bootstrap_pipeline_settings",
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction._resources", return_value=(store, storage)),
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.bootstrap_pipeline_settings",
               return_value=settings),
-        patch("teoria_pipelines.bid_eligibility.tasks.subprocess.run") as codex,
-        patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root),
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.subprocess.run") as codex,
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT", skill_root),
     ):
         result = await extract_bid_eligibility_notice.fn(notice, persist=False)
 
@@ -2977,11 +2996,11 @@ async def test_api_only_extraction_skips_codex_and_uses_structured_compiler() ->
     }
     skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
     with (
-        patch("teoria_pipelines.bid_eligibility.tasks._resources", return_value=(store, storage)),
-        patch("teoria_pipelines.bid_eligibility.tasks.bootstrap_pipeline_settings",
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction._resources", return_value=(store, storage)),
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.bootstrap_pipeline_settings",
               return_value=settings),
-        patch("teoria_pipelines.bid_eligibility.tasks.subprocess.run") as codex,
-        patch("teoria_pipelines.bid_eligibility.tasks.SKILL_ROOT", skill_root),
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.subprocess.run") as codex,
+        patch("teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT", skill_root),
     ):
         result = await extract_bid_eligibility_notice.fn(notice, persist=False)
 

@@ -40,14 +40,90 @@ Registry만 포함하고, `authoring` target은 Admin·migration·검증에 필�
 |---|---|
 | Runtime 직접 API·DB | `platform/registries/sources/` |
 | 지속 수집 API | `pipelines/connectors/` |
-| API→DB 정규화 | `pipelines/src/teoria_pipelines/normalization/` |
-| Source·DB→Ontology 변환 | `platform/src/teoria/runtime/mapping/functions/` |
+| API→DB 정규화 | `pipelines/src/teoria_pipelines/domains/<domain>/<feature>/normalization.py` |
+| Source·DB→Ontology 변환 | `platform/src/teoria/runtime/mapping/transforms/` |
 | Data DB schema | `pipelines/database/migrations/` |
 | Teoria Application DB schema | `platform/database/migrations/` |
 | OpenMetadata REST boundary | `platform/src/teoria/metadata/openmetadata/` |
 | Business Ontology v2 | `platform/src/teoria/ontology/` |
 | Semantic Binding | `platform/src/teoria/binding/` |
 | Metadata Intelligence | `platform/src/teoria/intelligence/` |
+| Company 식별 기능 | `platform/src/teoria/domains/company/identity/` |
+| 조달 질문 해석·계획·집계 | `platform/src/teoria/domains/public_procurement/context.py` |
+| 조달 참가 가능성·시장 분석·분류·관리 API | `platform/src/teoria/domains/public_procurement/` |
+
+Platform 내부에서도 실행 orchestration과 Domain 구현을 분리한다.
+`runtime/capability/runner.py`는 등록된 handler를 호출하고 입력 바인딩,
+Source 실행, timeout과 materialization을 소유한다. Domain별 processor와
+query 후처리는 각 Domain의 `processors.py`에 등록하고
+`runtime/composition.py`가 기본 구성을 조립한다. Registry의 processor 문자열을
+임의 Python import 경로로 해석하지 않는다.
+
+`context/service.py`는 의미 조회와 plan·execute의 정책 검증을 소유한다.
+질문 해석과 결과 집계는 주입된 query handler가 담당하며 기본 구성은
+`context/composition.py`에서 공공조달 handler를 선택한다. 새 기능 등록과
+Domain 선택을 위해 공통 Runner나 Context Engine에 Domain별 분기를 추가하지 않는다.
+
+공공조달 시장 분석은 `domains/public_procurement/market_analysis/` 안에서
+프로필·참여·경쟁사·계약 이력·활동·공고 비교 기능별로 구현한다. `processor.py`는
+기존 import의 호환 경로이며 새 호출은 기능 모듈을 직접 참조한다. Data DB
+프로파일링과 identity shadow 검증은 Domain의 `data_profile.py`,
+`identity_validation.py`가 소유하며 범용 `ontology/`에 조달 SQL을 두지 않는다.
+
+시장 분석의 프로필·관계·계약·입찰 맥락·관련 사업은 각각 `profiles/`,
+`relationships/`, `contracts/`, `bid_context/`, `related_projects/`에 묶는다.
+SQL 문장은 `sql/`, DB 조회 경계는 `readers/`가 소유한다.
+
+참가자격의 `assessment.py`는 단건·일괄 실행을 조립한다. `evidence_loader.py`는
+근거 조회, `evidence_snapshot.py`는 snapshot 조합, `assessment_cache.py`는 캐시,
+`outcomes.py`와 `expression_projection.py`는 판정 집계, `result_builder.py`는
+Runtime 응답 객체 생성을 소유한다. 기능 테스트는 `tests/unit/domains/`에서
+같은 Domain과 기능 위치를 따른다.
+
+설정은 `settings.py`, 속성 의미 문맥 API는 `admin/property_context_api.py`,
+Mapping 값 변환은 `runtime/mapping/transforms/`를 사용한다. 이전 `config.py`,
+`semantic_api.py`, `mapping/functions/`, `market_context/`와 참가자격
+`processor.py`는 호환용 재노출 경로다. 새 코드가 이 경로에 의존하지 않도록
+architecture 테스트로 검사한다. 기존 HTTP 경로·codec ID·Registry ID는 유지한다.
+
+Registry의 구조·타입·참조 검증은 `registry/validation/`이 소유한다. 참가자격
+규칙 검증은 Domain의 `bid_eligibility/registry_validation.py`가 담당하고
+`registry/composition.py`가 기본 검증기에 연결한다. CLI·Admin·Source 검증은
+이 기본 구성을 사용한다. 실행과 검증의 evaluator 이름은 Domain의 동일한
+등록 테이블을 기준으로 한다.
+
+Admin의 `api.py`는 HTTP 앱 설정과 진입점이며 `composition.py`가 서비스와
+Router를 조립한다. Registry 조회와 Ontology migration 보고서는 각각 이름 있는
+Router로 분리한다. 조달 참가자격 조회와 현재 조달 migration 선택은 Domain이
+소유한다. 기존 HTTP 경로·인증 정책·Registry ID는 코드 재배치로 변경하지 않는다.
+
+시장 분석의 Reader는 `market_analysis/readers/` 안에서 프로필·관계·유사 사업·
+참여·결과·활동·계약별로 분리하고 SQL import를 명시한다. `records.py`는
+프로필 사건의 날짜와 참여 시각·Decimal 금액·누락값 계약을 검증하는 내부 Data DB
+타입이며 Ontology 또는 Runtime Object가 아니다.
+`profiles/participation_analysis.py`는 같은 업체·입찰 사건 집합의 관측 성공률과
+별도 낙찰 실적을 구분한다. Data DB의 `runtime_bid_opening_collection_status`는
+Runtime에 수집 상태만 노출하며 `ingestion` 스키마 권한을 확장하지 않는다.
+
+Application DB의 `intelligence.application_attempts`는 승인된 Suggestion 적용의
+실행 주체·시도·결과를 기록한다. 실행권 token은 재시도 전후의 작업을 구분하고
+효과 시작·성공 기록은 외부 변경의 중복 실행을 막는다. Metadata entity 상태를
+복제하지 않고 적용 결과의 참조만 보관한다. Ontology와 Binding의 상태 변경은
+Ontology 소유 행을 먼저 잠그고 각 version·Binding을 검증한다.
+
+Registry의 `domains/<domain>/`은 업무 소유권이며 Runtime 계약 namespace와
+동일한 개념이 아니다. 계약은 `runtime_contracts/<contract_id>.yaml`에 둔다.
+`company`는 `company` 계약을, `public_procurement`는 `public_procurement`와
+`assessment` 계약을 소유한다. 참가자격 평가 Capability도 공공조달에 둔다.
+새 파일명은 계약 ID와 일치하며 소유 폴더명과는 독립적이다. 이전 발행 구조의
+`domains/<namespace>/runtime_contract.yaml`은 읽기 호환만 지원한다.
+
+기존 Registry의 `assessment` namespace와 `assessment.*`, `market_context.*`,
+`company_identity.*` processor ID는 게시된 계약의 호환성을 위해 유지한다.
+`assessment`의 현재 기능 소유자는 공공조달이며 범용 평가 Domain을 뜻하지 않는다.
+Python 코드 재배치로 Published Ontology 또는 artifact를 변경하지 않는다.
+Registry 파일 이동은 경로를 포함하는 checksum이 달라지므로 새 release로 발행한다.
+기존 Published release와 artifact를 직접 수정하지 않는다.
 
 OpenMetadata의 entity 본문은 Platform DB에 저장하지 않는다. Binding에
 필요한 `MetadataTargetRef`만 `teoria_app`에 정규화해 저장하며 이는
@@ -59,18 +135,33 @@ Ontology와의 연결은 Semantic Binding으로 표현한다.
 ## Prefect 구조
 
 ```text
-flows/           Task 조합과 파라미터
-tasks/           재시도·관찰이 필요한 경계
-connectors/      Provider API client
-normalization/   순수 raw-to-table 변환
-persistence/     raw·정규 데이터와 checkpoint 저장
-checkpoints/     cursor와 재개 정책
+src/teoria_pipelines/
+├── domains/public_procurement/
+│   ├── contracts/       flows.py, tasks.py, client.py, normalization.py
+│   ├── bid_notices/     공고 수집·첨부문서 획득
+│   ├── bid_results/     개찰·낙찰 수집
+│   ├── industries/      업종 사전 수집
+│   ├── bid_eligibility/ 문서 선택·모델 추출·검증·보정
+│   └── provider_response.py  조달 API 응답·오류 처리
+├── metadata/           격리된 OpenMetadata ingestion Job 실행
+├── execution/          재사용되는 실행·Raw 저장·checkpoint Task
+├── checkpoints/        cursor와 재개 정책
+├── persistence/        raw·정규 데이터와 checkpoint 저장
+└── flows/              기존 Prefect 배포 경로의 호환 import
 ```
 
 - Flow는 얇게 유지한다.
 - API 호출과 DB 쓰기는 Task로, 순수 변환은 일반 함수로 둔다.
 - Deployment와 schedule은 `pipelines/prefect.yaml`에 둔다.
 - Checkpoint는 모든 적재가 성공한 뒤 갱신한다.
+- 새 배포 entrypoint는 기능 패키지의 `flows.py`를 가리킨다. 기존 `flows/`는
+  같은 Flow 객체를 re-export하며 실행 구현을 복제하지 않는다.
+- `pipelines/connectors/`의 YAML은 Provider wire 계약이고 기능 패키지의
+  `client.py`는 호출 코드다. Reference·verification case와 Data DB migration
+  위치는 유지한다.
+- 참가자격의 Task는 실행 경계이며 `extraction.py`가 모델 실행을,
+  `validation.py`와 `repair/`가 순수 근거 검증·의미 보정을 소유한다.
+  폴더 재배치만으로 추출 의미·버전·입력 fingerprint를 변경하지 않는다.
 
 ## DB와 배포
 

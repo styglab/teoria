@@ -1,0 +1,6 @@
+from __future__ import annotations
+
+SIGNAL_POLICY_VERSION = "1.0.0"
+RECENT_ACTIVITY_DAYS = 365
+SIMILARITY_PROFILE = "bid_comparison_v1"
+ORGANIZATION_FIELD_CACHE_TTL_SECONDS = 600

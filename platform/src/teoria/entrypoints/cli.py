@@ -8,7 +8,7 @@ import psycopg
 
 from teoria_provider_api.executor import ProviderExecutor
 from teoria_provider_api.secrets import EnvironmentSecretProvider
-from teoria.config import Settings, bootstrap_settings
+from teoria.settings import Settings, bootstrap_settings
 from teoria.registry.artifact import (
     RegistryArtifactError,
     RegistryArtifactLoader,
@@ -18,7 +18,7 @@ from teoria.registry.artifact import (
 from teoria.registry.artifact_snapshot import RuntimeBundleSnapshotRepository
 from teoria.registry.loader import RegistryLoadError, RegistryLoader
 from teoria.registry.release import publish_registry
-from teoria.registry.validation.registry import RegistryValidator
+from teoria.registry.composition import create_registry_validator
 from teoria.persistence import apply_migrations
 from teoria.binding.repository import BindingRepository
 from teoria.binding.capability_manifest import CapabilityBindingManifest, apply_capability_binding_manifest
@@ -28,9 +28,9 @@ from teoria.ontology.authoring import OntologyAuthoringRepository
 from teoria.ontology.promotion import BusinessConceptPromotion, apply_business_concept_promotion
 from teoria.ontology.enrichment import OntologyEnrichmentManifest, apply_ontology_enrichment
 from teoria.ontology.blueprint import OntologyBlueprint, apply_ontology_blueprint
-from teoria.ontology.profiling import run_ontology_profile
+from teoria.domains.public_procurement.data_profile import run_data_profile
 from teoria.ontology.rule_manifest import BusinessRuleManifest, apply_business_rule_manifest
-from teoria.ontology.shadow import validate_procurement_shadow
+from teoria.domains.public_procurement.identity_validation import validate_procurement_identity
 from teoria.ontology.extension import OntologyExtensionManifest, apply_ontology_extension
 from teoria.registry.verification.source.graph import SourceVerificationServices, create_source_verification_graph
 
@@ -333,7 +333,7 @@ def main() -> int:
             print("ERROR TEORIA_ADMIN_DATA_DATABASE_URL is required")
             return 1
         try:
-            result = validate_procurement_shadow(
+            result = validate_procurement_identity(
                 settings.admin_data_database_url,
                 args.bid_notice_id,
             )
@@ -366,7 +366,7 @@ def main() -> int:
             print("ERROR --statement-timeout-ms must be positive")
             return 1
         try:
-            report = run_ontology_profile(
+            report = run_data_profile(
                 settings.admin_data_database_url,
                 include_deep=args.deep,
                 statement_timeout_ms=args.statement_timeout_ms,
@@ -422,7 +422,7 @@ def main() -> int:
             print(diagnostic)
         return 1
 
-    diagnostics = RegistryValidator().validate(catalog, source_id=getattr(args, "source", None))
+    diagnostics = create_registry_validator().validate(catalog, source_id=getattr(args, "source", None))
     for diagnostic in diagnostics:
         print(diagnostic)
     if diagnostics:

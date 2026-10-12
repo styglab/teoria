@@ -20,8 +20,10 @@ def validate_value_sets(catalog: RegistryCatalog, diagnostics: list[Diagnostic])
 def validate_runtime_contracts(catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
     for contract_id, contract in catalog.runtime_contracts.items():
         path = catalog.runtime_contract_paths[contract_id]
-        domain_contract = path.name in {"runtime_contract.yaml", "ontology.yaml"} and path.parent.name == contract.id
-        if path.stem != contract.id and not domain_contract:
+        # Canonical filenames identify contracts; the owning domain may differ.
+        # The single-contract layout remains readable for archived releases.
+        legacy_domain_contract = path.name in {"runtime_contract.yaml", "ontology.yaml"} and path.parent.name == contract.id
+        if path.stem != contract.id and not legacy_domain_contract:
             diagnostics.append(Diagnostic("runtime_contract_filename_mismatch", f"filename must match runtime contract id '{contract.id}.yaml'", path, location="runtime_contract.id"))
 
         object_types = {item.id: item for item in contract.object_types}

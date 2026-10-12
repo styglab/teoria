@@ -3,7 +3,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-from teoria.config import Settings
+from teoria.settings import Settings
 from teoria.policy.control_plane import create_policy_control_plane_app
 
 

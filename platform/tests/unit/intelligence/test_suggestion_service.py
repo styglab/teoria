@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 
+from teoria.intelligence.application import ApplicationClaim
 from teoria.intelligence.service import SuggestionApplicationError, SuggestionService
 
 
@@ -21,8 +22,14 @@ class _Repository:
             "risk_level": "low",
         }
 
-    def start_application(self, suggestion_id):
-        return uuid4()
+    def start_application(self, suggestion_id, *, target_system="openmetadata", actor="reviewer"):
+        return ApplicationClaim(uuid4(), uuid4(), target_system)
+
+    def mark_effect_started(self, claim):
+        pass
+
+    def record_effect_result(self, claim, external_change_ref):
+        pass
 
     def finish_application(self, suggestion_id, **values):
         self.status = "applied" if values["applied"] else "failed"
@@ -88,7 +95,7 @@ class _GlossaryRepository(_Repository):
             "risk_level": "medium",
         }
 
-    def start_application(self, suggestion_id, *, target_system="openmetadata"):
+    def start_application(self, suggestion_id, *, target_system="openmetadata", actor="reviewer"):
         return super().start_application(suggestion_id)
 
 
@@ -186,7 +193,7 @@ class _ExternalClient:
 
 
 class _OntologySuggestionRepository(_ExternalSuggestionRepository):
-    def start_application(self, suggestion_id, *, target_system="openmetadata"):
+    def start_application(self, suggestion_id, *, target_system="openmetadata", actor="reviewer"):
         self.target_system = target_system
         return super().start_application(suggestion_id)
 

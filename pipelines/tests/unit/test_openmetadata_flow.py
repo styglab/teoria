@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from teoria_pipelines.flows.openmetadata import (
+from teoria_pipelines.metadata.openmetadata import (
     _required_environment,
     run_openmetadata_ingestion_container,
 )
@@ -34,7 +34,7 @@ def test_ingestion_task_runs_and_removes_ephemeral_container(
 
     with (
         patch.dict("sys.modules", {"docker": docker_module}),
-        patch("teoria_pipelines.flows.openmetadata.get_run_logger") as logger,
+        patch("teoria_pipelines.metadata.openmetadata.get_run_logger") as logger,
     ):
         result = run_openmetadata_ingestion_container.fn(
             image="teoria-openmetadata-ingestion:1.12.6",
@@ -77,7 +77,7 @@ def test_ingestion_task_fails_on_nonzero_exit_and_removes_container(
 
     with (
         patch.dict("sys.modules", {"docker": docker_module}),
-        patch("teoria_pipelines.flows.openmetadata.get_run_logger"),
+        patch("teoria_pipelines.metadata.openmetadata.get_run_logger"),
         pytest.raises(RuntimeError, match="status 7"),
     ):
         run_openmetadata_ingestion_container.fn(
@@ -103,7 +103,7 @@ def test_ingestion_task_rejects_non_allowlisted_image(
 
     with (
         patch.dict("sys.modules", {"docker": docker_module}),
-        patch("teoria_pipelines.flows.openmetadata.get_run_logger"),
+        patch("teoria_pipelines.metadata.openmetadata.get_run_logger"),
         pytest.raises(RuntimeError, match="not allowlisted"),
     ):
         run_openmetadata_ingestion_container.fn(

@@ -30,9 +30,40 @@ Source의 세부 작성 절차와 verification case 규칙은
 
 ## Runtime 계약
 
-Domain은 독립 배포 경계가 아니라 namespace다. Object Type은 identity property와
+`domains/<domain>/`은 업무 소유권을 나타내며 독립 배포 경계가 아니다.
+Runtime 계약 namespace는 YAML의 `runtime_contract.id`로 식별한다. 하나의
+업무 Domain이 여러 Runtime 계약을 소유할 수 있다.
+
+```text
+domains/
+├── company/
+│   ├── runtime_contracts/company.yaml
+│   ├── capabilities/
+│   └── mappings/
+└── public_procurement/
+    ├── runtime_contracts/
+    │   ├── public_procurement.yaml
+    │   └── assessment.yaml
+    ├── capabilities/
+    ├── mappings/
+    └── rules/
+```
+
+파일명은 계약 ID와 일치해야 하며 소유 Domain 폴더명과 계약 ID를 같게 만들
+필요는 없다. `assessment`는 조달 참가자격 평가 결과 계약이며 별도 업무 Domain이
+아니다. 두 평가 Capability도 `public_procurement/capabilities/`에 둔다.
+기존 `assessment.*` 참조와 processor ID는 유지한다. 로더는 이전에 발행한
+`domains/<namespace>/runtime_contract.yaml` 구조도 읽지만 새 계약은 소유 Domain의
+`runtime_contracts/<contract_id>.yaml`에 작성한다. 중복 계약 ID는 위치와 무관하게
+거부한다.
+
+Object Type은 identity property와
 업무 property를, Link Type은 source와 target을, Mapping은 Source record 변환을,
 Capability는 검증된 입력·출력과 실행 조합을 정의한다.
+
+Registry checksum에는 파일 경로도 포함되므로 위치만 바꿔도 checksum이 달라진다.
+새 구조를 운영에 사용하려면 새 Registry release와 검증된 Runtime bundle을 만든다.
+기존 Published release·artifact 경로와 내용은 직접 수정하지 않는다.
 
 Breaking change는 새 Registry version으로 발행한다. Runtime은 검증된 immutable
 bundle과 checksum을 사용하며 Git 작업 파일을 운영 중에 임의로 읽어 바꾸지 않는다.

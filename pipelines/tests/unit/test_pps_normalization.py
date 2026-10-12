@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 from uuid import uuid4
 
 from teoria_pipelines.models import CollectionWindow, RawProviderRecord
-from teoria_pipelines.normalization import normalize_contract_record
+from teoria_pipelines.domains.public_procurement.contracts.normalization import normalize_contract_record
 
 
 def test_normalizes_contract_supplier_and_demand_organization() -> None:

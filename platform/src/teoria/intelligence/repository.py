@@ -7,6 +7,8 @@ from uuid import UUID, uuid4
 import psycopg
 from psycopg.rows import dict_row
 
+from teoria.intelligence.application import ApplicationClaim, ApplicationStateError
+
 
 class SuggestionRepository:
     def __init__(self, database_url: str) -> None:
@@ -139,38 +141,76 @@ class SuggestionRepository:
             )
         return self.get(suggestion_id)
 
-    def start_application(self, suggestion_id: UUID, *, target_system: str = "openmetadata") -> UUID:
-        application_id = uuid4()
-        with psycopg.connect(self.database_url) as connection:
-            connection.execute(
-                """
-                INSERT INTO intelligence.change_applications (
-                    change_application_id, suggestion_id, target_system,
-                    idempotency_key, status, attempted_at
-                ) VALUES (%s,%s,%s,%s,'applying',now())
-                ON CONFLICT (idempotency_key) DO UPDATE SET
-                    status = 'applying', attempted_at = now(), error_code = NULL
-                """,
-                (application_id, suggestion_id, target_system, f"suggestion:{suggestion_id}:{target_system}"),
-            )
-        return application_id
+    def start_application(self, suggestion_id: UUID, *, target_system: str = "openmetadata", actor: str, lease_seconds: int = 900) -> ApplicationClaim:
+        if lease_seconds < 1:
+            raise ValueError("Application lease must be positive")
+        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+            suggestion = connection.execute("SELECT status FROM intelligence.suggestions WHERE suggestion_id=%s FOR UPDATE", (suggestion_id,)).fetchone()
+            if suggestion is None:
+                raise KeyError(str(suggestion_id))
+            approved = connection.execute("SELECT 1 FROM intelligence.reviews WHERE suggestion_id=%s AND decision='approve'", (suggestion_id,)).fetchone()
+            if not approved or suggestion['status'] not in {'approved', 'failed', 'applied'}:
+                raise ApplicationStateError("An approved suggestion is required", code="application_not_approved")
+            current = connection.execute("SELECT *,COALESCE(lease_until>now(),false) AS lease_active FROM intelligence.change_applications WHERE idempotency_key=%s FOR UPDATE", (f"suggestion:{suggestion_id}:{target_system}",)).fetchone()
+            if current:
+                if current['status'] == 'applied':
+                    raise ApplicationStateError("Suggestion is already applied", code="application_already_applied")
+                if current['status'] == 'applying' and current['lease_active']:
+                    raise ApplicationStateError("Application is running", code="application_in_progress")
+                if current['effect_started_at'] is not None:
+                    raise ApplicationStateError("Verify the existing effect before another write", code="application_reconciliation_required")
+                application_id = current['change_application_id']
+                connection.execute("UPDATE intelligence.application_attempts SET finished_at=now(),outcome='superseded' WHERE change_application_id=%s AND finished_at IS NULL", (application_id,))
+            else:
+                application_id = uuid4()
+                connection.execute("INSERT INTO intelligence.change_applications (change_application_id,suggestion_id,target_system,idempotency_key,status) VALUES (%s,%s,%s,%s,'approved')", (application_id,suggestion_id,target_system,f"suggestion:{suggestion_id}:{target_system}"))
+            token = uuid4()
+            connection.execute("UPDATE intelligence.change_applications SET claim_token=%s,status='applying',attempted_at=now(),lease_until=now()+(%s*interval '1 second'),attempts=attempts+1,error_code=NULL WHERE change_application_id=%s", (token,lease_seconds,application_id))
+            connection.execute("INSERT INTO intelligence.application_attempts (attempt_id,change_application_id,actor) VALUES (%s,%s,%s)", (token,application_id,actor))
+        return ApplicationClaim(application_id, token, target_system)
 
-    def finish_application(self, suggestion_id: UUID, *, applied: bool, external_change_ref: str | None = None, error_code: str | None = None) -> None:
-        status = "applied" if applied else "failed"
+    def mark_effect_started(self, claim: ApplicationClaim) -> None:
         with psycopg.connect(self.database_url) as connection:
-            connection.execute(
-                """
-                UPDATE intelligence.change_applications
-                   SET status = %s, external_change_ref = %s, error_code = %s,
-                       applied_at = CASE WHEN %s THEN now() ELSE NULL END
-                 WHERE suggestion_id = %s AND status = 'applying'
-                """,
-                (status, external_change_ref, error_code, applied, suggestion_id),
-            )
-            connection.execute(
-                "UPDATE intelligence.suggestions SET status = %s WHERE suggestion_id = %s",
-                (status, suggestion_id),
-            )
+            result = connection.execute("UPDATE intelligence.change_applications SET effect_started_at=COALESCE(effect_started_at,now()) WHERE change_application_id=%s AND claim_token=%s AND status='applying' AND lease_until>now()", (claim.application_id,claim.token))
+            if result.rowcount != 1:
+                raise ApplicationStateError("Application no longer owns its execution claim", code="application_claim_lost")
+
+    def record_effect_result(self, claim: ApplicationClaim, external_change_ref: str) -> None:
+        with psycopg.connect(self.database_url) as connection:
+            result = connection.execute("UPDATE intelligence.change_applications SET effect_succeeded_at=now(),external_change_ref=%s WHERE change_application_id=%s AND claim_token=%s AND status='applying' AND effect_started_at IS NOT NULL", (external_change_ref,claim.application_id,claim.token))
+            if result.rowcount != 1:
+                raise ApplicationStateError("Application claim does not match", code="application_claim_lost")
+
+    def reconcile_application(self, suggestion_id: UUID, *, claim_token: UUID | str | None, external_change_ref: str, actor: str) -> None:
+        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+            connection.execute("SELECT suggestion_id FROM intelligence.suggestions WHERE suggestion_id=%s FOR UPDATE", (suggestion_id,))
+            application = connection.execute("SELECT *,COALESCE(lease_until>now(),false) AS lease_active FROM intelligence.change_applications WHERE suggestion_id=%s AND claim_token IS NOT DISTINCT FROM %s FOR UPDATE", (suggestion_id,claim_token)).fetchone()
+            if application is None or (application['status']=='applying' and application['lease_active']):
+                raise ApplicationStateError("Application changed during reconciliation", code="application_in_progress")
+            if application['status']=='applied':
+                return
+            if not connection.execute("SELECT 1 FROM intelligence.reviews WHERE suggestion_id=%s AND decision='approve'", (suggestion_id,)).fetchone():
+                raise ApplicationStateError("Approval is required", code="application_not_approved")
+            connection.execute("UPDATE intelligence.change_applications SET status='applied',external_change_ref=%s,effect_succeeded_at=COALESCE(effect_succeeded_at,now()),applied_at=now(),lease_until=NULL,error_code=NULL WHERE change_application_id=%s", (external_change_ref,application['change_application_id']))
+            connection.execute("UPDATE intelligence.application_attempts SET finished_at=now(),outcome='reconciled' WHERE change_application_id=%s AND finished_at IS NULL", (application['change_application_id'],))
+            connection.execute("INSERT INTO intelligence.application_attempts (attempt_id,change_application_id,actor,finished_at,outcome) VALUES (%s,%s,%s,now(),'reconciled')", (uuid4(),application['change_application_id'],actor))
+            connection.execute("UPDATE intelligence.suggestions SET status='applied' WHERE suggestion_id=%s", (suggestion_id,))
+
+    def get_application(self, suggestion_id: UUID) -> dict[str, Any] | None:
+        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+            row = connection.execute("SELECT *,COALESCE(lease_until>now(),false) AS lease_active FROM intelligence.change_applications WHERE suggestion_id=%s ORDER BY attempted_at DESC NULLS LAST LIMIT 1", (suggestion_id,)).fetchone()
+            return _jsonable(dict(row)) if row else None
+
+    def finish_application(self, suggestion_id: UUID, *, applied: bool, external_change_ref: str | None = None, error_code: str | None = None, claim_token: UUID | None = None, reconciled: bool = False) -> None:
+        status = 'applied' if applied else 'failed'
+        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+            connection.execute("SELECT suggestion_id FROM intelligence.suggestions WHERE suggestion_id=%s FOR UPDATE", (suggestion_id,))
+            row = connection.execute("UPDATE intelligence.change_applications SET status=%s,external_change_ref=COALESCE(%s,external_change_ref),error_code=%s,lease_until=NULL,applied_at=CASE WHEN %s THEN now() ELSE NULL END WHERE suggestion_id=%s AND claim_token IS NOT DISTINCT FROM %s AND status IN ('applying','failed') RETURNING change_application_id", (status,external_change_ref,error_code,applied,suggestion_id,claim_token)).fetchone()
+            if row is None:
+                raise ApplicationStateError("Application claim does not match", code="application_claim_lost")
+            connection.execute("UPDATE intelligence.application_attempts SET finished_at=now(),outcome=%s,error_code=%s WHERE attempt_id=%s", ('reconciled' if reconciled else status,error_code,claim_token))
+            connection.execute("UPDATE intelligence.suggestions SET status=%s WHERE suggestion_id=%s", (status,suggestion_id))
+
 
 
 def _jsonable(value: dict[str, Any]) -> dict[str, Any]:

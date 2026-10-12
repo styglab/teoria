@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from teoria_pipelines.connectors.pps_bid_notices import PPSBidNoticeClient
+from teoria_pipelines.domains.public_procurement.bid_notices.client import PPSBidNoticeClient
 from teoria_pipelines.models import (
     BidNoticeKey,
     CollectionWindow,
@@ -12,13 +12,13 @@ from teoria_pipelines.models import (
     NormalizedBidNoticeBatch,
     RawProviderRecord,
 )
-from teoria_pipelines.normalization.pps_bid_notices import (
+from teoria_pipelines.domains.public_procurement.bid_notices.normalization import (
     normalize_bid_notice_batch,
     parse_industry_main_field_groups,
     parse_industry_reference,
     parse_permitted_industries,
 )
-from teoria_pipelines.tasks.pps_bid_notices import (
+from teoria_pipelines.domains.public_procurement.bid_notices.tasks import (
     determine_bid_notice_window,
     omit_historical_bid_documents,
     safe_object_file_name,
@@ -166,7 +166,7 @@ def test_bid_notice_window_uses_seoul_calendar_date(monkeypatch) -> None:
             return datetime(2026, 8, 13, 8, 30, tzinfo=tz)
 
     monkeypatch.setattr(
-        "teoria_pipelines.tasks.pps_bid_notices.datetime", FixedDateTime
+        "teoria_pipelines.domains.public_procurement.bid_notices.tasks.datetime", FixedDateTime
     )
 
     assert determine_bid_notice_window.fn(lookback_days=1) == CollectionWindow(

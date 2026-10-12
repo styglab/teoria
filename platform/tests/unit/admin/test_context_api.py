@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from teoria.admin.auth import AdminAuthorizer
 from teoria.admin.context_api import create_context_router
-from teoria.config import Settings
+from teoria.settings import Settings
 from teoria.policy import PolicyDecision, PolicyDeniedError
 
 

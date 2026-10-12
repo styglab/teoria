@@ -44,6 +44,9 @@ source이며 `CapabilityTargetRef` Binding으로 Ontology와 연결한다.
 
 - Pipeline은 Provider API를 지속 수집하고 raw와 정규 데이터를 모두 저장한 뒤
   checkpoint를 갱신한다.
+- Pipeline의 Flow·Task·client·정규화는 업무 기능별 패키지에 모은다. 실행 기록과
+  checkpoint Task는 `execution/`, 저장은 `persistence/`, OpenMetadata ingestion
+  Job orchestration은 `metadata/`가 소유한다.
 - Runtime은 직접 호출 Source 또는 Data DB의 read-only relation을 Mapping으로
   runtime object에 변환하고 Capability를 실행한다.
 - Context Engine은 질문을 versioned Semantic Query Plan으로 만들고 계획과 실행을
@@ -55,6 +58,10 @@ source이며 `CapabilityTargetRef` Binding으로 Ontology와 연결한다.
 - MCP는 Runtime HTTP API만 호출하며 DB 권한이나 Provider credential을 갖지 않는다.
 - Provider wire 계약과 HTTP 실행은 `teoria-provider-api`만 담당한다.
 - Pipeline 실행 코드는 Platform Capability나 Mapping Runtime을 호출하지 않는다.
+- 공통 Capability Runner는 명시적으로 등록된 processor와 query 후처리를 실행한다.
+  Company와 공공조달 구현은 `platform/src/teoria/domains/`에 두고 composition에서
+  조립한다. Context Engine은 의미 조회와 정책 검증을 소유하며 조달 질문 해석·
+  집계는 공공조달 query handler가 담당한다.
 
 ## 저장소와 배포
 

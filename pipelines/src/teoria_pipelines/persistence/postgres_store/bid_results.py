@@ -12,12 +12,15 @@ from psycopg.types.json import Jsonb
 from teoria_pipelines.models import (
     BidNoticeKey,
     CollectionWindow,
+    ExtractedBatch,
     LoadSummary,
     NormalizedBatch,
     NormalizedBidResultBatch,
     NormalizedBidNoticeBatch,
     RawProviderRecord,
 )
+
+from teoria_pipelines.domains.public_procurement.bid_results.selection import select_participants
 
 from teoria_pipelines.persistence.postgres_store.support import (
     _filter_covered_unavailable_documents,
@@ -271,42 +274,32 @@ class BidResultStoreMixin:
                 if successful_keys:
                     cursor.executemany(
                     "UPDATE ingestion.bid_opening_enrichment_queue q SET "
-                    "status=CASE WHEN (SELECT count(DISTINCT p.business_registration_number) "
-                    "FROM public_procurement.bid_opening_participants p WHERE "
-                    "(p.notice_number,p.notice_order,p.bid_classification_number,p.rebid_number)="
-                    "(q.notice_number,q.notice_order,q.bid_classification_number,q.rebid_number)) "
-                    ">=LEAST(a.participant_count,10) THEN 'completed' "
+                    "status=CASE WHEN verified.complete THEN 'completed' "
                     "WHEN q.attempts+1>=5 THEN 'partial_completed' ELSE 'retry_wait' END,"
-                    "attempts=CASE WHEN (SELECT count(DISTINCT p.business_registration_number) "
-                    "FROM public_procurement.bid_opening_participants p WHERE "
-                    "(p.notice_number,p.notice_order,p.bid_classification_number,p.rebid_number)="
-                    "(q.notice_number,q.notice_order,q.bid_classification_number,q.rebid_number)) "
-                    ">=LEAST(a.participant_count,10) THEN q.attempts ELSE q.attempts+1 END,"
-                    "completed_at=CASE WHEN (SELECT count(DISTINCT p.business_registration_number) "
-                    "FROM public_procurement.bid_opening_participants p WHERE "
-                    "(p.notice_number,p.notice_order,p.bid_classification_number,p.rebid_number)="
-                    "(q.notice_number,q.notice_order,q.bid_classification_number,q.rebid_number)) "
-                    ">=LEAST(a.participant_count,10) THEN now() ELSE NULL END,"
-                    "next_retry_at=CASE WHEN (SELECT count(DISTINCT p.business_registration_number) "
-                    "FROM public_procurement.bid_opening_participants p WHERE "
-                    "(p.notice_number,p.notice_order,p.bid_classification_number,p.rebid_number)="
-                    "(q.notice_number,q.notice_order,q.bid_classification_number,q.rebid_number)) "
-                    ">=LEAST(a.participant_count,10) THEN q.next_retry_at "
+                    "attempts=CASE WHEN verified.complete THEN q.attempts ELSE q.attempts+1 END,"
+                    "completed_at=CASE WHEN verified.complete THEN now() ELSE NULL END,"
+                    "next_retry_at=CASE WHEN verified.complete THEN q.next_retry_at "
                     "WHEN q.attempts+1>=5 THEN now()+interval '7 days' "
                     "WHEN q.attempts<1 THEN now()+interval '30 minutes' "
                     "WHEN q.attempts<2 THEN now()+interval '2 hours' "
                     "WHEN q.attempts<3 THEN now()+interval '12 hours' "
                     "ELSE now()+interval '1 day' END,"
-                    "lease_until=NULL,last_error_code=CASE WHEN (SELECT count(DISTINCT "
-                    "p.business_registration_number) FROM public_procurement.bid_opening_participants p "
-                    "WHERE (p.notice_number,p.notice_order,p.bid_classification_number,p.rebid_number)="
-                    "(q.notice_number,q.notice_order,q.bid_classification_number,q.rebid_number)) "
-                    ">=LEAST(a.participant_count,10) THEN NULL ELSE 'opening_response_incomplete' END,"
-                    "updated_at=now() FROM public_procurement.bid_awards a WHERE "
-                    "(a.notice_number,a.notice_order,a.bid_classification_number,a.rebid_number)="
-                    "(q.notice_number,q.notice_order,q.bid_classification_number,q.rebid_number) AND "
+                    "lease_until=NULL,last_error_code=CASE WHEN verified.complete THEN NULL "
+                    "ELSE 'opening_response_incomplete' END,updated_at=now() FROM ("
+                    "SELECT c.notice_number,c.notice_order,c.bid_classification_number,c.rebid_number,"
+                    "c.award_source_record_hash, c.selected_business_numbers IS NOT NULL AND "
+                    "c.selected_business_numbers=ARRAY(SELECT DISTINCT p.business_registration_number "
+                    "FROM public_procurement.bid_opening_participants p WHERE "
+                    "(p.notice_number,p.notice_order,p.bid_classification_number,p.rebid_number)="
+                    "(c.notice_number,c.notice_order,c.bid_classification_number,c.rebid_number) "
+                    "ORDER BY p.business_registration_number) AS complete "
+                    "FROM ingestion.bid_opening_collection_status c) verified WHERE "
+                    "(verified.notice_number,verified.notice_order,verified.bid_classification_number,"
+                    "verified.rebid_number)=(q.notice_number,q.notice_order,"
+                    "q.bid_classification_number,q.rebid_number) AND "
+                    "verified.award_source_record_hash=q.award_source_record_hash AND "
                     "q.notice_number=%s AND q.notice_order=%s AND q.bid_classification_number=%s "
-                        "AND q.rebid_number=%s", successful_keys,
+                    "AND q.rebid_number=%s", successful_keys,
                     )
                 if failed_keys:
                     cursor.executemany(
@@ -324,6 +317,22 @@ class BidResultStoreMixin:
         self, awards: Iterable[RawProviderRecord], participants: Iterable[RawProviderRecord],
         execution_id: UUID,
     ) -> int:
+        awards = list(awards)
+        participants = list(participants)
+        selected_numbers: dict[tuple[str, str, str, str], set[str]] = {}
+        if awards:
+            first = awards[0]
+            selected = select_participants(
+                ExtractedBatch(execution_id, first.window, awards),
+                ExtractedBatch(execution_id, first.window, participants),
+            )
+            for record in selected.records:
+                key = tuple(str(record.payload.get(name) or "").strip() for name in (
+                    "bidNtceNo", "bidNtceOrd", "bidClsfcNo", "rbidNo"
+                ))
+                number = "".join(c for c in str(record.payload.get("prcbdrBizno") or "") if c.isdigit())
+                if number:
+                    selected_numbers.setdefault(key, set()).add(number)
         counts: dict[tuple[str, str, str, str], int] = {}
         for record in participants:
             key = tuple(str(record.payload.get(name) or "").strip() for name in (
@@ -335,7 +344,7 @@ class BidResultStoreMixin:
             key = tuple(str(record.payload.get(name) or "").strip() for name in (
                 "bidNtceNo", "bidNtceOrd", "bidClsfcNo", "rbidNo"
             ))
-            values.append((*key, record.source_record_hash, counts.get(key, 0), execution_id))
+            values.append((*key, record.source_record_hash, counts.get(key, 0), execution_id, sorted(selected_numbers.get(key, set()))))
         if not values:
             return 0
         with psycopg.connect(self.database_url) as connection:
@@ -343,12 +352,12 @@ class BidResultStoreMixin:
                 cursor.executemany(
                     "INSERT INTO ingestion.bid_opening_collection_status "
                     "(notice_number,notice_order,bid_classification_number,rebid_number,"
-                    "award_source_record_hash,participant_count,execution_id) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT "
+                    "award_source_record_hash,participant_count,execution_id,selected_business_numbers) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT "
                     "(notice_number,notice_order,bid_classification_number,rebid_number) "
                     "DO UPDATE SET award_source_record_hash=EXCLUDED.award_source_record_hash,"
                     "participant_count=EXCLUDED.participant_count,execution_id=EXCLUDED.execution_id,"
-                    "checked_at=now()",
+                    "selected_business_numbers=EXCLUDED.selected_business_numbers,checked_at=now()",
                     values,
                 )
         return len(values)

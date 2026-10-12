@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from teoria.config import Settings
+from teoria.settings import Settings
 
 
 @dataclass(frozen=True)

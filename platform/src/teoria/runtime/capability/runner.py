@@ -5,12 +5,12 @@ from copy import deepcopy
 from datetime import date, datetime, timezone
 from typing import Any
 
-import psycopg
-from pydantic import BaseModel, Field
+from teoria.runtime.capability.contracts import CapabilityExecutionError, CapabilityResult
+from teoria.runtime.capability.handlers import CapabilityHandlers
 
 from teoria.runtime.capability.binder import CapabilityBinder
 from teoria.runtime.mapping.decoder import MappedFragment, MappingDecoder
-from teoria.runtime.mapping.materializer import MaterializedLink, MaterializedObject, OntologyMaterializer
+from teoria.runtime.mapping.materializer import OntologyMaterializer
 from teoria_provider_api.errors import ProviderExecutionError
 from teoria_provider_api.executor import ProviderExecutor
 from teoria_provider_api.models import ExecutionResponse
@@ -24,51 +24,6 @@ from teoria.runtime.source.database import (
 from teoria.registry.loader import RegistryCatalog
 
 
-class CapabilityExecutionError(RuntimeError):
-    def __init__(
-        self,
-        code: str,
-        message: str,
-        *,
-        capability_id: str,
-        source_id: str | None = None,
-        operation_id: str | None = None,
-        page: int | None = None,
-        attempts: int | None = None,
-        retryable: bool = False,
-    ) -> None:
-        self.code = code
-        self.capability_id = capability_id
-        self.source_id = source_id
-        self.operation_id = operation_id
-        self.page = page
-        self.attempts = attempts
-        self.retryable = retryable
-        super().__init__(message)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "code": self.code,
-            "message": str(self),
-            "capability": self.capability_id,
-            "source": self.source_id,
-            "operation": self.operation_id,
-            "page": self.page,
-            "attempts": self.attempts,
-            "retryable": self.retryable,
-        }
-
-
-class CapabilityResult(BaseModel):
-    capability_id: str
-    objects: list[MaterializedObject] = Field(default_factory=list)
-    links: list[MaterializedLink] = Field(default_factory=list)
-    responses: list[ExecutionResponse] | None = None
-    outcome: dict[str, Any] | None = None
-    pagination: dict[str, int] | None = None
-    pagination_by_step: dict[str, dict[str, int]] | None = None
-
-
 class CapabilityRunner:
     def __init__(
         self,
@@ -78,6 +33,7 @@ class CapabilityRunner:
         max_pages: int = 100,
         database_executor: DatabaseSourceExecutor | None = None,
         cache: Any | None = None,
+        handlers: CapabilityHandlers | None = None,
     ) -> None:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be greater than zero")
@@ -97,6 +53,11 @@ class CapabilityRunner:
 
             cache = MemoryRuntimeCache()
         self.cache = cache
+        if handlers is None:
+            from teoria.runtime.composition import create_capability_handlers
+
+            handlers = create_capability_handlers()
+        self.handlers = handlers
 
     async def run(
         self,
@@ -137,96 +98,14 @@ class CapabilityRunner:
     ) -> CapabilityResult:
         capability = catalog.capabilities[capability_id]
         if capability.kind != "query":
-            if capability.processor == "company_identity.resolve_company_identifiers":
-                from teoria.runtime.company_identity.processor import (
-                    execute_company_identifier_resolution,
+            handler = self.handlers.processor(capability.processor)
+            if handler is None:
+                raise CapabilityExecutionError(
+                    "unknown_capability_processor",
+                    f"unknown capability processor '{capability.processor}'",
+                    capability_id=capability_id,
                 )
-
-                return await execute_company_identifier_resolution(
-                    self, catalog, capability_id, inputs,
-                )
-            if capability.processor == "company_identity.get_company_detail_context":
-                from teoria.runtime.company_identity.processor import (
-                    execute_company_detail_context,
-                )
-
-                return await execute_company_detail_context(
-                    self, catalog, capability_id, inputs,
-                )
-            if capability.processor == "assessment.evaluate_bid_eligibility":
-                from teoria.runtime.assessment.processor import execute_bid_eligibility_assessment
-
-                return await execute_bid_eligibility_assessment(self, catalog, capability_id, inputs)
-            if capability.processor == "assessment.evaluate_bid_eligibilities":
-                from teoria.runtime.assessment.processor import execute_bid_eligibility_assessments
-
-                return await execute_bid_eligibility_assessments(self, catalog, capability_id, inputs)
-            if capability.processor == "market_context.find_bid_project_lineage":
-                from teoria.runtime.market_context.processor import execute_bid_project_lineage
-
-                return await execute_bid_project_lineage(catalog, capability_id, inputs)
-            if capability.processor == "market_context.get_organization_company_relationship":
-                from teoria.runtime.market_context.processor import (
-                    execute_organization_company_relationship,
-                )
-
-                return await execute_organization_company_relationship(
-                    catalog, capability_id, inputs, cache=self.cache,
-                )
-            if capability.processor == "market_context.get_company_similar_project_experience":
-                from teoria.runtime.market_context.processor import (
-                    execute_company_similar_project_experience,
-                )
-
-                return await execute_company_similar_project_experience(
-                    catalog, capability_id, inputs,
-                )
-            if capability.processor == "market_context.analyze_organization_procurement_profile":
-                from teoria.runtime.market_context.processor import execute_organization_procurement_profile
-                return await execute_organization_procurement_profile(catalog, capability_id, inputs)
-            if capability.processor == "market_context.analyze_company_procurement_profile":
-                from teoria.runtime.market_context.processor import execute_company_procurement_profile
-                return await execute_company_procurement_profile(catalog, capability_id, inputs)
-            if capability.processor == "market_context.search_organization_supplier_entries":
-                from teoria.runtime.market_context.processor import (
-                    execute_organization_supplier_entry_search,
-                )
-                return await execute_organization_supplier_entry_search(
-                    catalog, capability_id, inputs,
-                )
-            if capability.processor == "market_context.search_company_bid_participations":
-                from teoria.runtime.market_context.processor import execute_company_participation_search
-                return await execute_company_participation_search(catalog, capability_id, inputs)
-            if capability.processor == "market_context.get_bid_notice_participations":
-                from teoria.runtime.market_context.processor import execute_bid_notice_participations
-                return await execute_bid_notice_participations(catalog, capability_id, inputs)
-            if capability.processor == "market_context.analyze_company_competitors":
-                from teoria.runtime.market_context.processor import execute_company_competitor_analysis
-                return await execute_company_competitor_analysis(catalog, capability_id, inputs)
-            if capability.processor == "market_context.get_bid_notice_relationship_context":
-                from teoria.runtime.market_context.processor import execute_bid_notice_relationship_context
-                return await execute_bid_notice_relationship_context(catalog, capability_id, inputs)
-            if capability.processor == "market_context.analyze_bid_participation_context":
-                from teoria.runtime.market_context.processor import execute_bid_participation_context
-                return await execute_bid_participation_context(
-                    catalog, capability_id, inputs, cache=self.cache,
-                )
-            if capability.processor == "market_context.search_bid_related_projects":
-                from teoria.runtime.market_context.processor import execute_bid_related_projects_search
-                return await execute_bid_related_projects_search(
-                    catalog, capability_id, inputs, cache=self.cache,
-                )
-            if capability.processor == "market_context.search_procurement_outcomes":
-                from teoria.runtime.market_context.processor import execute_procurement_outcome_search
-                return await execute_procurement_outcome_search(catalog, capability_id, inputs)
-            if capability.processor == "market_context.search_procurement_activity":
-                from teoria.runtime.market_context.processor import execute_procurement_activity_search
-                return await execute_procurement_activity_search(catalog, capability_id, inputs)
-            raise CapabilityExecutionError(
-                "unknown_capability_processor",
-                f"unknown capability processor '{capability.processor}'",
-                capability_id=capability_id,
-            )
+            return await handler(self, catalog, capability_id, inputs)
         allowed_objects = {item.split(".", 1)[1] for item in capability.returns if self._is_object(catalog, item)}
         allowed_links = {item.split(".", 1)[1] for item in capability.returns if not self._is_object(catalog, item)}
         fragments: list[MappedFragment] = []
@@ -345,20 +224,6 @@ class CapabilityRunner:
                 page += 1
 
         objects, links = self.materializer.materialize(catalog, fragments, observed_at, allowed_objects, allowed_links)
-        if capability_id == "search_public_procurement_contracts":
-            from teoria.runtime.market_context.processor import enrich_contract_search_objects
-
-            try:
-                await enrich_contract_search_objects(
-                    catalog, objects, observed_at=observed_at,
-                )
-            except (psycopg.Error, RuntimeError) as exc:
-                raise CapabilityExecutionError(
-                    "database_source_error", str(exc), capability_id=capability_id,
-                    source_id="teoria_public_procurement",
-                    operation_id="contract_suppliers",
-                    retryable=isinstance(exc, psycopg.Error),
-                ) from exc
         outcome_result = None
         if capability.outcome:
             outcome_result = {
@@ -372,7 +237,7 @@ class CapabilityRunner:
                 "observed_at": observed_at.isoformat(),
                 "input": {capability.outcome.input: inputs[capability.outcome.input]},
             }
-        return CapabilityResult(
+        result = CapabilityResult(
             capability_id=capability_id,
             objects=objects,
             links=links,
@@ -381,6 +246,10 @@ class CapabilityRunner:
             pagination=result_pagination if len(pagination_by_step) <= 1 else None,
             pagination_by_step=pagination_by_step if len(pagination_by_step) > 1 else None,
         )
+        hook = self.handlers.query_hook(capability_id)
+        if hook is not None:
+            result = await hook(self, catalog, result, observed_at)
+        return result
 
     @staticmethod
     def _period_contains(value: Any, reference_date: date) -> bool:

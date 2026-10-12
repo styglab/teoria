@@ -144,4 +144,21 @@ def create_intelligence_router(
                 detail={"code": exc.code, "message": str(exc)},
             ) from exc
 
+    @router.post("/suggestions/{suggestion_id}/applications/reconcile")
+    async def reconcile_application(
+        suggestion_id: UUID,
+        principal: AdminPrincipal = Depends(authorizer.require("metadata_reviewer", "metadata_admin", "ontology_owner")),
+    ) -> dict:
+        if service is None:
+            raise HTTPException(status_code=503, detail={"code": "intelligence_service_unavailable"})
+        try:
+            suggestion = require_repository().get(suggestion_id)
+            if suggestion.get("suggestion_type") == "ontology_change" and "ontology_owner" not in principal.roles:
+                raise HTTPException(status_code=403, detail={"code": "admin_role_required", "required_roles": ["ontology_owner"]})
+            return await service.reconcile_application(suggestion_id, actor=principal.actor)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail={"code": "suggestion_not_found"}) from exc
+        except (SuggestionApplicationError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail={"code": getattr(exc, "code", "application_reconciliation_failed"), "message": str(exc)}) from exc
+
     return router

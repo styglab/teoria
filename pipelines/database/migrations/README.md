@@ -31,3 +31,8 @@ uv run --locked --package teoria-pipelines \
 입찰 참가자격 추출은 첨부문서 처리 커버리지를 함께 저장한다. 일부 문서가 반복 실패하거나
 미지원 형식이어도 사용 가능한 문서와 정형 제한정보로 `partial` 결과를 생성하며, 누락 문서와
 오류 사유를 `unavailable_documents`에 기록한다.
+
+`081_bid_opening_runtime_collection_status.sql`은 참여 분석에 필요한 수집 상태를
+`public_procurement.runtime_bid_opening_collection_status` view로 제공한다.
+Runtime에는 이 view의 SELECT만 허용하고 ingestion 작업 테이블은 노출하지 않는다.
+새 Platform 참여 분석을 배포하기 전에 이 migration을 적용해야 한다.

@@ -1,8 +1,8 @@
-from teoria_pipelines.bid_eligibility.tasks import (
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repair.scope import (
     _apply_bid_entry_fast_scope,
     _prune_out_of_scope_participation_findings,
-    _repair_requirement_semantics,
 )
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repair.requirements import _repair_requirement_semantics
 
 
 def _requirement(text: str) -> dict:

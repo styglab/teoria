@@ -7,7 +7,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from teoria.config import Settings
+    from teoria.settings import Settings
 
 
 @dataclass(frozen=True)
