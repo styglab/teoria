@@ -65,3 +65,11 @@ uv run --locked --package teoria-pipelines teoria-pipelines verify connector \
 표시하지 않는다. 해당 gap은 15회 재시도 한도에 도달해 자동 재시도가 중단된
 상태다. 이 날짜는 제공기관 응답 복구 후 계약 식별자와 원본 hash를
 검증해야 하며, 다른 날짜의 과거 계약 backfill은 계속 진행한다.
+
+### 법령 근거 저장소
+
+`moleg_law_api`는 시행일 기준 법령 목록·전체 본문을 직접 수집한다.
+`moleg_law_ingestion`은 `type: data_database` sink로 `legal_information`에
+적재하며 Runtime Source 등록을 요구하지 않는다. 기존 sink는 기본
+`type: runtime_source`로 Source와 relation 검증을 유지한다.
+자세한 실행·원문 보존·시행 버전 규칙은 [법령 수집](law_collection.md)을 참고한다.

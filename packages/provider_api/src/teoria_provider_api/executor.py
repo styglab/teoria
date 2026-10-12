@@ -126,6 +126,7 @@ class ProviderExecutor:
             )}
         return ExecutionResponse(status_code=response.status_code, content_type=content_type,
             headers=dict(response.headers), body=body,
+            raw_body=getattr(response, "content", None),
             elapsed_ms=response.elapsed.total_seconds() * 1000)
 
     @staticmethod

@@ -76,3 +76,11 @@ Checkpoint는 원본 관찰과 정규 적재가 모두 성공한 뒤에만 이�
 [최신 데이터 수집·보정 주기](../docs/ingestion/prefect.md#최신-데이터-수집보정-주기)를 따른다.
 
 Deployment는 `prefect.yaml`, DB schema는 `database/migrations/`가 소유한다. 실행 방법은 [Prefect 운영 가이드](../docs/ingestion/prefect.md)를 따른다.
+
+## 법령 수집
+
+`domains/legal_information/laws/`는 법제처 공식 API의 시행일별 전체 원문을
+수집·파싱하며 Data DB에 원문 hash와 파서 버전별 snapshot을 보존한다.
+수집 대상은 `config/law_targets.yaml`, 외부 계약은 `connectors/moleg_law_api.yaml`이다.
+`teoria-pipelines law sync`, `law reparse`, `law versions`, `law show`를 제공한다.
+[실행·버전 관리](../docs/ingestion/law_collection.md)를 참고한다.

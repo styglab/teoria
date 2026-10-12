@@ -225,3 +225,13 @@ marimo/_lsp/
 __marimo__/
 # Local database backup archives
 /backups/
+
+# Official law connector reference snapshots are part of its wire contract.
+!pipelines/references/
+pipelines/references/*
+!pipelines/references/providers/
+pipelines/references/providers/*
+!pipelines/references/providers/moleg/
+pipelines/references/providers/moleg/*
+!pipelines/references/providers/moleg/moleg_law_api/
+!pipelines/references/providers/moleg/moleg_law_api/**

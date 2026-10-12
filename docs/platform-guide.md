@@ -155,3 +155,24 @@ uv run --locked --package teoria-platform teoria validate platform/registries
 uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
 docker compose -f deploy/compose/compose.yaml config --quiet
 ```
+
+## 법령 근거 수집 기반
+
+법제처 법령 목록·본문은 `pipelines`의 `legal_information/laws`에서 수집한다.
+법령 ID·MST·시행일을 구분하고 원문 hash와 파서 버전별 snapshot을 Data DB에
+보존한다. 이 단계는 근거 저장소이며 Business Ontology, 법률 판정, 위험등급
+태깅과 OpenMetadata 적용 기능을 제공하지 않는다.
+[법령 수집 실행 및 경계](ingestion/law_collection.md)를 참고한다.
+
+### 데이터 관측 근거와 법령 검색
+
+Data Assets 상세에서 OpenMetadata 저장 샘플·최신 프로파일을 조회한다.
+샘플 값은 기본적으로 가리고 `metadata_sample_reader` 역할이 있을 때만 원천이
+허용한 값을 표시한다. 미수집과 권한 오류를 구분하며 Teoria DB에는 복제하지 않는다.
+[샘플·프로파일 조회](ingestion/metadata_data_evidence.md)를 참고한다.
+
+법령 검색은 인증된 Admin API의 키워드 검색과 snapshot 기반 문서 조회로 시작한다.
+아직 Runtime Capability·MCP Tool 또는 임베딩 검색 기능은 아니다.
+[검색 계약](ingestion/law_collection.md)을 참고한다.
+현재 OpenMetadata 1.12.6과 최신 안정 릴리스 2.0.5의 차이는
+[업그레이드 검토](architecture/openmetadata_upgrade_assessment.md)에 정리했다.

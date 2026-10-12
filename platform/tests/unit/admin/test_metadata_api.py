@@ -67,3 +67,37 @@ def test_metadata_routes_expose_stable_teoria_dtos() -> None:
     assert detail["columns"] == [{"name": "contract_amount"}]
     lineage = client.get("/v1/admin/metadata/tables/table-1/lineage").json()
     assert lineage["entity"]["id"] == "table-1"
+
+
+def test_sample_values_require_authentication_and_explicit_reader_role():
+    from unittest.mock import AsyncMock
+    from teoria.metadata.models import TableSampleData
+    service=FakeMetadataService()
+    service.get_table_samples=AsyncMock(return_value=TableSampleData(
+        reference=_entity('table-1','table','customers').reference,available=True,
+        columns=['x'],rows=[['[REDACTED]']]))
+    settings=Settings(admin_auth_mode='bearer',admin_api_token='test-secret',admin_api_roles='metadata_admin')
+    client=TestClient(create_admin_app(settings=settings,catalog=RegistryLoader(REGISTRIES).load(),metadata_service=service))
+    path='/v1/admin/metadata/tables/table-1/sample-data'
+    assert client.get(path).status_code==401
+    headers={'Authorization':'Bearer test-secret'}
+    assert client.get(path+'?include_values=true',headers=headers).status_code==403
+    service.get_table_samples.assert_not_called()
+    result=client.get(path,headers=headers)
+    assert result.status_code==200
+    assert result.headers['cache-control']=='no-store'
+    service.get_table_samples.assert_awaited_once_with('table-1',limit=10,include_values=False)
+    settings.admin_api_roles='metadata_sample_reader'
+    privileged=TestClient(create_admin_app(settings=settings,catalog=RegistryLoader(REGISTRIES).load(),metadata_service=service))
+    assert privileged.get(path+'?include_values=true',headers=headers).status_code==200
+    assert privileged.get(path+'?limit=51',headers=headers).status_code==422
+
+
+def test_profile_permission_error_is_403_not_missing_data():
+    from unittest.mock import AsyncMock
+    from teoria.metadata.openmetadata import OpenMetadataError
+    service=FakeMetadataService()
+    service.get_table_profile=AsyncMock(side_effect=OpenMetadataError('openmetadata_api_error','denied',status_code=403))
+    client=TestClient(create_admin_app(settings=Settings(),catalog=RegistryLoader(REGISTRIES).load(),metadata_service=service))
+    result=client.get('/v1/admin/metadata/tables/table-1/profile')
+    assert result.status_code==403

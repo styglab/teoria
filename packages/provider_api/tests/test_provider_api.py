@@ -266,3 +266,22 @@ def test_response_validator_accepts_declared_no_data_control_without_records() -
 
     assert validator.is_no_data(definition, "list_records", empty) is True
     assert validator.validate(definition, "list_records", empty) == []
+
+
+def test_original_xml_bytes_are_available_without_entering_serialized_results():
+    raw = '<법령 키="원본"><내용><![CDATA[가 & 나]]></내용></법령>'.encode()
+    response = httpx.Response(200, content=raw, headers={'content-type':'text/xml'},
+                              request=httpx.Request('GET','https://example.test'))
+    response.elapsed = timedelta(milliseconds=1)
+    result = ProviderExecutor._execution_response(response)
+    assert result.raw_body == raw
+    assert 'raw_body' not in result.model_dump(mode='json')
+    assert 'CDATA' not in repr(result)
+
+
+def test_wire_record_paths_support_korean_names_but_reject_path_expressions():
+    from teoria_provider_api.validator import RECORD_PATH_PATTERN
+    assert RECORD_PATH_PATTERN.fullmatch('법령.기본정보')
+    assert RECORD_PATH_PATTERN.fullmatch('법령.조문.조문단위[]')
+    for value in ['법령..기본정보','법령/기본정보','법령.*','법령.0조문','법령.조문[1]']:
+        assert not RECORD_PATH_PATTERN.fullmatch(value)

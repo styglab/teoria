@@ -24,6 +24,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN useradd --create-home --uid 10001 teoria
 COPY --chown=teoria:teoria pipelines/connectors ./pipelines/connectors
 COPY --chown=teoria:teoria pipelines/definitions ./pipelines/definitions
+COPY --chown=teoria:teoria pipelines/config ./pipelines/config
 COPY --chown=teoria:teoria pipelines/references ./pipelines/references
 COPY --chown=teoria:teoria pipelines/database ./pipelines/database
 COPY --chown=teoria:teoria pipelines/prefect.yaml ./pipelines/prefect.yaml
@@ -56,6 +57,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY pipelines/connectors ./pipelines/connectors
 COPY pipelines/definitions ./pipelines/definitions
+COPY pipelines/config ./pipelines/config
 COPY pipelines/references ./pipelines/references
 COPY pipelines/database ./pipelines/database
 COPY pipelines/prefect.yaml ./pipelines/prefect.yaml
@@ -76,6 +78,7 @@ RUN useradd --create-home --uid 10001 teoria
 COPY --chown=teoria:teoria pipelines/connectors ./pipelines/connectors
 COPY --chown=teoria:teoria pipelines/definitions ./pipelines/definitions
 COPY --chown=teoria:teoria pipelines/verification_cases ./pipelines/verification_cases
+COPY --chown=teoria:teoria pipelines/config ./pipelines/config
 COPY --chown=teoria:teoria pipelines/references ./pipelines/references
 COPY --chown=teoria:teoria pipelines/database ./pipelines/database
 COPY --chown=teoria:teoria platform/registries ./platform/registries

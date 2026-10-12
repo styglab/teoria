@@ -698,3 +698,9 @@ html { color-scheme: light; }
 .evidence-list small { margin-top: 3px; color: #71717a; font-size: 8px; }
 .context-warning { color: #52525b; border-color: #e4e4e7; background: #fafafa; }
 @media (max-width: 700px) { .context-console { padding: 28px 16px; } .context-grid, .evidence-list { grid-template-columns: 1fr; } .context-console > form { flex-direction: column; } }
+
+.table-data-evidence { padding: 16px 20px; border-bottom: 1px solid var(--border, #e2e8f0); }
+.table-data-evidence > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.table-data-evidence > p { font-size: 13px; color: var(--text-muted, #64748b); }
+.table-data-evidence .catalog-table-wrap { max-height: 240px; overflow: auto; }
+.table-data-evidence small { display: block; margin-top: 8px; color: var(--text-muted, #64748b); }

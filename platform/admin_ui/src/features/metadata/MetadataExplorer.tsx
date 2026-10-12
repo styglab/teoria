@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Bot, ChevronLeft, ChevronRight, Clipboard, Database, Inbox, Search, Table2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { adminApi, type IntelligenceSuggestion, type MetadataEntity, type MetadataStatus, type MetadataTableDetail } from "../../api/admin";
+import { TableDataEvidence } from "./TableDataEvidence";
 
 export function MetadataExplorer() {
   const navigate = useNavigate();
@@ -96,6 +97,7 @@ export function MetadataExplorer() {
         <div><button onClick={copyAnalysisRequest}><Clipboard size={14} />{copied ? "요청 복사됨" : "분석 요청 복사"}</button><button onClick={() => navigate("/admin/review-queue")}><Inbox size={14} />Review Queue</button></div>
       </div>
       <div className="metadata-quality-strip"><span>Description {detail.description ? "등록" : "없음"}</span><span>Glossary {detail.glossary_terms.length ? `${detail.glossary_terms.length}개` : "없음"}</span><span>Quality Suite {detail.test_suite ? "연결" : "없음"}</span></div>
+      <TableDataEvidence key={detail.reference.entity_id} tableId={detail.reference.entity_id} />
       <div className="validation-dialog-body registry-list">{detail.columns.map((column) => <article className="registry-card" key={column.name}>
         <header><div><span>{column.dataType || "unknown"}</span><h3>{column.displayName || column.name}</h3></div></header>
         <p>{column.description || "Column description 없음"}</p>

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+
+from teoria.admin.auth import AdminAuthorizer, AdminPrincipal
 
 from teoria.metadata.models import MetadataStatus
 from teoria.metadata.openmetadata import OpenMetadataError, OpenMetadataService
 
 
-def create_metadata_router(service: OpenMetadataService | None) -> APIRouter:
-    router = APIRouter(prefix="/v1/admin/metadata", tags=["metadata"])
+def create_metadata_router(service: OpenMetadataService | None, authorizer: AdminAuthorizer) -> APIRouter:
+    router = APIRouter(prefix="/v1/admin/metadata", tags=["metadata"],
+                       dependencies=[Depends(authorizer.require())])
 
     def require_service() -> OpenMetadataService:
         if service is None:
@@ -50,6 +53,20 @@ def create_metadata_router(service: OpenMetadataService | None) -> APIRouter:
     async def lineage(table_id: str, upstream_depth: int = Query(1, ge=0, le=3), downstream_depth: int = Query(1, ge=0, le=3)) -> dict:
         return await _call(require_service().get_table_lineage(table_id, upstream_depth=upstream_depth, downstream_depth=downstream_depth))
 
+    @router.get("/tables/{table_id}/sample-data")
+    async def samples(table_id: str, response: Response, limit: int = Query(10, ge=1, le=50), include_values: bool = False,
+                      principal: AdminPrincipal = Depends(authorizer.require())) -> dict:
+        response.headers["Cache-Control"] = "no-store"
+        if include_values and "metadata_sample_reader" not in principal.roles:
+            raise HTTPException(status_code=403, detail={"code": "metadata_sample_reader_required",
+                                                        "message": "샘플 값을 조회할 권한이 없습니다."})
+        return await _call(require_service().get_table_samples(table_id, limit=limit, include_values=include_values))
+
+    @router.get("/tables/{table_id}/profile")
+    async def profile(table_id: str, response: Response) -> dict:
+        response.headers["Cache-Control"] = "no-store"
+        return await _call(require_service().get_table_profile(table_id))
+
     @router.get("/tables/{fully_qualified_name:path}")
     async def table(fully_qualified_name: str) -> dict:
         return await _call(require_service().get_table(fully_qualified_name))
@@ -61,6 +78,6 @@ async def _call(awaitable):
     try:
         result = await awaitable
     except OpenMetadataError as exc:
-        status_code = 404 if exc.status_code == 404 else 503
+        status_code = exc.status_code if exc.status_code in {403, 404} else 503
         raise HTTPException(status_code=status_code, detail={"code": exc.code, "message": str(exc)}) from exc
     return result.model_dump(mode="json") if hasattr(result, "model_dump") else result

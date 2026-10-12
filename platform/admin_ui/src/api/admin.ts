@@ -78,6 +78,15 @@ export type MetadataTableDetail = MetadataEntity & {
   glossary_terms: Array<Record<string, unknown>>;
   test_suite: Record<string, unknown> | null;
 };
+export type MetadataTableSamples = {
+  available: boolean; columns: string[]; rows: unknown[][]; stored_row_count: number;
+  truncated: boolean; values_included: boolean; reason: string | null; scope: "stored_sample";
+};
+export type MetadataTableProfile = {
+  available: boolean; table_metrics: Record<string, number | null>;
+  column_metrics: Array<{ name: string; metrics: Record<string, number | null> }>;
+  reason: string | null;
+};
 export type IntelligenceSuggestion = {
   suggestion_id: string;
   target_type: string;
@@ -127,7 +136,10 @@ async function responseError(response: Response): Promise<Error> {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_ROOT}${path}`);
+  const token = window.sessionStorage.getItem("teoria-admin-token");
+  const response = await fetch(`${API_ROOT}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {}, cache: "no-store",
+  });
   if (!response.ok) throw await responseError(response);
   return response.json() as Promise<T>;
 }
@@ -168,6 +180,9 @@ export const adminApi = {
     return getJson<MetadataPage>(`/metadata/tables${params.size ? `?${params}` : ""}`);
   },
   metadataTable: (fqn: string) => getJson<MetadataTableDetail>(`/metadata/tables/${encodeURIComponent(fqn)}`),
+  metadataTableSamples: (id: string, includeValues = false) => getJson<MetadataTableSamples>(
+    `/metadata/tables/${encodeURIComponent(id)}/sample-data?limit=10&include_values=${includeValues}`),
+  metadataTableProfile: (id: string) => getJson<MetadataTableProfile>(`/metadata/tables/${encodeURIComponent(id)}/profile`),
   intelligenceSuggestions: (status?: string) => getJson<{ items: IntelligenceSuggestion[] }>(`/intelligence/suggestions${status ? `?status=${encodeURIComponent(status)}` : ""}`),
   reviewSuggestion: (id: string, decision: "approve" | "reject") => postJson<IntelligenceSuggestion>(`/intelligence/suggestions/${encodeURIComponent(id)}/reviews`, { decision }),
   suggestColumnBinding: (tableId: string, columnName: string) => postJson<IntelligenceSuggestion>("/intelligence/binding-suggestions", { table_id: tableId, column_name: columnName }),

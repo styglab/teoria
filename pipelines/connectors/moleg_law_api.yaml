@@ -1,0 +1,181 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-12'
+connector:
+  id: moleg_law_api
+  name: 법제처 시행일 기준 법령 API
+  provider:
+    organization: 법제처
+    distribution: 국가법령정보 공동활용
+  type: api
+  specification:
+    format: html
+    version: '2026-10-12'
+    source_document: effective_law_list.html
+  access:
+    base_url: https://www.law.go.kr/DRF
+    authentication:
+      type: api_key
+      in: query
+      name: OC
+      credential_env: TEORIA_CONNECTOR_MOLEG_LAW_API_KEY
+  components:
+    objects:
+    - id: law_version_listing
+      name: 법령 버전 목록 항목
+      fields:
+      - id: 법령일련번호
+        name: 법령일련번호
+        data_type: string
+      - id: 법령ID
+        name: 법령ID
+        data_type: string
+      - id: 법령명한글
+        name: 법령명한글
+        data_type: string
+      - id: 시행일자
+        name: 시행일자
+        data_type: string
+      - id: 공포일자
+        name: 공포일자
+        data_type: string
+      - id: 공포번호
+        name: 공포번호
+        data_type: string
+      - id: 제개정구분명
+        name: 제개정구분명
+        data_type: string
+      - id: 현행연혁코드
+        name: 현행연혁코드
+        data_type: string
+      - id: 소관부처명
+        name: 소관부처명
+        data_type: string
+      - id: 법령구분명
+        name: 법령구분명
+        data_type: string
+      - id: 법령상세링크
+        name: 법령상세링크
+        data_type: string
+    - id: law_basic_information
+      name: 법령 기본정보
+      fields:
+      - id: 법령ID
+        name: 법령ID
+        data_type: string
+      - id: 법령명_한글
+        name: 법령명_한글
+        data_type: string
+      - id: 시행일자
+        name: 시행일자
+        data_type: string
+      - id: 공포일자
+        name: 공포일자
+        data_type: string
+      - id: 공포번호
+        name: 공포번호
+        data_type: string
+      - id: 법종구분
+        name: 법종구분
+        data_type: string
+      - id: 소관부처
+        name: 소관부처
+        data_type: string
+  operations:
+  - id: list_law_versions
+    name: 시행일 기준 법령 목록 조회
+    method: GET
+    idempotent: true
+    path: /lawSearch.do
+    pagination:
+      type: page_number
+      page:
+        request: query.page
+      page_size:
+        request: query.display
+      total_count: LawSearch.totalCnt
+    request:
+      query:
+        fields:
+        - id: target
+          name: target
+          data_type: string
+          default: eflaw
+          values:
+          - value: eflaw
+        - id: type
+          name: type
+          data_type: string
+          default: XML
+          values:
+          - value: XML
+        - id: query
+          name: 법령명
+          data_type: string
+        - id: LID
+          name: 법령ID
+          data_type: string
+        - id: nw
+          name: nw
+          data_type: string
+          default: 1,2,3
+        - id: display
+          name: 페이지 크기
+          data_type: integer
+          default: 100
+        - id: page
+          name: 페이지 번호
+          data_type: integer
+          default: 1
+        - id: sort
+          name: sort
+          data_type: string
+          default: efdes
+        required:
+        - target
+        - type
+        - display
+        - page
+    response:
+      content_type: text/xml
+      http_status: 200
+      data:
+        record_path: LawSearch.law[]
+        ref: law_version_listing
+  - id: get_law_version
+    name: 시행일을 고정한 법령 본문 조회
+    method: GET
+    idempotent: true
+    path: /lawService.do
+    request:
+      query:
+        fields:
+        - id: target
+          name: target
+          data_type: string
+          default: eflaw
+          values:
+          - value: eflaw
+        - id: type
+          name: type
+          data_type: string
+          default: XML
+          values:
+          - value: XML
+        - id: MST
+          name: 법령일련번호
+          data_type: string
+        - id: efYd
+          name: 법령 시행일자
+          data_type: string
+        required:
+        - target
+        - type
+        - MST
+        - efYd
+    response:
+      content_type: text/xml
+      http_status: 200
+      data:
+        record_path: 법령.기본정보
+        ref: law_basic_information

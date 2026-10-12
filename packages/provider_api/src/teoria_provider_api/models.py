@@ -32,3 +32,6 @@ class ExecutionResponse(BaseModel):
     headers: dict[str, str]
     body: Any
     elapsed_ms: float
+    # Preserve exact response bytes for archival consumers; never include them in
+    # verification output, repr, or JSON serialization.
+    raw_body: bytes | None = Field(default=None, exclude=True, repr=False)

@@ -1,0 +1,13 @@
+status: active
+target: connector
+provider: 법제처
+source: moleg_law_api
+title: 시행일 기준 법령 목록 및 본문 공식 API 가이드
+retrieved_at: '2026-10-12'
+official_url: https://open.law.go.kr/LSO/openApi/guideList.do
+files:
+- path: effective_law_list.html
+  format: html
+- path: effective_law_body.html
+  format: html
+registry: connectors/moleg_law_api.yaml

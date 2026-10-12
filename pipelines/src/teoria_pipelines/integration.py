@@ -21,6 +21,9 @@ class PlatformIntegrationValidator:
             ))
         for pipeline_id, pipeline in catalog.pipelines.items():
             path = catalog.pipeline_paths[pipeline_id]
+            if pipeline.sink.type == "data_database":
+                # Pipeline-owned data need not have a Runtime read contract yet.
+                continue
             sink = platform_catalog.sources.get(pipeline.sink.source)
             if sink is None or sink.source.type != "database":
                 diagnostics.append(Diagnostic("invalid_pipeline_sink",

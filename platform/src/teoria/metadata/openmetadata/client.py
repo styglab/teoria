@@ -71,6 +71,18 @@ class OpenMetadataClient:
             params={"fields": "owners,tags,domains,columns,database,databaseSchema,testSuite"},
         )
 
+    async def get_table_by_id(self, table_id: str) -> dict[str, Any]:
+        return await self.get(f"v1/tables/{quote(table_id, safe='')}", params={"fields": "columns"})
+
+    async def get_table_sample_data(self, table_id: str) -> dict[str, Any]:
+        return await self.get(f"v1/tables/{quote(table_id, safe='')}/sampleData")
+
+    async def get_latest_table_profile(self, fully_qualified_name: str) -> dict[str, Any]:
+        return await self.get(
+            f"v1/tables/{quote(fully_qualified_name, safe='')}/tableProfile/latest",
+            params={"includeColumnProfile": "true"},
+        )
+
     async def update_table_description(self, table_id: str, description: str, *, has_description: bool) -> dict[str, Any]:
         return await self.patch(
             f"v1/tables/{quote(table_id, safe='')}",

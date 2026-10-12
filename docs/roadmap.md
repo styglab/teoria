@@ -115,3 +115,17 @@ Ontology canvas, 범용 graph editor, 자동 승인, OpenMetadata entity 복제,
 추정하지 않는다. 수집원, 기간 유효 분류와 최신 체계 재분류의 완료 조건은
 [공공조달 분야 분류 기준과 확장 계획](domains/public_procurement/procurement_classification.md)을
 따른다.
+
+### 법령 기반 데이터 거버넌스
+
+법령 근거 저장소는 Pipeline의 시행일별 원문 수집·구조화·재가공 기능을 사용한다.
+다음 결과는 승인된 법령-정보 유형 매핑 규칙, 내부 처리와 외부 개방의 분리 평가,
+법령 변경 영향 검토 및 Suggestion→Review→Application을 통한 OpenMetadata 반영이다.
+업무 Ontology는 실제로 사용하는 보호대상 유형·처리 목적·개방 시나리오부터
+정의하며 조문 원문이나 개별 평가 응답을 Business Object로 만들지 않는다.
+
+현재 Admin 진단 기반은 OpenMetadata 저장 샘플·프로파일의 제한된 조회와 법령의
+키워드 검색·snapshot 원문 조회를 제공한다. 기본 메타데이터 ingestion은 샘플과
+프로파일을 자동 수집하지 않는다. 다음 검증 범위는 대상 테이블을 명시한 관측
+수집 workflow, AI 의미 분석·근거 생성과 태그 제안, 검색 평가 및 최신 안정
+OpenMetadata 버전으로의 복원·migration·연계 검증이다.

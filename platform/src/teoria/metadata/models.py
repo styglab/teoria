@@ -47,3 +47,27 @@ class MetadataStatus(BaseModel):
     base_url: str | None = None
     database_service: str | None = None
     reason: str | None = None
+
+
+class TableSampleData(BaseModel):
+    """Transient read response; never persisted as Teoria metadata or evidence."""
+
+    reference: MetadataTargetRef
+    available: bool
+    columns: list[str] = Field(default_factory=list)
+    rows: list[list[Any]] = Field(default_factory=list)
+    stored_row_count: int = 0
+    truncated: bool = False
+    values_included: bool = False
+    reason: str | None = None
+    scope: Literal["stored_sample"] = "stored_sample"
+
+
+class TableProfileData(BaseModel):
+    """Value-free aggregate metrics from OpenMetadata; no entity replication."""
+
+    reference: MetadataTargetRef
+    available: bool
+    table_metrics: dict[str, int | float | None] = Field(default_factory=dict)
+    column_metrics: list[dict[str, Any]] = Field(default_factory=list)
+    reason: str | None = None

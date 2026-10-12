@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field, field_validator, model_validator
 
 from teoria_provider_api.schema import ContractModel, IdentifiedContract, SNAKE_CASE_PATTERN
@@ -10,8 +12,21 @@ class PipelineCursor(ContractModel):
 
 
 class PipelineSink(ContractModel):
-    source: str
+    type: Literal["runtime_source", "data_database"] = "runtime_source"
+    source: str | None = None
+    schema_name: str | None = None
     relations: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_destination(self) -> "PipelineSink":
+        if self.type == "runtime_source":
+            if not self.source or self.schema_name is not None:
+                raise ValueError("runtime_source sink requires source and no schema_name")
+        elif not self.schema_name or self.source is not None:
+            raise ValueError("data_database sink requires schema_name and no source")
+        if self.schema_name and not SNAKE_CASE_PATTERN.fullmatch(self.schema_name):
+            raise ValueError("sink schema_name must be snake_case")
+        return self
 
 
 class PipelineProvenance(ContractModel):

@@ -23,6 +23,8 @@ from teoria.domains.public_procurement.admin_api import create_bid_check_router
 from teoria.domains.public_procurement.admin_api import create_eligibility_rule_router
 from teoria.domains.public_procurement.bid_check import BidCheckReader
 from teoria.domains.public_procurement.ontology_migration import applied_ontology_migration_manifest
+from teoria.domains.legal_information.admin_api import create_law_search_router
+from teoria.domains.legal_information.search import LawSearchReader
 from teoria.intelligence.repository import SuggestionRepository
 from teoria.intelligence.service import SuggestionService
 from teoria.metadata.openmetadata import OpenMetadataClient, OpenMetadataService
@@ -128,7 +130,12 @@ def create_admin_services(
 
 
 def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
-    app.include_router(create_metadata_router(services.metadata_service))
+    app.include_router(create_metadata_router(services.metadata_service, services.authorizer))
+    app.include_router(create_law_search_router(
+        LawSearchReader(services.settings.admin_data_database_url)
+        if services.settings.admin_data_database_url else None,
+        services.authorizer,
+    ))
     app.include_router(create_property_context_router(services.binding_repository))
     app.include_router(create_binding_router(services.binding_repository, services.authorizer, services.catalog))
     app.include_router(create_ontology_authoring_router(services.ontology_authoring_repository, services.authorizer))

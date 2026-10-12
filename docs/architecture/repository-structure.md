@@ -207,3 +207,19 @@ Teoria가 소유하는 repository path와 내부 ID의 기본 형식은 `snake_c
 `PascalCase`인 클래스·React 컴포넌트, `UPPER_SNAKE_CASE`인 환경변수와
 `kebab-case`인 CLI·Docker·배포 리소스다. 기존 문서의 `kebab-case` 파일은
 링크 호환을 위해 유지하며 신규 파일부터 이 규칙을 적용한다.
+
+## 법령 데이터 수집
+
+`pipelines/src/teoria_pipelines/domains/legal_information/laws/`는 공식 API client,
+Prefect Flow·Task, XML 파싱과 법령 저장 repository를 소유한다. 대상은
+`pipelines/config/law_targets.yaml`, Data DB는 `legal_information` 스키마다.
+법령 데이터 수집만 하는 정의는 `sink.type: data_database`를 사용하고 Runtime
+Source를 요구하지 않는다. Runtime이 직접 읽을 때 Database Source 계약을 추가한다.
+법령 문서 구조는 Business Ontology로 자동 발행하지 않는다.
+
+법령 키워드 검색과 고정 snapshot 문서 조회는 Platform의
+`domains/legal_information/search.py`와 `admin_api.py`가 소유한다. 현재 Admin
+진단 기능이며 Runtime Capability·MCP Tool 등록은 별도 계약이다. Pipeline은
+법령 검색용 읽기 view를 소유하며 Platform이나 Application DB로 법령을 복제하지 않는다.
+OpenMetadata 저장 샘플·프로파일 조회는 `metadata/openmetadata/`와 Admin metadata
+router가 소유한다. 샘플·프로파일 DTO는 일시 조회 응답이며 Teoria DB 모델이 아니다.

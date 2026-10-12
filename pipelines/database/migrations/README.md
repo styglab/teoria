@@ -36,3 +36,12 @@ uv run --locked --package teoria-pipelines \
 `public_procurement.runtime_bid_opening_collection_status` view로 제공한다.
 Runtime에는 이 view의 SELECT만 허용하고 ingestion 작업 테이블은 노출하지 않는다.
 새 Platform 참여 분석을 배포하기 전에 이 migration을 적용해야 한다.
+
+`082_legal_information_law_collection.sql`은 법령 ID·MST·시행일별 목록,
+인증값이 제거된 원문 bytes·관측, 파서 버전별 snapshot, 조항 계층과 별표 정보를
+추가한다. 기존 조달 테이블이나 적용된 migration을 수정하지 않는다.
+Runtime 읽기 권한은 추가하지 않는다.
+
+`083_legal_information_search_views.sql`은 수집 상태를 포함한 법령 버전 view와
+조문·부칙 하위 내용을 합친 검색 view를 추가한다. `teoria_runtime`에는 스키마
+USAGE와 두 view SELECT만 부여하며 원문·스냅샷·Raw 테이블 권한은 부여하지 않는다.

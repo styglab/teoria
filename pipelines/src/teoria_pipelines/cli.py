@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import sys
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -125,7 +126,43 @@ def main() -> int:
     connector_parser.add_argument("--connector", required=True)
     connector_parser.add_argument("--operation")
     connector_parser.add_argument("--input", type=Path)
+    law_parser = subparsers.add_parser("law", help="collect and inspect versioned laws")
+    law_subparsers = law_parser.add_subparsers(dest="law_command", required=True)
+    law_sync = law_subparsers.add_parser("sync")
+    law_sync.add_argument("--pipelines", default=_default_pipeline_root(), type=Path)
+    law_sync.add_argument("--target", action="append")
+    law_sync.add_argument("--reconcile-all", action="store_true")
+    law_sync.add_argument("--requests-per-second", type=float, default=1)
+    law_reparse = law_subparsers.add_parser("reparse")
+    law_reparse.add_argument("--target")
+    law_reparse.add_argument("--all", action="store_true")
+    law_versions = law_subparsers.add_parser("versions")
+    law_versions.add_argument("--target")
+    law_show = law_subparsers.add_parser("show")
+    law_show.add_argument("--law-id", required=True)
+    law_show.add_argument("--mst", required=True)
+    law_show.add_argument("--effective-date", type=date.fromisoformat, required=True)
+    law_show.add_argument("--article", help="article number, e.g. 24의2")
     args = parser.parse_args()
+
+    if args.command == "law":
+        settings = bootstrap_pipeline_settings()
+        from teoria_pipelines.domains.legal_information.laws.repository import LawRepository
+        if args.law_command == "sync":
+            from teoria_pipelines.domains.legal_information.laws.flows import sync_moleg_laws
+            result = asyncio.run(sync_moleg_laws(pipeline_root=str(args.pipelines), target_ids=args.target,
+                reconcile_all=args.reconcile_all, requests_per_second=args.requests_per_second))
+        elif args.law_command == "reparse":
+            from teoria_pipelines.domains.legal_information.laws.flows import reparse_moleg_laws
+            result = reparse_moleg_laws(target_id=args.target, reparse_all=args.all)
+        elif args.law_command == "versions":
+            result = LawRepository(settings.data_database_url or "").stored_versions(args.target)
+        else:
+            from teoria_pipelines.domains.legal_information.laws.parsing import provider_id
+            result = LawRepository(settings.data_database_url or "").get_provisions(
+                provider_id(args.law_id), provider_id(args.mst), args.effective_date, args.article)
+        print(json.dumps(result, ensure_ascii=False, default=str, indent=2))
+        return 0
 
     if args.command == "worker":
         from teoria_pipelines.recovery import recover_orphaned_pipeline_runs

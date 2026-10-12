@@ -5,7 +5,7 @@ from typing import Any, Mapping
 from teoria_provider_api.diagnostics import Diagnostic
 from teoria_provider_api.schema import ProviderDefinition
 
-RECORD_PATH_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\[\])?(?:\.[A-Za-z_][A-Za-z0-9_]*(?:\[\])?)*$")
+RECORD_PATH_PATTERN = re.compile(r"^[^\W\d]\w*(?:\[\])?(?:\.[^\W\d]\w*(?:\[\])?)*$")
 BUILTIN_DATA_TYPES = {"string", "integer", "number", "boolean"}
 
 
