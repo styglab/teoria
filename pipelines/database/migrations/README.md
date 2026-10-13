@@ -45,3 +45,14 @@ Runtime 읽기 권한은 추가하지 않는다.
 `083_legal_information_search_views.sql`은 수집 상태를 포함한 법령 버전 view와
 조문·부칙 하위 내용을 합친 검색 view를 추가한다. `teoria_runtime`에는 스키마
 USAGE와 두 view SELECT만 부여하며 원문·스냅샷·Raw 테이블 권한은 부여하지 않는다.
+
+`084_asset_collection_context.sql`은 명시한 공공조달 Pipeline output만 연결하는
+`runtime_asset_collection_status` view와 Pipeline별 최근 실행 조회 index를 추가한다.
+OpenMetadata entity ID·설명·컬럼 상태를 저장하지 않으며 view의 SELECT만 허용한다.
+Prefect schedule은 복제하지 않고 ingestion 원본·작업 테이블 권한도 확장하지 않는다.
+새 통합 자산 조회를 배포하기 전에 적용해야 한다. 커스텀 Pipeline ID 또는 파생
+relation은 이름으로 추정하지 않으며 output 계약에 별도로 명시해야 한다.
+
+`085_procurement_entity_search_index.sql`은 조달 개체 자동완성용 내부 검색 인덱스를
+추가한다. `086_bid_notice_region_filter_indexes.sql`은 계약에 연결된 공고의 구조화 참가
+지역조건을 네트워크·시장 조회에서 필터링하기 위한 공고번호·지역코드 인덱스를 추가한다.

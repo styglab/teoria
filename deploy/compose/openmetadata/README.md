@@ -3,6 +3,14 @@
 OpenMetadata is an optional Metadata Foundation in the main Compose deployment.
 Its database and search index are not Teoria application or data stores.
 
+New deployments default to the verified OpenMetadata 2.0.5 server and ingestion
+images. The operating catalog was upgraded to 2.0.5 on 2026-10-13 after an isolated
+restore/migration test. An existing `.env` containing an older version continues
+to select that version; changing the repository default does not upgrade it.
+See [upgrade verification](../../../docs/architecture/openmetadata_upgrade_assessment.md)
+before updating an existing catalog. Server, ingestion image, Prefect deployment
+image parameter and worker image allowlist must use the same version.
+
 ```bash
 docker compose --env-file deploy/compose/.env \
   -f deploy/compose/compose.yaml \

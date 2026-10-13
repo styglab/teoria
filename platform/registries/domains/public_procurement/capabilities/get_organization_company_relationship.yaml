@@ -1,5 +1,5 @@
 registry:
-  version: 1.4.0
+  version: 1.7.0
   registered_at: "2026-09-28"
 
 capability:
@@ -59,6 +59,14 @@ capability:
       data_type: string
     field_code:
       data_type: string
+    region_basis:
+      data_type: string
+      enum: [participation_restriction]
+    region_code:
+      data_type: string
+    region_codes:
+      data_type: string
+      collection: list
     period_years:
       data_type: integer
       default: 10
@@ -72,6 +80,12 @@ capability:
       data_type: integer
       minimum: 2000
       maximum: 2100
+    view_mode:
+      data_type: string
+      enum: [history, network_edge]
+      default: history
+    snapshot_id:
+      data_type: string
     page:
       data_type: integer
       default: 1

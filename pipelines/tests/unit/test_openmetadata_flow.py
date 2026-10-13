@@ -23,7 +23,7 @@ def test_ingestion_task_runs_and_removes_ephemeral_container(
     monkeypatch.setenv("OPENMETADATA_INGESTION_BOT_TOKEN", "jwt-secret")
     monkeypatch.setenv(
         "TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE",
-        "teoria-openmetadata-ingestion:1.12.6",
+        "teoria-openmetadata-ingestion:2.0.5",
     )
     container = MagicMock()
     container.logs.return_value = [b"metadata synchronized\n"]
@@ -37,7 +37,7 @@ def test_ingestion_task_runs_and_removes_ephemeral_container(
         patch("teoria_pipelines.metadata.openmetadata.get_run_logger") as logger,
     ):
         result = run_openmetadata_ingestion_container.fn(
-            image="teoria-openmetadata-ingestion:1.12.6",
+            image="teoria-openmetadata-ingestion:2.0.5",
             network="teoria_default",
             timeout_seconds=30,
         )
@@ -45,7 +45,7 @@ def test_ingestion_task_runs_and_removes_ephemeral_container(
     assert result == {
         "status": "completed",
         "status_code": 0,
-        "image": "teoria-openmetadata-ingestion:1.12.6",
+        "image": "teoria-openmetadata-ingestion:2.0.5",
     }
     client.containers.run.assert_called_once()
     call = client.containers.run.call_args
@@ -66,7 +66,7 @@ def test_ingestion_task_fails_on_nonzero_exit_and_removes_container(
     monkeypatch.setenv("OPENMETADATA_INGESTION_BOT_TOKEN", "jwt-secret")
     monkeypatch.setenv(
         "TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE",
-        "teoria-openmetadata-ingestion:1.12.6",
+        "teoria-openmetadata-ingestion:2.0.5",
     )
     container = MagicMock()
     container.logs.return_value = []
@@ -81,7 +81,7 @@ def test_ingestion_task_fails_on_nonzero_exit_and_removes_container(
         pytest.raises(RuntimeError, match="status 7"),
     ):
         run_openmetadata_ingestion_container.fn(
-            image="teoria-openmetadata-ingestion:1.12.6",
+            image="teoria-openmetadata-ingestion:2.0.5",
             network="teoria_default",
             timeout_seconds=30,
         )
@@ -97,7 +97,7 @@ def test_ingestion_task_rejects_non_allowlisted_image(
     monkeypatch.setenv("OPENMETADATA_INGESTION_BOT_TOKEN", "jwt-secret")
     monkeypatch.setenv(
         "TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE",
-        "teoria-openmetadata-ingestion:1.12.6",
+        "teoria-openmetadata-ingestion:2.0.5",
     )
     docker_module = SimpleNamespace(from_env=MagicMock())
 

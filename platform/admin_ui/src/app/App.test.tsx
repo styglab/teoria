@@ -1,0 +1,27 @@
+import "@testing-library/jest-dom/vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { afterEach, expect, test, vi } from "vitest";
+import { adminApi } from "../api/admin";
+import { App } from "./App";
+afterEach(()=>{cleanup();vi.restoreAllMocks();window.sessionStorage.clear()});
+test("a registry API failure does not block the metadata catalog",async()=>{
+ vi.spyOn(adminApi,"capabilities").mockRejectedValue(new Error("unavailable"));
+ vi.spyOn(adminApi,"sources").mockResolvedValue({sources:[]});
+ vi.spyOn(adminApi,"mappings").mockResolvedValue({mappings:[]});
+ vi.spyOn(adminApi,"lineage").mockResolvedValue({links:[]});
+ vi.spyOn(adminApi,"validation").mockResolvedValue({status:"valid",diagnostic_count:0,diagnostics:[]});
+ vi.spyOn(adminApi,"registryRelease").mockResolvedValue({version:"test",status:"published"} as never);
+ vi.spyOn(adminApi,"metadataSchemas").mockResolvedValue({items:[],total:0,after:null,before:null});
+ vi.spyOn(adminApi,"metadataStatus").mockResolvedValue({enabled:true,available:true,provider:"openmetadata",base_url:null,database_service:"service",reason:null});
+ vi.spyOn(adminApi,"metadataTables").mockResolvedValue({items:[],total:0,after:null,before:null});
+ render(<MemoryRouter initialEntries={["/admin/data-catalog"]}><App /></MemoryRouter>);
+ expect(await screen.findByRole("heading",{name:"전체 자산"})).toBeInTheDocument();
+ expect(screen.getByRole("link",{name:"Teoria 개요"})).toHaveAttribute("href","/admin/overview");
+ expect(screen.getAllByText("데이터 카탈로그").length).toBeGreaterThan(0);
+ expect(screen.getByRole("link",{name:/데이터 자산/})).toHaveAttribute("href","/admin/data-catalog");
+ expect(screen.getByRole("link",{name:/온톨로지/})).toHaveAttribute("href","/admin/semantic-model/ontology");
+ expect(screen.getByRole("link",{name:/메타데이터 공백/})).toHaveAttribute("href","/admin/governance");
+ expect(screen.getByRole("link",{name:/제안 검토/})).toHaveAttribute("href","/admin/changes/review");
+ expect(screen.queryByText("unavailable")).not.toBeInTheDocument();
+});

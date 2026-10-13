@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     runtime_cache_prefix: str = "teoria:runtime"
     admin_api_root_path: str = ""
     admin_auth_mode: Literal["disabled", "bearer"] = "disabled"
+    admin_metadata_public_read: bool = False
     admin_api_token: str | None = None
     admin_api_actor: str = "system:admin"
     admin_api_roles: str = "metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner"

@@ -75,7 +75,7 @@ def run_openmetadata_ingestion_container(
 
 @flow(name="OpenMetadata PostgreSQL 메타데이터 동기화", log_prints=False)
 def sync_openmetadata_postgres(
-    image: str = "teoria-openmetadata-ingestion:1.12.6",
+    image: str = "teoria-openmetadata-ingestion:2.0.5",
     network: str = "teoria_default",
     timeout_seconds: int = 1800,
 ) -> dict[str, Any]:

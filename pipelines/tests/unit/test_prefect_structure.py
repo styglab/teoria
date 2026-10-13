@@ -436,7 +436,7 @@ def test_openmetadata_ingestion_uses_isolated_worker_and_is_opt_in() -> None:
 
     assert deployment["work_pool"]["name"] == "teoria-metadata"
     assert deployment["parameters"] == {
-        "image": "teoria-openmetadata-ingestion:1.12.6",
+        "image": "teoria-openmetadata-ingestion:2.0.5",
         "network": "teoria_default",
         "timeout_seconds": 1800,
     }

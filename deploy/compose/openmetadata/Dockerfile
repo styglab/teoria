@@ -1,4 +1,4 @@
-ARG OPENMETADATA_VERSION=1.12.6
+ARG OPENMETADATA_VERSION=2.0.5
 FROM docker.getcollate.io/openmetadata/ingestion-base:${OPENMETADATA_VERSION}
 
 COPY --chown=openmetadata:openmetadata \

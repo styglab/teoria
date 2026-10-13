@@ -28,6 +28,8 @@ from teoria.domains.legal_information.search import LawSearchReader
 from teoria.intelligence.repository import SuggestionRepository
 from teoria.intelligence.service import SuggestionService
 from teoria.metadata.openmetadata import OpenMetadataClient, OpenMetadataService
+from teoria.metadata.asset_context import AssetApplicationReader, AssetContextService
+from teoria.domains.public_procurement.metadata_operations import AssetCollectionReader
 from teoria.ontology.authoring import OntologyAuthoringRepository
 from teoria.policy import PolicyEvaluator, create_policy_evaluator
 from teoria.registry.loader import RegistryCatalog, RegistryLoader
@@ -130,7 +132,20 @@ def create_admin_services(
 
 
 def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
-    app.include_router(create_metadata_router(services.metadata_service, services.authorizer))
+    context_service = None
+    if services.metadata_service and getattr(services.metadata_service, "client", None):
+        context_service = AssetContextService(
+            services.metadata_service.client,
+            database_service=services.metadata_service.database_service,
+            operations_reader=AssetCollectionReader(services.settings.admin_data_database_url)
+            if services.settings.admin_data_database_url else None,
+            application_reader=AssetApplicationReader(services.settings.app_database_url)
+            if services.settings.app_database_url else None,
+        )
+    app.include_router(create_metadata_router(
+        services.metadata_service, services.authorizer, context_service,
+        public_read=services.settings.admin_metadata_public_read,
+    ))
     app.include_router(create_law_search_router(
         LawSearchReader(services.settings.admin_data_database_url)
         if services.settings.admin_data_database_url else None,

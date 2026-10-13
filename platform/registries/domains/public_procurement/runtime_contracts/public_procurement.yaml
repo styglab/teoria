@@ -1,5 +1,5 @@
 registry:
-  version: 2.19.0
+  version: 2.20.0
   registered_at: "2026-10-10"
 
 runtime_contract:
@@ -7,6 +7,47 @@ runtime_contract:
   name: 대한민국 공공조달
   description: 대한민국 공공기관의 입찰공고, 참가요건, 조달계약, 기관과 계약업체의 참여 관계를 표현한다.
   object_types:
+    - id: procurement_entity_suggestions
+      name: 조달 개체 자동완성 결과
+      description: 공고·기관·업체·공식 분류 선택 후보와 적용 가능한 필터를 담는 Runtime projection
+      primary_key: procurement_entity_suggestions_id
+      properties:
+        - {id: procurement_entity_suggestions_id, name: 자동완성 결과 식별자, description: 정규화한 질의와 대상 유형의 fingerprint, data_type: string}
+        - {id: candidate_count, name: 후보 수, description: 현재 응답에 반환한 후보 수, data_type: integer}
+
+    - id: procurement_network
+      name: 조달 관계 네트워크
+      description: 선택한 시작점과 필터에서 일괄 집계한 제한된 조달 관계 Runtime projection
+      primary_key: procurement_network_id
+      properties:
+        - {id: procurement_network_id, name: 네트워크 식별자, description: 시작점과 데이터 기준점을 결합한 식별자, data_type: string}
+        - {id: node_count, name: 노드 수, description: 현재 응답에 반환한 노드 수, data_type: integer}
+        - {id: edge_count, name: 연결 수, description: 현재 응답에 반환한 연결 수, data_type: integer}
+
+    - id: procurement_field_market
+      name: 조달 분야 시장 분석
+      description: 공식 조달분류의 수집 범위 내 계약 시장 집계 Runtime projection
+      primary_key: procurement_field_market_id
+      properties:
+        - {id: procurement_field_market_id, name: 분야 시장 식별자, description: 분야와 조회 기간을 결합한 식별자, data_type: string}
+        - {id: contract_count, name: 계약사건 수, description: 최초 계약일 기준 고유 계약사건 수, data_type: integer}
+
+    - id: procurement_classification_catalog
+      name: 공식 조달분류 카탈로그
+      description: 공고 원천에서 확인된 공식 조달분류 코드와 계층의 Runtime projection
+      primary_key: procurement_classification_catalog_id
+      properties:
+        - {id: procurement_classification_catalog_id, name: 카탈로그 조회 식별자, description: 필터와 cursor 기준의 fingerprint, data_type: string}
+        - {id: item_count, name: 분류 수, description: 현재 응답에 반환한 분류 항목 수, data_type: integer}
+
+    - id: procurement_region_filter_options
+      name: 조달 지역 필터 옵션
+      description: 지원되는 지역 기준과 선택 가능한 코드의 Runtime projection
+      primary_key: procurement_region_filter_options_id
+      properties:
+        - {id: procurement_region_filter_options_id, name: 지역 옵션 식별자, description: 지원되는 지역 기준 ID, data_type: string}
+        - {id: option_count, name: 지역 옵션 수, description: 현재 응답에 반환한 지역 코드 수, data_type: integer}
+
     - id: procurement_activity
       name: 통합 조달 활동
       description: 공고 게시를 기준으로 공고·낙찰·계약 생애주기를 하나로 통합한 기관·업체 조달 활동

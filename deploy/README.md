@@ -62,6 +62,11 @@ writer용 `TEORIA_PIPELINE_DATA_DATABASE_URL`과 read-only Runtime용
 분리해야 한다. 외부 DB의 role·database 생성, TLS, 방화벽과 백업은 외부 DB 운영 영역이며 Compose의
 `postgres-init`이 외부 DB 계정을 생성하지 않는다.
 
+Data DB 컨테이너는 병렬 쿼리의 동적 공유 메모리를 위해 `shm_size: 1gb`를 사용한다.
+Docker 기본값인 64MB가 부족하면 디스크 여유와 무관하게 `could not resize shared memory
+segment`와 `No space left on device` 오류가 발생할 수 있다. 이 설정 변경은 기존 Data DB
+volume을 유지한 채 `postgres` 컨테이너를 재생성해야 적용된다.
+
 ```env
 TEORIA_PIPELINE_DATA_DATABASE_URL=postgresql://teoria_pipeline:비밀번호@db.example.com:5432/teoria_data?sslmode=require
 TEORIA_RUNTIME_DATA_DATABASE_URL=postgresql://teoria_runtime:비밀번호@db.example.com:5432/teoria_data?sslmode=require

@@ -196,9 +196,9 @@ export function OntologyGraph({ graph, onSelect }: { graph: GraphData; onSelect:
       <MiniMap nodeColor={(node) => (node.data.external ? "#596078" : "#746cff")} maskColor="rgba(7,9,18,.68)" />
       <Controls showInteractive={false} />
       <Panel position="top-right" className="graph-toolbar">
-        <button className={mode === "organic" ? "active" : ""} onClick={() => setMode("organic")}>Organic</button>
-        <button className={mode === "radial" ? "active" : ""} onClick={() => setMode("radial")}>Radial</button>
-        <button className={mode === "hierarchy" ? "active" : ""} onClick={() => setMode("hierarchy")}>Hierarchy</button>
+        <button className={mode === "organic" ? "active" : ""} onClick={() => setMode("organic")}>자유 배치</button>
+        <button className={mode === "radial" ? "active" : ""} onClick={() => setMode("radial")}>방사형</button>
+        <button className={mode === "hierarchy" ? "active" : ""} onClick={() => setMode("hierarchy")}>계층형</button>
         <button onClick={() => setLayoutVersion((version) => version + 1)} disabled={layoutPending}>{layoutPending ? "정렬 중…" : "자동 정렬"}</button>
         <button className={labelsPinned ? "active" : ""} onClick={() => setLabelsPinned((value) => !value)}>링크명 고정</button>
       </Panel>

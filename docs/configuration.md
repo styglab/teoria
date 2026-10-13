@@ -29,6 +29,7 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_ADMIN_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Admin API 앞에 붙이는 URL 경로 |
 | `TEORIA_ADMIN_AUTH_MODE` | `disabled` | Admin 쓰기 API 인증 방식. 공유·운영 환경은 `bearer` 사용 |
 | `TEORIA_ADMIN_API_TOKEN` | 없음 | `bearer` mode의 Admin API credential |
+| `TEORIA_ADMIN_METADATA_PUBLIC_READ` | `false` | `true`면 메타데이터 카탈로그·상세·통합 패널·계보·프로파일의 토큰 없는 조회 허용. 데이터 샘플과 변경 API의 인증은 유지 |
 | `TEORIA_ADMIN_API_ACTOR` | `system:admin` | 감사 기록에 남길 인증 principal ID |
 | `TEORIA_ADMIN_API_ROLES` | Admin 역할 전체 | 쉼표로 구분한 Admin 승인 역할 |
 | `TEORIA_ADMIN_DATA_DATABASE_URL` | 없음 | Admin API가 입찰 데이터 조회에 사용하는 read-only Data DB URL |
@@ -39,7 +40,7 @@ uv sync --locked --all-packages --all-groups
 | `TEORIA_OPENMETADATA_TIMEOUT_SECONDS` | `10` | OpenMetadata REST 요청 제한시간 |
 | `TEORIA_OPENMETADATA_VERIFY_SSL` | `true` | OpenMetadata TLS 인증서 검증 여부 |
 | `TEORIA_OPENMETADATA_DATABASE_SERVICE` | `teoria_postgresql` | 기본 Teoria PostgreSQL Database Service 이름 |
-| `OPENMETADATA_VERSION` | `1.12.6` | Server와 ephemeral ingestion image에 공통 적용하는 OpenMetadata 버전 |
+| `OPENMETADATA_VERSION` | `2.0.5` | Server와 ephemeral ingestion image에 공통 적용하는 OpenMetadata 버전 |
 | `OPENMETADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata 전용 PostgreSQL 암호 |
 | `OPENMETADATA_INGESTION_BOT_TOKEN` | 없음 | 일회성 ingestion Job이 OpenMetadata REST API에 쓰는 bot JWT |
 | `TEORIA_CONTEXT_RUNTIME_API_URL` | `http://localhost:8000` | Context Engine이 승인된 Capability를 실행할 Runtime API 내부 주소 |

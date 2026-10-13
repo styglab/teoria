@@ -21,6 +21,7 @@ from teoria_pipelines.domains.public_procurement.contracts.tasks import (
     normalize_contracts,
     record_backfill_gap,
     refresh_contract_event_ledger,
+    refresh_procurement_entity_search_index,
     resolve_backfill_gap,
     upsert_contracts,
 )
@@ -237,4 +238,7 @@ def _sum_summaries(summaries: list[LoadSummary]) -> LoadSummary:
 
 @flow(name="계약 사건 사전집계 갱신")
 def refresh_pps_contract_event_ledger(batch_size: int = 5) -> int:
-    return refresh_contract_event_ledger(batch_size)
+    refreshed = refresh_contract_event_ledger(batch_size)
+    if refreshed:
+        refresh_procurement_entity_search_index()
+    return refreshed

@@ -131,9 +131,18 @@ class BindingRepository:
         result["bindings"] = [_jsonable(dict(row)) for row in binding_rows]
         return result
 
-    def list_bindings(self, *, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
-        where = "WHERE ob.status = %s" if status else ""
-        params: tuple[Any, ...] = (status, limit) if status else (limit,)
+    def list_bindings(self, *, status: str | None = None, limit: int = 100,
+                      binding_ids: list[UUID] | None = None) -> list[dict[str, Any]]:
+        conditions = []
+        values: list[Any] = []
+        if status:
+            conditions.append("ob.status = %s")
+            values.append(status)
+        if binding_ids is not None:
+            conditions.append("ob.binding_id = ANY(%s)")
+            values.append(binding_ids)
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        params = tuple(values + [limit])
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
             rows = connection.execute(
                 f"""

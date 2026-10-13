@@ -1,0 +1,44 @@
+registry:
+  version: 1.2.0
+  registered_at: "2026-10-13"
+capability:
+  id: get_procurement_network
+  exposure: public
+  name: 조달 관계 네트워크 조회
+  description: 계약 관계 전용 ledger를 일괄 조회해 기관·업체·공식 분야 시작점의 제한된 2단 네트워크와 관계별 집계, 공고 참가 지역제한 필터, 표시 제한 및 관측 범위를 반환한다.
+  kind: compute
+  processor: procurement_exploration.get_procurement_network
+  semantic_requirements:
+    concepts:
+      - stable_key: procurement.Organization
+      - stable_key: party.BusinessRegistration
+      - stable_key: procurement.Contract
+      - stable_key: procurement.ContractParty
+    properties:
+      - stable_key: procurement.Organization.organizationCode
+      - stable_key: party.BusinessRegistration.businessRegistrationNumber
+      - stable_key: procurement.Contract.contractId
+      - stable_key: procurement.Contract.firstContractDate
+      - stable_key: procurement.ContractParty.attributedAmount
+    relationships:
+      - stable_key: procurement.SIGNS
+      - stable_key: procurement.HAS_CONTRACT_PARTY
+  effects:
+    reads: [public_procurement.contract]
+    produces: [public_procurement.procurement_network]
+  inputs:
+    root_type: {data_type: string, enum: [organization, company, field]}
+    root_id: {data_type: string}
+    field_code: {data_type: string}
+    work_type: {data_type: string, enum: [goods, service, construction, foreign, other, unknown]}
+    region_basis: {data_type: string, enum: [participation_restriction]}
+    region_code: {data_type: string}
+    region_codes:
+      data_type: string
+      collection: list
+    period_from_year: {data_type: integer, minimum: 2000, maximum: 2100}
+    period_to_year: {data_type: integer, minimum: 2000, maximum: 2100}
+    depth: {data_type: integer, default: 1, minimum: 1, maximum: 2}
+    first_hop_limit: {data_type: integer, default: 20, minimum: 1, maximum: 100}
+    second_hop_limit: {data_type: integer, default: 50, minimum: 1, maximum: 200}
+  returns: [public_procurement.procurement_network]

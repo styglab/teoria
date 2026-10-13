@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from teoria.admin.auth import AdminAuthorizer, AdminPrincipal
@@ -8,14 +10,22 @@ from teoria.metadata.models import MetadataStatus
 from teoria.metadata.openmetadata import OpenMetadataError, OpenMetadataService
 
 
-def create_metadata_router(service: OpenMetadataService | None, authorizer: AdminAuthorizer) -> APIRouter:
+def create_metadata_router(service: OpenMetadataService | None, authorizer: AdminAuthorizer,
+                           context_service=None, *, public_read: bool = False) -> APIRouter:
     router = APIRouter(prefix="/v1/admin/metadata", tags=["metadata"],
-                       dependencies=[Depends(authorizer.require())])
+                       dependencies=[] if public_read else [Depends(authorizer.require())])
 
     def require_service() -> OpenMetadataService:
         if service is None:
             raise HTTPException(status_code=503, detail={"code": "openmetadata_disabled"})
         return service
+
+    @router.get("/asset-context/{table_id}")
+    async def asset_context(table_id: UUID, response: Response) -> dict:
+        response.headers["Cache-Control"] = "no-store"
+        if context_service is None:
+            raise HTTPException(status_code=503, detail={"code": "asset_context_unavailable"})
+        return await _call(context_service.get(str(table_id)))
 
     @router.get("/status")
     async def status() -> dict:

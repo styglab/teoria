@@ -4,8 +4,8 @@ import type { LinkEdge, ObjectNode } from "../../api/admin";
 export function DetailPanel({ item, onClose, mode = "runtime" }: { item: ObjectNode | LinkEdge; onClose: () => void; mode?: "runtime" | "business" }) {
   const isLink = "link_type" in item;
   const itemType = mode === "business"
-    ? (isLink ? "RELATIONSHIP" : "BUSINESS OBJECT")
-    : (isLink ? "LINK TYPE" : "OBJECT TYPE");
+    ? (isLink ? "업무 관계" : "업무 개념")
+    : (isLink ? "연결 유형" : "객체 유형");
   return (
     <aside className="detail-panel">
       <div className="detail-header">
@@ -14,12 +14,12 @@ export function DetailPanel({ item, onClose, mode = "runtime" }: { item: ObjectN
       </div>
       <p>{item.description}</p>
       {isLink ? <>
-        <div className="link-direction"><div><span>Source</span><code>{item.source}</code></div><div><span>Target</span><code>{item.target}</code></div></div>
-        <h3>{mode === "business" ? "Ontology" : "Registry"}</h3>
-        <div className="primary-key"><span>{mode === "business" ? "Namespace" : "Runtime domain"}</span><code>{item.ontology}</code></div>
+        <div className="link-direction"><div><span>출발</span><code>{item.source}</code></div><div><span>도착</span><code>{item.target}</code></div></div>
+        <h3>{mode === "business" ? "온톨로지" : "Registry"}</h3>
+        <div className="primary-key"><span>{mode === "business" ? "네임스페이스" : "실행 도메인"}</span><code>{item.ontology}</code></div>
       </> : <>
-      {item.primary_key && <div className="primary-key"><span>{mode === "business" ? "Identity" : "Primary key"}</span><code>{item.primary_key}</code></div>}
-      <h3>Properties <b>{item.properties.length}</b></h3>
+      {item.primary_key && <div className="primary-key"><span>{mode === "business" ? "식별 기준" : "기본 키"}</span><code>{item.primary_key}</code></div>}
+      <h3>속성 <b>{item.properties.length}</b></h3>
       <div className="detail-properties">
         {item.properties.map((property) => (
           <div key={property.id}>

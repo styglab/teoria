@@ -50,6 +50,11 @@ def test_loads_current_registries() -> None:
         "pps_user",
     }
     assert set(catalog.capabilities) == {
+            "autocomplete_procurement_entities",
+            "get_procurement_network",
+            "analyze_procurement_field_market",
+            "get_procurement_classification_catalog",
+            "get_procurement_region_filter_options",
         "assess_company_bid_eligibilities",
         "assess_company_bid_eligibility",
             "analyze_company_competitors",

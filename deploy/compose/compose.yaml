@@ -43,6 +43,8 @@ services:
   postgres:
     image: postgres:17
     restart: unless-stopped
+    # Parallel PostgreSQL queries allocate dynamic shared memory in /dev/shm.
+    shm_size: 1gb
     environment:
       POSTGRES_DB: teoria_data
       POSTGRES_USER: teoria_pipeline
@@ -386,7 +388,11 @@ services:
 
   prefect-metadata-deploy:
     profiles: ["metadata-orchestration"]
-    <<: *pipeline-runner
+    image: teoria-pipelines-metadata:latest
+    build:
+      context: ../..
+      dockerfile: pipelines/Dockerfile
+      target: metadata-worker
     command: ["prefect", "deploy", "--all", "--prefect-file", "/app/pipelines/prefect.metadata.yaml"]
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
@@ -474,7 +480,7 @@ services:
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
       TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
       OPENMETADATA_INGESTION_BOT_TOKEN: ${OPENMETADATA_INGESTION_BOT_TOKEN:-}
-      TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-1.12.6}
+      TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-2.0.5}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
@@ -552,6 +558,7 @@ services:
       TEORIA_REGISTRY_PATH: /app/platform/registries
       TEORIA_ADMIN_API_ROOT_PATH: /admin-api
       TEORIA_ADMIN_AUTH_MODE: ${TEORIA_ADMIN_AUTH_MODE:-disabled}
+      TEORIA_ADMIN_METADATA_PUBLIC_READ: ${TEORIA_ADMIN_METADATA_PUBLIC_READ:-false}
       TEORIA_ADMIN_API_TOKEN: ${TEORIA_ADMIN_API_TOKEN:-}
       TEORIA_ADMIN_API_ACTOR: ${TEORIA_ADMIN_API_ACTOR:-system:admin}
       TEORIA_ADMIN_API_ROLES: ${TEORIA_ADMIN_API_ROLES:-metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner}
@@ -613,7 +620,7 @@ services:
       - openmetadata-search:/usr/share/elasticsearch/data
 
   openmetadata-migrate:
-    image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-1.12.6}
+    image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-2.0.5}
     profiles: ["metadata"]
     restart: "no"
     environment:
@@ -640,7 +647,7 @@ services:
         condition: service_healthy
 
   openmetadata-server:
-    image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-1.12.6}
+    image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-2.0.5}
     profiles: ["metadata"]
     restart: unless-stopped
     environment:
@@ -673,12 +680,12 @@ services:
   # One-shot ingestion runner. Scheduling and retries belong to Prefect; this
   # service deliberately contains no Airflow control plane.
   openmetadata-ingestion-job:
-    image: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-1.12.6}
+    image: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-2.0.5}
     build:
       context: ../..
       dockerfile: deploy/compose/openmetadata/Dockerfile
       args:
-        OPENMETADATA_VERSION: ${OPENMETADATA_VERSION:-1.12.6}
+        OPENMETADATA_VERSION: ${OPENMETADATA_VERSION:-2.0.5}
     profiles: ["metadata-ingestion"]
     restart: "no"
     environment:

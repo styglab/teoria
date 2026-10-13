@@ -102,8 +102,10 @@ def create_binding_router(
         return repository
 
     @router.get("")
-    def list_bindings(status: str | None = None, limit: int = Query(100, ge=1, le=500)) -> dict:
-        return {"items": require_repository().list_bindings(status=status, limit=limit)}
+    def list_bindings(status: str | None = None, limit: int = Query(100, ge=1, le=500),
+                      binding_id: list[UUID] | None = Query(None, max_length=50)) -> dict:
+        filters = {"binding_ids": binding_id} if binding_id is not None else {}
+        return {"items": require_repository().list_bindings(status=status, limit=limit, **filters)}
 
     @router.get("/validation")
     def validate_bindings() -> dict:

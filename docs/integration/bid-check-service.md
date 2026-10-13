@@ -4,9 +4,13 @@
 
 입찰체크가 직접 소비하는 Capability 목록과 전환 상태의 machine-readable 계약은
 [`bid_check_capabilities.yaml`](bid_check_capabilities.yaml)에 있다. 이 계약의
-`active` 항목은 Registry discovery에 존재해야 한다. `migration_required` 항목은
-이미 제거된 구형 계약이므로 대체 Capability의 입력·결과 의미를 확인해 서비스
-호출을 전환해야 한다.
+`capabilities`의 `active` 항목은 Registry discovery에 존재해야 한다.
+`retired_capabilities`는 제거된 구형 계약과 대체 Capability를 기록한다.
+조달 탐색 Capability 5개와 기관·업체 관계의 `network_edge` 모드는 Runtime bundle
+`2026.10.13.1`부터 제공한다. 배포마다 discovery를 확인한 뒤 기능을 활성화한다.
+
+빠른 탐색의 신규 이름, 기존 계약 재사용 범위와 인수 조건은
+[조달 탐색 계약 계획](procurement_exploration_contract.md)에 있다.
 
 ```text
 Bid service → API gateway → Teoria Runtime API → Capability → Source/Data DB

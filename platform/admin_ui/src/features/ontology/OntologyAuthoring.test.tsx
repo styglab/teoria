@@ -24,16 +24,15 @@ describe("OntologyAuthoring", () => {
     });
 
     render(<OntologyAuthoring />);
-    expect(await screen.findByText("Graph")).toBeTruthy();
-    expect(await screen.findByLabelText("도메인 필터")).toBeTruthy();
-    fireEvent.click(screen.getByText("Objects"));
     expect(await screen.findByText("party.BusinessEntity")).toBeTruthy();
     expect(screen.getAllByText("업체").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByText("Links"));
+    fireEvent.click(screen.getByText("관계", { selector: "button" }));
     expect(screen.getByText("party.HAS_REGISTRATION")).toBeTruthy();
-    fireEvent.click(screen.getByText("Rules"));
+    fireEvent.click(screen.getByText("규칙", { selector: "button" }));
     expect(screen.getByText("party.ENTITY_RULE")).toBeTruthy();
-    fireEvent.click(screen.getByText("Review"));
+    fireEvent.click(screen.getByText("관계도"));
+    expect(await screen.findByLabelText("도메인 필터")).toBeTruthy();
+    fireEvent.click(screen.getByText("버전 검토"));
     expect(await screen.findByText("구조 검증 통과")).toBeTruthy();
     expect(screen.getByText("호환 가능")).toBeTruthy();
   });

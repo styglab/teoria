@@ -101,3 +101,53 @@ def test_profile_permission_error_is_403_not_missing_data():
     client=TestClient(create_admin_app(settings=Settings(),catalog=RegistryLoader(REGISTRIES).load(),metadata_service=service))
     result=client.get('/v1/admin/metadata/tables/table-1/profile')
     assert result.status_code==403
+
+
+def test_public_metadata_read_does_not_disable_write_or_sample_authentication():
+    settings = Settings(admin_auth_mode='bearer', admin_api_token='test-secret',
+                        admin_metadata_public_read=True)
+    client = TestClient(create_admin_app(settings=settings,
+        catalog=RegistryLoader(REGISTRIES).load(), metadata_service=FakeMetadataService()))
+    for path in ['status', 'services', 'databases', 'schemas', 'tables',
+                 'tables/teoria.teoria_data.public_procurement.contracts', 'tables/table-1/lineage']:
+        assert client.get('/v1/admin/metadata/' + path).status_code == 200
+    assert client.get('/v1/admin/metadata/status',
+                      headers={'Authorization': 'Bearer obsolete-token'}).status_code == 200
+    assert client.get('/v1/admin/metadata/tables/table-1/sample-data').status_code == 401
+    assert client.post('/v1/admin/bindings', json={}).status_code == 401
+    assert client.post('/v1/admin/intelligence/binding-suggestions', json={}).status_code == 401
+
+
+def test_metadata_read_requires_authentication_by_default():
+    settings = Settings(admin_auth_mode='bearer', admin_api_token='test-secret')
+    client = TestClient(create_admin_app(settings=settings,
+        catalog=RegistryLoader(REGISTRIES).load(), metadata_service=FakeMetadataService()))
+    assert client.get('/v1/admin/metadata/status').status_code == 401
+    assert client.get('/v1/admin/metadata/tables').status_code == 401
+
+
+def test_admin_session_validates_token_and_returns_only_principal():
+    settings = Settings(admin_auth_mode='bearer', admin_api_token='test-secret',
+                        admin_metadata_public_read=True, admin_api_actor='user:reviewer')
+    client = TestClient(create_admin_app(settings=settings, catalog=RegistryLoader(REGISTRIES).load()))
+    path = '/v1/admin/auth/session'
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers={'Authorization':'Bearer wrong-token'}).status_code == 401
+    response = client.get(path, headers={'Authorization':'Bearer test-secret'})
+    assert response.status_code == 200
+    assert response.json()['actor'] == 'user:reviewer'
+    assert 'metadata_admin' in response.json()['roles']
+    assert 'test-secret' not in response.text
+    assert response.headers['cache-control'] == 'no-store'
+
+
+def test_binding_context_filter_validates_and_forwards_exact_ids():
+    from unittest.mock import Mock
+    repository=Mock()
+    repository.list_bindings.return_value=[]
+    client=TestClient(create_admin_app(settings=Settings(),catalog=RegistryLoader(REGISTRIES).load(),binding_repository=repository))
+    binding_id='00000000-0000-0000-0000-000000000001'
+    assert client.get('/v1/admin/bindings?binding_id='+binding_id).status_code==200
+    from uuid import UUID
+    repository.list_bindings.assert_called_once_with(status=None,limit=100,binding_ids=[UUID(binding_id)])
+    assert client.get('/v1/admin/bindings?binding_id=invalid').status_code==422

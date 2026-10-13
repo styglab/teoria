@@ -23,6 +23,10 @@
 - 승인된 Metadata Intelligence suggestion을 유형별 적용기로 실행하는 변경 경로
   (OpenMetadata description·Glossary·quality test, Binding Draft, Ontology Draft)
 - OpenMetadata integration과 Admin UI
+- Data Assets의 기술·적재 운영·업무 Binding·거버넌스 통합 조회,
+  명시적 Pipeline output 연결과 원천별 장애 상태
+- 작업 중심 Admin 메뉴·개요, URL 기반 자산 상세와 관점별 탭, 전체 자산 검색,
+  자산별 제안·직접/용어 기반 의미 연결 조회, 공통 관리자 인증과 원천별 오류 격리
 - Runtime API만 호출하는 MCP gateway
 - Domain별 processor 등록과 query 후처리, 공공조달 query handler를 분리한
   Runtime·Context orchestration
@@ -127,5 +131,6 @@ Ontology canvas, 범용 graph editor, 자동 승인, OpenMetadata entity 복제,
 현재 Admin 진단 기반은 OpenMetadata 저장 샘플·프로파일의 제한된 조회와 법령의
 키워드 검색·snapshot 원문 조회를 제공한다. 기본 메타데이터 ingestion은 샘플과
 프로파일을 자동 수집하지 않는다. 다음 검증 범위는 대상 테이블을 명시한 관측
-수집 workflow, AI 의미 분석·근거 생성과 태그 제안, 검색 평가 및 최신 안정
-OpenMetadata 버전으로의 복원·migration·연계 검증이다.
+수집 workflow, AI 의미 분석·근거 생성과 태그 제안 및 검색 평가다.
+OpenMetadata 2.0.5의 격리 DB 복원·migration·연계·ingestion 및 기존 버전 복구
+검증과 운영 전환 후 API·검색·Prefect ingestion 재검증을 완료했다.

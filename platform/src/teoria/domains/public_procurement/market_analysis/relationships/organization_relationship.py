@@ -377,6 +377,14 @@ async def execute_organization_company_relationship(
     cache: Any | None = None,
 ) -> CapabilityResult:
     """Return complete company×organization history without field filtering."""
+    if inputs.get("view_mode") == "network_edge":
+        from teoria.domains.public_procurement.exploration import (
+            execute_network_organization_company_relationship,
+        )
+
+        return await execute_network_organization_company_relationship(
+            catalog, capability_id, inputs,
+        )
     history_inputs = {
         "organization_code": inputs["organization_code"],
         "business_registration_number": inputs["business_registration_number"],

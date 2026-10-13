@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from teoria.admin.composition import create_admin_services, install_admin_routers
+from teoria.admin.auth import AdminPrincipal
 from teoria.binding.repository import BindingRepository
 from teoria.settings import Settings
 from teoria.context import ContextEngine
@@ -48,6 +49,12 @@ def create_admin_app(
             allow_headers=["*"],
         )
     install_admin_routers(app, services)
+
+    @app.get("/v1/admin/auth/session", tags=["authentication"])
+    async def session(response: Response,
+                      principal: AdminPrincipal = Depends(services.authorizer.require())) -> dict:
+        response.headers["Cache-Control"] = "no-store"
+        return {"actor": principal.actor, "roles": sorted(principal.roles)}
 
     @app.get("/health")
     async def health() -> dict[str, str]:

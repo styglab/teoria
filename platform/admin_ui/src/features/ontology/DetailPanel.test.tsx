@@ -15,7 +15,7 @@ describe("DetailPanel", () => {
       target: "company.postal_address",
     }} onClose={() => undefined} />);
 
-    expect(screen.getByText("LINK TYPE")).toBeTruthy();
+    expect(screen.getByText("연결 유형")).toBeTruthy();
     expect(screen.getByText("company.legal_entity")).toBeTruthy();
     expect(screen.getByText("company.postal_address")).toBeTruthy();
   });

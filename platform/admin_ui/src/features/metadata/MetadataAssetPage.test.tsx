@@ -1,0 +1,21 @@
+import "@testing-library/jest-dom/vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { afterEach, expect, test, vi } from "vitest";
+import { adminApi, type MetadataTableDetail } from "../../api/admin";
+import { MetadataAssetPage } from "./MetadataAssetPage";
+vi.mock("./AssetContext",()=>({AssetContext:({section}:{section:string})=><p>context:{section}</p>}));
+afterEach(()=>{cleanup();vi.restoreAllMocks()});
+const detail:MetadataTableDetail={reference:{system:"openmetadata",entity_id:"table-id",entity_type:"table",fully_qualified_name:"svc.db.schema.contracts",version:1},name:"contracts",display_name:null,description:"contract table",tags:[],owners:[],domains:[],database:null,database_schema:null,columns:[{name:"amount",description:"contract amount"}],glossary_terms:[],test_suite:null};
+test("opens a shareable asset URL and selected tab without a modal",async()=>{
+ const get=vi.spyOn(adminApi,"metadataTable").mockResolvedValue(detail);
+ render(<MemoryRouter initialEntries={["/admin/data-catalog/assets/svc.db.schema.contracts?tab=columns&returnTo=%2Fadmin%2Fdata-catalog%3Fq%3Dcontracts%26filter%3Downer"]}><Routes><Route path="/admin/data-catalog/assets/:fqn" element={<MetadataAssetPage/>}/></Routes></MemoryRouter>);
+ expect(await screen.findByText("contract amount")).toBeInTheDocument();
+ expect(get).toHaveBeenCalledWith("svc.db.schema.contracts");
+ expect(screen.getByRole("link",{name:"← 목록으로"})).toHaveAttribute("href","/admin/data-catalog?q=contracts&filter=owner");
+ expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+ expect(screen.getByRole("link",{name:"이 자산의 제안"})).toHaveAttribute("href","/admin/changes/review?asset=svc.db.schema.contracts&assetId=table-id");
+ fireEvent.click(screen.getByRole("button",{name:"운영"}));
+ expect(await screen.findByText("context:operations")).toBeInTheDocument();
+ expect(screen.queryByText("contract amount")).not.toBeInTheDocument();
+});

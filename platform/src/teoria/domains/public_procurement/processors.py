@@ -47,6 +47,13 @@ from teoria.domains.public_procurement.market_analysis.related_projects.similar_
 from teoria.domains.public_procurement.market_analysis.relationships.organization_relationship import (
     execute_organization_company_relationship,
 )
+from teoria.domains.public_procurement.exploration import (
+    execute_autocomplete_procurement_entities,
+    execute_procurement_classification_catalog,
+    execute_procurement_field_market,
+    execute_procurement_network,
+    execute_procurement_region_filter_options,
+)
 from teoria.registry.loader import RegistryCatalog
 from teoria.runtime.capability.contracts import CapabilityExecutionError, CapabilityResult
 from teoria.runtime.capability.handlers import CapabilityHandlers
@@ -84,6 +91,26 @@ async def _enrich_contract_search(
 
 
 def register_processors(handlers: CapabilityHandlers) -> None:
+    handlers.register_processor(
+        "procurement_exploration.autocomplete_procurement_entities",
+        _query(execute_autocomplete_procurement_entities, cache=True),
+    )
+    handlers.register_processor(
+        "procurement_exploration.get_procurement_network",
+        _query(execute_procurement_network, cache=True),
+    )
+    handlers.register_processor(
+        "procurement_exploration.analyze_procurement_field_market",
+        _query(execute_procurement_field_market, cache=True),
+    )
+    handlers.register_processor(
+        "procurement_exploration.get_procurement_classification_catalog",
+        _query(execute_procurement_classification_catalog, cache=True),
+    )
+    handlers.register_processor(
+        "procurement_exploration.get_procurement_region_filter_options",
+        _query(execute_procurement_region_filter_options, cache=True),
+    )
     handlers.register_processor(
         "assessment.evaluate_bid_eligibility", execute_bid_eligibility_assessment,
     )

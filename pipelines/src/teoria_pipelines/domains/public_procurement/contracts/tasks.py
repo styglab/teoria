@@ -181,6 +181,16 @@ def refresh_contract_event_ledger(batch_size: int = 5) -> int:
     return refreshed
 
 
+@task(name="조달 개체 검색 인덱스 갱신", retries=1, retry_delay_seconds=60,
+      viz_return_value=None)
+def refresh_procurement_entity_search_index() -> None:
+    store = _store()
+    with psycopg.connect(store.database_url, autocommit=True) as connection:
+        connection.execute(
+            "SELECT public_procurement.refresh_procurement_entity_search_index()"
+        )
+
+
 @task(name="완료 Operation 확인", viz_return_value=None)
 def get_completed_operation(pipeline_id: str, window: CollectionWindow,
                             operation_id: str) -> LoadSummary | None:

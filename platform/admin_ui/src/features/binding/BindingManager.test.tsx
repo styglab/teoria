@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { BindingManager } from "./BindingManager";
 
 describe("BindingManager", () => {
@@ -14,10 +15,10 @@ describe("BindingManager", () => {
       return response({ items: [{ binding_id: "binding-1", ontology_ref_type: "property", ontology_ref_id: "revision-1", ontology_concept_id: "concept-1", ontology_stable_key: "procurement.Contract.currentAmount", ontology_concept_kind: "property", target_type: "glossary_term", target_locator: "openmetadata://glossaryTerm/Procurement.ContractAmount", external_entity_id: "term-1", entity_type: "glossaryTerm", fully_qualified_name: "Procurement.ContractAmount", binding_type: "equivalent_to", purpose: "semantic_resolution", authority: "preferred", priority: 10, confidence: 1, status: "draft", created_by: "user:author", approved_by: null, created_at: "2026-10-05T00:00:00Z", last_verified_at: "2026-10-05T00:00:00Z" }] });
     });
 
-    render(<BindingManager />);
+    render(<MemoryRouter><BindingManager /></MemoryRouter>);
     expect(await screen.findByText("procurement.Contract.currentAmount")).toBeTruthy();
     expect(screen.getByText("Procurement.ContractAmount")).toBeTruthy();
-    fireEvent.click(screen.getByText("Approve"));
+    fireEvent.click(screen.getByText("승인"));
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes("binding-1/reviews") && init?.method === "POST")).toBe(true));
   });
 });

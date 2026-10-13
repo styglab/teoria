@@ -210,6 +210,12 @@ Teoria가 소유하는 repository path와 내부 ID의 기본 형식은 `snake_c
 
 ## 법령 데이터 수집
 
+통합 자산 조회는 `platform/src/teoria/metadata/asset_context.py`와 Admin metadata router가
+소유한다. 공공조달의 운영 read view 조회는 `domains/public_procurement/metadata_operations.py`,
+Pipeline output 계약과 read view는 Pipeline의 `084_asset_collection_context.sql`이 소유한다.
+조회 계정에 ingestion 스키마나 raw table 권한을 추가하지 않는다. 여러 DB의 정보를
+요청 시 조합하며 OpenMetadata entity와 운영 상태를 Application DB에 복제하지 않는다.
+
 `pipelines/src/teoria_pipelines/domains/legal_information/laws/`는 공식 API client,
 Prefect Flow·Task, XML 파싱과 법령 저장 repository를 소유한다. 대상은
 `pipelines/config/law_targets.yaml`, Data DB는 `legal_information` 스키마다.

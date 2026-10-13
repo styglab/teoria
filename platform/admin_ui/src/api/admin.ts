@@ -71,6 +71,19 @@ export type MetadataEntity = {
   owners: Array<Record<string, unknown>>; tags: Array<Record<string, unknown>>; domains: Array<Record<string, unknown>>;
 };
 export type MetadataPage = { items: MetadataEntity[]; total: number; after: string | null; before: string | null };
+export type AssetContextResult = {
+  observed_at: string; technical: MetadataTableDetail;
+  operations: { status: string; source: string; reason?: string; data?: Array<{
+    pipeline_id: string; status: string | null; last_success_at: string | null;
+    window_start: string | null; window_end: string | null; cursor_date: string | null;
+    checkpoint_updated_at: string | null; error_code: string | null;
+  }> };
+  business: { status: string; source: string; reason?: string; glossary_terms: string[]; data?: {
+    bindings: Array<{ binding_id: string; namespace: string; stable_key: string; status: string; entity_type: string; fully_qualified_name: string }>;
+    suggestions: Array<{ suggestion_id: string; suggestion_type: string; status: string; target_ref: string; reviewer: string | null; reviewed_at: string | null; application_status: string | null }>;
+    bindings_truncated: boolean; suggestions_truncated: boolean;
+  } };
+};
 export type MetadataTableDetail = MetadataEntity & {
   database: Record<string, unknown> | null;
   database_schema: Record<string, unknown> | null;
@@ -163,6 +176,7 @@ async function patchJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const adminApi = {
+  session: () => getJson<{ actor: string; roles: string[] }>("/auth/session"),
   capabilities: () => getJson<{ capabilities: CapabilitySummary[] }>("/capabilities"),
   capabilityCoverage: () => getJson<CapabilityCoverage>("/bindings/capability-coverage"),
   contextQuery: (question: string) => postJson<ContextQueryResult>("/context/execute", { question }),
@@ -179,15 +193,24 @@ export const adminApi = {
     if (options?.limit) params.set("limit", String(options.limit));
     return getJson<MetadataPage>(`/metadata/tables${params.size ? `?${params}` : ""}`);
   },
+  metadataSchemas: (after?: string) => getJson<MetadataPage>(`/metadata/schemas?limit=100${after?`&after=${encodeURIComponent(after)}`:""}`),
   metadataTable: (fqn: string) => getJson<MetadataTableDetail>(`/metadata/tables/${encodeURIComponent(fqn)}`),
+  assetContext: (tableId: string) => getJson<AssetContextResult>(`/metadata/asset-context/${encodeURIComponent(tableId)}`),
+  metadataLineage: (tableId: string) => getJson<Record<string, unknown>>(`/metadata/tables/${encodeURIComponent(tableId)}/lineage`),
   metadataTableSamples: (id: string, includeValues = false) => getJson<MetadataTableSamples>(
     `/metadata/tables/${encodeURIComponent(id)}/sample-data?limit=10&include_values=${includeValues}`),
   metadataTableProfile: (id: string) => getJson<MetadataTableProfile>(`/metadata/tables/${encodeURIComponent(id)}/profile`),
+  intelligenceSuggestion: (id: string) => getJson<IntelligenceSuggestion>(`/intelligence/suggestions/${encodeURIComponent(id)}`),
   intelligenceSuggestions: (status?: string) => getJson<{ items: IntelligenceSuggestion[] }>(`/intelligence/suggestions${status ? `?status=${encodeURIComponent(status)}` : ""}`),
   reviewSuggestion: (id: string, decision: "approve" | "reject") => postJson<IntelligenceSuggestion>(`/intelligence/suggestions/${encodeURIComponent(id)}/reviews`, { decision }),
   suggestColumnBinding: (tableId: string, columnName: string) => postJson<IntelligenceSuggestion>("/intelligence/binding-suggestions", { table_id: tableId, column_name: columnName }),
   ontologyConcepts: (namespace = "procurement") => getJson<{ items: OntologyConcept[] }>(`/ontology-authoring/ontologies/${encodeURIComponent(namespace)}/concepts`),
-  bindings: (status?: string) => getJson<{ items: SemanticBinding[] }>(`/bindings${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  bindings: (status?: string, ids?: string[]) => {
+    const params=new URLSearchParams();
+    if(status)params.set("status",status);
+    ids?.forEach(id=>params.append("binding_id",id));
+    return getJson<{items:SemanticBinding[]}>(`/bindings${params.size?`?${params}`:""}`);
+  },
   bindingValidation: () => getJson<BindingValidation>("/bindings/validation"),
   createBinding: (body: Record<string, unknown>) => postJson<SemanticBinding>("/bindings", body),
   reviewBinding: (id: string, decision: "approve" | "reject" | "deprecate", comment?: string) => postJson<SemanticBinding>(`/bindings/${encodeURIComponent(id)}/reviews`, { decision, comment }),

@@ -13,7 +13,7 @@ test("shows one capability with readiness and next actions", async () => {
   render(<CapabilityStudio capabilities={[{ id: "get_bid_notice", name: "입찰공고 조회", description: "공고와 근거를 조회합니다.", inputs: ["notice_id"], steps: ["procurement.get_notice"], returns: ["public_procurement.bid_notice"] }]} sources={[{ id: "procurement", name: "조달 DB", description: null, type: "database", provider: null, items: 1, item_label: "operation" }]} mappings={[]} lineage={[]} validation={{ status: "valid", diagnostic_count: 0, diagnostics: [] }} />);
   expect(screen.getByRole("heading", { name: "입찰공고 조회" })).toBeInTheDocument();
   expect(screen.getByText("데이터 준비도")).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByText("2/3 Capability·입출력 의미 연결")).toBeInTheDocument());
-  expect(screen.getByText("Bindings 열기")).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByText("2/3 기능·입출력 의미 연결")).toBeInTheDocument());
+  expect(screen.getByText("의미 연결 열기")).toBeInTheDocument();
   expect(screen.queryByText("릴리스 준비 완료")).not.toBeInTheDocument();
 });

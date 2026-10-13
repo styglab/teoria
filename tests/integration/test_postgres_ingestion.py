@@ -191,3 +191,20 @@ def test_opening_completion_matches_selected_business_numbers() -> None:
     store.finish_bid_opening_enrichment(awards.records, [])
     with psycopg.connect(DATABASE_URL) as c:
         assert c.execute("SELECT status FROM ingestion.bid_opening_enrichment_queue WHERE notice_number=%s", (key['bidNtceNo'],)).fetchone()[0] == 'pending'
+
+
+def test_asset_context_output_contract_and_reader_permissions() -> None:
+    """Only explicit pipeline outputs get status; runtime cannot inspect raw ingestion."""
+    store = PostgresStore(DATABASE_URL or '')
+    execution = uuid4()
+    window = CollectionWindow(date(2026, 10, 13), date(2026, 10, 13))
+    store.start_run(execution, 'pps_contract_incremental', window)
+    with psycopg.connect(DATABASE_URL) as connection:
+        connection.execute("UPDATE ingestion.pipeline_runs SET status='completed',finished_at=now(),contract_count=7 WHERE execution_id=%s", (execution,))
+        runs_oid,payload_oid=connection.execute("SELECT 'ingestion.pipeline_runs'::regclass::oid,'ingestion.raw_provider_payloads'::regclass::oid").fetchone()
+        connection.execute("SET ROLE teoria_runtime")
+        row=connection.execute("SELECT status,contract_count FROM public_procurement.runtime_asset_collection_status WHERE relation_name='contracts' AND pipeline_id='pps_contract_incremental'").fetchone()
+        assert row==('completed',7)
+        assert connection.execute("SELECT count(*) FROM public_procurement.runtime_asset_collection_status WHERE relation_name='contracts_neighbor'").fetchone()[0]==0
+        assert not connection.execute("SELECT has_table_privilege(current_user,%s,'SELECT')",(runs_oid,)).fetchone()[0]
+        assert not connection.execute("SELECT has_table_privilege(current_user,%s,'SELECT')",(payload_oid,)).fetchone()[0]

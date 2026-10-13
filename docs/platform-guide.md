@@ -57,15 +57,25 @@ Flow 경로를 사용하며 기존 `flows/` 경로는 호환 진입점으로 유
 
 ### Metadata 관리자
 
+Admin UI 현황에서 연결과 작업 상태를 확인한다. 데이터 카탈로그의 자산 상세에서는
+기술·운영·의미·거버넌스 메타데이터를 탭으로 조회하고, 의미 모델에서 온톨로지와
+Semantic Binding을 작성하며, 거버넌스와 검토·적용 화면에서 공백과 변경을 관리한다.
+자산별 제안·의미 연결로
+이동할 때 대상 맥락을 유지하며, 검토·변경 작업은 공통 관리자 연결을 사용한다.
+원천은 각각 OpenMetadata, 수집 Data DB, Teoria Application DB로 유지하며 통합 저장소를
+추가하지 않는다. 운영 연결은 Pipeline의 명시적인 output 계약이며 현재 공공조달
+수집의 적재 audit·checkpoint를 지원한다. 상세한 범위와 미연결·장애 표시는
+[Admin UI](admin-ui.md)를 따른다.
+
 OpenMetadata에서 asset, schema, glossary, owner와 lineage를 관리한다. Teoria에는
 OpenMetadata entity 본문을 복제하지 않는다.
 
-Metadata Intelligence 제안은 Review Queue에서 승인한 뒤 유형별 application service가
+Metadata Intelligence 제안은 제안 검토 화면에서 승인한 뒤 유형별 application service가
 적용한다. description, Glossary Term 생성·할당과 quality test는 OpenMetadata API를
 사용하며 적용 전 대상 version을 다시 확인한다. AI가 직접 승인하거나 OpenMetadata를
 임의 변경하지 않는다.
 [Metadata Asset 분석 Skill](skills/analyze_metadata_asset.md)을 사용하면 현재
-OpenMetadata 자산과 Ontology·Binding·Source 근거를 대조하여 Review Queue용 제안을
+OpenMetadata 자산과 Ontology·Binding·Source 근거를 대조하여 검토용 제안을
 만들 수 있다.
 
 Suggestion 적용은 승인된 제안별 실행권과 만료 시간으로 중복 실행을 막는다.
@@ -174,5 +184,6 @@ Data Assets 상세에서 OpenMetadata 저장 샘플·최신 프로파일을 조�
 법령 검색은 인증된 Admin API의 키워드 검색과 snapshot 기반 문서 조회로 시작한다.
 아직 Runtime Capability·MCP Tool 또는 임베딩 검색 기능은 아니다.
 [검색 계약](ingestion/law_collection.md)을 참고한다.
-현재 OpenMetadata 1.12.6과 최신 안정 릴리스 2.0.5의 차이는
+운영 OpenMetadata와 저장소의 배포 기본값은 격리·운영 검증한 2.0.5다.
+운영 DB 복원·마이그레이션과 Teoria API 호환 검증 결과는
 [업그레이드 검토](architecture/openmetadata_upgrade_assessment.md)에 정리했다.

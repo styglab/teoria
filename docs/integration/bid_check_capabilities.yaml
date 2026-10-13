@@ -1,6 +1,7 @@
 schema_version: "1.0"
 consumer: bid_check
 description: 입찰체크 서비스가 직접 사용하는 Runtime Capability 계약
+planning_document: procurement_exploration_contract.md
 retired_capabilities:
   - id: find_similar_bid_notices
     replacements: [search_bid_related_projects]
@@ -57,6 +58,11 @@ ontology_decision:
   reuse_stable_concepts: true
   rationale: 기존 Published artifact는 재사용하지 않되 의미가 같은 stable concept를 승계한 새 Draft를 검토·게시하고 Capability를 다시 연결한다.
 capabilities:
+  - {id: autocomplete_procurement_entities, area: exploration, status: active}
+  - {id: get_procurement_classification_catalog, area: classification, status: active}
+  - {id: get_procurement_network, area: exploration, status: active}
+  - {id: get_procurement_region_filter_options, area: region, status: active}
+  - {id: analyze_procurement_field_market, area: market, status: active}
   - {id: search_bid_notices, area: bid_notice, status: active}
   - {id: get_bid_notice, area: bid_notice, status: active}
   - {id: get_bid_requirements, area: bid_notice, status: active}
