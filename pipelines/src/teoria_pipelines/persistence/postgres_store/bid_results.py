@@ -207,7 +207,7 @@ class BidResultStoreMixin:
             raise ValueError("queue_mode must be incremental, backfill, or retry")
         now = datetime.now(timezone.utc)
         if queue_mode == "retry":
-            eligibility = "q.status IN ('retry_wait','partial_completed') AND q.next_retry_at<=now()"
+            eligibility = "q.status='retry_wait' AND q.next_retry_at<=now()"
             ordering = "q.next_retry_at,q.priority_date DESC NULLS LAST,q.updated_at"
         else:
             eligibility = "q.status='pending' AND q.queue_class=%s AND q.next_retry_at<=now()"
@@ -275,11 +275,11 @@ class BidResultStoreMixin:
                     cursor.executemany(
                     "UPDATE ingestion.bid_opening_enrichment_queue q SET "
                     "status=CASE WHEN verified.complete THEN 'completed' "
-                    "WHEN q.attempts+1>=5 THEN 'partial_completed' ELSE 'retry_wait' END,"
+                    "WHEN q.attempts+1>=3 THEN 'partial_completed' ELSE 'retry_wait' END,"
                     "attempts=CASE WHEN verified.complete THEN q.attempts ELSE q.attempts+1 END,"
                     "completed_at=CASE WHEN verified.complete THEN now() ELSE NULL END,"
                     "next_retry_at=CASE WHEN verified.complete THEN q.next_retry_at "
-                    "WHEN q.attempts+1>=5 THEN now()+interval '7 days' "
+                    "WHEN q.attempts+1>=3 THEN 'infinity'::timestamptz "
                     "WHEN q.attempts<1 THEN now()+interval '30 minutes' "
                     "WHEN q.attempts<2 THEN now()+interval '2 hours' "
                     "WHEN q.attempts<3 THEN now()+interval '12 hours' "
@@ -303,11 +303,13 @@ class BidResultStoreMixin:
                     )
                 if failed_keys:
                     cursor.executemany(
-                    "UPDATE ingestion.bid_opening_enrichment_queue SET status='retry_wait',"
+                    "UPDATE ingestion.bid_opening_enrichment_queue SET status=CASE "
+                    "WHEN attempts+1>=5 THEN 'permanent_failure' ELSE 'retry_wait' END,"
                     "attempts=attempts+1,lease_until=NULL,last_error_code='opening_lookup_failed',"
-                    "next_retry_at=now()+CASE WHEN attempts<1 THEN interval '30 minutes' "
+                    "next_retry_at=CASE WHEN attempts+1>=5 THEN 'infinity'::timestamptz "
+                    "ELSE now()+CASE WHEN attempts<1 THEN interval '30 minutes' "
                     "WHEN attempts<2 THEN interval '2 hours' WHEN attempts<3 THEN interval '12 hours' "
-                    "WHEN attempts<5 THEN interval '1 day' ELSE interval '7 days' END,updated_at=now() "
+                    "ELSE interval '1 day' END END,updated_at=now() "
                     "WHERE notice_number=%s "
                     "AND notice_order=%s AND bid_classification_number=%s AND rebid_number=%s",
                         failed_keys,

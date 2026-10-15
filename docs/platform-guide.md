@@ -74,9 +74,18 @@ Metadata Intelligence 제안은 제안 검토 화면에서 승인한 뒤 유형�
 적용한다. description, Glossary Term 생성·할당과 quality test는 OpenMetadata API를
 사용하며 적용 전 대상 version을 다시 확인한다. AI가 직접 승인하거나 OpenMetadata를
 임의 변경하지 않는다.
-[Metadata Asset 분석 Skill](skills/analyze_metadata_asset.md)을 사용하면 현재
-OpenMetadata 자산과 Ontology·Binding·Source 근거를 대조하여 검토용 제안을
-만들 수 있다.
+인증된 Metadata 관리자는 데이터 자산 상세에서 테이블·컬럼 description 변경안을
+직접 제출할 수 있다. 이 작업은 OpenMetadata를 즉시 수정하지 않고 제출자, 현재
+description과 table version을 포함한 pending Suggestion을 만든다. 검토자가 승인할 때
+현재 version 또는 대상 컬럼의 기존 description을 다시 대조한 뒤 반영한다.
+[자산 진단 Skills](skills/analyze_metadata_asset.md)는 메타데이터 인텔리전스의
+세 작업으로 나눈다. `메타데이터 정비`는 설명·용어를, `업무 의미 연결`은 기존
+Published Ontology와의 Binding을 제안한다. `개방 적합성 진단`은 수집된 법령을
+근거로 정보 분류·개방 상태·보호조치의 검토 초안을 작성한다. 신규 업무 Ontology
+제안은 보류한다. [자산 진단 Worker](architecture/asset_assessment.md)의 첫 구현은
+버튼 요청부터 설명·직접 자산 Binding 제안 등록과 법령 진단 findings까지 제공한다.
+모델 gateway를 설정하고 `intelligence` Compose profile의 Worker를 실행해야 한다.
+자동 Glossary 제안과 태그 적용은 후속 범위다.
 
 Suggestion 적용은 승인된 제안별 실행권과 만료 시간으로 중복 실행을 막는다.
 변경을 시작하기 전의 실패는 같은 승인으로 재시도할 수 있다. 외부 변경이 시작된
@@ -86,6 +95,12 @@ Suggestion 적용은 승인된 제안별 실행권과 만료 시간으로 중복
 복구한다. 이 경로는 OpenMetadata를 수정하지 않고 성공 기록 또는 현재 description·
 Glossary 할당을 읽어 확인한다. 결과를 증명할 수 없는 생성 작업은 검증 필요로
 유지한다. 재시도·복구 주체와 이전 시도 이력을 Application DB에 기록한다.
+제안 검토 화면은 상태·자산 범위를 서버에서 필터링하고 cursor 페이지 이동으로
+오래된 제안을 조회한다. 실패 시 변경 시작 전에는 `기존 승인으로 다시 적용`
+(`POST /v1/admin/intelligence/suggestions/{suggestion_id}/applications/retry`),
+변경 시작 후에는 `기존 적용 결과 확인`을 사용한다. 활성 실행은 재시도하지 않으며
+원천 변경은 재분석을 안내한다. 생성된 Binding·Ontology 초안 링크는 성공 기록에서
+복원해 새로고침 후에도 유지하고 후속 승인·게시 화면으로 연결한다.
 
 ### Ontology owner와 Binding reviewer
 
@@ -187,3 +202,11 @@ Data Assets 상세에서 OpenMetadata 저장 샘플·최신 프로파일을 조�
 운영 OpenMetadata와 저장소의 배포 기본값은 격리·운영 검증한 2.0.5다.
 운영 DB 복원·마이그레이션과 Teoria API 호환 검증 결과는
 [업그레이드 검토](architecture/openmetadata_upgrade_assessment.md)에 정리했다.
+
+제안 검토 화면은 제안 당시 설명 근거와 OpenMetadata에서 읽은 현재 값을 구분하고,
+자산 버전 변경을 안내한다. 적용 이력은 인증된 조회 API로 시도별 실행자·시각·결과와
+오류 코드를 페이지 조회한다. 최신 자산 조회는 일시 응답이며 DB에 복제하지 않는다.
+이력 조회나 비교는 승인·재시도·결과 복구를 실행하지 않는다.
+
+Admin은 데이터 자산 목록을 기준으로 공통 페이지 틀·제목·검색·필터를 사용한다.
+온톨로지는 버전 탐색과 개념 목록·속성 펼침·관계도·버전 검토를 같은 화면에서 제공한다.

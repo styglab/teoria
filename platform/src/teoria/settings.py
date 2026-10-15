@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     admin_api_roles: str = "metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner"
     admin_data_database_url: str | None = None
     app_database_url: str | None = None
+    assessment_enabled: bool = False
+    assessment_model_url: str | None = None
+    assessment_model_name: str | None = None
+    assessment_model_token: str | None = None
+    assessment_model_timeout_seconds: float = Field(default=90, ge=1, le=120)
+    assessment_model_max_tokens: int = Field(default=6000, ge=256, le=16000)
     openmetadata_enabled: bool = False
     openmetadata_base_url: str = "http://localhost:8585/api"
     openmetadata_auth_token: str | None = None

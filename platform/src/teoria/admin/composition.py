@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from fastapi import FastAPI
 
 from teoria.admin.auth import AdminAuthorizer
+from teoria.admin.asset_assessment_api import create_asset_assessment_router
+from teoria.intelligence.asset_assessment.repository import AssessmentRepository
 from teoria.admin.binding_api import create_binding_router
 from teoria.admin.context_api import create_context_router
 from teoria.admin.intelligence_api import create_intelligence_router
@@ -132,6 +134,13 @@ def create_admin_services(
 
 
 def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
+    app.include_router(create_asset_assessment_router(
+        AssessmentRepository(services.settings.app_database_url) if services.settings.app_database_url else None,
+        getattr(services.metadata_service, 'client', None),
+        services.authorizer,
+        enabled=bool(services.settings.assessment_enabled and services.settings.assessment_model_url),
+        model_name=services.settings.assessment_model_name,
+    ))
     context_service = None
     if services.metadata_service and getattr(services.metadata_service, "client", None):
         context_service = AssetContextService(

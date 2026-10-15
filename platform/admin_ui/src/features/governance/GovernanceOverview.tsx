@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { PageHeader } from "../../components/workspace/WorkspaceLayout";
 import { adminApi, type MetadataEntity } from "../../api/admin";
 
 type Coverage = { total: number; missingDescription: number; missingOwner: number; missingTags: number };
@@ -37,7 +38,7 @@ export function GovernanceOverview() {
   }, []);
 
   return <div className="workspace-page governance-page">
-    <header className="workspace-page-header"><div><h2>메타데이터 공백</h2><p>현재 데이터 자산에서 설명·소유자·분류가 필요한 항목을 확인합니다.</p></div></header>
+    <PageHeader title="메타데이터 공백" description="현재 데이터 자산에서 설명·소유자·분류가 필요한 항목을 확인합니다."/>
     {error && <p role="alert" className="workspace-error">거버넌스 현황 조회 실패: {error}</p>}
     <div className="overview-grid">
       <Link className="overview-stat" to="/admin/data-catalog"><span>전체 자산</span><strong>{coverage?.total ?? "—"}</strong><small>OpenMetadata 테이블</small></Link>

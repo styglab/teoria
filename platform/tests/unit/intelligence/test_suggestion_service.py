@@ -79,6 +79,22 @@ class _ColumnClient:
         }
 
 
+class _DescriptionSuggestionClient:
+    async def get(self, path, *, params=None):
+        assert path == "v1/tables/table-1"
+        assert params == {"fields": "columns"}
+        return {
+            "id": "table-1",
+            "version": 1.7,
+            "fullyQualifiedName": "svc.db.schema.contract",
+            "columns": [{
+                "name": "amount",
+                "description": "기존 설명",
+                "fullyQualifiedName": "svc.db.schema.contract.amount",
+            }],
+        }
+
+
 class _GlossaryRepository(_Repository):
     def review(self, suggestion_id, **_):
         self.status = "approved"
@@ -238,13 +254,45 @@ async def test_column_binding_suggestion_has_versioned_evidence_and_candidate() 
     repository = _BindingSuggestionRepository()
     result = await SuggestionService(
         repository, _ColumnClient(), _BindingRepository()
-    ).suggest_column_binding(table_id="table-1", column_name="contract_amount")
+    ).suggest_column_binding(
+        table_id="table-1", column_name="contract_amount", submitted_by="user:admin"
+    )
 
     assert result["suggestion_type"] == "binding"
     assert result["risk_level"] == "medium"
     assert result["proposed_value"]["ontology_stable_key"] == "procurement.Contract.amount"
     assert result["proposed_value"]["source_version"] == "1.4"
     assert repository.created["evidence"]
+    assert repository.created["submitted_by"] == "user:admin"
+
+
+@pytest.mark.asyncio
+async def test_manual_description_change_is_a_versioned_review_suggestion() -> None:
+    repository = _BindingSuggestionRepository()
+    result = await SuggestionService(
+        repository, _DescriptionSuggestionClient()
+    ).suggest_description_change(
+        table_id="table-1",
+        column_name="amount",
+        description=" 계약 체결 금액 ",
+        submitted_by="user:metadata-admin",
+    )
+
+    assert result["status"] == "pending"
+    assert repository.created["target_type"] == "openmetadata_column"
+    assert repository.created["proposed_value"] == {
+        "description": "계약 체결 금액",
+        "table_id": "table-1",
+        "column_name": "amount",
+        "column_fqn": "svc.db.schema.contract.amount",
+        "source_version": "1.7",
+        "source_description": "기존 설명",
+    }
+    assert repository.created["submitted_by"] == "user:metadata-admin"
+    assert repository.created["evidence"][0]["provenance"] == {
+        "source_version": "1.7",
+        "submitted_by": "user:metadata-admin",
+    }
 
 
 @pytest.mark.asyncio

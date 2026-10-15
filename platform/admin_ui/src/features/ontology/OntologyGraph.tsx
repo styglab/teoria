@@ -148,7 +148,7 @@ export function OntologyGraph({ graph, onSelect }: { graph: GraphData; onSelect:
         source: edge.source,
         target: edge.target,
         type: "floating",
-        markerEnd: { type: MarkerType.ArrowClosed, color: dimmed ? "#394158" : "#7c8cff" },
+        markerEnd: { type: MarkerType.ArrowClosed, color: dimmed ? "#d4d4d8" : "#a1a1aa" },
         data: { ...edge, label: edge.name, labelsPinned, dimmed },
       };
     }));
@@ -192,8 +192,8 @@ export function OntologyGraph({ graph, onSelect }: { graph: GraphData; onSelect:
       }}
       onPaneClick={clearFocus}
     >
-      <Background color="#283149" gap={22} size={1} />
-      <MiniMap nodeColor={(node) => (node.data.external ? "#596078" : "#746cff")} maskColor="rgba(7,9,18,.68)" />
+      <Background color="#e4e4e7" gap={22} size={1} />
+      <MiniMap nodeColor={(node) => (node.data.external ? "#d4d4d8" : "#71717a")} maskColor="rgba(250,250,250,.75)" />
       <Controls showInteractive={false} />
       <Panel position="top-right" className="graph-toolbar">
         <button className={mode === "organic" ? "active" : ""} onClick={() => setMode("organic")}>자유 배치</button>

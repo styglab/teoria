@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Database, Folder, RefreshCw, Search, Table2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Database, Folder, RefreshCw, Table2 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { adminApi, type MetadataEntity, type MetadataStatus } from "../../api/admin";
+
+import { CatalogLayout, FilterTabs, PageHeader, SearchField } from "../../components/workspace/WorkspaceLayout";
 
 function normalizeAdminToken(input: string): string {
   let token = input.trim().replace(/^(?:export\s+)?TEORIA_ADMIN_API_TOKEN\s*=\s*/, "");
@@ -114,16 +116,14 @@ export function MetadataExplorer() {
  if(!status&&!error)return <div className="loading-state">자산 연결 상태를 확인하고 있습니다…</div>;
  if(status&&!status.enabled)return <div className="metadata-empty"><Database size={28}/><h3>OpenMetadata가 설정되지 않았습니다</h3></div>;
  if(status&&!status.available)return <div className="metadata-empty"><Database size={28}/><h3>OpenMetadata에 연결할 수 없습니다</h3><p>{status.reason}</p><button onClick={()=>setRefresh(value=>value+1)}>다시 시도</button></div>;
- return <div className="asset-catalog">
- <aside className="asset-schema-panel" aria-label="스키마 탐색"><h2>스키마</h2><button className={!schema?"selected":""} onClick={()=>update({schema:""})}><Database size={16}/><span>전체 자산</span></button>
+ return <CatalogLayout label="스키마 탐색" sidebar={<><h2>스키마</h2><button className={!schema?"selected":""} onClick={()=>update({schema:""})}><Database size={16}/><span>전체 자산</span></button>
  {schemas.map(item=><button key={item.reference.entity_id} className={schema===item.reference.fully_qualified_name?"selected":""} title={item.reference.fully_qualified_name||item.name} onClick={()=>update({schema:item.reference.fully_qualified_name||""})}><Folder size={16}/><span><strong>{item.display_name||item.name}</strong><small>{item.reference.fully_qualified_name}</small></span></button>)}
  {schema&&!schemas.some(item=>item.reference.fully_qualified_name===schema)&&<p className="selected-schema">선택: {schema}</p>}
  {schemaError&&<p role="alert">{schemaError}</p>}
- </aside>
- <section className="asset-catalog-content">
- <header className="asset-catalog-header"><div><h2>{schemas.find(item=>item.reference.fully_qualified_name===schema)?.name|| (schema?"선택한 스키마":"전체 자산")}</h2><p>{loading?`불러오는 중 · ${loaded}${total===null?"":` / ${total}`}개`:error?"조회 실패":`${filtered.length}개 표시 · 선택 범위 ${tables.length}개`}</p></div><button className="catalog-refresh" aria-label="자산 새로고침" disabled={loading} onClick={()=>setRefresh(value=>value+1)}><RefreshCw size={16}/></button></header>
- <div className="asset-catalog-search"><Search size={17}/><input aria-label="전체 자산 검색" placeholder="이름, 설명, 태그, 소유자 검색" value={query} onChange={event=>update({q:event.target.value})}/>{query&&<button onClick={()=>update({q:""})}>지우기</button>}</div>
- <div className="asset-catalog-controls"><nav aria-label="메타데이터 누락 필터">{filters.map(item=><button key={item.id} aria-pressed={filter===item.id} onClick={()=>update({filter:item.id==="all"?"":item.id})}>{item.label}<span>{loading||error?"—":counts[item.id]}</span></button>)}</nav><label>정렬<select value={sort} onChange={event=>update({sort:event.target.value})}><option value="asc">이름 오름차순</option><option value="desc">이름 내림차순</option></select></label></div>
+ </>}>
+ <PageHeader title={schemas.find(item=>item.reference.fully_qualified_name===schema)?.name || (schema?"선택한 스키마":"전체 자산")} description={loading?`불러오는 중 · ${loaded}${total===null?"":` / ${total}`}개`:error?"조회 실패":`${filtered.length}개 표시 · 선택 범위 ${tables.length}개`} actions={<button className="page-icon-button" aria-label="자산 새로고침" disabled={loading} onClick={()=>setRefresh(value=>value+1)}><RefreshCw size={16}/></button>} />
+ <SearchField label="전체 자산 검색" placeholder="이름, 설명, 태그, 소유자 검색" value={query} onChange={value=>update({q:value})}/>
+ <div className="page-controls"><FilterTabs label="메타데이터 누락 필터" items={filters.map(item=>({...item,count:loading||error?"—":counts[item.id]}))} value={filter} onChange={value=>update({filter:value==="all"?"":value})}/><label>정렬<select value={sort} onChange={event=>update({sort:event.target.value})}><option value="asc">이름 오름차순</option><option value="desc">이름 내림차순</option></select></label></div>
  {error&&<div role="alert" className="workspace-error">자산 조회 실패: {error} <button onClick={()=>setRefresh(value=>value+1)}>다시 시도</button></div>}
  <div className="asset-catalog-table-wrap" aria-busy={loading}><table className="asset-catalog-table"><thead><tr><th>자산</th><th>설명</th><th>태그·용어</th><th>소유자</th><th><span className="sr-only">열기</span></th></tr></thead><tbody>{visible.map(table=><tr key={table.reference.entity_id} onClick={()=>openTable(table)} tabIndex={0} onKeyDown={event=>{if(event.key==="Enter")openTable(table)}}>
  <td><div className="asset-name-cell"><Table2 size={18}/><span><strong>{table.display_name||table.name}</strong><code title={table.reference.fully_qualified_name||""}>{table.reference.fully_qualified_name}</code></span></div></td>
@@ -132,5 +132,5 @@ export function MetadataExplorer() {
  <td><span className={table.owners.length?"asset-owner":"asset-value-missing"}>{table.owners.map(owner=>String(owner.displayName||owner.name||owner.id)).join(", ")||"미지정"}</span></td><td><ChevronRight size={16}/></td>
  </tr>)}</tbody></table>{loading?<div className="asset-catalog-empty" role="status">자산을 불러오고 있습니다…</div>:!error&&!visible.length&&<div className="asset-catalog-empty">{query||filter!=="all"?"조건에 맞는 자산이 없습니다.":"등록된 자산이 없습니다."}{(query||filter!=="all")&&<button onClick={()=>update({q:"",filter:""})}>검색·필터 초기화</button>}</div>}</div>
  <footer className="asset-catalog-footer"><label>페이지당<select value={pageSize} onChange={event=>update({size:event.target.value})}><option value="25">25개</option><option value="50">50개</option></select></label><span>{loading||error?"—":filtered.length?`${currentPage*pageSize+1}–${Math.min((currentPage+1)*pageSize,filtered.length)} / ${filtered.length}개`:"0개"}</span><div><button aria-label="이전 페이지" disabled={loading||currentPage===0} onClick={()=>update({page:String(currentPage-1)})}><ChevronLeft size={16}/></button><span>{currentPage+1} / {lastPage+1}</span><button aria-label="다음 페이지" disabled={loading||currentPage===lastPage} onClick={()=>update({page:String(currentPage+1)})}><ChevronRight size={16}/></button></div></footer>
- </section></div>;
+ </CatalogLayout>;
 }

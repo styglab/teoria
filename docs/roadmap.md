@@ -12,6 +12,8 @@
 - Ontology 게시 트랜잭션·단일 Published version 제약 및 Application DB 동시성 검증
 - 공공조달 참여 분석의 한국시간 개찰 연도·차수별 집계, 수집 상태와 상위 10위 보존 범위
 - Suggestion 적용 실행권·이력·성공 기록과 외부 쓰기 없는 결과 복구
+- 제안 검토의 서버 상태·자산 필터와 cursor 페이지 조회, 승인된 적용 재시도·결과 확인,
+  성공 기록 기반 Binding·Ontology 초안 이동
 - 분석 Reader 기능별 분리와 프로필·참여 Data DB 행 타입 검증
 - Connector·Prefect 수집 및 Data DB
 - 개찰 응답 완전성 검증과 상위 10위·낙찰자 저장 업체 집합의 완료 판정
@@ -84,10 +86,26 @@ Suggestion 적용은 자동 승인이 아니다. 사람이 최소 변경 단위�
 version을 재검증하고, OpenMetadata 변경 또는 Teoria Draft 생성을 수행하며 결과를
 `applied` 또는 `failed` 이력으로 남긴다. Ontology 변경은 게시가 아닌 Draft 생성까지만
 자동화한다.
+데이터 자산 상세의 수동 description 편집도 같은 Suggestion 경로를 사용한다. 제출자는
+인증 principal로 남기고, 원천의 현재 값과 version을 근거로 고정해 승인 전 변경과의
+충돌을 차단한다. owner·domain·classification·Glossary 편집 UI는 각 OpenMetadata
+참조 선택과 제거 의미, stale evidence 계약을 갖춘 뒤 이 흐름으로 확장한다.
 
-개발 단계 Metadata Agent는 Data Catalog에서 대상 FQN이 포함된 Codex Skill 요청을
-만들고 Review Queue에 pending Suggestion을 제출하는 흐름을 사용한다. 운영형 비동기
-Agent runner, 분석 실행 묶음, 재분석과 품질 지표는 별도 제품 결과로 남아 있다.
+메타데이터 인텔리전스의 사용자 작업명은 `자산 진단`이다. 개발 단계에서는
+Data Catalog에서 대상 FQN을 포함한 세 Skill 요청을 복사한다.
+
+- 메타데이터 정비 (`metadata_enrichment`, `$enrich-metadata-asset`): 설명·Glossary 제안
+- 업무 의미 연결 (`semantic_alignment`, `$align-metadata-semantics`): 기존 Published Concept Binding 제안
+- 개방 적합성 진단 (`disclosure_assessment`, `$assess-data-disclosure`): 정보 유형·법령 근거·개방 상태·보호조치 검토 초안
+
+정비와 의미 연결은 기존 Suggestion→Review→Application 경로를 사용한다.
+새 분석 유형 ID는 설계 용어이며 저장된 Suggestion enum과 API를 변경하지 않는다.
+신규 업무 Ontology 제안은 보류한다. 비동기 첫 구현은
+`intelligence.asset_assessments`와 `metadata-assessment-worker`를 사용한다.
+수동 시작·상태 조회·설명 및 기존 Concept 직접 Binding 제안 등록·법령 검토 findings를
+제공한다. 모델 gateway 설정 후 실행할 수 있으며 실제 모델 품질 평가는 별도다.
+법령 진단의 구조화된 Suggestion 계약·태그 적용기, 원천 문서 자동 검색,
+자동 Glossary 연결·주기 진단·재분석·품질 지표는 후속 범위다.
 
 ### 4. Semantic MCP/SDK
 
@@ -134,3 +152,10 @@ Ontology canvas, 범용 graph editor, 자동 승인, OpenMetadata entity 복제,
 수집 workflow, AI 의미 분석·근거 생성과 태그 제안 및 검색 평가다.
 OpenMetadata 2.0.5의 격리 DB 복원·migration·연계·ingestion 및 기존 버전 복구
 검증과 운영 전환 후 API·검색·Prefect ingestion 재검증을 완료했다.
+
+제안 검토는 최신 값·제안 값·제안 당시 설명 근거 비교, 자산 버전 변경 안내와
+시도별 적용 이력 조회를 지원한다. 복구 동작은 기존 승인과 실행권 검증을 유지하며,
+근거가 변경된 제안은 최신 자산 확인·재분석으로 연결한다.
+
+Admin 주요 화면은 데이터 자산 목록의 디자인 기준과 공통 화면 컴포넌트를 공유한다.
+온톨로지의 버전·개념·속성 탐색과 작은 화면의 메뉴 배치를 개선했다.

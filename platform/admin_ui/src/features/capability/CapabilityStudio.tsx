@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowRight, Braces, Check, ChevronRight, CircleDashed, Database, GitFork, Search, ShieldCheck, Workflow } from "lucide-react";
+import { AlertTriangle, ArrowRight, Braces, Check, ChevronRight, CircleDashed, Database, GitFork, ShieldCheck, Workflow } from "lucide-react";
+import { CatalogLayout, PageHeader, SearchField } from "../../components/workspace/WorkspaceLayout";
 import { adminApi, type CapabilityCoverage, type CapabilitySummary, type LineageLink, type MappingSummary, type SourceSummary, type ValidationReport } from "../../api/admin";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -54,17 +55,16 @@ export function CapabilityStudio({ capabilities, sources, mappings, lineage, val
   ];
 
   if (!capabilities.length) return <div className="loading-state">등록된 Capability가 없습니다.</div>;
-  return <div className="capability-studio">
-    <aside className="capability-catalog">
+  return <CatalogLayout className="capability-catalog-layout" label="기능 계약 탐색" sidebar={<>
       <div className="catalog-heading"><div><span>기능 계약</span><strong>{capabilities.length}개 등록 기능</strong></div><Button size="icon" variant="outline" aria-label="새 기능 계약" title="기능 계약 생성 절차는 준비 중입니다" disabled><Braces size={15} /></Button></div>
       <p className="catalog-help">Registry에 정의된 실행 기능입니다. 화면이나 사용자 메뉴의 개수가 아닙니다.</p>
-      <label className="catalog-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="기능, 입력, 업무 질문 검색" /></label>
+      <SearchField label="기능 계약 검색" value={query} onChange={setQuery} placeholder="기능, 입력, 업무 질문 검색"/>
       <div className="catalog-items">{filtered.map((item) => { const itemCoverage = coverage?.items.find((entry) => entry.capability_id === item.id); const statusLabel = itemCoverage?.status === "covered" ? "연결 완료" : itemCoverage?.status === "partial" ? "일부 연결" : itemCoverage?.status === "unbound" ? "연결 필요" : "확인 중"; return <button key={item.id} className={item.id === selected?.id ? "selected" : ""} onClick={() => setSelectedId(item.id)}><div><strong>{item.name}</strong><code>{item.id}</code></div><span className={`coverage-label ${itemCoverage?.status ?? "unknown"}`}>{statusLabel}</span><ChevronRight size={14} /></button>; })}</div>
-    </aside>
+    </>}>
 
     {selected && <section className="capability-workbench">
       <div className="capability-guide"><strong>기능 계약 검증 순서</strong><span>업무 의미 확인</span><ChevronRight size={13} /><span>데이터 근거 확인</span><ChevronRight size={13} /><Button size="sm" variant="ghost" onClick={onOpenBindings}>의미 연결 검토</Button><ChevronRight size={13} /><span>실행 결과 검증</span></div>
-      <header className="capability-hero"><div><div className="hero-badges"><Badge>{selected.kind ?? "capability"}</Badge><Badge variant="outline">{automatedReadinessValue === 100 ? "사용자 검증 필요" : "준비 중"}</Badge></div><h2>{selected.name}</h2><code>{selected.id}</code><p>{selected.description || "설명이 아직 없습니다. 사용자가 내리는 결정과 제공할 근거를 작성하세요."}</p></div><div className="hero-actions"><Button variant="outline" onClick={() => setActiveTab("checks")}>검토 항목 보기</Button><Button disabled title="대표 질문 종단 검증과 승인 전에는 릴리스할 수 없습니다"><ShieldCheck size={15} />릴리스</Button></div></header>
+      <PageHeader title={selected.name} description={selected.description || "설명이 아직 없습니다. 사용자가 내리는 결정과 제공할 근거를 작성하세요."} actions={<><Button variant="outline" onClick={() => setActiveTab("checks")}>검토 항목 보기</Button><Button disabled title="대표 질문 종단 검증과 승인 전에는 릴리스할 수 없습니다"><ShieldCheck size={15}/>릴리스</Button></>}><div className="page-header-meta"><code>{selected.id}</code><Badge variant="outline">{automatedReadinessValue === 100 ? "사용자 검증 필요" : "준비 중"}</Badge></div></PageHeader>
 
       <div className="readiness-grid">{readiness.map((item) => <ReadinessCard key={item.label} item={item} />)}</div>
 
@@ -86,5 +86,5 @@ export function CapabilityStudio({ capabilities, sources, mappings, lineage, val
         <TabsContent value="checks"><Card><CardHeader><CardTitle>사람의 최종 판단이 필요한 항목</CardTitle><CardDescription>자동 검증 성공은 업무 의미의 정확성을 보장하지 않습니다.</CardDescription></CardHeader><CardContent className="review-checklist">{["사용자 질문과 Capability 출력이 실제 의사결정을 지원하는가", "Ontology stable concept이 API·DB 컬럼 이름이 아니라 업무 의미를 나타내는가", "OpenMetadata description·Glossary·lineage가 Binding 근거를 뒷받침하는가", "Mapping의 identity, null, 단위, 시점 변환이 명시되었는가", "부분 실패와 불확실성이 결과에 보존되는가"].map((item) => <label key={item}><input type="checkbox" /><span>{item}</span></label>)}</CardContent></Card></TabsContent>
       </Tabs>
     </section>}
-  </div>;
+  </CatalogLayout>;
 }

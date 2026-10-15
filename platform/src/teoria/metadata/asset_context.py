@@ -28,15 +28,22 @@ def asset_targets(document: dict) -> tuple[list[str], list[str]]:
     return sorted(assets), sorted(terms)
 
 
+def suggestion_target_refs(table_id: str, assets: list[str], terms: list[str]) -> list[str]:
+    # Every FQN is authoritative. Include both historical glossary URI spellings.
+    return sorted(set(assets + terms + [table_id, f'openmetadata://table/{table_id}']
+                      + [f'openmetadata://table/{fqn}' for fqn in assets]
+                      + [f'openmetadata://column/{fqn}' for fqn in assets]
+                      + [f'openmetadata://{kind}/{fqn}' for fqn in terms
+                         for kind in ('glossaryTerm', 'glossary_term')]))
+
+
 class AssetApplicationReader:
     def __init__(self, database_url: str):
         self.database_url = database_url
 
     def __call__(self, table_id: str, assets: list[str], terms: list[str]) -> dict:
         targets = assets + terms
-        refs = targets + [table_id, f'openmetadata://table/{table_id}', f'openmetadata://table/{assets[0]}']
-        refs += [f'openmetadata://column/{fqn}' for fqn in assets]
-        refs += [f'openmetadata://glossaryTerm/{fqn}' for fqn in terms]
+        refs = suggestion_target_refs(table_id, assets, terms)
         with psycopg.connect(self.database_url, row_factory=dict_row, connect_timeout=3,
                              options="-c default_transaction_read_only=on -c statement_timeout=3000") as connection:
             bindings = connection.execute(

@@ -39,7 +39,9 @@ class SuggestionService:
         self.binding_repository = binding_repository
         self.ontology_repository = ontology_repository
 
-    async def suggest_column_binding(self, *, table_id: str, column_name: str) -> dict:
+    async def suggest_column_binding(
+        self, *, table_id: str, column_name: str, submitted_by: str
+    ) -> dict:
         if self.metadata_client is None or self.binding_repository is None:
             raise SuggestionApplicationError("Metadata and binding services are required")
         table = await self.metadata_client.get(
@@ -91,7 +93,85 @@ class SuggestionService:
             model_name="deterministic-binding-candidate-retriever",
             model_version="1.0",
             policy_version="binding-suggestion-v1",
+            submitted_by=submitted_by,
             evidence=evidence,
+        )
+
+    async def suggest_description_change(
+        self,
+        *,
+        table_id: str,
+        description: str,
+        submitted_by: str,
+        column_name: str | None = None,
+    ) -> dict:
+        if self.metadata_client is None:
+            raise SuggestionApplicationError("OpenMetadata write-back is disabled")
+        normalized = description.strip()
+        if not normalized:
+            raise ValueError("Description is required")
+        fields = {"fields": "columns"} if column_name else None
+        table = await self.metadata_client.get(f"v1/tables/{table_id}", params=fields)
+        table_fqn = str(table.get("fullyQualifiedName") or table_id)
+        source_version = (
+            str(table.get("version")) if table.get("version") is not None else None
+        )
+        if column_name:
+            column = next(
+                (item for item in table.get("columns", []) if item.get("name") == column_name),
+                None,
+            )
+            if column is None:
+                raise KeyError(column_name)
+            source_description = column.get("description")
+            column_fqn = str(
+                column.get("fullyQualifiedName") or f"{table_fqn}.{column_name}"
+            )
+            target_type = "openmetadata_column"
+            target_ref = f"openmetadata://column/{column_fqn}"
+            proposed_value = {
+                "description": normalized,
+                "table_id": str(table.get("id") or table_id),
+                "column_name": column_name,
+                "column_fqn": column_fqn,
+                "source_version": source_version,
+                "source_description": source_description,
+            }
+        else:
+            source_description = table.get("description")
+            target_type = "openmetadata_table"
+            target_ref = f"openmetadata://table/{table_fqn}"
+            proposed_value = {
+                "description": normalized,
+                "table_id": str(table.get("id") or table_id),
+                "fully_qualified_name": table_fqn,
+                "source_version": source_version,
+                "source_description": source_description,
+            }
+        if source_description == normalized:
+            raise ValueError("Description is unchanged")
+        return self.repository.create(
+            target_type=target_type,
+            target_ref=target_ref,
+            suggestion_type="description",
+            proposed_value=proposed_value,
+            confidence=1.0,
+            rationale="인증된 관리자가 자산 상세에서 제출한 메타데이터 변경안",
+            risk_level="low",
+            model_provider="teoria",
+            model_name="admin-metadata-editor",
+            model_version="1.0",
+            policy_version="manual-metadata-change-v1",
+            submitted_by=submitted_by,
+            evidence=[{
+                "evidence_type": "openmetadata_current_value",
+                "source_ref": target_ref,
+                "excerpt": source_description,
+                "provenance": {
+                    "source_version": source_version,
+                    "submitted_by": submitted_by,
+                },
+            }],
         )
 
     async def review_and_apply(self, suggestion_id: UUID, *, decision: str, reviewer: str, comment: str | None) -> dict:
@@ -512,7 +592,8 @@ class SuggestionService:
             current_version = str(table.get("version")) if table.get("version") is not None else None
             if proposed.get("source_version") and current_version != proposed["source_version"]:
                 raise SuggestionApplicationError(
-                    "STALE_EVIDENCE: OpenMetadata entity changed; re-evaluate the suggestion"
+                    "STALE_EVIDENCE: OpenMetadata entity changed; re-evaluate the suggestion",
+                    code="stale_evidence",
                 )
             columns = table.get("columns") or []
             column_index = next((index for index, item in enumerate(columns) if item.get("name") == column_name), None)
@@ -530,8 +611,8 @@ class SuggestionService:
         except OpenMetadataError as exc:
             self._finish_application(suggestion["suggestion_id"], applied=False, error_code=exc.code)
             raise SuggestionApplicationError(str(exc)) from exc
-        except SuggestionApplicationError:
-            self._finish_application(suggestion["suggestion_id"], applied=False, error_code="invalid_glossary_assignment")
+        except SuggestionApplicationError as exc:
+            self._finish_application(suggestion["suggestion_id"], applied=False, error_code=exc.code)
             raise
         self._finish_application(
             suggestion["suggestion_id"], applied=True,
@@ -581,5 +662,6 @@ class SuggestionService:
         current_version = str(table.get("version")) if table.get("version") is not None else None
         if current_version != proposed.get("source_version"):
             raise SuggestionApplicationError(
-                "STALE_EVIDENCE: OpenMetadata entity changed; re-evaluate the suggestion"
+                "STALE_EVIDENCE: OpenMetadata entity changed; re-evaluate the suggestion",
+                code="stale_evidence",
             )

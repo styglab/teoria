@@ -566,6 +566,9 @@ services:
       TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
       TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
       TEORIA_OPENMETADATA_ENABLED: ${TEORIA_OPENMETADATA_ENABLED:-true}
+      TEORIA_ASSESSMENT_ENABLED: ${TEORIA_ASSESSMENT_ENABLED:-false}
+      TEORIA_ASSESSMENT_MODEL_URL: ${TEORIA_ASSESSMENT_MODEL_URL:-}
+      TEORIA_ASSESSMENT_MODEL_NAME: ${TEORIA_ASSESSMENT_MODEL_NAME:-}
       TEORIA_OPENMETADATA_BASE_URL: ${TEORIA_OPENMETADATA_BASE_URL:-http://openmetadata-server:8585/api}
       TEORIA_OPENMETADATA_AUTH_TOKEN: ${TEORIA_OPENMETADATA_AUTH_TOKEN:-${OPENMETADATA_INGESTION_BOT_TOKEN:-}}
       TEORIA_OPENMETADATA_DATABASE_SERVICE: ${TEORIA_OPENMETADATA_DATABASE_SERVICE:-teoria_postgresql}
@@ -590,6 +593,32 @@ services:
         condition: service_healthy
       opa:
         condition: service_healthy
+
+  metadata-assessment-worker:
+    image: teoria-platform-authoring:latest
+    build:
+      context: ../..
+      dockerfile: platform/Dockerfile
+      target: authoring
+    profiles: [intelligence]
+    restart: unless-stopped
+    command: ["teoria-metadata-assessment-worker"]
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_ASSESSMENT_ENABLED: ${TEORIA_ASSESSMENT_ENABLED:-false}
+      TEORIA_ASSESSMENT_MODEL_URL: ${TEORIA_ASSESSMENT_MODEL_URL:-}
+      TEORIA_ASSESSMENT_MODEL_NAME: ${TEORIA_ASSESSMENT_MODEL_NAME:-}
+      TEORIA_ASSESSMENT_MODEL_TOKEN: ${TEORIA_ASSESSMENT_MODEL_TOKEN:-}
+      TEORIA_ASSESSMENT_MODEL_TIMEOUT_SECONDS: ${TEORIA_ASSESSMENT_MODEL_TIMEOUT_SECONDS:-90}
+      TEORIA_ASSESSMENT_MODEL_MAX_TOKENS: ${TEORIA_ASSESSMENT_MODEL_MAX_TOKENS:-6000}
+      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
+      TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
+      TEORIA_OPENMETADATA_ENABLED: ${TEORIA_OPENMETADATA_ENABLED:-true}
+      TEORIA_OPENMETADATA_BASE_URL: ${TEORIA_OPENMETADATA_BASE_URL:-http://openmetadata-server:8585/api}
+      TEORIA_OPENMETADATA_AUTH_TOKEN: ${TEORIA_OPENMETADATA_AUTH_TOKEN:-${OPENMETADATA_INGESTION_BOT_TOKEN:-}}
+    depends_on:
+      app-postgres-migrate:
+        condition: service_completed_successfully
 
   admin-ui:
     image: teoria-platform-admin-ui:latest

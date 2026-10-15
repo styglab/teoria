@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { BindingManager } from "./BindingManager";
+import { adminApi } from "../../api/admin";
 
 describe("BindingManager", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -20,6 +21,16 @@ describe("BindingManager", () => {
     expect(screen.getByText("Procurement.ContractAmount")).toBeTruthy();
     fireEvent.click(screen.getByText("승인"));
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes("binding-1/reviews") && init?.method === "POST")).toBe(true));
+  });
+
+  it("opens the exact draft from a suggestion even outside the latest asset context", async () => {
+    const bindings = vi.spyOn(adminApi, "bindings").mockResolvedValue({ items: [] });
+    vi.spyOn(adminApi, "ontologyConcepts").mockResolvedValue({ items: [] });
+    vi.spyOn(adminApi, "bindingValidation").mockResolvedValue({ status: "valid", binding_count: 0, diagnostic_count: 0, diagnostics: [] });
+    const context = vi.spyOn(adminApi, "assetContext");
+    render(<MemoryRouter initialEntries={["/?binding=draft-id&assetId=table-id"]}><BindingManager /></MemoryRouter>);
+    await waitFor(() => expect(bindings).toHaveBeenCalledWith(undefined, ["draft-id"]));
+    expect(context).not.toHaveBeenCalled();
   });
 });
 

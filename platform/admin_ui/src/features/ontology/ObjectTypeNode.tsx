@@ -16,7 +16,7 @@ export function ObjectTypeNode({ data, selected }: NodeProps) {
           <small>{object.id}</small>
           <div className="node-meta">
             {object.group && <span className="node-domain">{object.group}</span>}
-            <span>{object.external ? "외부 참조" : `${object.properties.length} properties`}</span>
+            <span>{object.external ? "외부 참조" : `속성 ${object.properties.length}개`}</span>
             {object.primary_key && <code>PK · {object.primary_key}</code>}
           </div>
         </div>

@@ -56,3 +56,7 @@ relation은 이름으로 추정하지 않으며 output 계약에 별도로 명�
 `085_procurement_entity_search_index.sql`은 조달 개체 자동완성용 내부 검색 인덱스를
 추가한다. `086_bid_notice_region_filter_indexes.sql`은 계약에 연결된 공고의 구조화 참가
 지역조건을 네트워크·시장 조회에서 필터링하기 위한 공고번호·지역코드 인덱스를 추가한다.
+
+`087_bound_bid_opening_retries.sql`은 선택 업체 검증값이 없는 과거 완료 건을 다시
+백필 대상으로 전환한다. 불완전 응답과 조회 실패는 각각 제한된 재시도 횟수 이후
+`partial_completed`와 `permanent_failure`로 종결하며 Runtime에는 `failed`로 제공한다.

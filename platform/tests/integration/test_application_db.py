@@ -52,8 +52,120 @@ def suggestion():
     row = repo.create(target_type='openmetadata_table', target_ref='openmetadata://table/test-table',
                       suggestion_type='description', proposed_value={'description': 'Approved description', 'table_id': 'test-table'},
                       confidence=.9, rationale='Synthetic test', risk_level='low', model_provider='test',
-                      model_name='test', model_version='1', policy_version='1', evidence=[])
+                      model_name='test', model_version='1', policy_version='1', submitted_by='test:author', evidence=[])
     return repo, UUID(row['suggestion_id'])
+
+
+def test_suggestion_pages_filter_before_limit_and_preserve_equal_timestamp_order():
+    repo, seed = suggestion()
+    target = f'openmetadata://table/pagination-{uuid4()}'
+    identifiers = [uuid4() for _ in range(55)]
+    with psycopg.connect(DATABASE_URL) as connection:
+        for index, identifier in enumerate(identifiers):
+            connection.execute(
+                """INSERT INTO intelligence.suggestions
+                       (suggestion_id,target_type,target_ref,suggestion_type,proposed_value,
+                        confidence,risk_level,model_provider,model_name,policy_version,submitted_by,status,created_at)
+                   SELECT %s,target_type,%s,suggestion_type,proposed_value,confidence,risk_level,
+                          model_provider,model_name,policy_version,submitted_by,%s,'2026-10-01T00:00:00Z'
+                     FROM intelligence.suggestions WHERE suggestion_id=%s""",
+                (identifier, target, 'pending' if index >= 50 else 'applied', seed),
+            )
+    page = repo.list_page(status='pending', limit=2, target_refs=[target])
+    assert len(page['items']) == 2 and page['next_cursor']
+    seen = [item['suggestion_id'] for item in page['items']]
+    while page['next_cursor']:
+        page = repo.list_page(status='pending', limit=2, after=page['next_cursor'], target_refs=[target])
+        seen.extend(item['suggestion_id'] for item in page['items'])
+    assert seen == sorted((str(value) for value in identifiers[50:]), reverse=True)
+    all_page = repo.list_page(status=None, limit=50, target_refs=[target])
+    assert len(all_page['items']) == 50 and all_page['next_cursor']
+    tail = repo.list_page(status=None, limit=50, target_refs=[target], after=all_page['next_cursor'])
+    assert len(tail['items']) == 5 and tail['next_cursor'] is None
+    assert len({item['suggestion_id'] for item in all_page['items'] + tail['items']}) == 55
+    assert repo.list_page(status=None, limit=50, target_refs=[target + '_neighbor'])['items'] == []
+    with pytest.raises(ValueError, match='Invalid suggestion cursor'):
+        repo.list_page(status=None, limit=50, after='invalid')
+
+
+def test_application_summary_distinguishes_retry_from_reconciliation_without_claim_token():
+    repo, identifier = suggestion()
+    repo.review(identifier, decision='approve', reviewer='reviewer', comment=None)
+    claim = repo.start_application(identifier, actor='reviewer')
+    assert repo.get(identifier)['next_action'] == 'wait'
+    repo.finish_application(identifier, claim_token=claim.token, applied=False, error_code='source_unavailable')
+    result = repo.get(identifier)
+    assert result['next_action'] == 'retry'
+    assert 'claim_token' not in result['application']
+    claim = repo.start_application(identifier, actor='reviewer')
+    repo.mark_effect_started(claim)
+    repo.finish_application(identifier, claim_token=claim.token, applied=False, error_code='source_timeout')
+    assert repo.get(identifier)['next_action'] == 'reconcile'
+
+
+def test_successful_draft_reference_survives_suggestion_reload():
+    repo, identifier = suggestion()
+    repo.review(identifier, decision='approve', reviewer='reviewer', comment=None)
+    claim = repo.start_application(identifier, actor='reviewer', target_system='teoria_binding')
+    repo.mark_effect_started(claim)
+    reference = f'teoria://binding/{uuid4()}'
+    repo.record_effect_result(claim, reference)
+    repo.finish_application(identifier, claim_token=claim.token, applied=True, external_change_ref=reference)
+    result = repo.get(identifier)
+    assert result['application']['external_change_ref'] == reference
+    assert result['application']['effect_succeeded_at']
+    assert result['next_action'] == 'none'
+
+
+def test_retry_api_reuses_approval_and_records_authenticated_actor():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from teoria.admin.auth import AdminAuthorizer
+    from teoria.admin.intelligence_api import create_intelligence_router
+    from teoria.metadata.openmetadata import OpenMetadataError
+    from teoria.settings import Settings
+
+    repo, identifier = suggestion()
+
+    class Client:
+        fail = True
+        writes = 0
+
+        async def get(self, *args, **kwargs):
+            if self.fail:
+                raise OpenMetadataError('source_unavailable', 'Synthetic pre-effect failure')
+            return {'id': 'test-table', 'description': None, 'version': 1}
+
+        async def update_table_description(self, *args, **kwargs):
+            self.writes += 1
+            return {'version': 2}
+
+    metadata = Client()
+    service = SuggestionService(repo, metadata)
+    with pytest.raises(SuggestionApplicationError):
+        asyncio.run(service.review_and_apply(identifier, decision='approve', reviewer='initial-reviewer', comment=None))
+    assert repo.get(identifier)['next_action'] == 'retry'
+    metadata.fail = False
+    app = FastAPI()
+    app.include_router(create_intelligence_router(repo, service, AdminAuthorizer(Settings(
+        admin_auth_mode='bearer', admin_api_token='synthetic-token',
+        admin_api_actor='authenticated-reviewer', admin_api_roles='metadata_reviewer',
+    ))))
+    http = TestClient(app)
+    path = f'/v1/admin/intelligence/suggestions/{identifier}/applications/retry'
+    headers = {'Authorization': 'Bearer synthetic-token'}
+    response = http.post(path, headers=headers, json={'reviewer': 'forged-reviewer'})
+    assert response.status_code == 200 and response.json()['status'] == 'applied'
+    assert metadata.writes == 1
+    assert len(repo.get(identifier)['reviews']) == 1
+    with psycopg.connect(DATABASE_URL) as connection:
+        actors = connection.execute(
+            "SELECT actor FROM intelligence.application_attempts WHERE change_application_id=%s",
+            (repo.get_application(identifier)['change_application_id'],),
+        ).fetchall()
+    assert {row[0] for row in actors} == {'initial-reviewer', 'authenticated-reviewer'}
+    assert http.post(path, headers=headers).status_code == 409
+    assert metadata.writes == 1
 
 
 def test_publication_checksum_matches_locked_content_and_published_edit_is_blocked():
@@ -269,3 +381,27 @@ def test_recovery_api_requires_authentication_and_records_principal():
     with psycopg.connect(DATABASE_URL) as c:
         actor = c.execute("SELECT actor FROM intelligence.application_attempts WHERE change_application_id=%s AND outcome='reconciled' ORDER BY started_at DESC LIMIT 1", (claim.application_id,)).fetchone()[0]
     assert actor == 'authenticated-reviewer'
+
+
+def test_application_history_pages_ties_and_rejects_other_suggestions_cursor():
+    repo, identifier = suggestion()
+    repo.review(identifier, decision='approve', reviewer='reviewer', comment=None)
+    tokens = []
+    for index in range(3):
+        claim = repo.start_application(identifier, actor=f'actor:{index}')
+        tokens.append(claim.token)
+        repo.finish_application(identifier, claim_token=claim.token, applied=False, error_code='source_unavailable')
+    with psycopg.connect(DATABASE_URL) as connection:
+        connection.execute("UPDATE intelligence.application_attempts SET started_at='2026-10-01T00:00:00Z' WHERE attempt_id=ANY(%s)", (tokens,))
+    first = repo.application_attempts(identifier, limit=2)
+    second = repo.application_attempts(identifier, limit=2, after=UUID(first['next_cursor']))
+    assert [item['attempt_id'] for item in first['items'] + second['items']] == sorted(map(str, tokens), reverse=True)
+    assert second['next_cursor'] is None
+    assert {item['actor'] for item in first['items'] + second['items']} == {'actor:0', 'actor:1', 'actor:2'}
+    assert all(item['outcome'] == 'failed' and item['error_code'] == 'source_unavailable' for item in first['items'] + second['items'])
+    _, other = suggestion()
+    assert repo.application_attempts(other) == {'items': [], 'next_cursor': None}
+    with pytest.raises(ValueError, match='cursor'):
+        repo.application_attempts(other, after=tokens[0])
+    with pytest.raises(KeyError):
+        repo.application_attempts(uuid4())

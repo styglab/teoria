@@ -1,0 +1,4 @@
+interface:
+  display_name: "업무 의미 연결"
+  short_description: "기존 업무 용어와 게시된 온톨로지의 의미 연결을 제안합니다"
+  default_prompt: "Use $align-metadata-semantics to propose evidence-backed bindings to existing published Ontology concepts."

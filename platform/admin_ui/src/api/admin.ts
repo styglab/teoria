@@ -112,11 +112,26 @@ export type IntelligenceSuggestion = {
   model_provider: string;
   model_name: string;
   policy_version: string;
+  submitted_by?: string;
   status: "pending" | "approved" | "rejected" | "changes_requested" | "applied" | "failed";
   created_at: string;
   evidence: Array<{ evidence_id: string; evidence_type: string; source_ref: string; excerpt: string | null; provenance: { score?: number; source_version?: string | null } }>;
   resulting_binding?: SemanticBinding;
+  application?: {
+    status: string; target_system: string; attempts: number; error_code: string | null;
+    attempted_at: string | null; applied_at: string | null; lease_active: boolean;
+    effect_started_at: string | null; effect_succeeded_at: string | null;
+    external_change_ref: string | null;
+  } | null;
+  next_action?: "none" | "wait" | "retry" | "reconcile" | "reanalyze";
 };
+export type SuggestionPage = { items: IntelligenceSuggestion[]; next_cursor: string | null };
+export type ApplicationAttempt = {
+  attempt_id: string; actor: string; target_system: string; started_at: string;
+  finished_at: string | null; outcome: "applied" | "failed" | "superseded" | "reconciled" | null;
+  error_code: string | null;
+};
+export type ApplicationAttemptPage = { items: ApplicationAttempt[]; next_cursor: string | null };
 export type OntologyConcept = { concept_id: string; concept_kind: "object" | "property" | "relationship" | "rule" | "metric"; stable_key: string; ontology_version: string; version_status: string };
 export type SemanticBinding = {
   binding_id: string; ontology_ref_type: OntologyConcept["concept_kind"];
@@ -175,7 +190,25 @@ async function patchJson<T>(path: string, body: unknown): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type AssessmentScope = "metadata_enrichment" | "semantic_alignment" | "disclosure_assessment";
+export type AssetAssessment = {
+  assessment_id: string;
+  status: "queued" | "running" | "completed" | "partial" | "failed";
+  scopes: AssessmentScope[];
+  model_name: string;
+  created_at: string;
+  error_code: string | null;
+  assessment_date?: string;
+  suggestion_ids: string[];
+  findings: Array<{summary:string; column_name?:string; code?:string; information_type?:string;
+    internal_processing?:string; disclosure_recommendation?:string; protection_recommendation?:string;
+    tag_candidates?:string[]; evidence?:Array<{source_ref:string; provenance?:Record<string,string>}>}>;
+};
+
 export const adminApi = {
+  createAssetAssessment: (request: {table_fqn:string; scopes:AssessmentScope[]; column_names:string[]; disclosure_context:"public_release" | "restricted_sharing"}) => postJson<AssetAssessment>("/intelligence/asset-assessments", request),
+  assetAssessments: (tableId:string) => getJson<{items:AssetAssessment[]}>(`/intelligence/asset-assessments?table_id=${encodeURIComponent(tableId)}`),
+  assetAssessment: (id:string) => getJson<AssetAssessment>(`/intelligence/asset-assessments/${encodeURIComponent(id)}`),
   session: () => getJson<{ actor: string; roles: string[] }>("/auth/session"),
   capabilities: () => getJson<{ capabilities: CapabilitySummary[] }>("/capabilities"),
   capabilityCoverage: () => getJson<CapabilityCoverage>("/bindings/capability-coverage"),
@@ -201,8 +234,22 @@ export const adminApi = {
     `/metadata/tables/${encodeURIComponent(id)}/sample-data?limit=10&include_values=${includeValues}`),
   metadataTableProfile: (id: string) => getJson<MetadataTableProfile>(`/metadata/tables/${encodeURIComponent(id)}/profile`),
   intelligenceSuggestion: (id: string) => getJson<IntelligenceSuggestion>(`/intelligence/suggestions/${encodeURIComponent(id)}`),
+  suggestionTarget: (id: string) => getJson<MetadataTableDetail>(`/intelligence/suggestions/${encodeURIComponent(id)}/target`),
+  suggestionAttempts: (id: string, after?: string) => getJson<ApplicationAttemptPage>(`/intelligence/suggestions/${encodeURIComponent(id)}/applications/attempts${after ? `?after=${encodeURIComponent(after)}` : ""}`),
   intelligenceSuggestions: (status?: string) => getJson<{ items: IntelligenceSuggestion[] }>(`/intelligence/suggestions${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  suggestionPage: (status?: string, after?: string, tableId?: string) => {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (after) params.set("after", after);
+    if (tableId) params.set("table_id", tableId);
+    return getJson<SuggestionPage>(`/intelligence/suggestions${params.size ? `?${params}` : ""}`);
+  },
+  retrySuggestionApplication: (id: string) => postJson<IntelligenceSuggestion>(`/intelligence/suggestions/${encodeURIComponent(id)}/applications/retry`, {}),
+  reconcileSuggestionApplication: (id: string) => postJson<IntelligenceSuggestion>(`/intelligence/suggestions/${encodeURIComponent(id)}/applications/reconcile`, {}),
   reviewSuggestion: (id: string, decision: "approve" | "reject") => postJson<IntelligenceSuggestion>(`/intelligence/suggestions/${encodeURIComponent(id)}/reviews`, { decision }),
+  suggestDescriptionChange: (tableId: string, description: string, columnName?: string) => postJson<IntelligenceSuggestion>("/intelligence/description-suggestions", {
+    table_id: tableId, description, ...(columnName ? { column_name: columnName } : {}),
+  }),
   suggestColumnBinding: (tableId: string, columnName: string) => postJson<IntelligenceSuggestion>("/intelligence/binding-suggestions", { table_id: tableId, column_name: columnName }),
   ontologyConcepts: (namespace = "procurement") => getJson<{ items: OntologyConcept[] }>(`/ontology-authoring/ontologies/${encodeURIComponent(namespace)}/concepts`),
   bindings: (status?: string, ids?: string[]) => {

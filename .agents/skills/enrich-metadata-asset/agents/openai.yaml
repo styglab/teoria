@@ -1,0 +1,4 @@
+interface:
+  display_name: "메타데이터 정비"
+  short_description: "테이블·컬럼 설명과 업무 용어를 근거에 따라 제안합니다"
+  default_prompt: "Use $enrich-metadata-asset to propose descriptions and glossary assignments for an OpenMetadata asset."

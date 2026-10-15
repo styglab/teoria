@@ -235,3 +235,8 @@ pipelines/references/providers/*
 pipelines/references/providers/moleg/*
 !pipelines/references/providers/moleg/moleg_law_api/
 !pipelines/references/providers/moleg/moleg_law_api/**
+
+# Version the evidence policy and proposal contract used by metadata skills.
+!.agents/skills/enrich-metadata-asset/references/
+!.agents/skills/enrich-metadata-asset/references/evidence_policy.md
+!.agents/skills/enrich-metadata-asset/references/proposal_bundle.schema.json

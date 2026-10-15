@@ -1,0 +1,4 @@
+interface:
+  display_name: "개방 적합성 진단"
+  short_description: "법령 근거에 따른 정보 분류와 개방 검토 초안을 작성합니다"
+  default_prompt: "Use $assess-data-disclosure to draft a cited disclosure assessment and protection recommendations for an OpenMetadata asset."

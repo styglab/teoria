@@ -87,6 +87,67 @@ def test_backfill_gap_claim_stops_after_maximum_attempts() -> None:
     assert parameters == ("pps_contract_backfill_2021_2026", 15, 1, 1)
 
 
+def test_bid_opening_retry_claim_excludes_terminal_partial_results() -> None:
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    result = MagicMock()
+    result.fetchall.return_value = []
+    result.description = []
+    connection.execute.return_value = result
+
+    with patch("teoria_pipelines.persistence.postgres_store.bid_results.psycopg.connect",
+               return_value=connection):
+        records = PostgresStore("postgresql://unused").claim_bid_opening_enrichment(
+            uuid4(), "retry", 60, 15,
+        )
+
+    assert records == []
+    sql = connection.execute.call_args_list[0].args[0]
+    assert "q.status='retry_wait'" in sql
+    assert "partial_completed" not in sql
+
+
+def test_bid_opening_failures_have_distinct_terminal_retry_limits() -> None:
+    connection = MagicMock()
+    connection.__enter__.return_value = connection
+    cursor = MagicMock()
+    cursor.__enter__.return_value = cursor
+    connection.cursor.return_value = cursor
+    record = RawProviderRecord(
+        raw_record_id=uuid4(), execution_id=uuid4(),
+        connector_id="pps_bid_result_api", operation_id="list_service_bid_awards",
+        window=CollectionWindow(date(2026, 1, 1), date(2026, 1, 1)),
+        fetched_at=datetime.now(timezone.utc), source_record_hash="award-hash",
+        payload={"bidNtceNo": "N1", "bidNtceOrd": "000", "bidClsfcNo": "0", "rbidNo": "000"},
+    )
+
+    with patch("teoria_pipelines.persistence.postgres_store.bid_results.psycopg.connect",
+               return_value=connection):
+        PostgresStore("postgresql://unused").finish_bid_opening_enrichment(
+            [record], [record],
+        )
+
+    incomplete_sql = cursor.executemany.call_args_list[0].args[0]
+    lookup_sql = cursor.executemany.call_args_list[1].args[0]
+    assert "q.attempts+1>=3 THEN 'partial_completed'" in incomplete_sql
+    assert "q.attempts+1>=3 THEN 'infinity'::timestamptz" in incomplete_sql
+    assert "attempts+1>=5 THEN 'permanent_failure'" in lookup_sql
+    assert "attempts+1>=5 THEN 'infinity'::timestamptz" in lookup_sql
+
+
+def test_bid_opening_retry_migration_requeues_unverified_legacy_completion() -> None:
+    migration = (
+        Path(__file__).parents[2] / "database" / "migrations"
+        / "087_bound_bid_opening_retries.sql"
+    ).read_text()
+
+    assert "queue.status = 'completed'" in migration
+    assert "checked.selected_business_numbers IS NULL" in migration
+    assert "last_error_code = 'legacy_selection_unverified'" in migration
+    assert "WHERE status = 'retry_wait'" in migration
+    assert "q.status IN ('partial_completed','permanent_failure') THEN 'failed'" in migration
+
+
 def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
     connection = MagicMock()
     connection.__enter__.return_value = connection

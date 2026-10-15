@@ -48,6 +48,7 @@ Registry만 포함하고, `authoring` target은 Admin·migration·검증에 필�
 | Business Ontology v2 | `platform/src/teoria/ontology/` |
 | Semantic Binding | `platform/src/teoria/binding/` |
 | Metadata Intelligence | `platform/src/teoria/intelligence/` |
+| 자산 진단 요청·선점·분석·제안 검증 | `platform/src/teoria/intelligence/asset_assessment/` |
 | Company 식별 기능 | `platform/src/teoria/domains/company/identity/` |
 | 조달 질문 해석·계획·집계 | `platform/src/teoria/domains/public_procurement/context.py` |
 | 조달 참가 가능성·시장 분석·분류·관리 API | `platform/src/teoria/domains/public_procurement/` |

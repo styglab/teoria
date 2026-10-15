@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, Database, Play, Route } from "lucide-react";
+import { PageHeader } from "../../components/workspace/WorkspaceLayout";
 import { adminApi, type ContextQueryResult } from "../../api/admin";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -24,7 +25,7 @@ export function ContextConsole() {
     finally { setBusy(false); }
   };
   return <div className="context-console">
-    <header><Badge variant="outline">의미 기반 실행 테스트</Badge><h2>업무 질문 테스트</h2><p>승인된 온톨로지와 의미 연결로 실행 기능을 선택하고, 실제 데이터 결과와 근거를 확인합니다.</p></header>
+    <PageHeader title="업무 질문 테스트" description="승인된 온톨로지와 의미 연결로 실행 기능을 선택하고, 실제 데이터 결과와 근거를 확인합니다."/>
     <div className="context-examples">{EXAMPLES.map((item) => <button key={item} type="button" onClick={() => setQuestion(item)}>{item}</button>)}</div>
     <form onSubmit={execute}><input value={question} onChange={(event) => setQuestion(event.target.value)} aria-label="업무 질문" /><Button disabled={busy || !question.trim()}><Play size={14} />{busy ? "실행 중…" : "질문 실행"}</Button></form>
     {error && <div className="context-error"><AlertTriangle size={15} />{error}</div>}

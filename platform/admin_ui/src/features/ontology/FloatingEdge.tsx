@@ -25,7 +25,7 @@ function boundaryPoint(node: InternalNode, toward: InternalNode) {
   const targetY = toward.internals.positionAbsolute.y + otherHeight / 2;
   const dx = targetX - x;
   const dy = targetY - y;
-  const scale = 1 / Math.sqrt((dx * dx) / ((width / 2) ** 2) + (dy * dy) / ((height / 2) ** 2));
+  const scale = 1 / Math.max(Math.abs(dx) / (width / 2), Math.abs(dy) / (height / 2), 1e-9);
   const normalizedX = dx / width;
   const normalizedY = dy / height;
 

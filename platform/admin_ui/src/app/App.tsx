@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
 import { Boxes, Braces, CheckCircle2, Database, GitFork, Home, Inbox, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck, Wrench } from "lucide-react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { adminApi, type CapabilitySummary, type LineageLink, type MappingSummary, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/admin";
@@ -12,6 +11,7 @@ import { MetadataAssetPage } from "../features/metadata/MetadataAssetPage";
 import { Overview, OperationsSettings } from "../features/overview/Overview";
 import { GovernanceOverview } from "../features/governance/GovernanceOverview";
 import { AdminAccess, AdminAccessProvider } from "../features/access/AdminAccess";
+import { WorkspaceFrame } from "../components/workspace/WorkspaceLayout";
 import { OntologyAuthoring } from "../features/ontology/OntologyAuthoring";
 
 const sections = [
@@ -26,14 +26,10 @@ const sections = [
   { path: "/admin/developer/ask", label: "질문 테스트", description: "의미 기반 실행 결과 검증", icon: Home, group: "개발 도구" },
 ];
 
-function FramedPage({ children }: { children: ReactNode }) {
-  return <div className="h-full overflow-hidden p-4"><section className="h-full overflow-hidden rounded-xl border border-border bg-card">{children}</section></div>;
-}
-
 export function App() { return <AdminAccessProvider><AdminWorkspace /></AdminAccessProvider>; }
 
 function AdminWorkspace() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1000);
   const location = useLocation();
   const navigate = useNavigate();
   const [capabilities, setCapabilities] = useState<CapabilitySummary[]>([]);
@@ -72,7 +68,7 @@ function AdminWorkspace() {
       <div className="border-t border-border p-2"><button onClick={() => setSidebarOpen((value) => !value)} className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}{sidebarOpen && "사이드바 접기"}</button></div>
     </aside>
 
-    <header className={`fixed inset-x-0 top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur ${sidebarOpen ? "left-64" : "left-16"}`}>
+    <header className={`admin-topbar fixed inset-x-0 top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur ${sidebarOpen ? "left-64" : "left-16"}`}>
       <div className="flex items-center gap-3"><Menu className="size-4 text-muted-foreground md:hidden" /><div><p className="text-[10px] font-medium text-muted-foreground">{current.group}</p><h1 className="text-sm font-semibold tracking-tight">{current.label}</h1></div></div>
       <div className="flex items-center gap-2 pr-48"><span className="hidden text-[11px] text-muted-foreground sm:inline">Registry {release?.version ?? "draft"}</span><span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] ${validation?.status === "valid" ? "border-border text-foreground" : "border-destructive/30 text-destructive"}`}><CheckCircle2 className="size-3" />{validation ? validation.status === "valid" ? "Registry 검증됨" : `${validation.diagnostic_count} issues` : "Registry 확인 중"}</span></div>
     </header>
@@ -81,16 +77,16 @@ function AdminWorkspace() {
       <Routes>
         <Route path="/" element={<Navigate to="/admin/overview" replace />} />
         <Route path="/admin" element={<Navigate to="/admin/overview" replace />} />
-        <Route path="/admin/overview" element={<Overview />} />
-        <Route path="/admin/governance" element={<GovernanceOverview />} />
-        <Route path="/admin/operations" element={<OperationsSettings />} />
-        <Route path="/admin/developer/ask" element={<AdminAccess><ContextConsole /></AdminAccess>} />
-        <Route path="/admin/developer/capabilities" element={<><div>{error && <p role="alert" className="workspace-error">{error}</p>}</div><CapabilityStudio capabilities={capabilities} sources={sources} mappings={mappings} lineage={lineage} validation={validation} onOpenBindings={() => navigate("/admin/semantic-model/bindings")} /></>} />
-        <Route path="/admin/data-catalog" element={<FramedPage><MetadataExplorer /></FramedPage>} />
-        <Route path="/admin/data-catalog/assets/:fqn" element={<MetadataAssetPage />} />
-        <Route path="/admin/changes/review" element={<AdminAccess><FramedPage><SuggestionReview /></FramedPage></AdminAccess>} />
-        <Route path="/admin/semantic-model/bindings" element={<AdminAccess><FramedPage><BindingManager /></FramedPage></AdminAccess>} />
-        <Route path="/admin/semantic-model/ontology" element={<AdminAccess><FramedPage><OntologyAuthoring /></FramedPage></AdminAccess>} />
+        <Route path="/admin/overview" element={<WorkspaceFrame><Overview /></WorkspaceFrame>} />
+        <Route path="/admin/governance" element={<WorkspaceFrame><GovernanceOverview /></WorkspaceFrame>} />
+        <Route path="/admin/operations" element={<WorkspaceFrame><OperationsSettings /></WorkspaceFrame>} />
+        <Route path="/admin/developer/ask" element={<AdminAccess><WorkspaceFrame><ContextConsole /></WorkspaceFrame></AdminAccess>} />
+        <Route path="/admin/developer/capabilities" element={<WorkspaceFrame><div>{error && <p role="alert" className="workspace-error">{error}</p>}</div><CapabilityStudio capabilities={capabilities} sources={sources} mappings={mappings} lineage={lineage} validation={validation} onOpenBindings={() => navigate("/admin/semantic-model/bindings")} /></WorkspaceFrame>} />
+        <Route path="/admin/data-catalog" element={<WorkspaceFrame><MetadataExplorer /></WorkspaceFrame>} />
+        <Route path="/admin/data-catalog/assets/:fqn" element={<WorkspaceFrame><MetadataAssetPage /></WorkspaceFrame>} />
+        <Route path="/admin/changes/review" element={<AdminAccess><WorkspaceFrame><SuggestionReview /></WorkspaceFrame></AdminAccess>} />
+        <Route path="/admin/semantic-model/bindings" element={<AdminAccess><WorkspaceFrame><BindingManager /></WorkspaceFrame></AdminAccess>} />
+        <Route path="/admin/semantic-model/ontology" element={<AdminAccess><WorkspaceFrame><OntologyAuthoring /></WorkspaceFrame></AdminAccess>} />
         <Route path="/admin/settings" element={<Navigate to="/admin/operations" replace />} />
         <Route path="/admin/ask" element={<Navigate to="/admin/developer/ask" replace />} />
         <Route path="/admin/capabilities" element={<Navigate to="/admin/developer/capabilities" replace />} />

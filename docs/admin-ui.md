@@ -21,8 +21,21 @@ Admin UI의 기본 진입점은 `/admin/overview`다. 정보 구조는 현황, �
 
 자산에서 검토/의미 연결로 이동하면 asset FQN과 entity ID를 유지한다.
 연결은 해당 자산의 직접 연결과 실제 Glossary를 통한 연결 ID로 조회한다.
-제안은 해당 자산의 근거 참조와 일치하는 최근 50개에서 상세를 조회하며 범위가
-잘리면 표시한다. 설명 제안은 원천의 현재 값과 제안 값을 함께 표시한다.
+제안 검토 화면은 서버에서 상태와 자산의 정확한 근거 참조를 먼저 필터링하고
+페이지당 최대 50개를 조회한다. 다음·이전 페이지로 오래된 제안도 조회할 수 있다.
+동일 생성 시각은 suggestion ID로 정렬하고 cursor는 생성 시각과 ID를 함께 고정한다.
+설명 제안은 원천의 현재 값과 제안 값을 함께 표시한다.
+자산 헤더의 `설명 변경안`과 스키마 표의 `설명 변경`은 각각 테이블·컬럼 설명
+변경안을 만든다. 인증된 principal을 제출자로 기록하고 OpenMetadata의 현재 설명과
+table version을 근거로 저장한다. 제출 직후에는 OpenMetadata를 수정하지 않으며,
+`변경안 검토`에서 승인해야 application service가 최신 상태를 재검증하고 반영한다.
+
+적용 시도 횟수·최근 시각·실패 코드를 표시하고 서버가 계산한 다음 조치를 제공한다.
+변경 시작 전 실패는 `기존 승인으로 다시 적용`, 변경 시작 후 결과 불확실 상태는
+`기존 적용 결과 확인`으로 처리한다. 실행권이 활성 상태면 기다리고 새로고침하며,
+stale evidence는 재분석이 필요하다. 재시도 API는 새 승인을 만들지 않고 기존
+승인·실행권 검증을 사용한다. 생성된 Binding과 Ontology Draft는 저장된 성공
+참조로 정확한 초안에 이동하며, 별도 Binding 승인이나 Ontology 검토·게시를 생략하지 않는다.
 
 상단의 공통 관리자 연결은 `/v1/admin/auth/session`으로 자격을 확인한다.
 공개 metadata status 응답을 인증 성공으로 사용하지 않는다. 로그아웃하면 token을
@@ -81,6 +94,17 @@ Admin UI → Admin API ─┬→ Registry Loader
 MCP      → Runtime API → Capability Runner
 ```
 
+## 공통 화면 구성
+
+데이터 자산 목록의 흰 배경·얇은 구분선·중립적인 선택 색상과 여백을 Admin 공통
+기준으로 사용한다. `components/workspace/WorkspaceLayout.tsx`의 `WorkspaceFrame`,
+`CatalogLayout`, `PageHeader`, `SearchField`, `FilterTabs`, `PageState`를 실제 화면에서
+공유하고, `workspace.css`가 화면 간 공통 크기와 반응형 배치를 정의한다.
+온톨로지는 버전 탐색과 본문을 분리하고 업무 개념·관계·규칙을 목록에서 조회한다.
+업무 개념을 펼치면 식별 기준과 속성 표를 볼 수 있다. 관계도와 버전 검토 기능은
+같은 화면 안에 유지한다. 의미 연결·제안 검토·현황·거버넌스·운영·기능 계약·질문
+테스트도 공통 제목과 페이지 틀을 사용한다. 작은 화면에서는 메뉴가 접힌 상태로 열린다.
+
 ## 실행
 
 전체 Compose 실행 후 nginx를 통해 `http://localhost:8081/`로 접속한다.
@@ -108,7 +132,7 @@ Compose에서 Admin API Swagger UI는 `http://localhost:8081/admin-api/docs`, Ru
 
 - 질문 테스트: 승인된 의미 연결을 사용한 실행 결과와 근거 확인
 - Capabilities: Registry 기능 계약, 의미·데이터·실행 준비도 확인
-- Metadata: OpenMetadata 자산의 최소 탐색
+- Metadata: OpenMetadata 자산 탐색과 테이블·컬럼 설명 변경안 작성
 - Suggestions: Metadata Intelligence 제안 검토와 승인
 - Bindings: Stable Ontology Concept과 OpenMetadata Glossary/Data Asset 연결
 - Ontology·Source·Mapping·Lineage 탐색
@@ -144,14 +168,33 @@ Binding 제안은 Binding Draft를 만들며 별도 Binding 승인 전에는 활
 아니다. 외부 대상 version이 제안 근거와 달라졌으면 적용하지 않고 stale evidence로
 실패시킨다.
 
-Data Catalog의 테이블 상세에서 `분석 요청 복사`를 누르면 해당 FQN이 포함된
-`$analyze-metadata-asset` Codex Skill 요청을 복사한다. 운영 Admin API가 Codex를
-백그라운드에서 직접 호출하는 기능은 아니다. 개발 단계에서는 Codex가 근거를
-분석해 pending Suggestion을 제출하고, 관리자는 `제안 검토` 화면으로 이동해
-각 변경을 검토한다. Quality Test와 Test Suite application은 생성 응답만 신뢰하지
+Data Catalog의 테이블 상세에는 `자산 진단`이 있다. 항목·대상 컬럼을 선택하고
+`진단 실행`으로 비동기 진단을 요청한다. 진단 상태·제안 링크·법령 검토 findings를
+조회하며 설명과 Binding은 별도 검토·승인 후 적용한다. 첫 구현의 설정·제한은
+[자산 진단](architecture/asset_assessment.md)을 따른다.
+진단 항목은 선택 카드로 표시하고, 대상 컬럼은 검색 가능한 체크 목록에서 최대
+30개까지 선택한다. 실행 영역과 최근 결과를 구분하며 상세 검토 사항과 개발용
+Skill 요청은 접어서 표시한다.
+개발용 Skill 요청도 유지한다. `메타데이터 정비 요청 복사`,
+`업무 의미 연결 요청 복사`, `개방 적합성 진단 요청 복사`는 각각 대상 FQN이 포함된
+`$enrich-metadata-asset`, `$align-metadata-semantics`, `$assess-data-disclosure`
+요청을 복사한다. 운영 Admin API가 Codex를 백그라운드에서 직접 호출하는 기능은
+아니다. 정비와 의미 연결은 pending Suggestion을 제출해 `제안 검토`에서 확인한다.
+개방 진단은 일반 공개를 가정한 검토 초안이며 아직 태그 적용이나 Review Queue
+제출을 지원하지 않는다. 신규 Ontology 제안은 이 진단 범위에서 보류한다.
+Quality Test와 Test Suite application은 생성 응답만 신뢰하지
 않고 OpenMetadata에서 생성 entity를 다시 읽은 뒤 적용 완료로 기록한다.
 
 Binding 화면에서 생성한 연결은 항상 Draft다. 승인·거절은 인증 principal의
 역할과 actor를 사용하며 review 요청은 별도 reviewer 필드를 받지 않는다. 운영에서
 Bearer 인증을 사용할 때 UI는 현재 세션의 `teoria-admin-token` 값을
 Authorization header로 전달한다. 장기 운영 인증은 OIDC 단계에서 교체한다.
+
+제안 검토의 변경 비교는 테이블 참조가 있는 설명·용어 할당·의미 연결 제안에 대해
+OpenMetadata의 최신 자산을 읽어 표시한다. 설명은 현재 값·제안 값·제안 당시 근거를
+구분하고, 근거 버전과 현재 버전이 다르면 재검토 안내를 표시한다. 최신 조회 실패나
+대상 부재는 빈 값과 구분하며, 조회 결과를 Application DB에 저장하지 않는다.
+각 적용의 `적용 이력 보기`에서는 실행자·시작/종료 시각·결과·오류를 페이지별로
+조회한다. 종료 기록이 없는 시도를 성공이나 실행 중으로 단정하지 않는다.
+복구는 서버가 정한 재시도·기존 결과 확인·재분석 안내를 따르며 기존 승인과 실행권
+검증을 유지한다.

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import base64
+from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -28,28 +30,44 @@ class SuggestionRepository:
         model_name: str,
         model_version: str | None,
         policy_version: str,
+        submitted_by: str,
         evidence: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        suggestion_id = uuid4()
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            connection.execute(
+            suggestion_id = self.insert(
+                connection, target_type=target_type, target_ref=target_ref,
+                suggestion_type=suggestion_type, proposed_value=proposed_value,
+                confidence=confidence, rationale=rationale, risk_level=risk_level,
+                model_provider=model_provider, model_name=model_name,
+                model_version=model_version, policy_version=policy_version,
+                submitted_by=submitted_by, evidence=evidence,
+            )
+        return self.get(suggestion_id)
+
+    @staticmethod
+    def insert(connection, *, target_type, target_ref, suggestion_type, proposed_value,
+               confidence, rationale, risk_level, model_provider, model_name,
+               model_version, policy_version, submitted_by, evidence) -> UUID:
+        """Insert a pending proposal inside the caller's transaction."""
+        suggestion_id = uuid4()
+        connection.execute(
                 """
                 INSERT INTO intelligence.suggestions (
                     suggestion_id, target_type, target_ref, suggestion_type,
                     proposed_value, confidence, rationale, risk_level,
                     model_provider, model_name, model_version, policy_version,
-                    status
-                ) VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,'pending')
+                    submitted_by, status
+                ) VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s,%s,%s,'pending')
                 """,
                 (
                     suggestion_id, target_type, target_ref, suggestion_type,
                     json.dumps(proposed_value, ensure_ascii=False), confidence,
                     rationale, risk_level, model_provider, model_name,
-                    model_version, policy_version,
+                    model_version, policy_version, submitted_by,
                 ),
             )
-            for item in evidence:
-                connection.execute(
+        for item in evidence:
+            connection.execute(
                     """
                     INSERT INTO intelligence.suggestion_evidence (
                         evidence_id, suggestion_id, evidence_type, source_ref,
@@ -63,18 +81,45 @@ class SuggestionRepository:
                         json.dumps(item.get("provenance", {}), ensure_ascii=False),
                     ),
                 )
-        return self.get(suggestion_id)
+        return suggestion_id
 
     def list(self, *, status: str | None, limit: int) -> list[dict[str, Any]]:
-        query = "SELECT * FROM intelligence.suggestions"
+        return self.list_page(status=status, limit=limit)["items"]
+
+    def list_page(
+        self, *, status: str | None, limit: int, after: str | None = None,
+        target_refs: list[str] | None = None,
+    ) -> dict[str, Any]:
+        if not 1 <= limit <= 100:
+            raise ValueError("Invalid page size")
+        conditions = []
         params: list[Any] = []
         if status:
-            query += " WHERE status = %s"
+            conditions.append("status = %s")
             params.append(status)
-        query += " ORDER BY created_at DESC LIMIT %s"
-        params.append(limit)
+        if target_refs is not None:
+            conditions.append("target_ref = ANY(%s)")
+            params.append(target_refs)
+        if after:
+            try:
+                timestamp, identifier = json.loads(base64.urlsafe_b64decode(after).decode())
+                timestamp = datetime.fromisoformat(timestamp)
+                if timestamp.tzinfo is None:
+                    raise ValueError("Timestamp must include timezone")
+                identifier = UUID(identifier)
+            except (ValueError, TypeError, UnicodeError) as exc:
+                raise ValueError("Invalid suggestion cursor") from exc
+            conditions.append("(created_at, suggestion_id) < (%s, %s)")
+            params.extend([timestamp, identifier])
+        query = "SELECT * FROM intelligence.suggestions"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY created_at DESC, suggestion_id DESC LIMIT %s"
+        params.append(limit + 1)
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
             rows = connection.execute(query, params).fetchall()
+            has_more = len(rows) > limit
+            rows = rows[:limit]
             suggestion_ids = [row["suggestion_id"] for row in rows]
             evidence_by_suggestion: dict[Any, list[dict[str, Any]]] = {
                 suggestion_id: [] for suggestion_id in suggestion_ids
@@ -94,7 +139,43 @@ class SuggestionRepository:
                 item = _jsonable(dict(row))
                 item["evidence"] = evidence_by_suggestion[row["suggestion_id"]]
                 result.append(item)
-            return result
+            self._attach_applications(connection, result)
+            cursor = None
+            if has_more:
+                last = result[-1]
+                cursor = base64.urlsafe_b64encode(json.dumps([
+                    last["created_at"], last["suggestion_id"],
+                ]).encode()).decode()
+            return {"items": result, "next_cursor": cursor}
+
+    @staticmethod
+    def _attach_applications(connection, items: list[dict[str, Any]]) -> None:
+        if not items:
+            return
+        ids = [UUID(item["suggestion_id"]) for item in items]
+        rows = connection.execute(
+            """SELECT DISTINCT ON (suggestion_id) suggestion_id, change_application_id,
+                      status, target_system, attempted_at, applied_at, attempts,
+                      error_code, external_change_ref, effect_started_at, effect_succeeded_at,
+                      COALESCE(lease_until>now(),false) AS lease_active
+                 FROM intelligence.change_applications WHERE suggestion_id=ANY(%s)
+                 ORDER BY suggestion_id, attempted_at DESC NULLS LAST""", (ids,),
+        ).fetchall()
+        applications = {str(row["suggestion_id"]): _jsonable(dict(row)) for row in rows}
+        for item in items:
+            application = applications.get(item["suggestion_id"])
+            item["application"] = application
+            item["next_action"] = "none"
+            if item["status"] not in {"approved", "failed"}:
+                continue
+            if application and application["status"] == "applying" and application["lease_active"]:
+                item["next_action"] = "wait"
+            elif application and application["effect_started_at"]:
+                item["next_action"] = "reconcile"
+            elif application and application["error_code"] == "stale_evidence":
+                item["next_action"] = "reanalyze"
+            else:
+                item["next_action"] = "retry"
 
     def get(self, suggestion_id: UUID) -> dict[str, Any]:
         with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
@@ -112,10 +193,45 @@ class SuggestionRepository:
                 "SELECT * FROM intelligence.reviews WHERE suggestion_id = %s ORDER BY reviewed_at",
                 (suggestion_id,),
             ).fetchall()
-        result = _jsonable(dict(row))
-        result["evidence"] = [_jsonable(dict(item)) for item in evidence]
-        result["reviews"] = [_jsonable(dict(item)) for item in reviews]
+            result = _jsonable(dict(row))
+            result["evidence"] = [_jsonable(dict(item)) for item in evidence]
+            result["reviews"] = [_jsonable(dict(item)) for item in reviews]
+            self._attach_applications(connection, [result])
         return result
+
+    def application_attempts(
+        self, suggestion_id: UUID, *, limit: int = 50, after: UUID | None = None,
+    ) -> dict[str, Any]:
+        if not 1 <= limit <= 100:
+            raise ValueError("Invalid page size")
+        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+            if not connection.execute(
+                "SELECT 1 FROM intelligence.suggestions WHERE suggestion_id=%s", (suggestion_id,),
+            ).fetchone():
+                raise KeyError(str(suggestion_id))
+            params: list[Any] = [suggestion_id]
+            cursor_filter = ""
+            if after is not None:
+                cursor = connection.execute(
+                    """SELECT a.started_at, a.attempt_id FROM intelligence.application_attempts a
+                       JOIN intelligence.change_applications c USING (change_application_id)
+                       WHERE c.suggestion_id=%s AND a.attempt_id=%s""", (suggestion_id, after),
+                ).fetchone()
+                if cursor is None:
+                    raise ValueError("Invalid application history cursor")
+                cursor_filter = " AND (a.started_at,a.attempt_id)<(%s,%s)"
+                params.extend([cursor["started_at"], cursor["attempt_id"]])
+            params.append(limit + 1)
+            rows = connection.execute(
+                """SELECT a.attempt_id,a.actor,a.started_at,a.finished_at,a.outcome,a.error_code,
+                          c.target_system
+                   FROM intelligence.application_attempts a
+                   JOIN intelligence.change_applications c USING (change_application_id)
+                   WHERE c.suggestion_id=%s""" + cursor_filter +
+                " ORDER BY a.started_at DESC,a.attempt_id DESC LIMIT %s", params,
+            ).fetchall()
+            items = [_jsonable(dict(row)) for row in rows[:limit]]
+            return {"items": items, "next_cursor": items[-1]["attempt_id"] if len(rows) > limit else None}
 
     def review(self, suggestion_id: UUID, *, decision: str, reviewer: str, comment: str | None) -> dict[str, Any]:
         status_by_decision = {
