@@ -36,14 +36,24 @@ class CapabilityBindingManifest(BaseModel):
             capability = catalog.capabilities.get(item.capability_id)
             if capability is None:
                 diagnostics.append(f"unknown capability: {item.capability_id}")
-            elif item.target_scope == "input" and item.field_path not in capability.inputs:
-                diagnostics.append(f"unknown input: {item.capability_id}.{item.field_path}")
-            elif item.target_scope == "output" and item.field_path not in capability.returns:
-                diagnostics.append(f"unknown output: {item.capability_id}.{item.field_path}")
+            elif (
+                item.target_scope == "input"
+                and item.field_path not in capability.inputs
+            ):
+                diagnostics.append(
+                    f"unknown input: {item.capability_id}.{item.field_path}"
+                )
+            elif (
+                item.target_scope == "output"
+                and item.field_path not in capability.returns
+            ):
+                diagnostics.append(
+                    f"unknown output: {item.capability_id}.{item.field_path}"
+                )
         return diagnostics
 
 
-def apply_capability_binding_manifest(
+async def apply_capability_binding_manifest(
     repository: BindingRepository,
     catalog: RegistryCatalog,
     manifest: CapabilityBindingManifest,
@@ -63,12 +73,14 @@ def apply_capability_binding_manifest(
     unchanged = []
     replaced = []
     for item in manifest.bindings:
-        concept = repository.get_published_concept(
+        concept = await repository.get_published_concept(
             item.ontology_stable_key,
             ontology_namespace=item.ontology_namespace,
         )
         if concept is None:
-            raise ValueError(f"Unknown published ontology concept: {item.ontology_stable_key}")
+            raise ValueError(
+                f"Unknown published ontology concept: {item.ontology_stable_key}"
+            )
         target_type = {
             "capability": "capability",
             "input": "capability_input",
@@ -77,7 +89,7 @@ def apply_capability_binding_manifest(
         locator = f"capability://{item.capability_id}"
         if item.field_path:
             locator = f"{locator}/{item.target_scope}/{item.field_path}"
-        existing = repository.get_active_binding(
+        existing = await repository.get_active_binding(
             ontology_concept_id=concept["concept_id"],
             target_type=target_type,
             target_locator=locator,
@@ -87,14 +99,20 @@ def apply_capability_binding_manifest(
                 unchanged.append(existing)
                 continue
             decision = "deprecate" if existing["status"] == "approved" else "reject"
-            replaced.append(repository.review_binding(
-                existing["binding_id"], decision=decision, reviewer=actor,
-                comment=(
-                    "Superseded by Capability binding verified against Registry "
-                    f"release {registry_version}"
-                ),
-            ))
-        binding = repository.create_capability_binding(
+            replaced.append(
+                (
+                    await repository.review_binding(
+                        existing["binding_id"],
+                        decision=decision,
+                        reviewer=actor,
+                        comment=(
+                            "Superseded by Capability binding verified against Registry "
+                            f"release {registry_version}"
+                        ),
+                    )
+                )
+            )
+        binding = await repository.create_capability_binding(
             ontology_ref_type=concept["concept_kind"],
             ontology_ref_id=None,
             ontology_concept_id=concept["concept_id"],
@@ -108,12 +126,17 @@ def apply_capability_binding_manifest(
             authority=item.authority,
             priority=item.priority,
             confidence=1.0,
-            provenance={"source": "reviewed_manifest", "manifest_version": manifest.schema_version},
+            provenance={
+                "source": "reviewed_manifest",
+                "manifest_version": manifest.schema_version,
+            },
             created_by=actor,
         )
         if approve:
-            binding = repository.review_binding(
-                binding["binding_id"], decision="approve", reviewer=actor,
+            binding = await repository.review_binding(
+                binding["binding_id"],
+                decision="approve",
+                reviewer=actor,
                 comment="Approved reviewed Capability semantic binding manifest",
             )
         created.append(binding)

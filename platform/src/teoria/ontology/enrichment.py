@@ -44,17 +44,34 @@ class OntologyEnrichmentManifest(BaseModel):
         return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
-def apply_ontology_enrichment(repository: OntologyAuthoringRepository, manifest: OntologyEnrichmentManifest, *, actor: str, publish: bool) -> dict[str, Any]:
+async def apply_ontology_enrichment(
+    repository: OntologyAuthoringRepository,
+    manifest: OntologyEnrichmentManifest,
+    *,
+    actor: str,
+    publish: bool,
+) -> dict[str, Any]:
     results = []
     for spec in manifest.ontologies:
-        versions = repository.list_versions(spec.namespace)
-        existing = next((item for item in versions if item["version"] == spec.target_version), None)
+        versions = await repository.list_versions(spec.namespace)
+        existing = next(
+            (item for item in versions if item["version"] == spec.target_version), None
+        )
         if existing:
-            results.append({"namespace": spec.namespace, "version": spec.target_version, "status": existing["status"], "action": "unchanged"})
+            results.append(
+                {
+                    "namespace": spec.namespace,
+                    "version": spec.target_version,
+                    "status": existing["status"],
+                    "action": "unchanged",
+                }
+            )
             continue
-        revision = repository.create_draft(spec.namespace, version=spec.target_version, actor=actor)
+        revision = await repository.create_draft(
+            spec.namespace, version=spec.target_version, actor=actor
+        )
         version_id = UUID(revision["ontology_version_id"])
-        detail = repository.get_version(version_id)
+        detail = await repository.get_version(version_id)
         objects = {item["code"]: item for item in detail["objects"]}
         for prop in spec.properties:
             owner = objects.get(prop.object)
@@ -68,47 +85,88 @@ def apply_ontology_enrichment(repository: OntologyAuthoringRepository, manifest:
             if existing_property is not None:
                 if existing_property["stable_key"] == stable_key:
                     continue
-                repository.delete_item(
+                await repository.delete_item(
                     version_id,
                     kind="property",
                     concept_id=UUID(existing_property["concept_id"]),
                     actor=actor,
                 )
-            repository.add_item(version_id, kind="property", payload={
-                "code": prop.code, "name": prop.name,
-                "stable_key": stable_key,
-                "object_concept_id": owner["concept_id"], "value_type": prop.value_type,
-                "cardinality": "optional", "unit": prop.unit, "temporal": prop.temporal,
-            }, actor=actor)
-        existing_relationships = {item["code"]: item for item in detail["relationships"]}
+            await repository.add_item(
+                version_id,
+                kind="property",
+                payload={
+                    "code": prop.code,
+                    "name": prop.name,
+                    "stable_key": stable_key,
+                    "object_concept_id": owner["concept_id"],
+                    "value_type": prop.value_type,
+                    "cardinality": "optional",
+                    "unit": prop.unit,
+                    "temporal": prop.temporal,
+                },
+                actor=actor,
+            )
+        existing_relationships = {
+            item["code"]: item for item in detail["relationships"]
+        }
         for rel in spec.relationships:
             source, target = objects.get(rel.source), objects.get(rel.target)
             if source is None or target is None:
-                raise ValueError(f"Unknown relationship endpoint {spec.namespace}.{rel.code}")
+                raise ValueError(
+                    f"Unknown relationship endpoint {spec.namespace}.{rel.code}"
+                )
             stable_key = rel.stable_key or f"{spec.namespace}.{rel.code}"
             existing_relationship = existing_relationships.get(rel.code)
             if existing_relationship is not None:
                 if existing_relationship["stable_key"] == stable_key:
                     continue
-                repository.delete_item(
+                await repository.delete_item(
                     version_id,
                     kind="relationship",
                     concept_id=UUID(existing_relationship["concept_id"]),
                     actor=actor,
                 )
-            repository.add_item(version_id, kind="relationship", payload={
-                "code": rel.code, "name": rel.name,
-                "stable_key": stable_key,
-                "source_object_concept_id": source["concept_id"],
-                "target_object_concept_id": target["concept_id"],
-                "source_cardinality": "one", "target_cardinality": "many", "temporal": True,
-            }, actor=actor)
-        validation = repository.validate(version_id)
+            await repository.add_item(
+                version_id,
+                kind="relationship",
+                payload={
+                    "code": rel.code,
+                    "name": rel.name,
+                    "stable_key": stable_key,
+                    "source_object_concept_id": source["concept_id"],
+                    "target_object_concept_id": target["concept_id"],
+                    "source_cardinality": "one",
+                    "target_cardinality": "many",
+                    "temporal": True,
+                },
+                actor=actor,
+            )
+        validation = await repository.validate(version_id)
         if publish:
             if validation["status"] != "valid":
-                raise ValueError(f"Enrichment validation failed: {validation['diagnostics']}")
-            repository.transition(version_id, action="submit", actor=actor, comment="Reviewed ontology enrichment manifest")
-            repository.transition(version_id, action="approve", actor=actor, comment="Approved ontology enrichment")
-            repository.publish(version_id, actor=actor)
-        results.append({"namespace": spec.namespace, "version": spec.target_version, "status": "published" if publish else "draft", "action": "created", "validation": validation})
+                raise ValueError(
+                    f"Enrichment validation failed: {validation['diagnostics']}"
+                )
+            await repository.transition(
+                version_id,
+                action="submit",
+                actor=actor,
+                comment="Reviewed ontology enrichment manifest",
+            )
+            await repository.transition(
+                version_id,
+                action="approve",
+                actor=actor,
+                comment="Approved ontology enrichment",
+            )
+            await repository.publish(version_id, actor=actor)
+        results.append(
+            {
+                "namespace": spec.namespace,
+                "version": spec.target_version,
+                "status": "published" if publish else "draft",
+                "action": "created",
+                "validation": validation,
+            }
+        )
     return {"status": "complete", "ontologies": results}

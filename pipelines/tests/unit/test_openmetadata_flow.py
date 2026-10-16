@@ -2,14 +2,15 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from teoria_pipelines.metadata.openmetadata import (
     _required_environment,
     run_openmetadata_ingestion_container,
 )
 
 
-def test_required_environment_rejects_missing_value(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_required_environment_rejects_missing_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("OPENMETADATA_INGESTION_BOT_TOKEN", raising=False)
 
     with pytest.raises(RuntimeError, match="OPENMETADATA_INGESTION_BOT_TOKEN"):
@@ -113,3 +114,65 @@ def test_ingestion_task_rejects_non_allowlisted_image(
         )
 
     docker_module.from_env.assert_not_called()
+
+
+def test_kubernetes_backend_keeps_allowlist_and_does_not_require_docker_credentials(
+    monkeypatch,
+):
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_BACKEND", "kubernetes")
+    monkeypatch.setenv(
+        "TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE", "registry/ingestion:approved"
+    )
+    monkeypatch.delenv("OPENMETADATA_INGESTION_BOT_TOKEN", raising=False)
+    with patch(
+        "teoria_pipelines.metadata.kubernetes_job.run_ingestion_job",
+        return_value={"status": "completed"},
+    ) as run:
+        result = run_openmetadata_ingestion_container.fn(
+            image="registry/ingestion:approved", network="unused", timeout_seconds=30
+        )
+    assert result == {"status": "completed"}
+    run.assert_called_once_with(image="registry/ingestion:approved", timeout_seconds=30)
+
+
+@pytest.mark.parametrize("succeeded,failed,raises", [(1, 0, False), (0, 1, True)])
+def test_kubernetes_ingestion_job_scopes_credentials_and_cleans_up(
+    monkeypatch, succeeded, failed, raises
+):
+    from teoria_pipelines.metadata.kubernetes_job import run_ingestion_job
+
+    api = MagicMock()
+    api.read_namespaced_job_status.return_value = SimpleNamespace(
+        status=SimpleNamespace(succeeded=succeeded, failed=failed)
+    )
+    monkeypatch.setenv("TEORIA_KUBERNETES_NAMESPACE", "teoria-test")
+    module = SimpleNamespace(
+        config=SimpleNamespace(load_incluster_config=MagicMock()),
+        client=SimpleNamespace(BatchV1Api=MagicMock(return_value=api)),
+    )
+    with patch.dict("sys.modules", {"kubernetes": module}):
+        if raises:
+            with pytest.raises(RuntimeError, match="Job failed"):
+                run_ingestion_job(
+                    image="registry/ingestion:approved", timeout_seconds=30
+                )
+        else:
+            assert (
+                run_ingestion_job(
+                    image="registry/ingestion:approved", timeout_seconds=30
+                )["status"]
+                == "completed"
+            )
+    namespace, body = api.create_namespaced_job.call_args.args
+    assert namespace == "teoria-test"
+    pod = body["spec"]["template"]["spec"]
+    assert pod["automountServiceAccountToken"] is False
+    assert "volumes" not in pod
+    assert {e["name"] for e in pod["containers"][0]["env"]} == {
+        "TEORIA_METADATA_DB_PASSWORD",
+        "OPENMETADATA_INGESTION_BOT_TOKEN",
+    }
+    assert all("value" not in e for e in pod["containers"][0]["env"])
+    api.delete_namespaced_job.assert_called_once_with(
+        body["metadata"]["name"], "teoria-test", propagation_policy="Background"
+    )

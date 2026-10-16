@@ -1,5 +1,7 @@
 pipeline:
   id: pps_bid_result_ingestion
+  flow_modules:
+    - teoria_pipelines.domains.public_procurement.bid_results.flows
   description: 조달청 나라장터 최종낙찰, 유찰, 개찰 상위 10위 및 낙찰업체 결과를 수집·정규화하여 저장한다.
   connector: pps_bid_result_api
   operations:

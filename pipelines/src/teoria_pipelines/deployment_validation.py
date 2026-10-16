@@ -1,0 +1,61 @@
+"""Validate deployment ownership against the collection inventory without importing flows."""
+
+from pathlib import Path
+from typing import Any
+
+from teoria_pipelines.diagnostics import Diagnostic
+from teoria_pipelines.loader import PipelineCatalog
+
+
+def validate_deployment_contracts(
+    catalog: PipelineCatalog, deployments: list[tuple[Path, dict[str, Any]]]
+) -> list[Diagnostic]:
+    diagnostics = []
+    names = set()
+    referenced = set()
+    for path, deployment in deployments:
+        name = deployment["name"]
+        if name in names:
+            diagnostics.append(
+                Diagnostic(
+                    "duplicate_deployment", f"duplicate deployment '{name}'", path
+                )
+            )
+        names.add(name)
+        module = deployment["entrypoint"].rsplit(".", 1)[0]
+        if module.startswith("teoria_pipelines.metadata."):
+            continue
+        tags = deployment.get("tags", [])
+        ids = [
+            tag.removeprefix("pipeline:") for tag in tags if tag.startswith("pipeline:")
+        ]
+        if len(ids) != 1 or ids[0] not in catalog.pipelines:
+            diagnostics.append(
+                Diagnostic(
+                    "invalid_deployment_pipeline",
+                    f"'{name}' requires one known pipeline tag",
+                    path,
+                )
+            )
+            continue
+        pipeline_id = ids[0]
+        definition = catalog.pipelines[pipeline_id]
+        domain = catalog.pipeline_paths[pipeline_id].parent.name
+        if module not in definition.flow_modules or f"domain:{domain}" not in tags:
+            diagnostics.append(
+                Diagnostic(
+                    "deployment_pipeline_mismatch",
+                    f"'{name}' flow '{module}' is not owned by '{pipeline_id}' in '{domain}'",
+                    path,
+                )
+            )
+        referenced.add(pipeline_id)
+    for pipeline_id in sorted(catalog.pipelines.keys() - referenced):
+        diagnostics.append(
+            Diagnostic(
+                "pipeline_without_deployment",
+                f"pipeline '{pipeline_id}' has no deployment",
+                catalog.pipeline_paths[pipeline_id],
+            )
+        )
+    return diagnostics

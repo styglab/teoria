@@ -5,6 +5,15 @@ on:
   push:
 
 jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: python3 -m unittest discover -s tests/documentation
+      - run: python3 tests/documentation/check_docs.py
+      - run: uv run --locked --package teoria-pipelines teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
+
   provider:
     runs-on: ubuntu-latest
     steps:
@@ -64,7 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv run --locked --package teoria-pipelines pytest pipelines/tests
+      - run: uv run --locked --package teoria-pipelines --group etl-example pytest pipelines/tests
       - run: uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
 
   integration:
@@ -98,30 +107,64 @@ jobs:
               connection.execute("CREATE ROLE teoria_pipeline")
               connection.execute("CREATE ROLE teoria_runtime")
           PY
-      - run: uv run --locked --package teoria-pipelines --group validation pytest tests/integration
+      - name: Test Pipeline database integration
+        run: uv run --locked --package teoria-pipelines pytest pipelines/tests/integration
+      - name: Test Pipeline and Platform contracts
+        run: uv run --locked --package teoria-pipelines --group validation pytest tests/integration
       - run: uv run --locked --package teoria-pipelines --group validation teoria-pipelines validate-integration pipelines --platform-registries platform/registries
 
   deployment:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Test shared Prefect execution policies
+        run: uv run --locked --package teoria-pipelines --group kubernetes-orchestration pytest pipelines/tests/unit/test_deployment_registration.py pipelines/tests/integration/test_prefect_scheduling.py
       - name: Validate Docker Compose
         env:
+          TEORIA_ADMIN_API_TOKEN: validation
           TEORIA_LOCAL_RUNTIME_DB_PASSWORD: validation
-          TEORIA_OBJECT_STORAGE_ACCESS_KEY: validation
-          TEORIA_OBJECT_STORAGE_ENDPOINT: http://object-storage.invalid
-          TEORIA_OBJECT_STORAGE_SECRET_KEY: validation
           TEORIA_OPA_CONTROL_PLANE_TOKEN: validation
           TEORIA_PREFECT_PASSWORD: validation
           TEORIA_PREFECT_USERNAME: validation
           TEORIA_RUNTIME_API_TOKEN: validation
         run: docker compose -f deploy/compose/compose.yaml config --quiet
+      - name: Validate manifests against a K3s API server
+        run: |
+          set -euo pipefail
+          docker run -d --privileged --name teoria-ci-k3s --tmpfs /run --tmpfs /var/run \
+            rancher/k3s:v1.37.1-k3s1 server --disable-agent --disable traefik \
+            --disable servicelb --disable metrics-server --disable local-storage
+          trap 'docker rm -fv teoria-ci-k3s >/dev/null' EXIT
+          ready=false
+          for attempt in $(seq 1 60); do
+            if docker exec teoria-ci-k3s kubectl get --raw=/readyz >/dev/null 2>&1; then ready=true; break; fi
+            echo "Waiting for K3s API ($attempt/60)"
+            sleep 2
+          done
+          [ "$ready" = true ]
+          docker exec teoria-ci-k3s kubectl create namespace teoria
+          docker exec teoria-ci-k3s kubectl create namespace teoria-pipelines
+          for phase in execution infrastructure openmetadata application; do
+            namespace=teoria
+            if [ "$phase" = execution ]; then namespace=teoria-pipelines; fi
+            docker run --rm --entrypoint kubectl -v "$PWD:/work" -w /work \
+              ghcr.io/helmfile/helmfile:v1.7.1 kustomize "deploy/k3s/$phase" \
+              --load-restrictor LoadRestrictionsNone \
+              > "$RUNNER_TEMP/k3s-$phase.yaml"
+            docker exec -i teoria-ci-k3s kubectl -n "$namespace" apply --dry-run=server -f - \
+              < "$RUNNER_TEMP/k3s-$phase.yaml"
+          done
+          for job in deploy/k3s/jobs/*.yaml; do
+            docker exec -i teoria-ci-k3s kubectl -n teoria apply --dry-run=server -f - < "$job"
+          done
+          bash -n deploy/k3s/deploy.sh
+      - name: Test Compose volume isolation and authentication
+        run: python3 -m unittest discover -s deploy/compose/tests -v
       - name: Validate OpenMetadata Compose profile
         env:
+          TEORIA_ADMIN_API_TOKEN: validation
           TEORIA_LOCAL_RUNTIME_DB_PASSWORD: validation
-          TEORIA_OBJECT_STORAGE_ACCESS_KEY: validation
-          TEORIA_OBJECT_STORAGE_ENDPOINT: http://object-storage.invalid
-          TEORIA_OBJECT_STORAGE_SECRET_KEY: validation
           TEORIA_OPA_CONTROL_PLANE_TOKEN: validation
           TEORIA_PREFECT_PASSWORD: validation
           TEORIA_PREFECT_USERNAME: validation
@@ -131,17 +174,6 @@ jobs:
           -f deploy/compose/compose.yaml
           --profile metadata
           config --quiet
-      - name: Validate Helm and Helmfile environments
-        run: |
-          docker run --rm -v "$PWD:/work" -w /work \
-            ghcr.io/helmfile/helmfile:v1.7.1 \
-            helm lint deploy/experimental/k3s/charts/teoria
-          docker run --rm -v "$PWD:/work" -w /work \
-            ghcr.io/helmfile/helmfile:v1.7.1 \
-            helmfile -f deploy/experimental/k3s/helmfile.yaml.gotmpl -e on-prem template
-          docker run --rm -v "$PWD:/work" -w /work \
-            ghcr.io/helmfile/helmfile:v1.7.1 \
-            helmfile -f deploy/experimental/k3s/helmfile.yaml.gotmpl -e aws-ec2 template
 
   mcp:
     runs-on: ubuntu-latest

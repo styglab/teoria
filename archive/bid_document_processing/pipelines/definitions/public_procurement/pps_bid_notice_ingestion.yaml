@@ -1,0 +1,30 @@
+pipeline:
+  id: pps_bid_notice_ingestion
+  flow_modules:
+    - teoria_pipelines.domains.public_procurement.bid_notices.flows
+    - teoria_pipelines.domains.public_procurement.bid_eligibility.flows
+  description: 나라장터 입찰공고와 공고별 면허·지역 제한을 수집하고 첨부파일 처리 대상을 등록한다.
+  connector: pps_bid_notice_api
+  operations:
+    - list_construction_bid_notices
+    - list_service_bid_notices
+    - list_foreign_bid_notices
+    - list_goods_bid_notices
+    - list_other_bid_notices
+    - list_license_restrictions
+    - list_participation_regions
+  cursor:
+    field: notice_published_at
+    window_days: 1
+    overlap_days: 0
+  sink:
+    type: data_database
+    schema_name: public_procurement
+    relations:
+      - bid_notices
+      - bid_notice_license_restrictions
+      - bid_notice_participation_regions
+      - bid_notice_documents
+  provenance:
+    retain_raw_records: true
+    fields: [connector, operation, fetched_at, source_record_hash]

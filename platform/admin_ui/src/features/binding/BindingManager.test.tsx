@@ -2,7 +2,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { BindingManager } from "./BindingManager";
-import { adminApi } from "../../api/admin";
+import { bindingApi } from "../../api/binding";
+import { ontologyApi } from "../../api/ontology";
+import { metadataApi } from "../../api/metadata";
 
 describe("BindingManager", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -24,10 +26,10 @@ describe("BindingManager", () => {
   });
 
   it("opens the exact draft from a suggestion even outside the latest asset context", async () => {
-    const bindings = vi.spyOn(adminApi, "bindings").mockResolvedValue({ items: [] });
-    vi.spyOn(adminApi, "ontologyConcepts").mockResolvedValue({ items: [] });
-    vi.spyOn(adminApi, "bindingValidation").mockResolvedValue({ status: "valid", binding_count: 0, diagnostic_count: 0, diagnostics: [] });
-    const context = vi.spyOn(adminApi, "assetContext");
+    const bindings = vi.spyOn(bindingApi, "bindings").mockResolvedValue({ items: [] });
+    vi.spyOn(ontologyApi, "ontologyConcepts").mockResolvedValue({ items: [] });
+    vi.spyOn(bindingApi, "bindingValidation").mockResolvedValue({ status: "valid", binding_count: 0, diagnostic_count: 0, diagnostics: [] });
+    const context = vi.spyOn(metadataApi, "assetContext");
     render(<MemoryRouter initialEntries={["/?binding=draft-id&assetId=table-id"]}><BindingManager /></MemoryRouter>);
     await waitFor(() => expect(bindings).toHaveBeenCalledWith(undefined, ["draft-id"]));
     expect(context).not.toHaveBeenCalled();

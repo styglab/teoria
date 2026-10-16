@@ -24,11 +24,18 @@ from teoria_pipelines.models import CollectionWindow, ExtractedBatch, RawProvide
 
 
 class PPSContractClient:
-    def __init__(self, definition: ProviderDefinition, *, path: Path,
-                 executor: ProviderExecutor | None = None, page_size: int = 100,
-                 max_pages: int = 1000, requests_per_second: float = 1000.0,
-                 provider_error_max_attempts: int = 1,
-                 provider_error_backoff_seconds: float = 60.0) -> None:
+    def __init__(
+        self,
+        definition: ProviderDefinition,
+        *,
+        path: Path,
+        executor: ProviderExecutor | None = None,
+        page_size: int = 100,
+        max_pages: int = 1000,
+        requests_per_second: float = 1000.0,
+        provider_error_max_attempts: int = 1,
+        provider_error_backoff_seconds: float = 60.0,
+    ) -> None:
         if requests_per_second <= 0:
             raise ValueError("requests_per_second must be positive")
         if provider_error_max_attempts < 1:
@@ -47,33 +54,45 @@ class PPSContractClient:
     def from_pipeline_root(cls, root: Path | str, **values: Any) -> "PPSContractClient":
         catalog = PipelineLoader(root).load()
         registry = catalog.connectors["pps_contract_api"]
-        return cls(registry.connector, path=catalog.connector_paths["pps_contract_api"], **values)
+        return cls(
+            registry.connector,
+            path=catalog.connector_paths["pps_contract_api"],
+            **values,
+        )
 
-    async def fetch_window(self, execution_id: UUID, window: CollectionWindow,
-                           operation_ids: list[str]) -> ExtractedBatch:
+    async def fetch_window(
+        self, execution_id: UUID, window: CollectionWindow, operation_ids: list[str]
+    ) -> ExtractedBatch:
         batch = ExtractedBatch(execution_id=execution_id, window=window)
         for operation_id in operation_ids:
-            operation_batch = await self.fetch_operation(execution_id, window, operation_id)
+            operation_batch = await self.fetch_operation(
+                execution_id, window, operation_id
+            )
             batch.records.extend(operation_batch.records)
             batch.pages += operation_batch.pages
         return batch
 
-    async def fetch_operation(self, execution_id: UUID, window: CollectionWindow,
-                              operation_id: str) -> ExtractedBatch:
-        operation = next(item for item in self.definition.operations if item.id == operation_id)
+    async def fetch_operation(
+        self, execution_id: UUID, window: CollectionWindow, operation_id: str
+    ) -> ExtractedBatch:
+        operation = next(
+            item for item in self.definition.operations if item.id == operation_id
+        )
         page_number = 1
         records: list[RawProviderRecord] = []
         while page_number <= self.max_pages:
             request = ProviderRequestBuilder().build(
                 self.definition,
                 operation_id,
-                {"query": {
-                    "numOfRows": self.page_size,
-                    "pageNo": page_number,
-                    "inqryDiv": "1",
-                    "inqryBgnDate": window.start.strftime("%Y%m%d"),
-                    "inqryEndDate": window.end.strftime("%Y%m%d"),
-                }},
+                {
+                    "query": {
+                        "numOfRows": self.page_size,
+                        "pageNo": page_number,
+                        "inqryDiv": "1",
+                        "inqryBgnDate": window.start.strftime("%Y%m%d"),
+                        "inqryEndDate": window.end.strftime("%Y%m%d"),
+                    }
+                },
                 path=self.path,
             )
             response = await self._execute_with_provider_retry(request)
@@ -81,7 +100,9 @@ class PPSContractClient:
                 self.definition, operation_id, response, path=self.path
             )
             if diagnostics:
-                raise ConnectorResponseError("; ".join(str(item) for item in diagnostics))
+                raise ConnectorResponseError(
+                    "; ".join(str(item) for item in diagnostics)
+                )
             total_count = int(_resolve(response.body, operation.pagination.total_count))
             if total_count == 0:
                 return ExtractedBatch(
@@ -92,18 +113,23 @@ class PPSContractClient:
             payloads = _resolve(response.body, operation.response.data.record_path)
             fetched_at = datetime.now(timezone.utc)
             for payload in payloads:
-                canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True,
-                                       separators=(",", ":"))
-                records.append(RawProviderRecord(
-                    raw_record_id=uuid4(),
-                    execution_id=execution_id,
-                    connector_id=self.definition.id,
-                    operation_id=operation_id,
-                    window=window,
-                    fetched_at=fetched_at,
-                    source_record_hash=hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
-                    payload=payload,
-                ))
+                canonical = json.dumps(
+                    payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                )
+                records.append(
+                    RawProviderRecord(
+                        raw_record_id=uuid4(),
+                        execution_id=execution_id,
+                        connector_id=self.definition.id,
+                        operation_id=operation_id,
+                        window=window,
+                        fetched_at=fetched_at,
+                        source_record_hash=hashlib.sha256(
+                            canonical.encode("utf-8")
+                        ).hexdigest(),
+                        payload=payload,
+                    )
+                )
             if page_number * self.page_size >= total_count:
                 return ExtractedBatch(
                     execution_id=execution_id,

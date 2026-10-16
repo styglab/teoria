@@ -1,0 +1,442 @@
+name: teoria-data-pipelines
+prefect-version: 3.8.1
+
+build: null
+push: null
+pull: null
+
+deployments:
+  - name: pps-industry-weekly
+    version: 1.1.0
+    description: 나라장터 표준업종과 근거법규 전체 사전을 매주 일요일 동기화한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.industries.flows.sync_pps_industries
+    tags: [domain:public_procurement, pipeline:pps_industry_ingestion]
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters: {pipeline_root: /app/pipelines}
+    schedules:
+      - cron: "0 3 * * 0"
+        timezone: Asia/Seoul
+        active: true
+    work_pool: {name: teoria-ingestion, work_queue_name: default}
+
+  - name: pps-bid-notice-ingestion
+    version: 1.1.0
+    description: 신규·변경 나라장터 입찰공고를 수집하고 공고번호별 면허제한과 참가가능지역을 보강한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_notices.flows.sync_pps_bid_notices
+    tags: [domain:public_procurement, pipeline:pps_bid_notice_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      lookback_days: 1
+      enrichment_batch_size: 20
+    schedules:
+      - cron: "0 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-document-processing
+    version: 1.0.0
+    description: 입찰공고에서 발견한 첨부파일을 다운로드하고 checksum과 함께 Object Storage에 저장한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_notices.flows.sync_pps_bid_documents
+    tags: [domain:public_procurement, pipeline:pps_bid_notice_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      batch_size: 500
+      concurrency: 8
+    schedules:
+      - cron: "15 * * * *"
+        timezone: Asia/Seoul
+        active: false
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-contract-incremental
+    version: 1.0.0
+    description: 최근 나라장터 계약정보를 4시간마다 다시 조회하여 신규·변경 데이터를 반영한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.contracts.flows.sync_pps_contract_incremental
+    tags: [domain:public_procurement, pipeline:pps_contract_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      lookback_days: 3
+    schedules:
+      - cron: "0 */4 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-contract-event-ledger-refresh
+    version: 1.0.0
+    description: 변경된 공식 조달분야의 원계약·공동수급 귀속 원장과 인사이트 사전집계를 갱신한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.contracts.flows.refresh_pps_contract_event_ledger
+    tags: [domain:public_procurement, pipeline:pps_contract_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      batch_size: 5
+    schedules:
+      - cron: "15 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-result-incremental
+    version: 1.1.0
+    description: 최근 3일의 최종낙찰과 해당 공고의 개찰 참여업체 결과를 4시간마다 갱신한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_results.flows.sync_pps_bid_results_incremental
+    tags: [domain:public_procurement, pipeline:pps_bid_result_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      lookback_days: 3
+    schedules:
+      - cron: "30 */4 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-notice-reconciliation-3d
+    version: 1.0.0
+    description: 최근 3일의 신규·변경 입찰공고와 참가제한 정보를 매일 보정한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_notices.flows.sync_pps_bid_notices
+    tags: [domain:public_procurement, pipeline:pps_bid_notice_ingestion]
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters:
+      pipeline_root: /app/pipelines
+      lookback_days: 3
+    schedules:
+      - {cron: "10 1 * * *", timezone: Asia/Seoul, active: false}
+    work_pool: {name: teoria-ingestion, work_queue_name: default}
+
+  - name: pps-contract-reconciliation-30d
+    version: 1.0.0
+    description: 최근 30일 계약정보의 지연 등록과 정정을 매일 보정한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.contracts.flows.sync_pps_contract_incremental
+    tags: [domain:public_procurement, pipeline:pps_contract_ingestion]
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters: {pipeline_root: /app/pipelines, lookback_days: 30}
+    schedules:
+      - {cron: "0 2 * * *", timezone: Asia/Seoul, active: true}
+    work_pool: {name: teoria-ingestion, work_queue_name: default}
+
+  - name: pps-contract-reconciliation-90d
+    version: 1.0.0
+    description: 최근 90일 계약정보의 장기 지연·정정을 매주 보정한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.contracts.flows.sync_pps_contract_incremental
+    tags: [domain:public_procurement, pipeline:pps_contract_ingestion]
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters: {pipeline_root: /app/pipelines, lookback_days: 90}
+    schedules:
+      - {cron: "0 3 * * 0", timezone: Asia/Seoul, active: true}
+    work_pool: {name: teoria-ingestion, work_queue_name: default}
+
+  - name: pps-bid-result-reconciliation-30d
+    version: 1.0.0
+    description: 최근 30일 개찰 건의 지연 낙찰 확정과 참여업체 결과를 매일 보정한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_results.flows.sync_pps_bid_results_incremental
+    tags: [domain:public_procurement, pipeline:pps_bid_result_ingestion]
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters: {pipeline_root: /app/pipelines, lookback_days: 30}
+    schedules:
+      - {cron: "30 2 * * *", timezone: Asia/Seoul, active: true}
+    work_pool: {name: teoria-ingestion, work_queue_name: default}
+
+  - name: pps-bid-result-reconciliation-90d
+    version: 1.0.0
+    description: 최근 90일 개찰 건의 장기 지연 낙찰 확정을 매주 보정한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_results.flows.sync_pps_bid_results_incremental
+    tags: [domain:public_procurement, pipeline:pps_bid_result_ingestion]
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters: {pipeline_root: /app/pipelines, lookback_days: 90}
+    schedules:
+      - {cron: "30 3 * * 0", timezone: Asia/Seoul, active: true}
+    work_pool: {name: teoria-ingestion, work_queue_name: default}
+
+  - name: pps-bid-document-parsing
+    version: 1.2.0
+    description: 저장된 입찰공고 첨부파일을 페이지·문단·표 단위 JSON으로 파싱한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_eligibility.flows.parse_pps_bid_documents
+    tags: [domain:public_procurement, pipeline:pps_bid_notice_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      batch_size: 100
+      concurrency: 4
+    schedules:
+      - cron: "*/10 * * * *"
+        timezone: Asia/Seoul
+        active: false
+    work_pool:
+      name: teoria-ai-extraction
+      work_queue_name: default
+
+  - name: pps-bid-document-retention
+    version: 1.0.0
+    description: 입찰 마감 후 90일이 지난 원본·파싱·AI 출력 객체를 삭제하고 메타데이터와 정규 요건은 보존한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_notices.flows.purge_expired_pps_bid_documents
+    tags: [domain:public_procurement, pipeline:pps_bid_notice_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      retention_days: 90
+      batch_size: 500
+    schedules:
+      - cron: "45 3 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-eligibility-extraction
+    version: 1.14.0
+    description: 최신 활성 공고 20건을 선점하고 결정론적 추출 또는 Codex 추출을 최대 4개 병렬 실행한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_eligibility.flows.extract_pps_bid_eligibility
+    tags: [domain:public_procurement, pipeline:pps_bid_notice_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      batch_size: 20
+    schedules:
+      - cron: "5-55/10 * * * *"
+        timezone: Asia/Seoul
+        active: false
+    work_pool:
+      name: teoria-ai-extraction
+      work_queue_name: default
+
+  - name: pps-contract-backfill
+    version: 1.5.0
+    description: 계약정보를 실행당 7일씩 역순 Backfill하며 실패한 날짜·Operation은 결손 큐로 격리해 전체 진행을 계속한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.contracts.flows.sync_pps_contract_backfill
+    tags: [domain:public_procurement, pipeline:pps_contract_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      checkpoint_id: pps_contract_backfill_2021_2026
+      start_date: "2021-01-01"
+      end_date: "2026-09-13"
+      pipeline_root: /app/pipelines
+      batch_days: 7
+    schedules:
+      - cron: "20 4 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-contract-backfill-gap-retry
+    version: 1.1.0
+    description: 계약 Backfill 결손 Operation을 작은 페이지 크기로 최대 15회까지 매일 재시도한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.contracts.flows.retry_pps_contract_backfill_gaps
+    tags: [domain:public_procurement, pipeline:pps_contract_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      source_pipeline_id: pps_contract_backfill_2021_2026
+      batch_size: 1
+      retry_days: 1
+      max_attempts: 15
+    schedules:
+      - cron: "20 5 * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-notice-backfill
+    version: 1.1.0
+    description: 2026-09-13부터 2021-01-01까지 최신 날짜 우선으로 첨부파일과 참가제한 보강을 제외한 기본 입찰공고를 Backfill한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_notices.flows.sync_pps_bid_notice_backfill
+    tags: [domain:public_procurement, pipeline:pps_bid_notice_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      checkpoint_id: pps_bid_notice_backfill_2021_2026
+      start_date: "2021-01-01"
+      end_date: "2026-09-13"
+      pipeline_root: /app/pipelines
+      batch_days: 7
+    schedules:
+      - cron: "50 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-notice-enrichment-backfill
+    version: 1.0.0
+    description: 기본 공고와 독립적으로 7일 이상 지난 미처리 공고의 면허제한과 참가가능지역을 제한된 호출량으로 보강한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_notices.flows.sync_pps_bid_notice_enrichment_backfill
+    tags: [domain:public_procurement, pipeline:pps_bid_notice_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 20
+      chunk_size: 5
+      minimum_age_days: 7
+      lease_minutes: 60
+    schedules:
+      - cron: "25 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-result-backfill
+    version: 1.2.0
+    description: 현재 연도 포함 최근 5개 회계연도(2022년 이후) 낙찰정보를 최신 연도 우선으로 Backfill한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_results.flows.sync_pps_bid_results_backfill
+    tags: [domain:public_procurement, pipeline:pps_bid_result_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      checkpoint_id: pps_bid_result_backfill_5y
+      start_date: "2022-01-01"
+      end_date: "2026-09-13"
+      pipeline_root: /app/pipelines
+      batch_days: 30
+    schedules:
+      - cron: "40 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-opening-incremental-enrichment
+    version: 2.0.0
+    description: 신규 낙찰의 개찰 참여업체 Top 10과 낙찰업체를 우선 보강한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_results.flows.enrich_pps_bid_opening_participants
+    tags: [domain:public_procurement, pipeline:pps_bid_result_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 30
+      lease_minutes: 15
+      queue_mode: incremental
+    schedules:
+      - cron: "*/5 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-notice-outcome-enrichment
+    version: 1.0.0
+    description: 낙찰이 확인되지 않은 개찰 공고를 조달청 유찰 목록으로 확인해 확정 상태와 사유를 보강한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_results.flows.enrich_pps_bid_notice_outcomes
+    tags: [domain:public_procurement, pipeline:pps_bid_result_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 100
+    schedules:
+      - cron: "3-59/5 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-opening-backfill-enrichment
+    version: 2.1.0
+    description: 최근 5개년 개찰 참여업체를 5분마다 최대 180개 공고씩 최신 건부터 과거 방향으로 지속 보강한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_results.flows.enrich_pps_bid_opening_participants
+    tags: [domain:public_procurement, pipeline:pps_bid_result_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 180
+      lease_minutes: 30
+      queue_mode: backfill
+    schedules:
+      - cron: "1-59/5 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: pps-bid-opening-retry-enrichment
+    version: 2.1.0
+    description: 실패·부분 수집된 개찰 건을 유형별 상한과 지연 정책으로 재시도한다.
+    entrypoint: teoria_pipelines.domains.public_procurement.bid_results.flows.enrich_pps_bid_opening_participants
+    tags: [domain:public_procurement, pipeline:pps_bid_result_ingestion]
+    concurrency_limit:
+      limit: 1
+      collision_strategy: CANCEL_NEW
+    parameters:
+      pipeline_root: /app/pipelines
+      batch_size: 60
+      lease_minutes: 15
+      queue_mode: retry
+    schedules:
+      - cron: "7,22,37,52 * * * *"
+        timezone: Asia/Seoul
+        active: true
+    work_pool:
+      name: teoria-ingestion
+      work_queue_name: default
+
+  - name: moleg-law-daily
+    version: 1.0.0
+    description: 지정 법령의 전체 버전 목록을 확인하고 신규·변경·현행·시행예정 본문을 수집한다.
+    entrypoint: teoria_pipelines.domains.legal_information.laws.flows.sync_moleg_laws
+    tags: [domain:legal_information, pipeline:moleg_law_ingestion]
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters: {pipeline_root: /app/pipelines, reconcile_all: false, requests_per_second: 1}
+    schedules:
+      - {cron: "15 4 * * 1-6", timezone: Asia/Seoul, active: true}
+    work_pool: {name: teoria-ingestion, work_queue_name: default}
+
+  - name: moleg-law-weekly-reconciliation
+    version: 1.0.0
+    description: 지정 법령의 모든 연혁 본문을 재조회해 기존 식별자의 원문 정정도 보존한다.
+    entrypoint: teoria_pipelines.domains.legal_information.laws.flows.sync_moleg_laws
+    tags: [domain:legal_information, pipeline:moleg_law_ingestion]
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters: {pipeline_root: /app/pipelines, reconcile_all: true, requests_per_second: 1}
+    schedules:
+      - {cron: "15 4 * * 0", timezone: Asia/Seoul, active: true}
+    work_pool: {name: teoria-ingestion, work_queue_name: default}

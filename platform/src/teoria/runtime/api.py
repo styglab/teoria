@@ -241,7 +241,6 @@ def create_runtime_app(
             status_code = {
                 "capability_timeout": 504,
                 "bid_notice_not_found": 404,
-                "bid_requirements_not_found": 409,
                 "invalid_bid_notice_id": 422,
             }.get(exc.code, 502)
             raise HTTPException(status_code=status_code, detail=exc.to_dict()) from exc

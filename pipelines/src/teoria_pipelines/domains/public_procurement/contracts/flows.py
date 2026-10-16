@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from teoria_pipelines.domains.public_procurement.calendar import procurement_today
+
 from datetime import date
 from uuid import UUID, uuid4
 
@@ -25,9 +27,12 @@ from teoria_pipelines.domains.public_procurement.contracts.tasks import (
     resolve_backfill_gap,
     upsert_contracts,
 )
-from teoria_pipelines.domains.public_procurement.provider_response import ConnectorResponseError
+from teoria_pipelines.domains.public_procurement.models import LoadSummary
+from teoria_pipelines.domains.public_procurement.provider_response import (
+    ConnectorResponseError,
+)
+from teoria_pipelines.domains.public_procurement.tasks import complete_pipeline_run
 from teoria_pipelines.execution.tasks import (
-    complete_pipeline_run,
     determine_backfill_windows,
     determine_incremental_window,
     fail_pipeline_run,
@@ -35,8 +40,7 @@ from teoria_pipelines.execution.tasks import (
     start_pipeline_run,
     update_checkpoint,
 )
-from teoria_pipelines.models import CollectionWindow, LoadSummary
-
+from teoria_pipelines.models import CollectionWindow
 
 OPERATION_TASK_NAMES = {
     "list_goods_contracts": "상품 계약 API 수집",
@@ -47,25 +51,29 @@ OPERATION_TASK_NAMES = {
 
 
 @flow(name="나라장터 계약정보 일별 수집")
-async def sync_pps_contract_window(window: CollectionWindow,
-                                   pipeline_root: str = "/app/pipelines",
-                                   parent_window: CollectionWindow | None = None,
-                                   pipeline_id: str = PIPELINE_ID,
-                                   checkpoint_cursor: date | None = None,
-                                   resume_completed_operations: bool = False,
-                                   continue_on_operation_error: bool = False) -> LoadSummary:
+async def sync_pps_contract_window(
+    window: CollectionWindow,
+    pipeline_root: str = "/app/pipelines",
+    parent_window: CollectionWindow | None = None,
+    pipeline_id: str = PIPELINE_ID,
+    checkpoint_cursor: date | None = None,
+    resume_completed_operations: bool = False,
+    continue_on_operation_error: bool = False,
+) -> LoadSummary:
     del parent_window  # keeps the parent task-to-subflow dependency visible
     # Use the Prefect child Flow Run ID as the DB audit identity when executed
     # by Prefect, while keeping static visualization callable without a backend.
     prefect_run_id = flow_run.get_id()
     execution_id = UUID(prefect_run_id) if prefect_run_id else uuid4()
-    started_execution_id = start_pipeline_run(execution_id, pipeline_id, window)
+    started_execution_id = await start_pipeline_run(execution_id, pipeline_id, window)
     try:
         summaries: list[LoadSummary] = []
         previous_batch = None
         for operation_id in OPERATIONS:
             if resume_completed_operations:
-                completed = get_completed_operation(pipeline_id, window, operation_id)
+                completed = await get_completed_operation(
+                    pipeline_id, window, operation_id
+                )
                 if completed is not None:
                     summaries.append(completed)
                     continue
@@ -83,42 +91,57 @@ async def sync_pps_contract_window(window: CollectionWindow,
             except ConnectorResponseError as exc:
                 if not continue_on_operation_error:
                     raise
-                record_backfill_gap(
-                    pipeline_id, window, operation_id,
+                await record_backfill_gap(
+                    pipeline_id,
+                    window,
+                    operation_id,
                     f"{type(exc).__name__}: {exc}",
                 )
                 previous_batch = None
                 continue
-            raw_count = save_raw_records(previous_batch)
+            raw_count = await save_raw_records(previous_batch)
             normalized = normalize_contracts(previous_batch, raw_count)
-            loaded = upsert_contracts(normalized)
-            enqueue_contract_event_ledger_refresh(normalized, loaded)
-            summaries.append(complete_operation(
-                pipeline_id, window, operation_id, execution_id, raw_count, loaded
-            ))
+            loaded = await upsert_contracts(normalized)
+            await enqueue_contract_event_ledger_refresh(normalized, loaded)
+            summaries.append(
+                (
+                    await complete_operation(
+                        pipeline_id,
+                        window,
+                        operation_id,
+                        execution_id,
+                        raw_count,
+                        loaded,
+                    )
+                )
+            )
         loaded = _sum_summaries(summaries)
-        checkpointed = update_checkpoint(
+        checkpointed = await update_checkpoint(
             execution_id,
             pipeline_id,
             checkpoint_cursor or window.end,
             loaded.raw_records,
             loaded,
         )
-        return complete_pipeline_run(execution_id, checkpointed)
+        return await complete_pipeline_run(execution_id, checkpointed)
     except BaseException as exc:
-        fail_pipeline_run(execution_id, type(exc).__name__)
+        (await fail_pipeline_run(execution_id, type(exc).__name__))
         raise
 
 
 @flow(name="나라장터 계약정보 수집")
-async def sync_pps_contracts(start_date: date | None = None,
-                             end_date: date | None = None,
-                             pipeline_root: str = "/app/pipelines",
-                             window_days: int = 1,
-                             overlap_days: int = 2) -> list[LoadSummary]:
+async def sync_pps_contracts(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    pipeline_root: str = "/app/pipelines",
+    window_days: int = 1,
+    overlap_days: int = 2,
+) -> list[LoadSummary]:
     """Collect a requested range, or continue from the checkpoint with overlap."""
 
-    collection_window = determine_collection_window(start_date, end_date, overlap_days)
+    collection_window = await determine_collection_window(
+        start_date, end_date, overlap_days
+    )
     summaries: list[LoadSummary] = []
     for window in split_windows(collection_window, window_days):
         summaries.append(
@@ -135,7 +158,9 @@ async def sync_pps_contract_incremental(
 ) -> list[LoadSummary]:
     """Refresh recent contracts independently of historical backfill progress."""
 
-    collection_window = determine_incremental_window(lookback_days)
+    collection_window = determine_incremental_window(
+        lookback_days, today=procurement_today()
+    )
     summaries: list[LoadSummary] = []
     for window in split_windows(collection_window, 1):
         summaries.append(
@@ -160,8 +185,13 @@ async def sync_pps_contract_backfill(
 ) -> list[LoadSummary]:
     """Move from the latest date backward through an independent historical range."""
 
-    windows = determine_backfill_windows(
-        checkpoint_id, start_date, end_date, batch_days, reverse=True
+    windows = await determine_backfill_windows(
+        checkpoint_id,
+        start_date,
+        end_date,
+        batch_days,
+        reverse=True,
+        today=procurement_today(),
     )
     summaries: list[LoadSummary] = []
     for window in windows:
@@ -187,7 +217,7 @@ async def retry_pps_contract_backfill_gaps(
     retry_days: int = 1,
     max_attempts: int = 15,
 ) -> list[LoadSummary]:
-    gaps = claim_backfill_gaps(
+    gaps = await claim_backfill_gaps(
         source_pipeline_id, batch_size, retry_days, max_attempts
     )
     summaries: list[LoadSummary] = []
@@ -200,28 +230,37 @@ async def retry_pps_contract_backfill_gaps(
         )
         operation_id = gap["operation_id"]
         execution_id = uuid4()
-        started_execution_id = start_pipeline_run(
+        started_execution_id = await start_pipeline_run(
             execution_id, f"{source_pipeline_id}_gap_retry", window
         )
         try:
             batch = await extract_contract_operation.with_options(
                 name=f"계약 Backfill 결손 재시도: {operation_id}"
             )(
-                started_execution_id, window, operation_id, pipeline_root, None,
-                (20, 10, 1), 1,
+                started_execution_id,
+                window,
+                operation_id,
+                pipeline_root,
+                None,
+                (20, 10, 1),
+                1,
             )
-            raw_count = save_raw_records(batch)
+            raw_count = await save_raw_records(batch)
             normalized = normalize_contracts(batch, raw_count)
-            loaded = upsert_contracts(normalized)
-            enqueue_contract_event_ledger_refresh(normalized, loaded)
-            summary = complete_operation(
-                source_pipeline_id, window, operation_id, execution_id,
-                raw_count, loaded,
+            loaded = await upsert_contracts(normalized)
+            await enqueue_contract_event_ledger_refresh(normalized, loaded)
+            summary = await complete_operation(
+                source_pipeline_id,
+                window,
+                operation_id,
+                execution_id,
+                raw_count,
+                loaded,
             )
-            resolve_backfill_gap(source_pipeline_id, window, operation_id)
-            summaries.append(complete_pipeline_run(execution_id, summary))
+            await resolve_backfill_gap(source_pipeline_id, window, operation_id)
+            summaries.append((await complete_pipeline_run(execution_id, summary)))
         except BaseException as exc:
-            fail_pipeline_run(execution_id, type(exc).__name__)
+            (await fail_pipeline_run(execution_id, type(exc).__name__))
             raise
     return summaries
 
@@ -237,8 +276,8 @@ def _sum_summaries(summaries: list[LoadSummary]) -> LoadSummary:
 
 
 @flow(name="계약 사건 사전집계 갱신")
-def refresh_pps_contract_event_ledger(batch_size: int = 5) -> int:
-    refreshed = refresh_contract_event_ledger(batch_size)
+async def refresh_pps_contract_event_ledger(batch_size: int = 5) -> int:
+    refreshed = await refresh_contract_event_ledger(batch_size)
     if refreshed:
-        refresh_procurement_entity_search_index()
+        await refresh_procurement_entity_search_index()
     return refreshed

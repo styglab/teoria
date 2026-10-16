@@ -1,0 +1,9 @@
+# Install at /etc/rancher/k3s/config.yaml before starting the single EC2 node.
+write-kubeconfig-mode: "0600"
+secrets-encryption: true
+# Mount a persistent EBS volume here before installation if using a separate disk.
+data-dir: /var/lib/rancher/k3s
+# K3s supplies containerd, Traefik and local-path storage; no Docker daemon needed.
+kubelet-arg:
+  - system-reserved=cpu=500m,memory=512Mi
+  - kube-reserved=cpu=500m,memory=512Mi

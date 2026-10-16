@@ -8,8 +8,7 @@ from teoria.admin.auth import AdminPrincipal
 from teoria.binding.repository import BindingRepository
 from teoria.settings import Settings
 from teoria.context import ContextEngine
-from teoria.domains.public_procurement.bid_check import BidCheckReader
-from teoria.intelligence.repository import SuggestionRepository
+from teoria.intelligence.suggestions.repository import SuggestionRepository
 from teoria.metadata.openmetadata import OpenMetadataService
 from teoria.policy import PolicyEvaluator
 from teoria.registry.loader import RegistryCatalog
@@ -19,7 +18,6 @@ def create_admin_app(
     *,
     settings: Settings | None = None,
     catalog: RegistryCatalog | None = None,
-    bid_check_reader: BidCheckReader | None = None,
     metadata_service: OpenMetadataService | None = None,
     binding_repository: BindingRepository | None = None,
     suggestion_repository: SuggestionRepository | None = None,
@@ -29,7 +27,6 @@ def create_admin_app(
     services = create_admin_services(
         settings=settings,
         catalog=catalog,
-        bid_check_reader=bid_check_reader,
         metadata_service=metadata_service,
         binding_repository=binding_repository,
         suggestion_repository=suggestion_repository,

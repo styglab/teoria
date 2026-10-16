@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Check, ChevronDown, CircleAlert, FileText, X } from "lucide-react";
-import { adminApi, type IntelligenceSuggestion, type MetadataTableDetail } from "../../api/admin";
+import { suggestionApi, type IntelligenceSuggestion } from "../../api/suggestions";
+import { metadataApi, type MetadataTableDetail } from "../../api/metadata";
 import { FilterTabs, PageHeader } from "../../components/workspace/WorkspaceLayout";
 import { SuggestionComparison } from "./SuggestionComparison";
 import { SuggestionApplicationHistory } from "./SuggestionApplicationHistory";
@@ -109,7 +110,7 @@ export function SuggestionReview() {
   });
   useEffect(()=>{
     let active=true;setTable(null);
-    if(asset)adminApi.metadataTable(asset).then(value=>{if(active)setTable(value)}).catch(()=>{});
+    if(asset)metadataApi.metadataTable(asset).then(value=>{if(active)setTable(value)}).catch(()=>{});
     return()=>{active=false};
   },[asset]);
   useEffect(() => { setError(null); }, [scope]);
@@ -117,8 +118,8 @@ export function SuggestionReview() {
     let active = true;
     setLoading(true); setItems([]); setNextCursor(null);
     const fetchItems = selectedId
-      ? adminApi.intelligenceSuggestion(selectedId).then(item => ({ items: [item], next_cursor: null }))
-      : adminApi.suggestionPage(filter === "all" ? undefined : filter, cursor, assetId || undefined);
+      ? suggestionApi.intelligenceSuggestion(selectedId).then(item => ({ items: [item], next_cursor: null }))
+      : suggestionApi.suggestionPage(filter === "all" ? undefined : filter, cursor, assetId || undefined);
     fetchItems.then(value => { if (active) { setItems(value.items); setNextCursor(value.next_cursor); } })
       .catch((reason: Error) => { if (active) setError(reason.message); })
       .finally(() => { if (active) setLoading(false); });
@@ -128,9 +129,9 @@ export function SuggestionReview() {
   const act = async (id: string, action: "approve" | "reject" | "retry" | "reconcile") => {
     setBusy(id); setError(null);
     try {
-      if (action === "retry") await adminApi.retrySuggestionApplication(id);
-      else if (action === "reconcile") await adminApi.reconcileSuggestionApplication(id);
-      else await adminApi.reviewSuggestion(id, action);
+      if (action === "retry") await suggestionApi.retrySuggestionApplication(id);
+      else if (action === "reconcile") await suggestionApi.reconcileSuggestionApplication(id);
+      else await suggestionApi.reviewSuggestion(id, action);
     }
     catch (reason) { setError((reason as Error).message); }
     finally { setBusy(null); setRefresh(value => value + 1); }

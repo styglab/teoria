@@ -2,9 +2,14 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
-
-from teoria.domains.public_procurement.market_analysis.records import (
-    MarketDataError, participation_row, profile_activity_row,
+from teoria.domains.public_procurement.market_analysis.participation.models import (
+    participation_row,
+)
+from teoria.domains.public_procurement.market_analysis.profiles.models import (
+    profile_activity_row,
+)
+from teoria.domains.public_procurement.market_analysis.row_validation import (
+    MarketDataError,
 )
 
 

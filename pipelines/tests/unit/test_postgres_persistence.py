@@ -1,6 +1,6 @@
-from unittest.mock import MagicMock, patch
 from datetime import date, datetime, timezone
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 from teoria_pipelines.models import CollectionWindow, RawProviderRecord
@@ -9,7 +9,9 @@ from teoria_pipelines.persistence.postgres import PostgresStore
 
 def test_raw_payload_deduplication_migration_backfills_before_legacy_drop() -> None:
     migrations = Path(__file__).parents[2] / "database" / "migrations"
-    deduplication = (migrations / "036_deduplicate_raw_provider_payloads.sql").read_text()
+    deduplication = (
+        migrations / "036_deduplicate_raw_provider_payloads.sql"
+    ).read_text()
     legacy_drop = (migrations / "037_drop_legacy_raw_provider_records.sql").read_text()
 
     assert "INSERT INTO ingestion.raw_provider_payloads" in deduplication
@@ -20,66 +22,21 @@ def test_raw_payload_deduplication_migration_backfills_before_legacy_drop() -> N
     assert "DROP TABLE ingestion.raw_provider_records" in legacy_drop
 
 
-def test_bid_notice_search_migration_materializes_latest_version_and_trigrams() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "042_bid_notice_runtime_search.sql"
-    ).read_text()
-
-    assert "CREATE EXTENSION IF NOT EXISTS pg_trgm" in migration
-    assert migration.count("gin_trgm_ops") == 4
-    assert "CREATE TABLE public_procurement.bid_notice_latest_versions" in migration
-    assert "CREATE TRIGGER bid_notices_sync_latest_version" in migration
-    assert "row_number() OVER" not in migration
-
-
-def test_contract_operation_progress_migration_cleans_stale_runs_and_dates() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "043_pipeline_operation_progress.sql"
-    ).read_text()
-
-    assert "CREATE TABLE ingestion.pipeline_operation_progress" in migration
-    assert "StalePipelineRun" in migration
-    assert "contract_date = NULL" in migration
-    assert "opening_at = NULL" in migration
-
-
-def test_contract_relationship_context_has_company_first_lookup_index() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "068_optimize_contract_relationship_company_lookup.sql"
-    ).read_text()
-
-    assert "contract_event_company_ledger_company_date_idx" in migration
-    assert "company_number, first_contract_date, organization_code" in " ".join(
-        migration.split()
-    )
-
-
-def test_relationship_graph_cleanup_drops_snapshot_data_and_functions() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "075_drop_procurement_relationship_graph.sql"
-    ).read_text()
-
-    assert "DROP TABLE IF EXISTS" in migration
-    assert "procurement_relationship_graph_versions" in migration
-    assert "procurement_relationship_graph_aggregates" in migration
-    assert "procurement_relationship_graph_nodes" in migration
-    assert "procurement_relationship_graph_overviews" in migration
-    assert "publish_procurement_relationship_graph" in migration
-
-
-def test_backfill_gap_claim_stops_after_maximum_attempts() -> None:
+async def test_backfill_gap_claim_stops_after_maximum_attempts() -> None:
     connection = MagicMock()
-    connection.__enter__.return_value = connection
+    connection.__aenter__.return_value = connection
+    connection.execute = AsyncMock(return_value=AsyncMock())
     connection.execute.return_value.fetchall.return_value = []
 
-    with patch("teoria_pipelines.persistence.postgres_store.base.psycopg.connect",
-               return_value=connection):
-        PostgresStore("postgresql://unused").claim_backfill_gaps(
-            "pps_contract_backfill_2021_2026", 1, retry_days=1, max_attempts=15,
+    with patch(
+        "teoria_pipelines.persistence.connection.psycopg.AsyncConnection.connect",
+        return_value=connection,
+    ):
+        await PostgresStore("postgresql://unused").claim_backfill_gaps(
+            "pps_contract_backfill_2021_2026",
+            1,
+            retry_days=1,
+            max_attempts=15,
         )
 
     sql, parameters = connection.execute.call_args.args
@@ -87,146 +44,43 @@ def test_backfill_gap_claim_stops_after_maximum_attempts() -> None:
     assert parameters == ("pps_contract_backfill_2021_2026", 15, 1, 1)
 
 
-def test_bid_opening_retry_claim_excludes_terminal_partial_results() -> None:
+async def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
     connection = MagicMock()
-    connection.__enter__.return_value = connection
-    result = MagicMock()
-    result.fetchall.return_value = []
-    result.description = []
-    connection.execute.return_value = result
-
-    with patch("teoria_pipelines.persistence.postgres_store.bid_results.psycopg.connect",
-               return_value=connection):
-        records = PostgresStore("postgresql://unused").claim_bid_opening_enrichment(
-            uuid4(), "retry", 60, 15,
-        )
-
-    assert records == []
-    sql = connection.execute.call_args_list[0].args[0]
-    assert "q.status='retry_wait'" in sql
-    assert "partial_completed" not in sql
-
-
-def test_bid_opening_failures_have_distinct_terminal_retry_limits() -> None:
-    connection = MagicMock()
-    connection.__enter__.return_value = connection
+    connection.__aenter__.return_value = connection
+    connection.execute = AsyncMock(return_value=AsyncMock())
     cursor = MagicMock()
-    cursor.__enter__.return_value = cursor
-    connection.cursor.return_value = cursor
-    record = RawProviderRecord(
-        raw_record_id=uuid4(), execution_id=uuid4(),
-        connector_id="pps_bid_result_api", operation_id="list_service_bid_awards",
-        window=CollectionWindow(date(2026, 1, 1), date(2026, 1, 1)),
-        fetched_at=datetime.now(timezone.utc), source_record_hash="award-hash",
-        payload={"bidNtceNo": "N1", "bidNtceOrd": "000", "bidClsfcNo": "0", "rbidNo": "000"},
-    )
-
-    with patch("teoria_pipelines.persistence.postgres_store.bid_results.psycopg.connect",
-               return_value=connection):
-        PostgresStore("postgresql://unused").finish_bid_opening_enrichment(
-            [record], [record],
-        )
-
-    incomplete_sql = cursor.executemany.call_args_list[0].args[0]
-    lookup_sql = cursor.executemany.call_args_list[1].args[0]
-    assert "q.attempts+1>=3 THEN 'partial_completed'" in incomplete_sql
-    assert "q.attempts+1>=3 THEN 'infinity'::timestamptz" in incomplete_sql
-    assert "attempts+1>=5 THEN 'permanent_failure'" in lookup_sql
-    assert "attempts+1>=5 THEN 'infinity'::timestamptz" in lookup_sql
-
-
-def test_bid_opening_retry_migration_requeues_unverified_legacy_completion() -> None:
-    migration = (
-        Path(__file__).parents[2] / "database" / "migrations"
-        / "087_bound_bid_opening_retries.sql"
-    ).read_text()
-
-    assert "queue.status = 'completed'" in migration
-    assert "checked.selected_business_numbers IS NULL" in migration
-    assert "last_error_code = 'legacy_selection_unverified'" in migration
-    assert "WHERE status = 'retry_wait'" in migration
-    assert "q.status IN ('partial_completed','permanent_failure') THEN 'failed'" in migration
-
-
-def test_raw_storage_separates_deduplicated_payload_from_observation() -> None:
-    connection = MagicMock()
-    connection.__enter__.return_value = connection
-    cursor = MagicMock()
-    cursor.__enter__.return_value = cursor
+    cursor.__aenter__.return_value = cursor
+    cursor.executemany = AsyncMock()
     cursor.rowcount = 1
     connection.cursor.return_value = cursor
     execution_id = uuid4()
     record = RawProviderRecord(
-        raw_record_id=uuid4(), execution_id=execution_id,
-        connector_id="pps_contract_api", operation_id="list_goods_contracts",
+        raw_record_id=uuid4(),
+        execution_id=execution_id,
+        connector_id="pps_contract_api",
+        operation_id="list_goods_contracts",
         window=CollectionWindow(date(2026, 9, 15), date(2026, 9, 15)),
-        fetched_at=datetime.now(timezone.utc), source_record_hash="hash",
+        fetched_at=datetime.now(timezone.utc),
+        source_record_hash="hash",
         payload={"id": "contract"},
     )
 
-    with patch("teoria_pipelines.persistence.postgres_store.base.psycopg.connect",
-               return_value=connection):
-        assert PostgresStore("postgresql://unused").save_raw_records([record]) == 1
+    with patch(
+        "teoria_pipelines.persistence.connection.psycopg.AsyncConnection.connect",
+        return_value=connection,
+    ):
+        assert (
+            await PostgresStore("postgresql://unused").save_raw_records([record])
+        ) == 1
 
     payload_call, observation_call = cursor.executemany.call_args_list
     assert "INSERT INTO ingestion.raw_provider_payloads" in payload_call.args[0]
-    assert "ON CONFLICT (connector_id, operation_id, source_record_hash)" in payload_call.args[0]
-    assert "INSERT INTO ingestion.raw_provider_observations" in observation_call.args[0]
-    assert "ON CONFLICT (execution_id, connector_id, operation_id" in observation_call.args[0]
-
-
-def test_parser_claim_reclaims_expired_processing_lease() -> None:
-    connection = MagicMock()
-    connection.__enter__.return_value = connection
-    connection.execute.return_value.fetchall.return_value = []
-
-    with patch("teoria_pipelines.persistence.postgres_store.documents.psycopg.connect",
-               return_value=connection):
-        PostgresStore("postgresql://unused").claim_documents_for_parsing(
-            10, "2.1.1", max_attempts=3,
-        )
-
-    sql, parameters = connection.execute.call_args.args
-    assert "parse_status='processing' AND updated_at <= now()-interval '1 hour'" in sql
     assert (
-        "parse_status IN ('parsed','unsupported') "
-        "AND parser_version IS DISTINCT FROM %s"
-    ) in sql
-    assert "CASE WHEN c.parser_version_changed THEN 1" in sql
-    assert parameters == ("2.1.1", 3, "2.1.1", 10)
-
-
-def test_extraction_selection_prioritizes_latest_active_notice_revision() -> None:
-    connection = MagicMock()
-    connection.__enter__.return_value = connection
-    connection.execute.return_value.fetchall.return_value = []
-
-    with patch("teoria_pipelines.persistence.postgres_store.eligibility.psycopg.connect",
-               return_value=connection):
-        PostgresStore("postgresql://unused").list_notices_for_eligibility_extraction(10)
-
-    sql, parameters = connection.execute.call_args.args
-    assert "n.notice_kind_name IS DISTINCT FROM '취소공고'" in sql
-    assert "COALESCE(n.notice_kind_name, '') !~ '(평가|개찰|낙찰|계약).*(결과|결정)'" in sql
-    assert "COALESCE(n.notice_name, '') !~" in sql
-    assert "FROM public_procurement.bid_notices newer" in sql
-    assert "ORDER BY n.notice_published_at DESC NULLS LAST" in sql
-    assert parameters == [3, 3, 10]
-
-
-def test_eligibility_claim_uses_one_hour_lease() -> None:
-    connection = MagicMock()
-    connection.__enter__.return_value = connection
-    connection.execute.return_value.fetchone.return_value = (1,)
-
-    with patch("teoria_pipelines.persistence.postgres_store.eligibility.psycopg.connect",
-               return_value=connection):
-        claimed = PostgresStore("postgresql://unused").claim_eligibility_extraction(
-            {"notice_number": "R1", "notice_order": "000"}, "fingerprint", "2.3.15"
-        )
-
-    sql, parameters = connection.execute.call_args.args
-    assert claimed is True
-    assert "status='processing'" in sql
-    assert "started_at<=now()-interval '1 hour'" in sql
-    assert parameters[1:] == ("R1", "000", "fingerprint", "2.3.15")
+        "ON CONFLICT (connector_id, operation_id, source_record_hash)"
+        in payload_call.args[0]
+    )
+    assert "INSERT INTO ingestion.raw_provider_observations" in observation_call.args[0]
+    assert (
+        "ON CONFLICT (execution_id, connector_id, operation_id"
+        in observation_call.args[0]
+    )

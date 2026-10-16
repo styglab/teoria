@@ -30,17 +30,19 @@ Require an OpenMetadata table FQN and, when applicable, one or more column names
    - user-provided or repository source documents;
    - bounded, read-only data samples only when the user authorized them and the registered Database Source supplies the query path.
 4. Separate observations from inference. Do not infer authoritative meaning from a similar name alone. Propose descriptions, existing Glossary assignments, or new Glossary terms supported by governed definitions. Route Ontology bindings to `$align-metadata-semantics` and disclosure diagnosis to `$assess-data-disclosure`.
-5. Produce a bundle conforming to `references/proposal_bundle.schema.json`. Use one suggestion per independently reviewable change. Record the OpenMetadata version in evidence provenance and add content hashes for local documents when available.
+5. Produce a bundle conforming to `references/proposal_bundle.schema.json`, generated from `platform/src/teoria/intelligence/suggestions/contracts.py`. Use one suggestion per independently reviewable change. Record the OpenMetadata version in evidence provenance and add content hashes for local documents when available.
 6. Validate locally without submitting:
 
    ```bash
-   python3 .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py proposal_bundle.json
+   uv run --locked --package teoria-platform python \
+     .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py proposal_bundle.json
    ```
 
 7. Show the user the proposed changes, evidence, confidence, warnings, and unsupported gaps. Submit only when the user asked to place proposals in the Review Queue:
 
    ```bash
-   python3 .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py \
+   uv run --locked --package teoria-platform python \
+     .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py \
      proposal_bundle.json --submit
    ```
 

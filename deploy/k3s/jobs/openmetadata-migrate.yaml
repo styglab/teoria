@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openmetadata-migrate
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: openmetadata-migrate
+    spec:
+      containers:
+      - name: openmetadata-migrate
+        image: docker.getcollate.io/openmetadata/server:2.0.5
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+          limits:
+            memory: 4Gi
+            cpu: '1'
+        env:
+        - name: DB_DRIVER_CLASS
+          value: org.postgresql.Driver
+        - name: DB_SCHEME
+          value: postgresql
+        - name: DB_PARAMS
+          value: allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+        - name: DB_USER
+          value: openmetadata_user
+        - name: DB_HOST
+          value: platform-postgres
+        - name: DB_PORT
+          value: '5432'
+        - name: OM_DATABASE
+          value: openmetadata_db
+        - name: SEARCH_TYPE
+          value: elasticsearch
+        - name: ELASTICSEARCH_HOST
+          value: openmetadata-search
+        - name: ELASTICSEARCH_PORT
+          value: '9200'
+        - name: ELASTICSEARCH_SCHEME
+          value: http
+        - name: PIPELINE_SERVICE_CLIENT_ENABLED
+          value: 'false'
+        - name: AUTHENTICATION_PROVIDER
+          value: basic
+        - name: AUTHORIZER_CLASS_NAME
+          value: org.openmetadata.service.security.DefaultAuthorizer
+        - name: DB_USER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: OPENMETADATA_DB_PASSWORD
+        command:
+        - /bin/bash
+        - bootstrap/openmetadata-ops.sh
+        - migrate
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      restartPolicy: Never

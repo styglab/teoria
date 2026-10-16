@@ -1,0 +1,82 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: platform-postgres-init
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: platform-postgres-init
+    spec:
+      containers:
+      - name: platform-postgres-init
+        image: postgres:17
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: PGHOST
+          value: platform-postgres
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASE
+          value: postgres
+        - name: PGUSER
+          value: platform_admin
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_PLATFORM_DB_PASSWORD
+        - name: TEORIA_LOCAL_APP_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_APP_DB_PASSWORD
+        - name: TEORIA_LOCAL_PREFECT_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_PREFECT_DB_PASSWORD
+        - name: OPENMETADATA_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: OPENMETADATA_DB_PASSWORD
+        command:
+        - sh
+        - -ec
+        - "psql --set=ON_ERROR_STOP=1 \\\n  --set=teoria_app_password=\"${TEORIA_LOCAL_APP_DB_PASSWORD}\"\
+          \ \\\n  --set=prefect_password=\"${TEORIA_LOCAL_PREFECT_DB_PASSWORD}\" \\\
+          \n  --set=openmetadata_password=\"${OPENMETADATA_DB_PASSWORD}\" <<'SQL'\n\
+          SELECT format('CREATE ROLE teoria_app LOGIN PASSWORD %L', :'teoria_app_password')\n\
+          WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_app')\n\
+          \\gexec\nALTER ROLE teoria_app PASSWORD :'teoria_app_password';\nSELECT\
+          \ format('CREATE ROLE prefect LOGIN PASSWORD %L', :'prefect_password')\n\
+          WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'prefect')\n\\\
+          gexec\nALTER ROLE prefect PASSWORD :'prefect_password';\nSELECT format('CREATE\
+          \ ROLE openmetadata_user LOGIN PASSWORD %L', :'openmetadata_password')\n\
+          WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmetadata_user')\n\
+          \\gexec\nALTER ROLE openmetadata_user PASSWORD :'openmetadata_password';\n\
+          SELECT 'CREATE DATABASE teoria_app OWNER teoria_app'\nWHERE NOT EXISTS (SELECT\
+          \ 1 FROM pg_database WHERE datname = 'teoria_app')\n\\gexec\nSELECT 'CREATE\
+          \ DATABASE prefect OWNER prefect'\nWHERE NOT EXISTS (SELECT 1 FROM pg_database\
+          \ WHERE datname = 'prefect')\n\\gexec\nSELECT 'CREATE DATABASE openmetadata_db\
+          \ OWNER openmetadata_user'\nWHERE NOT EXISTS (SELECT 1 FROM pg_database\
+          \ WHERE datname = 'openmetadata_db')\n\\gexec\nREVOKE CONNECT ON DATABASE\
+          \ teoria_app FROM PUBLIC;\nGRANT CONNECT ON DATABASE teoria_app TO teoria_app,\
+          \ platform_admin;\nREVOKE CONNECT ON DATABASE prefect FROM PUBLIC;\nGRANT\
+          \ CONNECT ON DATABASE prefect TO prefect, platform_admin;\nREVOKE CONNECT\
+          \ ON DATABASE openmetadata_db FROM PUBLIC;\nGRANT CONNECT ON DATABASE openmetadata_db\
+          \ TO openmetadata_user, platform_admin;\nSQL\n"
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      restartPolicy: Never

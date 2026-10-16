@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from teoria_pipelines.domains.public_procurement.calendar import procurement_today
+
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from teoria_pipelines.models import ExtractedBatch, NormalizedBidResultBatch, RawProviderRecord
+from teoria_pipelines.models import ExtractedBatch, RawProviderRecord
+from teoria_pipelines.domains.public_procurement.bid_results.models import (
+    NormalizedBidResultBatch,
+)
 
 
 AWARD_TYPES = {
@@ -29,11 +34,15 @@ def normalize_bid_result_batch(batch: ExtractedBatch) -> NormalizedBidResultBatc
         if record.operation_id in AWARD_TYPES:
             result.awards.append(normalize_bid_award_record(record))
         elif record.operation_id == "list_completed_opening_results":
-            result.opening_participants.append(normalize_opening_participant_record(record))
+            result.opening_participants.append(
+                normalize_opening_participant_record(record)
+            )
         elif record.operation_id == "list_failing_opening_results":
             result.notice_outcomes.append(normalize_failed_opening_record(record))
         else:
-            raise BidResultNormalizationError(f"unsupported operation '{record.operation_id}'")
+            raise BidResultNormalizationError(
+                f"unsupported operation '{record.operation_id}'"
+            )
     return result
 
 
@@ -64,7 +73,9 @@ def normalize_bid_award_record(record: RawProviderRecord) -> dict[str, Any]:
         "notice_name": _text(value.get("bidNtceNm")),
         "participant_count": _integer(value.get("prtcptCnum")),
         "winner_name": _text(value.get("bidwinnrNm")),
-        "winner_business_registration_number": _business_number(value.get("bidwinnrBizno")),
+        "winner_business_registration_number": _business_number(
+            value.get("bidwinnrBizno")
+        ),
         "winner_representative_name": _text(value.get("bidwinnrCeoNm")),
         "winner_address": _text(value.get("bidwinnrAdrs")),
         "winner_telephone_number": _text(value.get("bidwinnrTelNo")),
@@ -74,7 +85,9 @@ def normalize_bid_award_record(record: RawProviderRecord) -> dict[str, Any]:
         "demand_organization_code": _text(value.get("dminsttCd")),
         "demand_organization_name": _text(value.get("dminsttNm")),
         "source_registered_at": _kst_datetime(value.get("rgstDt")),
-        "final_award_date": _date(value.get("fnlSucsfDate") or value.get("FnlSucsfDate")),
+        "final_award_date": _date(
+            value.get("fnlSucsfDate") or value.get("FnlSucsfDate")
+        ),
         "winner_manager_name": _text(value.get("fnlSucsfCorpOfcl")),
         "source_record_hash": record.source_record_hash,
     }
@@ -168,7 +181,13 @@ def _date(value: Any) -> date | None:
     for pattern in ("%Y-%m-%d", "%Y%m%d"):
         try:
             parsed = datetime.strptime(text, pattern).date()
-            return parsed if date(1900, 1, 1) <= parsed <= date.today() + timedelta(days=366) else None
+            return (
+                parsed
+                if date(1900, 1, 1)
+                <= parsed
+                <= procurement_today() + timedelta(days=366)
+                else None
+            )
         except ValueError:
             continue
     raise BidResultNormalizationError(f"invalid date value {value!r}")
@@ -181,7 +200,13 @@ def _kst_datetime(value: Any) -> datetime | None:
     for pattern in ("%Y-%m-%d %H:%M:%S", "%Y%m%d%H%M%S", "%Y-%m-%dT%H:%M:%S"):
         try:
             parsed = datetime.strptime(text, pattern).replace(tzinfo=KST)
-            return parsed if date(1900, 1, 1) <= parsed.date() <= date.today() + timedelta(days=366) else None
+            return (
+                parsed
+                if date(1900, 1, 1)
+                <= parsed.date()
+                <= procurement_today() + timedelta(days=366)
+                else None
+            )
         except ValueError:
             continue
     raise BidResultNormalizationError(f"invalid datetime value {value!r}")

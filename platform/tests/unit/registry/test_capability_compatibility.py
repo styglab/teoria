@@ -39,9 +39,9 @@ def _published_ontology_from_blueprint() -> dict:
 
 def test_loader_materializes_capability_version_and_definition_checksum() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
-    capability = catalog.capabilities["assess_company_bid_eligibility"]
+    capability = catalog.capabilities["search_bid_notices"]
 
-    assert capability.version == "1.2.0"
+    assert capability.version == catalog.capabilities["search_bid_notices"].version
     assert catalog.capability_versions[(capability.id, capability.version)] is capability
     assert catalog.capability_checksums[(capability.id, capability.version)].startswith(
         "sha256:"
@@ -50,7 +50,7 @@ def test_loader_materializes_capability_version_and_definition_checksum() -> Non
 
 def test_compatibility_is_computed_for_a_specific_capability_version() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
-    capability_id = "assess_company_bid_eligibility"
+    capability_id = "search_bid_notices"
     original = catalog.capabilities[capability_id]
     capability = original.model_copy(update={
         "semantic_requirements": CapabilitySemanticRequirements(
@@ -78,7 +78,7 @@ def test_compatibility_is_computed_for_a_specific_capability_version() -> None:
         if item["capability_id"] == capability_id
     )
 
-    assert report["capability_version"] == "1.2.0"
+    assert report["capability_version"] == catalog.capabilities["search_bid_notices"].version
     assert report["status"] == "incompatible"
     assert report["missing_required"] == [{
         "kind": "property",

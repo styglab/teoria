@@ -1,5 +1,7 @@
 pipeline:
   id: pps_industry_ingestion
+  flow_modules:
+    - teoria_pipelines.domains.public_procurement.industries.flows
   description: 조달청 나라장터 표준업종과 근거법규 전체 사전을 매주 일요일 동기화한다.
   connector: pps_industry_api
   operations: [list_industry_base_laws]

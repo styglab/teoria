@@ -31,9 +31,8 @@ retired_capabilities:
     replacements: [get_business_registration_status]
     reason: 입찰평가는 사업자 상태조회만 사용하며 별도 진위확인 Capability 실행 경로가 없다.
 internal_support_capabilities:
-  assessment:
+  company_data:
     - get_bid_notices_by_ids
-    - get_bid_requirements_by_notice_ids
     - get_business_registration_status
     - get_company_qualifications
     - get_direct_production_confirmations
@@ -65,8 +64,6 @@ capabilities:
   - {id: analyze_procurement_field_market, area: market, status: active}
   - {id: search_bid_notices, area: bid_notice, status: active}
   - {id: get_bid_notice, area: bid_notice, status: active}
-  - {id: get_bid_requirements, area: bid_notice, status: active}
-  - {id: get_bid_participation_findings, area: bid_notice, status: active}
   - {id: get_bid_notice_participations, area: bid_notice, status: active}
   - {id: get_bid_notice_contracts, area: bid_notice, status: active}
   - {id: get_bid_notice_relationship_context, area: bid_notice, status: active}
@@ -88,5 +85,3 @@ capabilities:
   - {id: analyze_company_competitors, area: company, status: active}
   - {id: search_companies_by_name, area: company, status: active}
   - {id: search_bid_awards, area: award, status: active}
-  - {id: assess_company_bid_eligibility, area: eligibility, status: active}
-  - {id: assess_company_bid_eligibilities, area: eligibility, status: active}

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from teoria.runtime.capability import CapabilityBinder, CapabilityExecutionError, CapabilityRunner
+from teoria.runtime.capability import CapabilityExecutionError, CapabilityRunner
 from teoria_provider_api.models import ExecutionResponse
 from teoria.registry.loader import RegistryLoader
 
@@ -48,7 +48,12 @@ class PaginatedProfileExecutor:
             {
                 "response": {
                     "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."},
-                    "body": {"numOfRows": 10, "pageNo": page, "totalCount": 11, "items": {"item": items}},
+                    "body": {
+                        "numOfRows": 10,
+                        "pageNo": page,
+                        "totalCount": 11,
+                        "items": {"item": items},
+                    },
                 }
             }
         )
@@ -115,24 +120,34 @@ def xml_no_data_response(code: str = "90") -> ExecutionResponse:
 @pytest.mark.asyncio
 async def test_gets_company_and_direct_production_qualifications() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
-    executor = FakeExecutor([
-        xml_response([{
-            "certSeCode": "03",
-            "issuInstt": "서울지방중소벤처기업청",
-            "validPdBeginDe": "20260101",
-            "validPdEndDe": "20261231",
-            "certfcDe": "20260101",
-        }]),
-        xml_response([]),
-        xml_response([{
-            "certSeCode": "01",
-            "validPdBeginDe": "20260101",
-            "validPdEndDe": "20261231",
-            "certfcDe": "20260101",
-            "detailPrdnmNo": "8111189901",
-            "essntlPartclrMatter": "테스트 범위",
-        }]),
-    ])
+    executor = FakeExecutor(
+        [
+            xml_response(
+                [
+                    {
+                        "certSeCode": "03",
+                        "issuInstt": "서울지방중소벤처기업청",
+                        "validPdBeginDe": "20260101",
+                        "validPdEndDe": "20261231",
+                        "certfcDe": "20260101",
+                    }
+                ]
+            ),
+            xml_response([]),
+            xml_response(
+                [
+                    {
+                        "certSeCode": "01",
+                        "validPdBeginDe": "20260101",
+                        "validPdEndDe": "20261231",
+                        "certfcDe": "20260101",
+                        "detailPrdnmNo": "8111189901",
+                        "essntlPartclrMatter": "테스트 범위",
+                    }
+                ]
+            ),
+        ]
+    )
 
     result = await CapabilityRunner(executor).run(
         catalog,
@@ -143,14 +158,21 @@ async def test_gets_company_and_direct_production_qualifications() -> None:
         },
     )
 
-    assert [request.query["stdrDate"] for request in executor.requests] == ["20260808"] * 3
-    assert [request.query["bsnmNo"] for request in executor.requests] == ["3808100318"] * 3
+    assert [request.query["stdrDate"] for request in executor.requests] == [
+        "20260808"
+    ] * 3
+    assert [request.query["bsnmNo"] for request in executor.requests] == [
+        "3808100318"
+    ] * 3
     objects = {item.object_type: item.properties for item in result.objects}
     assert objects["qualification"]["qualification_type"] == "women_owned_business"
     assert objects["qualification"]["grant_form"] == "confirmation"
     assert objects["qualification"]["status"] == "active"
     assert objects["qualification"]["reference_date"] == date(2026, 8, 8)
-    assert objects["direct_production_confirmation"]["detailed_product_code"] == "8111189901"
+    assert (
+        objects["direct_production_confirmation"]["detailed_product_code"]
+        == "8111189901"
+    )
     assert objects["direct_production_confirmation"]["status"] == "active"
     assert {item.link_type for item in result.links} == {
         "business_registration_has_qualification",
@@ -159,7 +181,9 @@ async def test_gets_company_and_direct_production_qualifications() -> None:
 
 
 @pytest.mark.asyncio
-async def test_company_qualification_profile_treats_declared_provider_no_data_as_empty() -> None:
+async def test_company_qualification_profile_treats_declared_provider_no_data_as_empty() -> (
+    None
+):
     catalog = RegistryLoader(ROOT / "registries").load()
     executor = FakeExecutor([xml_no_data_response() for _ in range(3)])
 
@@ -180,7 +204,16 @@ async def test_company_qualification_profile_treats_declared_provider_no_data_as
 def test_missing_collection_response_path_is_an_empty_result() -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
     executor = FakeExecutor(
-        [response({"response": {"header": {"resultCode": "00"}, "body": {"totalCount": 0}}})]
+        [
+            response(
+                {
+                    "response": {
+                        "header": {"resultCode": "00"},
+                        "body": {"totalCount": 0},
+                    }
+                }
+            )
+        ]
     )
 
     result = asyncio.run(
@@ -219,7 +252,7 @@ async def test_runs_capability_and_decodes_ontology_objects() -> None:
                             "rbf_tax_type": "해당없음",
                             "rbf_tax_type_cd": "99",
                         }
-                    ]
+                    ],
                 }
             )
         ]
@@ -233,7 +266,9 @@ async def test_runs_capability_and_decodes_ontology_objects() -> None:
 
     assert executor.requests[0].body == {"b_no": ["0000000000"]}
     objects = {item.object_type: item.properties for item in result.objects}
-    assert objects["business_registration"]["business_registration_number"] == "0000000000"
+    assert (
+        objects["business_registration"]["business_registration_number"] == "0000000000"
+    )
     status = objects["taxpayer_status_observation"]
     assert status["operating_status"] == "active"
     assert status["current_taxation_type"] == "general_taxpayer"
@@ -241,11 +276,20 @@ async def test_runs_capability_and_decodes_ontology_objects() -> None:
     assert status["is_closed_due_to_unit_tax_conversion"] is False
     assert status["observation_id"]
     assert status["observed_at"]
-    status_object = next(item for item in result.objects if item.object_type == "taxpayer_status_observation")
+    status_object = next(
+        item
+        for item in result.objects
+        if item.object_type == "taxpayer_status_observation"
+    )
     assert status_object.property_provenance["operating_status"][0].kind == "source"
-    assert status_object.property_provenance["operating_status"][0].source == "nts_business_registration"
+    assert (
+        status_object.property_provenance["operating_status"][0].source
+        == "nts_business_registration"
+    )
     assert status_object.property_provenance["observation_id"][0].kind == "execution"
-    assert status_object.property_provenance["observed_at"][0].operation == "materialize"
+    assert (
+        status_object.property_provenance["observed_at"][0].operation == "materialize"
+    )
     assert len(result.links) == 1
     assert result.links[0].link_type == "business_registration_has_taxpayer_status"
     assert result.responses is None
@@ -255,7 +299,21 @@ async def test_runs_capability_and_decodes_ontology_objects() -> None:
 @pytest.mark.parametrize(
     ("records", "expected_status", "expected_match"),
     [
-        ([{"vnia_sn": 1, "cmp_nm": "테스트벤처", "rprsv_nm": "대표자", "bizrno": "0000000000", "hdofc_addr": "서울특별시", "indsty_cd": "62", "indsty_nm": "정보통신업"}], "currently_disclosed", True),
+        (
+            [
+                {
+                    "vnia_sn": 1,
+                    "cmp_nm": "테스트벤처",
+                    "rprsv_nm": "대표자",
+                    "bizrno": "0000000000",
+                    "hdofc_addr": "서울특별시",
+                    "indsty_cd": "62",
+                    "indsty_nm": "정보통신업",
+                }
+            ],
+            "currently_disclosed",
+            True,
+        ),
         ([], "not_disclosed", False),
     ],
 )
@@ -263,7 +321,18 @@ async def test_verifies_current_venture_company_disclosure(
     records: list[dict], expected_status: str, expected_match: bool
 ) -> None:
     catalog = RegistryLoader(ROOT / "registries").load()
-    executor = FakeExecutor([response({"RESULT": "SUCCESS", "TOTAL_COUNT": str(len(records)), "NOW_PAGE": "1", "DATA_LIST": records})])
+    executor = FakeExecutor(
+        [
+            response(
+                {
+                    "RESULT": "SUCCESS",
+                    "TOTAL_COUNT": str(len(records)),
+                    "NOW_PAGE": "1",
+                    "DATA_LIST": records,
+                }
+            )
+        ]
+    )
 
     result = await CapabilityRunner(executor).run(
         catalog,
@@ -335,10 +404,17 @@ async def test_verifies_innovation_certification_validity(
         "currently_certified" if expected_match else "not_currently_certified"
     )
     objects = {item.object_type: item for item in result.objects}
-    assert objects["business_registration"].properties["business_registration_number"] == "0000000000"
+    assert (
+        objects["business_registration"].properties["business_registration_number"]
+        == "0000000000"
+    )
     certification = objects["innovation_certification_observation"].properties
-    assert certification["valid_from"] == date.fromisoformat(record["certification_period"].split(" ~ ")[0])
-    assert certification["valid_until"] == date.fromisoformat(record["certification_period"].split(" ~ ")[1])
+    assert certification["valid_from"] == date.fromisoformat(
+        record["certification_period"].split(" ~ ")[0]
+    )
+    assert certification["valid_until"] == date.fromisoformat(
+        record["certification_period"].split(" ~ ")[1]
+    )
     assert any(
         item.link_type == "business_registration_has_innovation_certification"
         for item in result.links

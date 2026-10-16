@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { adminApi, type ApplicationAttempt } from "../../api/admin";
+import { suggestionApi, type ApplicationAttempt } from "../../api/suggestions";
 import { Button } from "../../components/ui/button";
 
 const OUTCOMES: Record<string, string> = {
@@ -17,7 +17,7 @@ export function SuggestionApplicationHistory({ id }: { id: string }) {
     if (!open) return;
     let active = true;
     setLoading(true); setError(null);
-    adminApi.suggestionAttempts(id, after)
+    suggestionApi.suggestionAttempts(id, after)
       .then(page => { if (active) { setItems(previous => after ? [...previous, ...page.items] : page.items); setCursor(page.next_cursor); } })
       .catch(() => { if (active) setError("적용 이력을 조회하지 못했습니다."); })
       .finally(() => { if (active) setLoading(false); });

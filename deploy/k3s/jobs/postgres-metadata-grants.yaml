@@ -1,0 +1,63 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-metadata-grants
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: postgres-metadata-grants
+    spec:
+      containers:
+      - name: postgres-metadata-grants
+        image: postgres:17
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: PGHOST
+          value: postgres
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASE
+          value: teoria_data
+        - name: PGUSER
+          value: teoria_pipeline
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_DATA_DB_PASSWORD
+        command:
+        - sh
+        - -ec
+        - 'psql --set=ON_ERROR_STOP=1 <<''SQL''
+
+          REVOKE ALL ON SCHEMA ingestion FROM teoria_metadata;
+
+          REVOKE ALL ON ALL TABLES IN SCHEMA ingestion FROM teoria_metadata;
+
+          ALTER DEFAULT PRIVILEGES FOR ROLE teoria_pipeline IN SCHEMA ingestion REVOKE
+          ALL ON TABLES FROM teoria_metadata;
+
+          GRANT USAGE ON SCHEMA public_procurement TO teoria_metadata;
+
+          GRANT SELECT ON ALL TABLES IN SCHEMA public_procurement TO teoria_metadata;
+
+          ALTER DEFAULT PRIVILEGES FOR ROLE teoria_pipeline IN SCHEMA public_procurement
+          GRANT SELECT ON TABLES TO teoria_metadata;
+
+          SQL
+
+          '
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      restartPolicy: Never

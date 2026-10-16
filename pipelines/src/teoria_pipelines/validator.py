@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from teoria_provider_api.validator import ProviderContractValidator
+
 from teoria_pipelines.diagnostics import Diagnostic
 from teoria_pipelines.loader import PipelineCatalog
 
@@ -21,7 +22,13 @@ class PipelineValidator:
         if connector_id is not None:
             connector = catalog.connectors.get(connector_id)
             if connector is None:
-                return [Diagnostic("unknown_connector", f"unknown connector '{connector_id}'", catalog.root / "connectors")]
+                return [
+                    Diagnostic(
+                        "unknown_connector",
+                        f"unknown connector '{connector_id}'",
+                        catalog.root / "connectors",
+                    )
+                ]
             connectors = [(connector_id, connector)]
 
         for current_id, registry in connectors:
@@ -54,8 +61,35 @@ class PipelineValidator:
         catalog: PipelineCatalog,
         diagnostics: list[Diagnostic],
     ) -> None:
+        used_connectors = {
+            pipeline.connector for pipeline in catalog.pipelines.values()
+        }
+        for connector_id in sorted(catalog.connectors.keys() - used_connectors):
+            diagnostics.append(
+                Diagnostic(
+                    "missing_connector_pipeline",
+                    f"connector '{connector_id}' has no collection definition",
+                    catalog.connector_paths[connector_id],
+                    location="connector.id",
+                )
+            )
         for pipeline_id, pipeline in catalog.pipelines.items():
             path = catalog.pipeline_paths[pipeline_id]
+            prefix = f"teoria_pipelines.domains.{path.parent.name}."
+            for module in pipeline.flow_modules:
+                if (
+                    not module.startswith(prefix)
+                    or not module.endswith(".flows")
+                    or not all(part.isidentifier() for part in module.split("."))
+                ):
+                    diagnostics.append(
+                        Diagnostic(
+                            "invalid_pipeline_flow_module",
+                            f"flow module '{module}' must belong to '{path.parent.name}'",
+                            path,
+                            location="pipeline.flow_modules",
+                        )
+                    )
             if path.stem != pipeline.id:
                 diagnostics.append(
                     Diagnostic(
@@ -89,7 +123,9 @@ class PipelineValidator:
                         )
 
     @staticmethod
-    def _validate_references(catalog: PipelineCatalog, diagnostics: list[Diagnostic]) -> None:
+    def _validate_references(
+        catalog: PipelineCatalog, diagnostics: list[Diagnostic]
+    ) -> None:
         for connector_id, connector_registry in catalog.connectors.items():
             source_document = connector_registry.connector.specification.source_document
             reference = catalog.references.get(connector_id)

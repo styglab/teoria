@@ -1,212 +1,105 @@
-# Teoria platform guide
+# Teoria 시작과 역할별 작업
 
-Teoria는 OpenMetadata가 관리하는 데이터 자산과 Teoria의 Business Ontology 및
-Capability를 연결해 검증 가능한 business context를 제공한다. 전체 권위 경계는
-[Architecture](architecture/overview.md)를 따른다.
+Teoria는 데이터를 수집하고, OpenMetadata로 자산을 설명하고, Ontology·Binding으로
+업무 의미를 연결한 뒤 Capability와 Context로 요청을 실행한다. 공공조달은 이 경로를
+검증하는 첫 업무 도메인이다. 구성요소의 책임은 [전체 아키텍처](architecture/overview.md)를 따른다.
 
-## 저장소
+## 로컬 스택 시작
 
-| 경로 | 책임 |
-|---|---|
-| `platform/` | Ontology, Binding, Intelligence, Runtime, 직접 Source 실행 |
-| `pipelines/` | Connector, Prefect, raw·정규 적재, Data DB migration |
-| `mcp/` | MCP protocol과 Runtime HTTP client |
-| `packages/provider_api/` | Provider wire 계약과 HTTP 실행 |
-| `deploy/` | 지원되는 Compose와 실험 단계의 k3s 스캐폴드 |
-
-## 로컬 실행
+저장소 루트에서 환경 파일을 복사하고 의존성을 설치한다.
 
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-export TEORIA_ENV_FILE=deploy/compose/.env
 uv sync --locked --all-packages --all-groups
+```
+
+`.env`의 필수 token·DB 암호·Prefect 인증정보와 외부 S3 호환 저장소를 준비한다.
+설정 이름과 기본값은 [환경 설정](deployment/configuration.md), 서비스 시작 조건은
+[Compose](deployment/compose.md)를 따른다.
+
+```bash
 docker compose --env-file deploy/compose/.env \
   -f deploy/compose/compose.yaml up --build -d
 ```
 
-기본 진입점은 다음과 같다.
-
-| 대상 | 주소/명령 |
+| 대상 | 기본 주소 |
 |---|---|
 | Admin UI | `http://localhost:8081/` |
-| Admin API | `http://localhost:8081/admin-api/docs` |
-| Runtime API | `http://localhost:8081/runtime-api/docs` |
-| Prefect | `http://localhost:8081/prefect/` |
-| MCP | `uv run --locked --package teoria-mcp teoria-mcp` |
+| Admin API 문서 | `http://localhost:8081/admin-api/docs` |
+| Runtime API 문서 | `http://localhost:8081/runtime-api/docs` |
+| Prefect UI | `http://localhost:8081/prefect/` |
 
-OpenMetadata는 `metadata` profile로 선택 실행한다. 상세한 환경변수는
-[Configuration](configuration.md), 서비스 운영은 [Deployment](../deploy/README.md)를
-참고한다.
 
-## 주요 작업 흐름
+OpenMetadata가 필요하면 `--profile metadata`를 추가한다. Server는 기본
+`http://localhost:8585/`에서 확인한다. Server 시작만으로 메타데이터 수집이 실행되지는
+않는다. [OpenMetadata 배포](deployment/openmetadata.md) 후 [수집 Job](pipelines/openmetadata.md)을 실행한다.
 
-### 데이터 운영자
+## 데이터 운영자: 수집부터 확인하기
 
-Connector와 Prefect Flow를 관리하고 raw·정규 적재가 모두 성공한 뒤 checkpoint가
-이동하는지 확인한다. [Prefect guide](ingestion/prefect.md)를 따른다.
+수집 코드는 Compose와 K3s가 공유한다. K3s에서는 작업별 Job과 자원 예산·동시 실행 상한으로
+병렬 실행을 제어한다. Compose는 Worker 전체 자원 상한을 사용하며 최신 수집 우선·Backfill
+동시 실행 제한은 양쪽에 적용한다. 공통 정책은 [Prefect 운영](pipelines/prefect.md),
+K3s 설정과 검증 범위는 [K3s 배포](deployment/k3s.md)를 따른다.
 
-수집 코드는 `pipelines/src/teoria_pipelines/domains/<domain>/<feature>/`에서
-Flow·Task·client·정규화를 함께 관리한다. 여러 수집 작업이 사용하는 실행 관리는
-`execution/`, DB·Object Storage 접근은 `persistence/`에 둔다.
-OpenMetadata ingestion Job은 `metadata/`가 소유한다. 새 Prefect 배포는 기능별
-Flow 경로를 사용하며 기존 `flows/` 경로는 호환 진입점으로 유지한다.
-공공조달 개찰 보강은 전체 API 응답을 검증한 뒤 상위 10위·낙찰자 업체 집합과
-정규 저장 결과를 대조해 완료한다. 전체 참가자 수를 저장 대상 수로 사용하지 않는다.
-기존 backlog와 과거 계약 gap은 [Connector guide](ingestion/connectors.md)의
-완료·재검증 기준에 따라 처리한다.
+1. [배포 목록](pipelines/deployments.md)에서 수집 계약·Flow·파라미터를 찾는다.
+2. [Prefect](pipelines/prefect.md)에서 실행하고 실패 Task와 재시도를 확인한다.
+3. 원본 관찰과 정규 적재가 성공한 뒤 checkpoint가 이동했는지 확인한다.
+4. OpenMetadata Job을 실행해 수집된 테이블·view를 catalog에서 찾는다.
 
-### Metadata 관리자
+조달의 최신·보정·Backfill 수집은 [공공조달 수집](pipelines/domains/public_procurement.md),
+법령 원문·시행 버전은 [법령 수집](pipelines/domains/legal_information.md)을 따른다. Flow를 수정할
+때는 [Pipelines 개발 안내](pipelines/development.md)에서 구현과 검증 위치를 찾는다.
 
-Admin UI 현황에서 연결과 작업 상태를 확인한다. 데이터 카탈로그의 자산 상세에서는
-기술·운영·의미·거버넌스 메타데이터를 탭으로 조회하고, 의미 모델에서 온톨로지와
-Semantic Binding을 작성하며, 거버넌스와 검토·적용 화면에서 공백과 변경을 관리한다.
-자산별 제안·의미 연결로
-이동할 때 대상 맥락을 유지하며, 검토·변경 작업은 공통 관리자 연결을 사용한다.
-원천은 각각 OpenMetadata, 수집 Data DB, Teoria Application DB로 유지하며 통합 저장소를
-추가하지 않는다. 운영 연결은 Pipeline의 명시적인 output 계약이며 현재 공공조달
-수집의 적재 audit·checkpoint를 지원한다. 상세한 범위와 미연결·장애 표시는
-[Admin UI](admin-ui.md)를 따른다.
+첨부파일 다운로드·문서 입찰요건 추출·참가자격 판단은 보류되어
+[archive](../archive/bid_document_processing/README.md)에 보관한다. 현재 배포와 API에서 제공하지 않는다.
 
-OpenMetadata에서 asset, schema, glossary, owner와 lineage를 관리한다. Teoria에는
-OpenMetadata entity 본문을 복제하지 않는다.
+## Metadata 관리자: 자산을 이해하고 변경하기
 
-Metadata Intelligence 제안은 제안 검토 화면에서 승인한 뒤 유형별 application service가
-적용한다. description, Glossary Term 생성·할당과 quality test는 OpenMetadata API를
-사용하며 적용 전 대상 version을 다시 확인한다. AI가 직접 승인하거나 OpenMetadata를
-임의 변경하지 않는다.
-인증된 Metadata 관리자는 데이터 자산 상세에서 테이블·컬럼 description 변경안을
-직접 제출할 수 있다. 이 작업은 OpenMetadata를 즉시 수정하지 않고 제출자, 현재
-description과 table version을 포함한 pending Suggestion을 만든다. 검토자가 승인할 때
-현재 version 또는 대상 컬럼의 기존 description을 다시 대조한 뒤 반영한다.
-[자산 진단 Skills](skills/analyze_metadata_asset.md)는 메타데이터 인텔리전스의
-세 작업으로 나눈다. `메타데이터 정비`는 설명·용어를, `업무 의미 연결`은 기존
-Published Ontology와의 Binding을 제안한다. `개방 적합성 진단`은 수집된 법령을
-근거로 정보 분류·개방 상태·보호조치의 검토 초안을 작성한다. 신규 업무 Ontology
-제안은 보류한다. [자산 진단 Worker](architecture/asset_assessment.md)의 첫 구현은
-버튼 요청부터 설명·직접 자산 Binding 제안 등록과 법령 진단 findings까지 제공한다.
-모델 gateway를 설정하고 `intelligence` Compose profile의 Worker를 실행해야 한다.
-자동 Glossary 제안과 태그 적용은 후속 범위다.
+1. [Admin 데이터 카탈로그](platform/admin_ui.md)에서 자산과 컬럼을 찾는다.
+2. [자산 맥락](platform/metadata/asset_context.md)에서 기술·운영·의미·거버넌스 정보를 확인한다.
+3. 설명 변경안을 직접 작성하거나 [자산 진단](platform/metadata/asset_assessment.md)을 요청한다.
+4. [제안 검토·적용](platform/metadata/suggestions.md)에서 현재 값·근거·대상 version을 비교한 뒤 승인하고 적용 결과를 확인한다.
 
-Suggestion 적용은 승인된 제안별 실행권과 만료 시간으로 중복 실행을 막는다.
-변경을 시작하기 전의 실패는 같은 승인으로 재시도할 수 있다. 외부 변경이 시작된
-작업은 결과 확인 전까지 다시 쓰지 않는다. 적용 성공 기록은 최종 상태 갱신과
-분리해 남겨 DB 기록 실패 후 복구할 수 있게 한다. 인증된 검토자는
-`POST /v1/admin/intelligence/suggestions/{suggestion_id}/applications/reconcile`로
-복구한다. 이 경로는 OpenMetadata를 수정하지 않고 성공 기록 또는 현재 description·
-Glossary 할당을 읽어 확인한다. 결과를 증명할 수 없는 생성 작업은 검증 필요로
-유지한다. 재시도·복구 주체와 이전 시도 이력을 Application DB에 기록한다.
-제안 검토 화면은 상태·자산 범위를 서버에서 필터링하고 cursor 페이지 이동으로
-오래된 제안을 조회한다. 실패 시 변경 시작 전에는 `기존 승인으로 다시 적용`
-(`POST /v1/admin/intelligence/suggestions/{suggestion_id}/applications/retry`),
-변경 시작 후에는 `기존 적용 결과 확인`을 사용한다. 활성 실행은 재시도하지 않으며
-원천 변경은 재분석을 안내한다. 생성된 Binding·Ontology 초안 링크는 성공 기록에서
-복원해 새로고침 후에도 유지하고 후속 승인·게시 화면으로 연결한다.
+OpenMetadata entity는 Teoria DB로 복제하지 않는다. AI 결과는 Suggestion이며 승인과
+적용 성공 전에는 권위 metadata가 아니다. 개방 진단은 법령 근거를 가진 검토 초안이며
+법률 적용성이나 공개 승인을 확정하지 않는다. Codex로 작업하려면
+[진단 Skills](skills/analyze_metadata_asset.md)의 별도 실행·제출 절차를 따른다.
 
-### Ontology owner와 Binding reviewer
+## Ontology 담당자: 의미를 연결하고 게시하기
 
-Published version에서 새 Draft를 만들고 review·approval 후 publish한다.
-수정·검토·게시와 Binding 승인은 동일 Ontology의 잠금 규칙을 따른다. 게시할
-본문의 검증·조회·checksum·상태 전환·감사 기록은 같은 트랜잭션에서 처리하며
-동일 Ontology의 Published version은 하나만 허용한다. Binding과
-AI Suggestion은 승인 전까지 권위 정보가 아니다. 상세 계약은
-[Ontology](architecture/ontology.md)를 따른다.
-Ontology 변경 Suggestion 승인도 새 Draft와 변경 항목만 생성하며, 별도의 Ontology
-review·approval·publish 단계를 생략하지 않는다.
+자산과 Glossary를 확인하고 Stable Concept에 Binding을 작성한다. 기본 경로는
+`Physical Asset → OpenMetadata Glossary Term → Teoria Ontology`다. 직접 자산 Binding은
+보조 연결이며 용어 경로보다 우선하지 않는다.
 
-### Capability 개발자
+Binding Draft를 검토·승인하고, Ontology 변경은 현재 Published version에서 새 Draft를
+만들어 검토·승인·게시한다. [Ontology와 이관](platform/ontology.md)을 따른다.
+변경된 의미를 운영 실행에 반영하려면 [Runtime bundle](platform/runtime.md)을 구성·활성화하고 재배포한다.
 
-Runtime Object, Mapping과 Capability를 업무 소유 Domain Registry에 정의한다.
-`domains/<domain>/runtime_contracts/<contract_id>.yaml`에서 폴더는 업무 소유자를,
-파일명과 `runtime_contract.id`는 실행 계약 namespace를 나타낸다. 조달 평가의
-`assessment` 계약과 두 평가 Capability는 `public_procurement`가 소유한다. 직접 실행 API는
-Source, 지속 수집 API는 Connector로 작성한다. [Registry guide](registry/README.md)와
-[Source authoring](registry/source-authoring.md)을 따른다.
+## 개발자: 실행 기능 추가하기
 
-코드로 구현하는 Capability는 `platform/src/teoria/domains/<domain>/`에 두고 해당
-Domain의 `processors.py`에서 handler를 등록한다. 기본 Runtime 구성은
-`runtime/composition.py`가 조립하며 공통 Runner에 processor별 분기를 추가하지 않는다.
-query 결과 후처리도 Domain에 등록한다. 현재 조달 질문 해석·계획·집계와 입찰
-참가 가능성·시장 분석·분류 구현은 `domains/public_procurement/`가 소유한다.
-Context Engine은 query handler를 주입받아 plan과 execute의 정책 검증을 수행한다.
+요청 시 직접 호출하는 API는 [Source](platform/registry/source_authoring.md), 지속 수집하는
+API는 [Connector](pipelines/connectors.md)로 작성한다. Pipeline이 적재한 DB를 조회할 때는
+Database Source와 Mapping을 작성한다. 같은 API를 양쪽에 중복 등록하지 않는다.
 
-시장 분석 코드는 `market_analysis/`의 기능별 하위 폴더와 참여·활동 모듈에서
-찾는다. 세부 소유권은 [시장 분석 모듈 안내](../platform/src/teoria/domains/public_procurement/market_analysis/README.md)를
-따른다. 조달 데이터 profile·shadow 검증과 참가자격 Registry 검증도 같은 Domain이
-소유한다. Admin 서비스 조립은 `admin/composition.py`, Registry의 기본 검증
-조립은 `registry/composition.py`가 담당한다.
+[Platform 개발 안내](platform/development.md)에서 기능의 Domain과 진입점을 찾고,
+[Registry 안내](platform/registry/guide.md)에 따라 Mapping·Capability를 정의한다.
+조달 계산을 바꿀 때는 [집계 기준](platform/domains/public_procurement/contract_aggregation.md)을
+먼저 확인한다. 검증한 계약은 bundle로 발행하고 API version을 확인한다.
 
-Platform 설정은 `src/teoria/settings.py`에서 관리한다. 참가 가능성 평가의
-실행·근거·캐시·판정·결과 생성은 `bid_eligibility/`의 이름 있는 모듈에 나뉘어
-있으며 Domain 테스트도 같은 기능 위치를 따른다. 호환 모듈은 이전 import만
-지원하고 새 구현은 정식 경로를 사용한다.
+## 클라이언트 개발자: 기능 발견과 호출
 
-공공조달 기관·업체 프로필의 참여 분석은 `outcome.participation_analysis`에
-관측 참여·확정 결과·그중 낙찰·성공률의 분자와 분모를 제공한다. 수집 중인
-연도의 미관측 참여는 표시용 `null`과 `수집 중` 상태로 구분하고, 상위 10위와
-원천 응답에 있는 최종 낙찰업체만 보존하는 범위를 명시한다. 전체 성공률은
-추정하지 않는다. 도움말과 화면은 입찰체크에서 구현한다.
+[MCP Gateway](mcp/gateway.md) 또는 Runtime HTTP API로 공개 Capability를 발견한다.
+질문의 의미 조회·계획·실행은 [Context](platform/context.md)를 참고한다.
+입력 schema는 discovery에서 가져오고 결과의 provenance·페이지·부분 실패를 확인한다.
+외부 서비스의 권장 호출 순서는 [입찰체크 연동](integration/bid-check-service.md)을 따른다.
+MCP에는 Source 키나 DB 권한을 주지 않는다.
 
-공공조달 기관·업체 프로필의 계약 건수, 변경계약 병합, 연도 귀속과 공동수급 금액은
-[공공조달 계약 집계 기준](domains/public_procurement/contract_aggregation.md)을 따른다.
-이 규칙은 첫 vertical의 Domain 규칙이며 Platform 공통 집계 규칙으로 간주하지 않는다.
-물품·용역·공사의 현재 분야 표시 기준과 향후 버전형 분류체계의 범위는
-[공공조달 분야 분류 기준과 확장 계획](domains/public_procurement/procurement_classification.md)에
-정의한다.
+## 변경 검증과 다음 단계
 
-### API/MCP 사용자
+프로젝트별 테스트와 계약 검증은 [Platform](platform/development.md),
+[Pipelines](pipelines/development.md), [MCP](mcp/gateway.md),
+[Provider API](packages/provider_api.md)의 개발 안내를 따른다.
+과거 종단 실행 결과는 [검증 기록](verification/index.md), 남은 제품 결과는
+[로드맵](roadmap.md), 전체 문서 탐색은 [목차](index.md)에서 확인한다.
 
-배포된 Runtime의 `/v1/capabilities`에서 사용할 수 있는 Capability와 입력 schema를
-조회하고 `/v1/capabilities/{id}:execute`를 호출한다. MCP는 같은 Runtime API의
-protocol adapter다.
-
-Admin Context API는 `/v1/admin/context/plan`에서 질문의 concept, Capability,
-입력, artifact와 정책 결정을 포함한 Semantic Query Plan을 반환하고,
-`/v1/admin/context/execute`에서 동일 질문을 다시 계획·검증한 뒤 실행한다.
-기존 `/v1/admin/context/query`는 호환용 deprecated alias다. Runtime Capability와
-Context 계획·실행은 OPA 결정을 통과해야 하며 Compose는 OPA 장애 시 fail-closed한다.
-정책 변경은 `deploy/compose/opa/bundle/`에서 수행한다. Compose의 bundle build job은
-Rego 검사·테스트 후 RSA 서명 Bundle을 만들며 OPA는 서명과 scope를 검증한 뒤에만
-활성화한다. 실행 입력은 masking policy로 decision log에서 제거하고 결정 ID, actor,
-action, resource, 결과와 bundle revision은 Application DB audit에 보존한다.
-
-## 검증
-
-```bash
-uv run --locked --package teoria-provider-api pytest packages/provider_api/tests
-uv run --locked --package teoria-platform pytest platform/tests
-uv run --locked --package teoria-pipelines pytest pipelines/tests
-uv run --locked --package teoria-mcp pytest mcp/tests
-uv run --locked --package teoria-platform teoria validate platform/registries
-uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
-docker compose -f deploy/compose/compose.yaml config --quiet
-```
-
-## 법령 근거 수집 기반
-
-법제처 법령 목록·본문은 `pipelines`의 `legal_information/laws`에서 수집한다.
-법령 ID·MST·시행일을 구분하고 원문 hash와 파서 버전별 snapshot을 Data DB에
-보존한다. 이 단계는 근거 저장소이며 Business Ontology, 법률 판정, 위험등급
-태깅과 OpenMetadata 적용 기능을 제공하지 않는다.
-[법령 수집 실행 및 경계](ingestion/law_collection.md)를 참고한다.
-
-### 데이터 관측 근거와 법령 검색
-
-Data Assets 상세에서 OpenMetadata 저장 샘플·최신 프로파일을 조회한다.
-샘플 값은 기본적으로 가리고 `metadata_sample_reader` 역할이 있을 때만 원천이
-허용한 값을 표시한다. 미수집과 권한 오류를 구분하며 Teoria DB에는 복제하지 않는다.
-[샘플·프로파일 조회](ingestion/metadata_data_evidence.md)를 참고한다.
-
-법령 검색은 인증된 Admin API의 키워드 검색과 snapshot 기반 문서 조회로 시작한다.
-아직 Runtime Capability·MCP Tool 또는 임베딩 검색 기능은 아니다.
-[검색 계약](ingestion/law_collection.md)을 참고한다.
-운영 OpenMetadata와 저장소의 배포 기본값은 격리·운영 검증한 2.0.5다.
-운영 DB 복원·마이그레이션과 Teoria API 호환 검증 결과는
-[업그레이드 검토](architecture/openmetadata_upgrade_assessment.md)에 정리했다.
-
-제안 검토 화면은 제안 당시 설명 근거와 OpenMetadata에서 읽은 현재 값을 구분하고,
-자산 버전 변경을 안내한다. 적용 이력은 인증된 조회 API로 시도별 실행자·시각·결과와
-오류 코드를 페이지 조회한다. 최신 자산 조회는 일시 응답이며 DB에 복제하지 않는다.
-이력 조회나 비교는 승인·재시도·결과 복구를 실행하지 않는다.
-
-Admin은 데이터 자산 목록을 기준으로 공통 페이지 틀·제목·검색·필터를 사용한다.
-온톨로지는 버전 탐색과 개념 목록·속성 펼침·관계도·버전 검토를 같은 화면에서 제공한다.
+EC2의 K3s 배포와 main push 자동 배포는 [K3s 배포 안내](deployment/k3s.md)를 따른다.

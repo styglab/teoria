@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  provider:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --locked --package teoria-provider-api pytest packages/provider_api/tests
+
+  admin-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform/admin_ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: platform/admin_ui/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --locked --package teoria-platform pytest platform/tests
+      - run: uv run --locked --package teoria-platform teoria validate platform/registries
+
+  platform-app-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: teoria_app
+          POSTGRES_USER: teoria_test
+          POSTGRES_PASSWORD: teoria_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U teoria_test -d teoria_app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEORIA_TEST_APP_DATABASE_URL: postgresql://teoria_test:teoria_test@localhost:5432/teoria_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --locked --package teoria-platform pytest platform/tests/integration
+
+  pipelines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --locked --package teoria-pipelines pytest pipelines/tests
+      - run: uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: teoria_data
+          POSTGRES_USER: teoria_test
+          POSTGRES_PASSWORD: teoria_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U teoria_test -d teoria_data"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEORIA_TEST_DATA_DATABASE_URL: postgresql://teoria_test:teoria_test@localhost:5432/teoria_data
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Initialize database roles
+        run: |
+          uv run --locked --package teoria-pipelines python - <<'PY'
+          import os
+          import psycopg
+
+          with psycopg.connect(os.environ["TEORIA_TEST_DATA_DATABASE_URL"], autocommit=True) as connection:
+              connection.execute("CREATE ROLE teoria_pipeline")
+              connection.execute("CREATE ROLE teoria_runtime")
+          PY
+      - run: uv run --locked --package teoria-pipelines --group validation pytest tests/integration
+      - run: uv run --locked --package teoria-pipelines --group validation teoria-pipelines validate-integration pipelines --platform-registries platform/registries
+
+  deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Docker Compose
+        env:
+          TEORIA_LOCAL_RUNTIME_DB_PASSWORD: validation
+          TEORIA_OBJECT_STORAGE_ACCESS_KEY: validation
+          TEORIA_OBJECT_STORAGE_ENDPOINT: http://object-storage.invalid
+          TEORIA_OBJECT_STORAGE_SECRET_KEY: validation
+          TEORIA_OPA_CONTROL_PLANE_TOKEN: validation
+          TEORIA_PREFECT_PASSWORD: validation
+          TEORIA_PREFECT_USERNAME: validation
+          TEORIA_RUNTIME_API_TOKEN: validation
+        run: docker compose -f deploy/compose/compose.yaml config --quiet
+      - name: Validate OpenMetadata Compose profile
+        env:
+          TEORIA_LOCAL_RUNTIME_DB_PASSWORD: validation
+          TEORIA_OBJECT_STORAGE_ACCESS_KEY: validation
+          TEORIA_OBJECT_STORAGE_ENDPOINT: http://object-storage.invalid
+          TEORIA_OBJECT_STORAGE_SECRET_KEY: validation
+          TEORIA_OPA_CONTROL_PLANE_TOKEN: validation
+          TEORIA_PREFECT_PASSWORD: validation
+          TEORIA_PREFECT_USERNAME: validation
+          TEORIA_RUNTIME_API_TOKEN: validation
+        run: >-
+          docker compose
+          -f deploy/compose/compose.yaml
+          --profile metadata
+          config --quiet
+
+  mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv run --locked --package teoria-mcp pytest mcp/tests

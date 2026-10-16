@@ -5,7 +5,10 @@ from copy import deepcopy
 from datetime import date, datetime, timezone
 from typing import Any
 
-from teoria.runtime.capability.contracts import CapabilityExecutionError, CapabilityResult
+from teoria.runtime.capability.contracts import (
+    CapabilityExecutionError,
+    CapabilityResult,
+)
 from teoria.runtime.capability.handlers import CapabilityHandlers
 
 from teoria.runtime.capability.binder import CapabilityBinder
@@ -69,7 +72,11 @@ class CapabilityRunner:
     ) -> CapabilityResult:
         capability = catalog.capabilities.get(capability_id)
         if capability is None:
-            raise CapabilityExecutionError("unknown_capability", f"unknown capability '{capability_id}'", capability_id=capability_id)
+            raise CapabilityExecutionError(
+                "unknown_capability",
+                f"unknown capability '{capability_id}'",
+                capability_id=capability_id,
+            )
         if capability.lifecycle.status == "deprecated":
             raise CapabilityExecutionError(
                 "deprecated_capability",
@@ -79,7 +86,12 @@ class CapabilityRunner:
             )
         try:
             async with asyncio.timeout(self.timeout_seconds):
-                return await self._run(catalog, capability_id, inputs, include_raw_responses=include_raw_responses)
+                return await self._run(
+                    catalog,
+                    capability_id,
+                    inputs,
+                    include_raw_responses=include_raw_responses,
+                )
         except TimeoutError as exc:
             raise CapabilityExecutionError(
                 "capability_timeout",
@@ -106,8 +118,16 @@ class CapabilityRunner:
                     capability_id=capability_id,
                 )
             return await handler(self, catalog, capability_id, inputs)
-        allowed_objects = {item.split(".", 1)[1] for item in capability.returns if self._is_object(catalog, item)}
-        allowed_links = {item.split(".", 1)[1] for item in capability.returns if not self._is_object(catalog, item)}
+        allowed_objects = {
+            item.split(".", 1)[1]
+            for item in capability.returns
+            if self._is_object(catalog, item)
+        }
+        allowed_links = {
+            item.split(".", 1)[1]
+            for item in capability.returns
+            if not self._is_object(catalog, item)
+        }
         fragments: list[MappedFragment] = []
         raw_responses: list[ExecutionResponse] = []
         observed_at = datetime.now(timezone.utc)
@@ -121,12 +141,8 @@ class CapabilityRunner:
             if source.source.type == "database":
                 query = self.binder.bind(catalog, capability, step, inputs)
                 try:
-                    database_result = await asyncio.to_thread(
-                        self.database_executor.execute,
-                        catalog,
-                        source_id,
-                        operation_id,
-                        query,
+                    database_result = await self.database_executor.execute(
+                        catalog, source_id, operation_id, query
                     )
                 except DatabaseSourceExecutionError as exc:
                     raise CapabilityExecutionError(
@@ -140,14 +156,20 @@ class CapabilityRunner:
                     rows = database_result.rows
                     if database_result.pagination is not None:
                         result_pagination = database_result.pagination
-                        pagination_by_step[step.id or operation_id] = database_result.pagination
+                        pagination_by_step[step.id or operation_id] = (
+                            database_result.pagination
+                        )
                 else:
                     rows = database_result
-                fragments.extend(self.decoder.decode_database_rows(
-                    catalog, source_id, operation_id, rows
-                ))
+                fragments.extend(
+                    self.decoder.decode_database_rows(
+                        catalog, source_id, operation_id, rows
+                    )
+                )
                 continue
-            operation = next(item for item in source.source.operations if item.id == operation_id)
+            operation = next(
+                item for item in source.source.operations if item.id == operation_id
+            )
             base_input = self.binder.bind(catalog, capability, step, inputs)
             page = 1
             while True:
@@ -162,8 +184,12 @@ class CapabilityRunner:
                     )
                 input_data = deepcopy(base_input)
                 if operation.pagination:
-                    self._set_request_value(input_data, operation.pagination.page.request, page)
-                request = self.request_builder.build(catalog, source_id, operation_id, input_data)
+                    self._set_request_value(
+                        input_data, operation.pagination.page.request, page
+                    )
+                request = self.request_builder.build(
+                    catalog, source_id, operation_id, input_data
+                )
                 try:
                     response = await self.executor.execute(request)
                 except ProviderExecutionError as exc:
@@ -177,7 +203,9 @@ class CapabilityRunner:
                         attempts=exc.attempts,
                         retryable=exc.retryable,
                     ) from exc
-                diagnostics = self.response_validator.validate(catalog, source_id, operation_id, response)
+                diagnostics = self.response_validator.validate(
+                    catalog, source_id, operation_id, response
+                )
                 if diagnostics:
                     raise CapabilityExecutionError(
                         "source_response_invalid",
@@ -190,40 +218,69 @@ class CapabilityRunner:
                 if include_raw_responses:
                     raw_responses.append(response)
                 if self.response_validator.is_no_data(
-                    catalog, source_id, operation_id, response,
+                    catalog,
+                    source_id,
+                    operation_id,
+                    response,
                 ):
                     break
                 outcome = capability.outcome
-                outcome_field = outcome.response_field if outcome and outcome.type == "exact_match_presence" else (
-                    outcome.period_field if outcome and outcome.type == "active_period_presence" else None
+                outcome_field = (
+                    outcome.response_field
+                    if outcome and outcome.type == "exact_match_presence"
+                    else (
+                        outcome.period_field
+                        if outcome and outcome.type == "active_period_presence"
+                        else None
+                    )
                 )
-                if outcome and outcome_field and outcome_field.startswith(f"{source_id}.{operation_id}.response."):
+                if (
+                    outcome
+                    and outcome_field
+                    and outcome_field.startswith(
+                        f"{source_id}.{operation_id}.response."
+                    )
+                ):
                     field = outcome_field.split(".", 3)[3]
-                    records = self.decoder._resolve_path(response.body, operation.response.data.record_path)
+                    records = self.decoder._resolve_path(
+                        response.body, operation.response.data.record_path
+                    )
                     if not isinstance(records, list):
                         records = [records]
                     if outcome.type == "exact_match_presence":
                         expected = str(inputs[outcome.input])
                         outcome_matched = outcome_matched or any(
-                            str(self.decoder._resolve_path(record, field, missing="")) == expected
+                            str(self.decoder._resolve_path(record, field, missing=""))
+                            == expected
                             for record in records
                         )
                     else:
                         outcome_matched = outcome_matched or any(
                             self._period_contains(
-                                self.decoder._resolve_path(record, field, missing=""), observed_at.date()
+                                self.decoder._resolve_path(record, field, missing=""),
+                                observed_at.date(),
                             )
                             for record in records
                         )
-                fragments.extend(self.decoder.decode(
-                    catalog, source_id, operation_id, response,
-                    request=request, record_key_prefix=str(page)
-                ))
-                if not operation.pagination or not self._has_next_page(operation, request, response, page):
+                fragments.extend(
+                    self.decoder.decode(
+                        catalog,
+                        source_id,
+                        operation_id,
+                        response,
+                        request=request,
+                        record_key_prefix=str(page),
+                    )
+                )
+                if not operation.pagination or not self._has_next_page(
+                    operation, request, response, page
+                ):
                     break
                 page += 1
 
-        objects, links = self.materializer.materialize(catalog, fragments, observed_at, allowed_objects, allowed_links)
+        objects, links = self.materializer.materialize(
+            catalog, fragments, observed_at, allowed_objects, allowed_links
+        )
         outcome_result = None
         if capability.outcome:
             outcome_result = {
@@ -244,7 +301,9 @@ class CapabilityRunner:
             responses=raw_responses if include_raw_responses else None,
             outcome=outcome_result,
             pagination=result_pagination if len(pagination_by_step) <= 1 else None,
-            pagination_by_step=pagination_by_step if len(pagination_by_step) > 1 else None,
+            pagination_by_step=pagination_by_step
+            if len(pagination_by_step) > 1
+            else None,
         )
         hook = self.handlers.query_hook(capability_id)
         if hook is not None:
@@ -264,19 +323,25 @@ class CapabilityRunner:
             return False
         return start <= reference_date <= end
 
-    def _has_next_page(self, operation: Any, request: Any, response: ExecutionResponse, page: int) -> bool:
+    def _has_next_page(
+        self, operation: Any, request: Any, response: ExecutionResponse, page: int
+    ) -> bool:
         pagination = operation.pagination
         total = int(self.decoder._resolve_path(response.body, pagination.total_count))
         if total == 0:
             return False
         section, field = pagination.page_size.request.split(".", 1)
         page_size = int(getattr(request, section).get(field, 0))
-        records = self.decoder._resolve_path(response.body, operation.response.data.record_path)
+        records = self.decoder._resolve_path(
+            response.body, operation.response.data.record_path
+        )
         returned = len(records) if isinstance(records, list) else 1
         return returned > 0 and page_size > 0 and page * page_size < total
 
     @staticmethod
-    def _set_request_value(input_data: dict[str, Any], reference: str, value: Any) -> None:
+    def _set_request_value(
+        input_data: dict[str, Any], reference: str, value: Any
+    ) -> None:
         section, field = reference.split(".", 1)
         input_data.setdefault(section, {})[field] = value
 

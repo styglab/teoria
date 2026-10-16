@@ -1,7 +1,6 @@
 import ast
 from pathlib import Path
 
-
 SOURCE_ROOT = Path(__file__).parents[2] / "src" / "teoria_pipelines"
 PLATFORM_INTEGRATION_MODULES = {"cli.py"}
 
@@ -23,9 +22,9 @@ def test_pipeline_runtime_does_not_import_platform() -> None:
     assert violations == []
 
 
-def test_execution_and_checkpoint_packages_do_not_import_domains() -> None:
+def test_infrastructure_packages_do_not_import_domains() -> None:
     violations = []
-    for package in ("execution", "checkpoints"):
+    for package in ("execution", "checkpoints", "persistence"):
         for path in (SOURCE_ROOT / package).rglob("*.py"):
             for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
                 if isinstance(node, ast.ImportFrom) and node.module:
@@ -39,18 +38,42 @@ def test_execution_and_checkpoint_packages_do_not_import_domains() -> None:
     assert violations == []
 
 
-def test_eligibility_validation_and_repair_have_no_orchestration_or_storage_imports() -> None:
-    package = SOURCE_ROOT / "domains/public_procurement/bid_eligibility"
-    paths = [package / "validation.py", package / "structured.py", *sorted((package / "repair").glob("*.py"))]
-    forbidden = ("prefect", "psycopg", "subprocess", "teoria_pipelines.persistence", "teoria_pipelines.execution")
+def test_generic_models_do_not_import_domains() -> None:
+    tree = ast.parse((SOURCE_ROOT / "models.py").read_text(encoding="utf-8"))
+    assert not any(
+        isinstance(node, ast.ImportFrom)
+        and node.module
+        and node.module.startswith("teoria_pipelines.domains.")
+        for node in ast.walk(tree)
+    )
+
+
+def test_prefect_tasks_do_not_implement_postgres_access() -> None:
     violations = []
-    for path in paths:
+    for path in (SOURCE_ROOT / "domains").rglob("*tasks.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             names = []
-            if isinstance(node, ast.ImportFrom) and node.module:
+            if isinstance(node, ast.Import):
+                names = [item.name for item in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module]
-            elif isinstance(node, ast.Import):
-                names = [alias.name for alias in node.names]
-            if any(name == prefix or name.startswith(prefix + ".") for name in names for prefix in forbidden):
-                violations.append(f"{path.relative_to(SOURCE_ROOT)}:{node.lineno}")
+            if any(name == "psycopg" or name.startswith("psycopg.") for name in names):
+                violations.append(str(path.relative_to(SOURCE_ROOT)))
+    assert violations == []
+
+
+def test_feature_repositories_do_not_aggregate_other_features() -> None:
+    root = SOURCE_ROOT / "domains/public_procurement"
+    violations = []
+    prefix = "teoria_pipelines.domains.public_procurement."
+    for path in root.glob("*/repository.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and node.module.startswith(prefix)
+            ):
+                relative = node.module.removeprefix(prefix).split(".")
+                if len(relative) > 1 and relative[0] != path.parent.name:
+                    violations.append(str(path.relative_to(SOURCE_ROOT)))
     assert violations == []

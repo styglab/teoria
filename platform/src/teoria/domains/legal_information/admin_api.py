@@ -4,37 +4,54 @@ from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
-from starlette.concurrency import run_in_threadpool
 
 from teoria.admin.auth import AdminAuthorizer
 from teoria.domains.legal_information.search import LawSearchReader, LawSearchRequest
 
 
-def create_law_search_router(reader: LawSearchReader | None, authorizer: AdminAuthorizer) -> APIRouter:
-    router = APIRouter(prefix="/v1/admin/legal-information", tags=["legal-information"],
-                       dependencies=[Depends(authorizer.require())])
+def create_law_search_router(
+    reader: LawSearchReader | None, authorizer: AdminAuthorizer
+) -> APIRouter:
+    router = APIRouter(
+        prefix="/v1/admin/legal-information",
+        tags=["legal-information"],
+        dependencies=[Depends(authorizer.require())],
+    )
 
     def require_reader():
         if reader is None:
-            raise HTTPException(status_code=503, detail={"code": "law_search_database_not_configured"})
+            raise HTTPException(
+                status_code=503, detail={"code": "law_search_database_not_configured"}
+            )
         return reader
 
-    @router.post("/search")
+    @(router.post("/search"))
     async def search(request: LawSearchRequest):
         try:
-            return await run_in_threadpool(require_reader().search, request)
+            return await require_reader().search(request)
         except psycopg.Error:
-            raise HTTPException(status_code=503, detail={"code": "law_search_database_unavailable"}) from None
+            raise HTTPException(
+                status_code=503, detail={"code": "law_search_database_unavailable"}
+            ) from None
 
     @router.get("/documents/{snapshot_id}")
-    async def document(snapshot_id: UUID, path: str = Query(..., min_length=1, max_length=1000),
-                       max_chars: int = Query(20000, ge=1000, le=50000)):
+    async def document(
+        snapshot_id: UUID,
+        path: str = Query(..., min_length=1, max_length=1000),
+        max_chars: int = Query(20000, ge=1000, le=50000),
+    ):
         try:
-            result = await run_in_threadpool(require_reader().get_document, snapshot_id, path, max_chars=max_chars)
+            result = await require_reader().get_document(
+                snapshot_id, path, max_chars=max_chars
+            )
         except psycopg.Error:
-            raise HTTPException(status_code=503, detail={"code": "law_search_database_unavailable"}) from None
+            raise HTTPException(
+                status_code=503, detail={"code": "law_search_database_unavailable"}
+            ) from None
         if result is None:
-            raise HTTPException(status_code=404, detail={"code": "law_document_not_found"})
+            raise HTTPException(
+                status_code=404, detail={"code": "law_document_not_found"}
+            )
         return result
 
     return router

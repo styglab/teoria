@@ -1,5 +1,7 @@
 pipeline:
   id: pps_contract_ingestion
+  flow_modules:
+    - teoria_pipelines.domains.public_procurement.contracts.flows
   description: 조달청 나라장터 계약정보 API를 날짜 구간별로 수집하고 정규화하여 조달계약 데이터 저장소에 적재한다.
   connector: pps_contract_api
   operations:

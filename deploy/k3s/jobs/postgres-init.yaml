@@ -1,0 +1,65 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-init
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: postgres-init
+    spec:
+      containers:
+      - name: postgres-init
+        image: postgres:17
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: PGHOST
+          value: postgres
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASE
+          value: teoria_data
+        - name: PGUSER
+          value: teoria_pipeline
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_DATA_DB_PASSWORD
+        - name: TEORIA_LOCAL_RUNTIME_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_RUNTIME_DB_PASSWORD
+        - name: TEORIA_METADATA_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_METADATA_DB_PASSWORD
+        command:
+        - sh
+        - -ec
+        - "psql --set=ON_ERROR_STOP=1 \\\n  --set=runtime_password=\"${TEORIA_LOCAL_RUNTIME_DB_PASSWORD}\"\
+          \ \\\n  --set=metadata_password=\"${TEORIA_METADATA_DB_PASSWORD}\" <<'SQL'\n\
+          SELECT format('CREATE ROLE teoria_runtime LOGIN PASSWORD %L', :'runtime_password')\n\
+          WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_runtime')\n\
+          \\gexec\nALTER ROLE teoria_runtime PASSWORD :'runtime_password';\nALTER\
+          \ ROLE teoria_runtime SET statement_timeout = '30s';\nSELECT format('CREATE\
+          \ ROLE teoria_metadata LOGIN PASSWORD %L', :'metadata_password')\nWHERE\
+          \ NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_metadata')\n\
+          \\gexec\nALTER ROLE teoria_metadata PASSWORD :'metadata_password';\nALTER\
+          \ ROLE teoria_metadata SET statement_timeout = '60s';\nGRANT CONNECT ON\
+          \ DATABASE teoria_data TO teoria_metadata;\nSQL\n"
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      restartPolicy: Never

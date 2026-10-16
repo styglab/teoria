@@ -17,7 +17,7 @@ Validate the MCP boundary independently from direct Platform calls. Report separ
    ```
 
 3. Confirm `.codex/config.toml` contains the `teoria` MCP server. Do not print credentials or complete database URLs.
-4. Confirm the Data DB is running. Start or modify services only when the user requested it.
+4. Confirm the Runtime API is reachable and its Data DB dependency is running. MCP receives only Runtime API credentials. Start or modify services only when the user requested it.
 5. Run the bundled protocol smoke test:
 
    ```bash
@@ -43,8 +43,8 @@ Validate the MCP boundary independently from direct Platform calls. Report separ
 
 - MCP unit tests pass.
 - MCP `initialize` and `tools/list` succeed.
-- The three public-procurement Tools are exposed.
+- The configured public Capability tools are exposed, including `search_public_procurement_contracts`.
 - `search_public_procurement_contracts` returns a successful MCP result.
 - For company lookup requests, the expected ontology objects and links are present.
 
-The current development setup uses embedded Runtime compatibility. Treat embedded DB access as temporary; do not redesign it into the target architecture where MCP calls the Runtime HTTP API.
+MCP supports remote mode only and calls the Runtime HTTP API. Do not inject Database credentials, Source keys or Registry execution into the gateway.

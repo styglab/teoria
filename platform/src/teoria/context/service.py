@@ -44,15 +44,20 @@ class ContextEngine:
         if query_handler is None:
             from teoria.context.composition import create_query_handler
 
-            query_handler = create_query_handler(self.resolve, runtime_client, self.policy)
+            query_handler = create_query_handler(
+                self.resolve, runtime_client, self.policy
+            )
         self.query_handler = query_handler
 
-    async def resolve(self, term: str, *, purpose: str | None = None) -> dict[str, Any] | None:
-        resolved = self.repository.resolve_property(term)
+    async def resolve(
+        self, term: str, *, purpose: str | None = None
+    ) -> dict[str, Any] | None:
+        resolved = await self.repository.resolve_property(term)
         if resolved is None:
             return None
         metadata_bindings = [
-            item for item in resolved["bindings"]
+            item
+            for item in resolved["bindings"]
             if item["target_type"] in {"glossary_term", "data_asset"}
         ]
         api_fields = [
@@ -67,10 +72,12 @@ class ContextEngine:
                 "authority": item["authority"],
                 "priority": item["priority"],
             }
-            for item in resolved["bindings"] if item["target_type"] == "api_field"
+            for item in resolved["bindings"]
+            if item["target_type"] == "api_field"
         ]
         capability_bindings = [
-            item for item in resolved["bindings"] + resolved["object_capabilities"]
+            item
+            for item in resolved["bindings"] + resolved["object_capabilities"]
             if item["target_type"].startswith("capability")
         ]
         seen_capabilities: set[tuple[str, str, str | None]] = set()
@@ -81,24 +88,30 @@ class ContextEngine:
                 continue
             seen_capabilities.add(identity)
             capabilities.append(
-            {
-                "capability_id": item["capability_id"],
-                "scope": item["target_scope"],
-                "field_path": item["field_path"],
-                "contract_version": item["contract_version"],
-                "registry_version": item["registry_version"],
-                "binding_type": item["binding_type"],
-                "purpose": item["purpose"],
-                "authority": item["authority"],
-                "priority": item["priority"],
-            }
+                {
+                    "capability_id": item["capability_id"],
+                    "scope": item["target_scope"],
+                    "field_path": item["field_path"],
+                    "contract_version": item["contract_version"],
+                    "registry_version": item["registry_version"],
+                    "binding_type": item["binding_type"],
+                    "purpose": item["purpose"],
+                    "authority": item["authority"],
+                    "priority": item["priority"],
+                }
             )
         capabilities.sort(key=lambda item: (item["priority"], item["capability_id"]))
-        selected_route = self._select_route(capabilities, purpose=purpose) if purpose else None
+        selected_route = (
+            self._select_route(capabilities, purpose=purpose) if purpose else None
+        )
         metadata, warnings = await self._metadata(metadata_bindings)
         if not api_fields and not metadata_bindings:
             warnings.append("no_approved_api_field_binding")
-        metadata_update_values = [item["table_updated_at"] for item in metadata if item.get("table_updated_at")]
+        metadata_update_values = [
+            item["table_updated_at"]
+            for item in metadata
+            if item.get("table_updated_at")
+        ]
         result = {
             "query": term,
             "concept": {
@@ -108,7 +121,7 @@ class ContextEngine:
                 "value_type": resolved["value_type"],
                 "unit": resolved["unit"],
                 "business_object": {
-                    "stable_key": f'{resolved["namespace"]}.{resolved["object_code"]}',
+                    "stable_key": f"{resolved['namespace']}.{resolved['object_code']}",
                     "name": resolved["object_name"],
                 },
             },
@@ -133,10 +146,13 @@ class ContextEngine:
                 }
                 for item in resolved["bindings"]
             ],
-            "metadata_updated_at": max(metadata_update_values) if metadata_update_values else None,
+            "metadata_updated_at": max(metadata_update_values)
+            if metadata_update_values
+            else None,
             "data_freshness": None,
             "data_freshness_status": "unavailable",
-            "warnings": warnings + ([] if capabilities else ["no_approved_capability_binding"]),
+            "warnings": warnings
+            + ([] if capabilities else ["no_approved_capability_binding"]),
         }
         return result
 
@@ -162,7 +178,9 @@ class ContextEngine:
         if not decision.allow:
             raise PolicyDeniedError(decision)
         plan = await self.query_handler.plan(
-            question, as_of=resolved_as_of, principal=principal,
+            question,
+            as_of=resolved_as_of,
+            principal=principal,
         )
         plan["policy"] = decision.model_dump(mode="json")
         return plan
@@ -176,7 +194,10 @@ class ContextEngine:
         roles: frozenset[str] = frozenset(),
     ) -> dict[str, Any]:
         plan = await self.plan(
-            question, as_of=as_of, actor=actor, roles=roles,
+            question,
+            as_of=as_of,
+            actor=actor,
+            roles=roles,
         )
         principal = PolicyPrincipal(actor=actor, roles=roles, service="admin-api")
         decision = await self.policy_evaluator.decide(
@@ -195,17 +216,23 @@ class ContextEngine:
         return await self.query_handler.execute(plan, principal, decision)
 
     @staticmethod
-    def _select_route(capabilities: list[dict[str, Any]], *, purpose: str) -> dict[str, Any] | None:
+    def _select_route(
+        capabilities: list[dict[str, Any]], *, purpose: str
+    ) -> dict[str, Any] | None:
         candidates = [item for item in capabilities if item.get("purpose") == purpose]
         if not candidates:
             return None
-        selected = min(candidates, key=lambda item: (item["priority"], item["capability_id"]))
+        selected = min(
+            candidates, key=lambda item: (item["priority"], item["capability_id"])
+        )
         return {
             **selected,
             "selection_reason": f"approved_{purpose}_binding_with_lowest_priority",
         }
 
-    async def _metadata(self, bindings: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    async def _metadata(
+        self, bindings: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], list[str]]:
         items = []
         warnings: list[str] = []
         for binding in bindings:
@@ -216,17 +243,25 @@ class ContextEngine:
                 "last_verified_at": binding["last_verified_at"],
                 "available": self.metadata_client is not None,
             }
-            if self.metadata_client and binding["entity_type"] == "column" and binding["fully_qualified_name"]:
+            if (
+                self.metadata_client
+                and binding["entity_type"] == "column"
+                and binding["fully_qualified_name"]
+            ):
                 table_fqn = binding["fully_qualified_name"].rsplit(".", 1)[0]
                 try:
                     table = await self.metadata_client.get_table_by_name(table_fqn)
                     item["table_description"] = table.get("description")
                     updated_at = table.get("updatedAt")
                     if isinstance(updated_at, (int, float)):
-                        updated_at = datetime.fromtimestamp(updated_at / 1000, tz=timezone.utc).isoformat()
+                        updated_at = datetime.fromtimestamp(
+                            updated_at / 1000, tz=timezone.utc
+                        ).isoformat()
                     item["table_updated_at"] = updated_at
                     item["quality"] = {
-                        "status": "available" if table.get("testSuite") else "unavailable",
+                        "status": "available"
+                        if table.get("testSuite")
+                        else "unavailable",
                         "test_suite": table.get("testSuite"),
                     }
                 except OpenMetadataError as exc:

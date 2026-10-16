@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import psycopg
+from teoria.persistence.postgres import connect
 from psycopg.rows import dict_row
 
 from teoria.binding.repository import BindingRepository
@@ -14,12 +14,15 @@ class RuntimeBundleSnapshotRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
 
-    def snapshot(
-        self, *, ontology_namespaces: set[str] | None = None,
+    async def snapshot(
+        self,
+        *,
+        ontology_namespaces: set[str] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            rows = connection.execute(
-                """
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            rows = await (
+                await connection.execute(
+                    """
                 SELECT o.namespace,v.version,a.artifact_id,a.schema_version,
                        a.checksum,a.content,a.created_at
                   FROM ontology.runtime_artifacts a
@@ -28,6 +31,7 @@ class RuntimeBundleSnapshotRepository:
                  WHERE v.status='published'
                  ORDER BY o.namespace,v.version
                 """
+                )
             ).fetchall()
         ontologies = [_jsonable(dict(row)) for row in rows]
         if ontology_namespaces is not None:
@@ -39,12 +43,13 @@ class RuntimeBundleSnapshotRepository:
                 raise ValueError(
                     f"published Ontology namespace not found: {', '.join(sorted(missing))}"
                 )
-        bindings = BindingRepository(self.database_url).list_bindings(
+        bindings = await BindingRepository(self.database_url).list_bindings(
             status="approved", limit=100_000
         )
         if ontology_namespaces is not None:
             bindings = [
-                item for item in bindings
+                item
+                for item in bindings
                 if item["ontology_namespace"] in ontology_namespaces
             ]
         return ontologies, bindings

@@ -1,0 +1,139 @@
+registry:
+  version: 1.3.0
+  registered_at: "2026-10-10"
+
+mapping:
+  id: bid_notices
+  name: 입찰공고 매핑
+  description: Runtime 입찰공고 View를 입찰공고와 공고기관 객체로 변환한다.
+  ontology: public_procurement
+  bindings:
+    bid_notice.bid_notice_id:
+      - {field: teoria_public_procurement.bid_notices.bid_notice_id}
+    bid_notice.notice_number:
+      - {field: teoria_public_procurement.bid_notices.notice_number}
+    bid_notice.notice_order:
+      - {field: teoria_public_procurement.bid_notices.notice_order}
+    bid_notice.notice_name:
+      - {field: teoria_public_procurement.bid_notices.notice_name}
+    bid_notice.work_type:
+      - {field: teoria_public_procurement.bid_notices.work_type}
+    bid_notice.field_code:
+      - {field: teoria_public_procurement.bid_notices.field_code}
+    bid_notice.field_name:
+      - {field: teoria_public_procurement.bid_notices.field_name}
+    bid_notice.large_category:
+      - {field: teoria_public_procurement.bid_notices.large_category}
+    bid_notice.middle_category:
+      - {field: teoria_public_procurement.bid_notices.middle_category}
+    bid_notice.notice_kind_name:
+      - {field: teoria_public_procurement.bid_notices.notice_kind_name}
+    bid_notice.is_re_notice:
+      - {field: teoria_public_procurement.bid_notices.is_re_notice}
+    bid_notice.notice_kind:
+      - {field: teoria_public_procurement.bid_notices.notice_kind}
+    bid_notice.notice_lineage_id:
+      - {field: teoria_public_procurement.bid_notices.notice_lineage_id}
+    bid_notice.root_bid_notice_id:
+      - {field: teoria_public_procurement.bid_notices.root_bid_notice_id}
+    bid_notice.previous_bid_notice_id:
+      - {field: teoria_public_procurement.bid_notices.previous_bid_notice_id}
+    bid_notice.superseded_by_bid_notice_id:
+      - {field: teoria_public_procurement.bid_notices.superseded_by_bid_notice_id}
+    bid_notice.is_latest_in_lineage:
+      - {field: teoria_public_procurement.bid_notices.is_latest_in_lineage}
+    bid_notice.lineage_status:
+      - {field: teoria_public_procurement.bid_notices.lineage_status}
+    bid_notice.lineage_confidence:
+      - {field: teoria_public_procurement.bid_notices.lineage_confidence}
+    bid_notice.lineage_count:
+      - {field: teoria_public_procurement.bid_notices.lineage_count}
+    bid_notice.lineage_notices:
+      - {field: teoria_public_procurement.bid_notices.lineage_notices}
+    bid_notice.notice_published_at:
+      - {field: teoria_public_procurement.bid_notices.notice_published_at}
+    bid_notice.bid_begin_at:
+      - {field: teoria_public_procurement.bid_notices.bid_begin_at}
+    bid_notice.bid_deadline_at:
+      - {field: teoria_public_procurement.bid_notices.bid_deadline_at}
+    bid_notice.opening_at:
+      - {field: teoria_public_procurement.bid_notices.opening_at}
+    bid_notice.bid_status:
+      - {field: teoria_public_procurement.bid_notices.bid_status}
+    bid_notice.notice_status:
+      - {field: teoria_public_procurement.bid_notices.notice_status}
+    bid_notice.current_status:
+      - {field: teoria_public_procurement.bid_notices.current_status}
+    bid_notice.current_status_label:
+      - {field: teoria_public_procurement.bid_notices.current_status_label}
+    bid_notice.cancellation_reason:
+      - {field: teoria_public_procurement.bid_notices.cancellation_reason}
+    bid_notice.cancellation_at:
+      - {field: teoria_public_procurement.bid_notices.cancellation_at}
+    bid_notice.failure_reason:
+      - {field: teoria_public_procurement.bid_notices.failure_reason}
+    bid_notice.failure_at:
+      - {field: teoria_public_procurement.bid_notices.failure_at}
+    bid_notice.status_source:
+      - {field: teoria_public_procurement.bid_notices.status_source}
+    bid_notice.status_confirmed_at:
+      - {field: teoria_public_procurement.bid_notices.status_confirmed_at}
+    bid_notice.original_notice_id:
+      - {field: teoria_public_procurement.bid_notices.original_notice_id}
+    bid_notice.current_notice_id:
+      - {field: teoria_public_procurement.bid_notices.current_notice_id}
+    bid_notice.revision_number:
+      - {field: teoria_public_procurement.bid_notices.revision_number}
+    bid_notice.is_latest_revision:
+      - {field: teoria_public_procurement.bid_notices.is_latest_revision}
+    bid_notice.notice_organization_code:
+      - {field: teoria_public_procurement.bid_notices.notice_organization_code}
+    bid_notice.notice_organization_name:
+      - {field: teoria_public_procurement.bid_notices.notice_organization_name}
+    bid_notice.demand_organization_code:
+      - {field: teoria_public_procurement.bid_notices.demand_organization_code}
+    bid_notice.demand_organization_name:
+      - {field: teoria_public_procurement.bid_notices.demand_organization_name}
+    bid_notice.bid_method_name:
+      - {field: teoria_public_procurement.bid_notices.bid_method_name}
+    bid_notice.contract_method_name:
+      - {field: teoria_public_procurement.bid_notices.contract_method_name}
+    bid_notice.estimated_price:
+      - {field: teoria_public_procurement.bid_notices.estimated_price}
+    bid_notice.allocated_budget:
+      - {field: teoria_public_procurement.bid_notices.allocated_budget}
+    bid_notice.detail_url:
+      - {field: teoria_public_procurement.bid_notices.detail_url}
+    bid_notice.notice_url:
+      - {field: teoria_public_procurement.bid_notices.notice_url}
+    bid_notice.source_changed_at:
+      - {field: teoria_public_procurement.bid_notices.source_changed_at}
+    bid_notice.requirement_expression:
+      - {field: teoria_public_procurement.bid_notices.requirement_expression}
+    bid_notice.extraction_completeness:
+      - {field: teoria_public_procurement.bid_notices.extraction_completeness}
+    bid_notice.requires_review:
+      - {field: teoria_public_procurement.bid_notices.requires_review}
+    bid_notice.region_requirement_status:
+      - {field: teoria_public_procurement.bid_notices.region_requirement_status}
+    bid_notice.industry_license_requirement_status:
+      - {field: teoria_public_procurement.bid_notices.industry_license_requirement_status}
+    bid_notice.requirement_extraction_status:
+      - {field: teoria_public_procurement.bid_notices.requirement_extraction_status}
+    bid_notice.requirement_categories:
+      - {field: teoria_public_procurement.bid_notices.requirement_categories}
+    public_organization.organization_code:
+      - {field: teoria_public_procurement.bid_notices.notice_organization_code, role: publishing_organization}
+    public_organization.name:
+      - {field: teoria_public_procurement.bid_notices.notice_organization_name, role: publishing_organization}
+  materializations:
+    teoria_public_procurement.bid_notices:
+      objects:
+        bid_notice:
+          type: bid_notice
+          identity: [bid_notice_id]
+        publishing_organization:
+          type: public_organization
+          identity: [organization_code]
+      links:
+        - {type: public_organization_publishes_bid_notice, source: publishing_organization, target: bid_notice}

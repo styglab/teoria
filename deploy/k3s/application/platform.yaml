@@ -1,0 +1,388 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runtime-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: runtime-api
+  template:
+    metadata:
+      labels:
+        app: runtime-api
+    spec:
+      containers:
+      - name: runtime-api
+        image: teoria/runtime:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_POLICY_MODE
+          value: opa
+        - name: TEORIA_OPA_URL
+          value: http://opa:8181
+        - name: TEORIA_OPA_DECISION_PATH
+          value: teoria/authz/decision
+        - name: TEORIA_REGISTRY_REQUIRE_PUBLISHED
+          value: 'true'
+        - name: TEORIA_RUNTIME_ARTIFACT_STORE
+          value: /app/runtime_artifacts
+        - name: TEORIA_RUNTIME_API_ROOT_PATH
+          value: /runtime-api
+        - name: TEORIA_RUNTIME_CACHE_BACKEND
+          value: redis
+        - name: TEORIA_RUNTIME_CACHE_URL
+          value: redis://runtime-redis:6379/0
+        - name: TEORIA_RUNTIME_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_API_TOKEN
+        - name: TEORIA_RUNTIME_DATA_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_DATA_DATABASE_URL
+        - name: TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY
+        - name: TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY
+        - name: TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY
+        - name: TEORIA_SOURCE_PPS_USER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_SOURCE_PPS_USER_API_KEY
+        - name: TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY
+        command:
+        - teoria-runtime-api
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet: &id001
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 90
+        volumeMounts:
+        - name: runtime-artifacts
+          mountPath: /app/runtime_artifacts
+          readOnly: true
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      volumes:
+      - name: runtime-artifacts
+        persistentVolumeClaim:
+          claimName: runtime-artifacts
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: runtime-api
+spec:
+  selector:
+    app: runtime-api
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-api
+  template:
+    metadata:
+      labels:
+        app: admin-api
+    spec:
+      containers:
+      - name: admin-api
+        image: teoria/authoring:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_POLICY_MODE
+          value: opa
+        - name: TEORIA_OPA_URL
+          value: http://opa:8181
+        - name: TEORIA_OPA_DECISION_PATH
+          value: teoria/authz/decision
+        - name: TEORIA_ADMIN_API_ROOT_PATH
+          value: /admin-api
+        - name: TEORIA_ADMIN_AUTH_MODE
+          value: bearer
+        - name: TEORIA_ADMIN_METADATA_PUBLIC_READ
+          value: 'false'
+        - name: TEORIA_RUNTIME_ARTIFACT_STORE
+          value: /app/runtime_artifacts
+        - name: TEORIA_OPENMETADATA_ENABLED
+          value: 'true'
+        - name: TEORIA_OPENMETADATA_BASE_URL
+          value: http://openmetadata-server:8585/api
+        - name: TEORIA_OPENMETADATA_DATABASE_SERVICE
+          value: teoria_postgresql
+        - name: TEORIA_CONTEXT_RUNTIME_API_URL
+          value: http://runtime-api:8000
+        - name: TEORIA_APP_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_APP_DATABASE_URL
+        - name: TEORIA_ADMIN_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ADMIN_API_TOKEN
+        - name: TEORIA_ADMIN_DATA_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_DATA_DATABASE_URL
+        - name: TEORIA_CONTEXT_RUNTIME_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_API_TOKEN
+        - name: TEORIA_OPENMETADATA_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_OPENMETADATA_AUTH_TOKEN
+        - name: TEORIA_ASSESSMENT_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_ENABLED
+        - name: TEORIA_ASSESSMENT_MODEL_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_MODEL_URL
+        - name: TEORIA_ASSESSMENT_MODEL_NAME
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_MODEL_NAME
+        command:
+        - teoria-admin-api
+        ports:
+        - containerPort: 8001
+        readinessProbe:
+          httpGet: &id001
+            path: /health
+            port: 8001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 90
+        volumeMounts:
+        - name: runtime-artifacts
+          mountPath: /app/runtime_artifacts
+          readOnly: true
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      volumes:
+      - name: runtime-artifacts
+        persistentVolumeClaim:
+          claimName: runtime-artifacts
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-api
+spec:
+  selector:
+    app: admin-api
+  ports:
+  - port: 8001
+    targetPort: 8001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-ui
+  template:
+    metadata:
+      labels:
+        app: admin-ui
+    spec:
+      containers:
+      - name: admin-ui
+        image: teoria/admin-ui:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env: []
+        ports:
+        - containerPort: 80
+        readinessProbe:
+          httpGet: &id001
+            path: /
+            port: 80
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 90
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-ui
+spec:
+  selector:
+    app: admin-ui
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metadata-assessment-worker
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: metadata-assessment-worker
+  template:
+    metadata:
+      labels:
+        app: metadata-assessment-worker
+    spec:
+      containers:
+      - name: metadata-assessment-worker
+        image: teoria/authoring:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_OPENMETADATA_ENABLED
+          value: 'true'
+        - name: TEORIA_OPENMETADATA_BASE_URL
+          value: http://openmetadata-server:8585/api
+        - name: TEORIA_APP_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_APP_DATABASE_URL
+        - name: TEORIA_ADMIN_DATA_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_DATA_DATABASE_URL
+        - name: TEORIA_OPENMETADATA_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_OPENMETADATA_AUTH_TOKEN
+        - name: TEORIA_ASSESSMENT_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_ENABLED
+        - name: TEORIA_ASSESSMENT_MODEL_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_MODEL_URL
+        - name: TEORIA_ASSESSMENT_MODEL_NAME
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_MODEL_NAME
+        - name: TEORIA_ASSESSMENT_MODEL_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_MODEL_TOKEN
+        - name: TEORIA_ASSESSMENT_MODEL_TIMEOUT_SECONDS
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_MODEL_TIMEOUT_SECONDS
+        - name: TEORIA_ASSESSMENT_MODEL_MAX_TOKENS
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_MODEL_MAX_TOKENS
+        command:
+        - teoria-metadata-assessment-worker
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+  strategy:
+    type: Recreate

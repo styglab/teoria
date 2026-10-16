@@ -1,0 +1,113 @@
+"""Protect persistent data isolation and the supported Compose auth contract."""
+
+import json
+import os
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+COMPOSE_ROOT = Path(__file__).resolve().parents[1]
+
+
+class ComposeConfigurationTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.env_file = Path(self.directory.name) / ".env"
+        self.env_file.write_text((COMPOSE_ROOT / ".env.example").read_text())
+        self.environment = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith(("TEORIA_", "OPENMETADATA_", "COMPOSE_"))
+        }
+        for key in (
+            "TEORIA_ADMIN_API_TOKEN",
+            "TEORIA_RUNTIME_API_TOKEN",
+            "TEORIA_OPA_CONTROL_PLANE_TOKEN",
+            "TEORIA_PREFECT_USERNAME",
+            "TEORIA_PREFECT_PASSWORD",
+            "TEORIA_LOCAL_RUNTIME_DB_PASSWORD",
+        ):
+            self.environment[key] = "synthetic-validation-value"
+
+    def config(self, project):
+        return subprocess.run(
+            [
+                "docker",
+                "compose",
+                "--env-file",
+                str(self.env_file),
+                "-f",
+                str(COMPOSE_ROOT / "compose.yaml"),
+                "-p",
+                project,
+                "config",
+                "--format",
+                "json",
+            ],
+            env=self.environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def resolved(self, project):
+        result = self.config(project)
+        self.assertEqual(result.returncode, 0, "Compose configuration must resolve")
+        return json.loads(result.stdout)
+
+    def test_default_project_preserves_existing_persistent_volume_names(self):
+        config = self.resolved("teoria")
+        for key, suffix in {
+            "postgres": "data-db",
+            "platform-postgres": "platform-db",
+            "runtime-artifacts": "runtime-artifacts",
+            "opa-bundles": "opa-bundles",
+            "opa-signing-keys": "opa-signing-keys",
+            "opa-state": "opa-state",
+        }.items():
+            self.assertEqual(config["volumes"][key]["name"], "teoria_" + suffix)
+
+    def test_different_projects_share_no_managed_volumes(self):
+        first = self.resolved("teoria-test-dev")
+        second = self.resolved("teoria-test-staging")
+        names = lambda config: {item["name"] for item in config["volumes"].values()}
+        self.assertTrue(names(first).isdisjoint(names(second)))
+
+    def test_compose_requires_admin_credentials_and_keeps_bearer_auth(self):
+        self.environment["TEORIA_ADMIN_AUTH_MODE"] = "disabled"
+        config = self.resolved("teoria-test-auth")
+        self.assertEqual(
+            config["services"]["admin-api"]["environment"]["TEORIA_ADMIN_AUTH_MODE"],
+            "bearer",
+        )
+        self.environment["TEORIA_ADMIN_API_TOKEN"] = ""
+        missing = self.config("teoria-test-auth")
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("TEORIA_ADMIN_API_TOKEN", missing.stderr)
+
+    def test_example_uses_container_dns_for_openmetadata(self):
+        config = self.resolved("teoria-test-metadata")
+        environment = config["services"]["admin-api"]["environment"]
+        self.assertEqual(
+            environment["TEORIA_OPENMETADATA_BASE_URL"],
+            "http://openmetadata-server:8585/api",
+        )
+        self.assertEqual(environment["TEORIA_OPENMETADATA_ENABLED"], "true")
+
+    def test_pipeline_worker_has_resource_and_execution_limits(self):
+        services = self.resolved("teoria-test-limits")["services"]
+        worker = services["prefect-worker"]
+        self.assertEqual(worker["cpus"], 4)
+        self.assertEqual(int(worker["mem_limit"]), 8 * 1024 ** 3)
+        self.assertEqual(worker["environment"]["TEORIA_PIPELINE_CONCURRENCY"], "2")
+        registration = services["prefect-deploy"]
+        self.assertEqual(registration["command"], [
+            "teoria-pipelines", "register", "--backend", "process", "--kind", "ingestion",
+        ])
+        self.assertEqual(registration["environment"]["TEORIA_PIPELINE_BACKFILL_CONCURRENCY"], "1")
+
+
+if __name__ == "__main__":
+    unittest.main()

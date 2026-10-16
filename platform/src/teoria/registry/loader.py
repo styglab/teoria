@@ -19,8 +19,6 @@ from teoria.registry.schema import (
     RuntimeContractDefinition,
     RuntimeContractRegistry,
     ProviderReference,
-    EligibilityRuleDefinition,
-    EligibilityRuleRegistry,
     SourceRegistry,
     ValueSetDefinition,
     ValueSetRegistry,
@@ -75,8 +73,6 @@ class RegistryCatalog:
     capability_paths: dict[str, Path] = field(default_factory=dict)
     references: dict[str, ProviderReference] = field(default_factory=dict)
     reference_paths: dict[str, Path] = field(default_factory=dict)
-    eligibility_rules: dict[str, EligibilityRuleDefinition] = field(default_factory=dict)
-    eligibility_rule_paths: dict[str, Path] = field(default_factory=dict)
     release: RegistryRelease | None = None
 
 class RegistryLoadError(Exception):
@@ -114,8 +110,6 @@ class RegistryLoader:
         capability_paths: dict[str, Path] = {}
         references: dict[str, ProviderReference] = {}
         reference_paths: dict[str, Path] = {}
-        eligibility_rules: dict[str, EligibilityRuleDefinition] = {}
-        eligibility_rule_paths: dict[str, Path] = {}
 
         data_type_paths = [self.root / "core" / "data_types.yaml"]
         for path in data_type_paths:
@@ -217,20 +211,6 @@ class RegistryLoader:
                     capabilities[capability_id] = capability
                 capability_paths[capability_id] = path
 
-        eligibility_rule_paths_to_load = list((self.root / "rules").glob("*.yaml"))
-        eligibility_rule_paths_to_load.extend((self.root / "domains").glob("*/rules/*.yaml"))
-        for path in sorted(eligibility_rule_paths_to_load):
-            document = self._parse(path, diagnostics)
-            if document is None:
-                continue
-            registry = self._validate(EligibilityRuleRegistry, document, path, diagnostics)
-            if registry:
-                for definition in registry.eligibility_rules:
-                    if definition.id in eligibility_rules:
-                        diagnostics.append(Diagnostic("duplicate_eligibility_rule", f"duplicate eligibility rule id '{definition.id}'", path))
-                    eligibility_rules[definition.id] = definition
-                    eligibility_rule_paths[definition.id] = path
-
         if self.reference_root.is_dir():
             for path in sorted(self.reference_root.glob("*/*/metadata.yaml")):
                 document = self._parse(path, diagnostics)
@@ -243,7 +223,7 @@ class RegistryLoader:
                     references[reference.source] = reference
                     reference_paths[reference.source] = path
 
-        if not any((sources, data_types, value_sets, runtime_contracts, mappings, capabilities, eligibility_rules)):
+        if not any((sources, data_types, value_sets, runtime_contracts, mappings, capabilities)):
             diagnostics.append(Diagnostic("empty_registry", "registry root contains no recognized registry documents", self.root))
         if diagnostics:
             raise RegistryLoadError(diagnostics)
@@ -263,8 +243,6 @@ class RegistryLoader:
             capability_paths=capability_paths,
             references=references,
             reference_paths=reference_paths,
-            eligibility_rules=eligibility_rules,
-            eligibility_rule_paths=eligibility_rule_paths,
             release=None,
         )
 

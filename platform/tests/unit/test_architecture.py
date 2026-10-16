@@ -39,25 +39,3 @@ def test_common_registry_and_ontology_modules_do_not_own_procurement_rules():
                 if 'public_procurement.' in node.value or node.value == 'procurement_supplier_registered':
                     violations.append(f'{path.relative_to(SOURCE_ROOT)}:{node.lineno}')
     assert violations == []
-
-
-def test_canonical_code_does_not_depend_on_compatibility_paths():
-    legacy_paths = (
-        'teoria.config',
-        'teoria.admin.semantic_api',
-        'teoria.runtime.mapping.functions',
-        'teoria.domains.public_procurement.market_context',
-        'teoria.domains.public_procurement.ontology_profiling',
-        'teoria.domains.public_procurement.ontology_shadow',
-        'teoria.domains.public_procurement.bid_eligibility.processor',
-    )
-    violations = []
-    for path in SOURCE_ROOT.rglob('*.py'):
-        for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
-            modules = [node.module] if isinstance(node, ast.ImportFrom) and node.module else (
-                [alias.name for alias in node.names] if isinstance(node, ast.Import) else []
-            )
-            if any(module == legacy or module.startswith(legacy + '.')
-                   for module in modules for legacy in legacy_paths):
-                violations.append(f'{path.relative_to(SOURCE_ROOT)}:{node.lineno}')
-    assert violations == []

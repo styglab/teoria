@@ -12,13 +12,42 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - 의미 정의, Semantic Registry, 사용자 요청 실행과 Runtime은 `platform/`에 둔다.
 - 지속 수집, Connector, Prefect, 정규화, 적재와 Data DB migration은 `pipelines/`에 둔다.
 - MCP protocol과 Runtime HTTP client는 `mcp/`에 둔다.
-- MCP는 목표 운영 구조에서 Runtime API만 호출한다. 현재 embedded mode는 Runtime API 구현 전까지의 호환 경로다.
+- MCP는 Runtime API만 호출한다. embedded mode와 MCP의 직접 DB 접근은 지원하지 않는다.
 - Pipeline 실행 코드에서 Platform의 Capability 또는 Mapping Runtime을 직접 호출하지 않는다.
 - Provider API wire 계약, 요청 생성, 응답 검증과 HTTP 실행만 `packages/provider_api/`의 `teoria-provider-api`를 사용한다.
 - 프로젝트 사이에 일반적인 `common`, `shared`, `utils` 패키지를 만들지 않는다.
 - `packages/`에는 둘 이상의 프로젝트가 실제로 사용하는 설치형 라이브러리만 둔다. 각 패키지는 독립 `pyproject.toml`, 테스트와 단일 책임을 가지며 소유 프로젝트를 역으로 import하지 않는다.
 - 미래 사용을 예상한 빈 패키지나 추상화는 만들지 않는다.
-- 지원 배포 정의는 `deploy/compose/`에 둔다. `deploy/experimental/`의 파일을 운영 지원 계약으로 문서화하거나 의존하지 않는다.
+- 로컬 Compose 배포는 `deploy/compose/`, EC2 K3s 배포와 GitHub 자동 배포는 `deploy/k3s/`와 `.github/workflows/deploy_k3s.yaml`에 둔다. 실제 환경 검증 전에는 템플릿 검증을 운영 배포 성공으로 기록하지 않는다.
+- 첨부파일 다운로드·문서 파싱·입찰요건 추출·참가자격 판단은 현재 보류 및 제거 대상이다.
+  보관본은 `archive/bid_document_processing/`에 두고 활성 코드·Registry·Skill·배포에 다시 연결하지 않는다.
+  공고·계약·낙찰·개찰 수집과 API 면허·지역 정보 적재는 유지한다.
+
+## Understandability and maintainability
+
+코드는 사용자 이해성과 유지보수성을 고려하여 작성하고 수정한다. 사용자가 기능의
+진입점과 동작을 이해하고, 다음 유지보수자가 변경 위치와 영향을 예측할 수 있어야 한다.
+
+- 파일·디렉터리·함수 이름은 업무 목적과 책임을 드러내며 같은 책임은 같은 위치 규칙을 따른다.
+- 기능별 실행 코드·타입·저장소 구현은 소유 Domain의 이름 있는 기능 패키지에 모은다.
+  공통 계층에는 실제로 재사용하는 기반 코드만 두고 Domain 구현을 역으로 import하지 않는다.
+- Flow·진입점은 실행 순서를 읽을 수 있게 유지하고 서로 다른 책임이 커지면 이름 있는 모듈로 분리한다.
+- 설정·계약·배포·문서의 기준 위치를 명확히 하고 반복되는 운영 정보는 자동 생성 또는 검증으로 일치시킨다.
+- 구조 변경 시 관련 import·테스트·안내 문서를 함께 갱신하고 동작과 외부 계약의 보존을 검증한다.
+- 테스트는 검증 대상의 소유 프로젝트에 둔다. 루트 `tests/`에는 저장소 공통 검사와
+  프로젝트 간 계약·연동 검증을 두고, 기능별 테스트 경로는 소유 코드의 Domain·기능 구조를 따른다.
+- `docs/`에는 문서와 문서용 예제·템플릿을 둔다. 문서 검증 코드는 `tests/documentation/`에
+  두며 이를 위해 루트 `tools/` 또는 `docs/` 아래 실행 코드 폴더를 만들지 않는다.
+- 파일 수나 줄 수만을 이유로 분리하거나 미래 재사용을 위한 추상화를 추가하지 않는다.
+
+## Asynchronous I/O
+
+- HTTP·DB I/O는 native async client로 실행하고 API → Service → Repository 호출을 `await`로 연결한다.
+- 정규화·계산·검증은 일반 함수로 유지한다. `async def`만 붙여 blocking I/O를 감추지 않는다.
+- 비동기 경로에서 불가피한 동기 SDK는 제한된 thread 실행이나 별도 Prefect Task·Job으로 격리한다.
+- 동시 실행에는 명시적인 제한을 두고 동일 transaction의 SQL·승인·적용·checkpoint 순서를 유지한다.
+- DB 연결은 소유 프로젝트의 async connection 경계를 사용한다. 연결·transaction을 Task나 event loop 사이에 공유하지 않는다.
+- `asyncio.run()`은 동기 CLI·프로세스 진입점에서만 사용한다. 비동기 API·Service·Flow 안에서 호출하지 않는다.
 
 ## Naming convention
 
@@ -69,15 +98,15 @@ docker compose -f deploy/compose/compose.yaml config --quiet
 
 ## Provider contract work
 
-Source Registry를 생성하거나 수정하기 전에 `docs/registry/source-authoring.md`를 끝까지 읽고 그 절차와 체크리스트를 따른다.
+Source Registry를 생성하거나 수정하기 전에 `docs/platform/registry/source_authoring.md`를 끝까지 읽고 그 절차와 체크리스트를 따른다.
 
 - Semantic Runtime이 직접 호출하는 API만 `platform/registries/sources/`에 둔다.
-- Prefect 등 Pipeline Worker만 호출하는 API는 `pipelines/connectors/`에 두고 `docs/ingestion/connectors.md`를 따른다.
+- Prefect 등 Pipeline Worker만 호출하는 API는 `pipelines/connectors/`에 두고 `docs/pipelines/connectors.md`를 따른다.
 - 수집·정규화된 DB를 Runtime이 직접 조회하면 `platform/registries/sources/`에 Database Source와 DB-to-Ontology Mapping을 만든다.
 
 Provider Reference 문서에서 신규 Source와 verification case를 생성·검증하거나 기존 Source를 원문 대조할 때는 저장소 Skill `$author-source-registry`를 사용한다. 사용법은 `docs/skills/source-registry-author.md`에 있다.
 
-- 새 Source는 `docs/registry/templates/source.yaml`을 복사해 시작한다.
+- 새 Source는 `docs/platform/registry/templates/source.yaml`을 복사해 시작한다.
 - Source 필드와 요청 파라미터 ID는 제공기관의 원본 표기를 보존한다.
 - Teoria가 정의하는 Source, Object, Operation ID는 `snake_case`를 사용한다.
 - 문서에 없는 의미를 추측하여 필드, 타입, 필수 여부나 코드를 만들지 않는다.

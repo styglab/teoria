@@ -1,0 +1,400 @@
+import pytest
+from teoria_pipelines.domains.public_procurement.bid_eligibility.normalization import (
+    _validate_semantic_normalization,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repair.evidence import (
+    _reconcile_original_text,
+    _reconcile_proposition_spans,
+)
+
+from .cases import _validated_requirement
+
+
+def test_semantic_normalization_rejects_custom_duplicate_of_known_type() -> None:
+    evidence = [
+        {
+            "source_type": "document",
+            "source_id": "doc",
+            "document_id": "doc",
+            "block_id": "b1",
+            "page": 1,
+            "section": None,
+            "excerpt": "공동도급 불허",
+        }
+    ]
+    base = {
+        "operator": "exists",
+        "value": {
+            "text": "공동도급 불허",
+            "number": None,
+            "boolean": None,
+            "items": [],
+            "attributes": [],
+        },
+        "original_text": "공동도급 불허",
+        "holder_scope": "bidder",
+        "reference_date_type": "bid_deadline",
+        "mandatory": True,
+        "review_status": "extracted",
+        "confidence": 1.0,
+        "evidence": evidence,
+    }
+    result = {
+        "requirements": [
+            {**base, "id": "r1", "type": "consortium"},
+            {**base, "id": "r2", "type": "custom"},
+        ]
+    }
+
+    with pytest.raises(ValueError, match="custom_duplicates_known_requirement"):
+        _validate_semantic_normalization(result)
+
+
+def test_semantic_normalization_rejects_duplicate_proposition_with_same_type() -> None:
+    evidence = [
+        {
+            "source_type": "document",
+            "source_id": "doc",
+            "document_id": "doc",
+            "block_id": "b1",
+            "page": 1,
+            "section": None,
+            "excerpt": "공동도급 불허",
+        }
+    ]
+    base = {
+        "type": "consortium",
+        "operator": "exists",
+        "value": {
+            "text": "공동도급 불허",
+            "number": None,
+            "boolean": None,
+            "items": [],
+            "attributes": [],
+        },
+        "original_text": "공동도급 불허",
+        "holder_scope": "bidder",
+        "reference_date_type": "bid_deadline",
+        "mandatory": True,
+        "review_status": "extracted",
+        "confidence": 1.0,
+        "evidence": evidence,
+    }
+    result = {"requirements": [{**base, "id": "r1"}, {**base, "id": "r2"}]}
+
+    with pytest.raises(ValueError, match="duplicate_requirement_proposition"):
+        _validate_semantic_normalization(result)
+
+
+def test_semantic_normalization_rejects_joined_joint_and_subcontract_facts() -> None:
+    result = {
+        "requirements": [
+            {
+                "id": "r1",
+                "type": "consortium",
+                "operator": "not_exists",
+                "value": {
+                    "text": "공동수급 및 하도급 불허",
+                    "number": None,
+                    "boolean": False,
+                    "items": [],
+                    "attributes": [],
+                },
+                "original_text": "공동수급 및 하도급 불허",
+                "holder_scope": "bidder",
+                "reference_date_type": "bid_deadline",
+                "mandatory": True,
+                "review_status": "extracted",
+                "confidence": 1.0,
+                "evidence": [
+                    {
+                        "source_type": "document",
+                        "source_id": "doc",
+                        "document_id": "doc",
+                        "block_id": "b1",
+                        "page": 1,
+                        "section": None,
+                        "excerpt": "공동수급 및 하도급 불허",
+                    }
+                ],
+            }
+        ]
+    }
+
+    with pytest.raises(ValueError, match="non_atomic_consortium_requirement"):
+        _validate_semantic_normalization(result)
+
+
+def test_semantic_normalization_rejects_same_semantic_value_despite_different_source_text() -> (
+    None
+):
+    evidence = [
+        {
+            "source_type": "document",
+            "source_id": "doc",
+            "document_id": "doc",
+            "block_id": "b1",
+            "page": 1,
+            "section": None,
+            "excerpt": "나라장터 업체 및 전자입찰용 인증서 등록을 마감 전까지 완료해야 합니다.",
+        }
+    ]
+    base = {
+        "type": "procurement_registration",
+        "operator": "exists",
+        "value": {
+            "text": "등록",
+            "number": None,
+            "boolean": True,
+            "items": [],
+            "attributes": [],
+        },
+        "holder_scope": "bidder",
+        "reference_date_type": "bid_deadline",
+        "mandatory": True,
+        "review_status": "extracted",
+        "confidence": 1.0,
+        "evidence": evidence,
+    }
+    result = {
+        "requirements": [
+            {
+                **base,
+                "id": "r1",
+                "original_text": "나라장터 입찰자 등록 및 업체 전자입찰용 인증서 등록을 마감 전까지 완료해야 합니다.",
+            },
+            {
+                **base,
+                "id": "r2",
+                "original_text": "업체 전자입찰용 인증서 등록을 마감 전까지 완료해야 합니다.",
+            },
+        ]
+    }
+
+    with pytest.raises(ValueError, match="duplicate_requirement_proposition"):
+        _validate_semantic_normalization(result)
+
+
+def test_semantic_normalization_allows_atomic_facts_from_same_compound_source() -> None:
+    evidence = [
+        {
+            "source_type": "document",
+            "source_id": "doc",
+            "document_id": "doc",
+            "block_id": "b1",
+            "page": 1,
+            "section": None,
+            "excerpt": "공동도급 및 하도급을 허용하지 않습니다.",
+        }
+    ]
+    base = {
+        "type": "consortium",
+        "operator": "not_exists",
+        "value": {
+            "text": None,
+            "number": None,
+            "boolean": False,
+            "items": [],
+            "attributes": [],
+        },
+        "original_text": "공동도급 및 하도급을 허용하지 않습니다.",
+        "reference_date_type": "bid_deadline",
+        "mandatory": True,
+        "review_status": "extracted",
+        "confidence": 1.0,
+        "evidence": evidence,
+    }
+    result = {
+        "requirements": [
+            {
+                **base,
+                "id": "r1",
+                "holder_scope": "bidder",
+                "value": {**base["value"], "text": "공동도급 불허"},
+            },
+            {
+                **base,
+                "id": "r2",
+                "holder_scope": "subcontractor",
+                "value": {**base["value"], "text": "하도급 불허"},
+            },
+        ]
+    }
+
+    _validate_semantic_normalization(result)
+
+
+def test_semantic_normalization_requires_tax_evasion_as_sanction() -> None:
+    result = {
+        "requirements": [
+            {
+                "id": "r1",
+                "type": "legal_qualification",
+                "operator": "not_exists",
+                "value": {
+                    "text": "조세포탈 유죄 확정 후 2년 미경과",
+                    "number": 2,
+                    "boolean": False,
+                    "items": [],
+                    "attributes": [],
+                },
+                "original_text": "조세포탈 등을 한 자로서 유죄판결 확정 후 2년이 지나지 않은 자",
+                "holder_scope": "bidder",
+                "reference_date_type": "bid_deadline",
+                "assessment_stage": "bid_entry",
+                "failure_effect": "cannot_bid",
+                "comparison_mode": "structured",
+                "proof_requirements": [],
+                "mandatory": True,
+                "review_status": "extracted",
+                "confidence": 1.0,
+                "evidence": [],
+            }
+        ]
+    }
+
+    with pytest.raises(ValueError, match="tax_evasion_must_be_sanction"):
+        _validate_semantic_normalization(result)
+
+
+def test_semantic_normalization_rejects_qualification_review_as_bid_entry() -> None:
+    result = {
+        "requirements": [
+            {
+                "id": "r1",
+                "type": "equipment_ownership",
+                "operator": "exists",
+                "value": {
+                    "text": "수집·운반 장비",
+                    "number": None,
+                    "boolean": True,
+                    "items": [],
+                    "attributes": [],
+                },
+                "original_text": "적격심사 시 장비보유현황증명서를 제출하여야 합니다.",
+                "proposition_text": "적격심사 시 장비보유현황증명서를 제출하여야 합니다.",
+                "holder_scope": "bidder",
+                "reference_date_type": "bid_deadline",
+                "assessment_stage": "bid_entry",
+                "failure_effect": "cannot_bid",
+                "comparison_mode": "document_evidence",
+                "proof_requirements": [],
+                "mandatory": True,
+                "review_status": "extracted",
+                "confidence": 1.0,
+                "evidence": [],
+            }
+        ]
+    }
+
+    with pytest.raises(ValueError, match="qualification_review_stage_mismatch"):
+        _validate_semantic_normalization(result)
+
+
+def test_semantic_normalization_requires_verbatim_original_text() -> None:
+    item = _validated_requirement("입찰 참가자격을 갖춘 자")
+    item["original_text"] = "입찰 참가자격 보유 업체"
+
+    with pytest.raises(ValueError, match="original_text_must_be_verbatim_evidence"):
+        _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_semantic_normalization_rejects_bid_price_formula() -> None:
+    item = _validated_requirement("예정가격 대비 견적가격이 89.745% 이상인 자")
+
+    with pytest.raises(ValueError, match="bid_price_must_not_be_eligibility"):
+        _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_semantic_normalization_ignores_incidental_price_in_shared_evidence() -> None:
+    item = _validated_requirement(
+        "전자수의, 총액입찰, 단독이행, 제한적 최저가(낙찰하한율 89.745%)",
+        type="consortium",
+        value={
+            "text": "단독이행",
+            "number": None,
+            "boolean": True,
+            "items": [],
+            "attributes": [],
+        },
+    )
+
+    _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_semantic_normalization_rejects_bid_registration_as_contracting() -> None:
+    item = _validated_requirement(
+        "정보통신공사업으로 입찰참가 등록한 자",
+        assessment_stage="contracting",
+        failure_effect="cannot_contract",
+    )
+
+    with pytest.raises(
+        ValueError, match="bid_entry_registration_must_not_be_contracting"
+    ):
+        _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_contracting_sanction_may_reference_bid_participation_restriction() -> None:
+    item = _validated_requirement(
+        "계약 위반 시 입찰참가자격 제한 처분을 받습니다.",
+        type="sanction",
+        operator="not_exists",
+        assessment_stage="contracting",
+        failure_effect="cannot_contract",
+    )
+
+    _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_semantic_normalization_rejects_implicit_bid_deadline_for_review() -> None:
+    item = _validated_requirement(
+        "적격심사 시 장비보유현황을 확인합니다.",
+        assessment_stage="qualification_review",
+        failure_effect="qualification_rejection",
+        reference_date_type="bid_deadline",
+    )
+
+    with pytest.raises(
+        ValueError, match="qualification_review_bid_deadline_not_explicit"
+    ):
+        _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_semantic_normalization_accepts_explicit_quotation_deadline_for_review() -> (
+    None
+):
+    item = _validated_requirement(
+        "견적서 제출 마감일 현재 부도·파산·해산·영업정지가 확정된 경우",
+        type="business_status",
+        assessment_stage="qualification_review",
+        failure_effect="qualification_rejection",
+        reference_date_type="bid_deadline",
+    )
+
+    _validate_semantic_normalization({"requirements": [item]})
+
+
+def test_semantic_normalization_rejects_unreviewed_source_conflict() -> None:
+    first = _validated_requirement(
+        "서울특별시 소재 업체", type="participation_region", operator="in"
+    )
+    second = _validated_requirement(
+        "서울특별시 소재 업체", id="r2", type="participation_region", operator="not_in"
+    )
+
+    with pytest.raises(ValueError, match="conflicting_source_requirements_need_review"):
+        _validate_semantic_normalization({"requirements": [first, second]})
+
+
+def test_reconcile_original_text_uses_exact_evidence_when_whitespace_differs() -> None:
+    original = "입찰참가자격 제한을 통보받았거나 전자조달시스템에 게재된 자"
+    item = _validated_requirement(original)
+    excerpt = "입찰참가자격 제한을 통보 받았거나  전자조달시스템에 게재된 자"
+    item["evidence"][0]["excerpt"] = excerpt
+
+    _reconcile_original_text({"requirements": [item]})
+
+    assert item["original_text"] == excerpt
+    _reconcile_proposition_spans({"requirements": [item]})
+    _validate_semantic_normalization({"requirements": [item]})

@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg
+from teoria.persistence.postgres import connect
 from psycopg.rows import dict_row
 
 
@@ -135,34 +136,43 @@ PROFILE_QUERIES = (
 )
 
 
-def run_data_profile(
+async def run_data_profile(
     database_url: str,
     *,
     include_deep: bool = False,
     statement_timeout_ms: int = 30_000,
 ) -> dict[str, Any]:
     results: dict[str, Any] = {}
-    with psycopg.connect(database_url, row_factory=dict_row) as connection:
+    async with connect(database_url, row_factory=dict_row) as connection:
         connection.read_only = True
-        connection.execute("SELECT set_config('statement_timeout', %s, false)", (str(statement_timeout_ms),))
-        connection.commit()
+        await connection.execute(
+            "SELECT set_config('statement_timeout', %s, false)",
+            (str(statement_timeout_ms),),
+        )
+        await connection.commit()
         for query in PROFILE_QUERIES:
             if query.deep and not include_deep:
-                results[query.key] = {"status": "skipped", "reason": "deep_profile_not_requested"}
+                results[query.key] = {
+                    "status": "skipped",
+                    "reason": "deep_profile_not_requested",
+                }
                 continue
             try:
-                with connection.transaction():
-                    row = connection.execute(query.sql).fetchone()
-                results[query.key] = {"status": "available", "values": _json_values(row or {})}
+                async with connection.transaction():
+                    row = await (await connection.execute(query.sql)).fetchone()
+                results[query.key] = {
+                    "status": "available",
+                    "values": _json_values(row or {}),
+                }
             except psycopg.errors.QueryCanceled:
-                connection.rollback()
+                await connection.rollback()
                 results[query.key] = {
                     "status": "unavailable",
                     "reason": "statement_timeout",
                     "statement_timeout_ms": statement_timeout_ms,
                 }
             except psycopg.Error as exc:
-                connection.rollback()
+                await connection.rollback()
                 results[query.key] = {
                     "status": "unavailable",
                     "reason": "database_error",
@@ -182,4 +192,7 @@ def run_data_profile(
 
 
 def _json_values(row: dict[str, Any]) -> dict[str, Any]:
-    return {key: float(value) if isinstance(value, Decimal) else value for key, value in row.items()}
+    return {
+        key: float(value) if isinstance(value, Decimal) else value
+        for key, value in row.items()
+    }

@@ -14,9 +14,9 @@ description: Create or revise a Teoria Source Registry and operation verificatio
 작업 전에 다음 파일을 끝까지 읽는다.
 
 - `AGENTS.md`
-- `docs/registry/source-authoring.md`
-- `docs/registry/source_registry.md`
-- `docs/registry/templates/source.yaml`
+- `docs/platform/registry/source_authoring.md`
+- `docs/platform/registry/guide.md`
+- `docs/platform/registry/templates/source.yaml`
 - 대상과 유사한 기존 Source 및 verification case
 
 이 Skill은 Source, Reference metadata, verification case만 기본 범위로 삼는다. 요청받지 않은 Ontology, Mapping, Capability는 만들지 않는다. 사용자 변경과 관련 없는 파일은 수정하지 않는다.
@@ -57,7 +57,7 @@ Connector 원문이면 입력 경로로 `pipelines/references/providers/{provide
 
 ### 3. Source와 case 작성
 
-`docs/registry/templates/source.yaml`을 기준으로 다음을 함께 작성한다.
+`docs/platform/registry/templates/source.yaml`을 기준으로 다음을 함께 작성한다.
 
 ```text
 platform/registries/sources/{source_id}.yaml

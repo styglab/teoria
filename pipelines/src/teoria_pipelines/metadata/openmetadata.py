@@ -22,11 +22,8 @@ def run_openmetadata_ingestion_container(
     network: str,
     timeout_seconds: int,
 ) -> dict[str, Any]:
-    """Run the official ingestion runtime as an ephemeral Docker container."""
+    """Run the official ingestion runtime as an ephemeral container or Kubernetes Job."""
 
-    import docker
-
-    logger = get_run_logger()
     allowed_image = _required_environment(
         "TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE"
     )
@@ -35,6 +32,17 @@ def run_openmetadata_ingestion_container(
             "OpenMetadata ingestion image is not allowlisted: "
             f"requested={image!r}"
         )
+    backend = os.environ.get("TEORIA_OPENMETADATA_INGESTION_BACKEND", "docker")
+    if backend == "kubernetes":
+        from teoria_pipelines.metadata.kubernetes_job import run_ingestion_job
+
+        return run_ingestion_job(image=image, timeout_seconds=timeout_seconds)
+    if backend != "docker":
+        raise ValueError("Unsupported OpenMetadata ingestion backend")
+    import docker
+
+    logger = get_run_logger()
+
     environment = {
         "TEORIA_METADATA_DB_PASSWORD": _required_environment(
             "TEORIA_METADATA_DB_PASSWORD"

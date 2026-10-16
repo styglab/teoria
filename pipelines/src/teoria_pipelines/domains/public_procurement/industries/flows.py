@@ -1,4 +1,4 @@
-from datetime import date
+from teoria_pipelines.domains.public_procurement.calendar import procurement_today
 from uuid import UUID, uuid4
 
 from prefect import flow
@@ -11,8 +11,8 @@ from teoria_pipelines.domains.public_procurement.industries.tasks import (
     normalize_industry_dictionary,
     save_industry_raw,
 )
+from teoria_pipelines.domains.public_procurement.tasks import complete_pipeline_run
 from teoria_pipelines.execution.tasks import (
-    complete_pipeline_run,
     fail_pipeline_run,
     start_pipeline_run,
     update_checkpoint,
@@ -22,18 +22,20 @@ from teoria_pipelines.models import CollectionWindow
 
 @flow(name="나라장터 업종 사전 주간 동기화")
 async def sync_pps_industries(pipeline_root: str = "/app/pipelines"):
-    today = date.today()
+    today = procurement_today()
     window = CollectionWindow(today, today)
     run_id = flow_run.get_id()
     execution_id = UUID(run_id) if run_id else uuid4()
-    start_pipeline_run(execution_id, PIPELINE_ID, window)
+    await start_pipeline_run(execution_id, PIPELINE_ID, window)
     try:
         extracted = await extract_industries(execution_id, pipeline_root)
-        raw_count = save_industry_raw(extracted)
+        raw_count = await save_industry_raw(extracted)
         rows = normalize_industry_dictionary(extracted, raw_count)
-        loaded = load_industry_dictionary(rows)
-        checkpointed = update_checkpoint(execution_id, PIPELINE_ID, today, raw_count, loaded)
-        return complete_pipeline_run(execution_id, checkpointed)
+        loaded = await load_industry_dictionary(rows)
+        checkpointed = await update_checkpoint(
+            execution_id, PIPELINE_ID, today, raw_count, loaded
+        )
+        return await complete_pipeline_run(execution_id, checkpointed)
     except BaseException as exc:
-        fail_pipeline_run(execution_id, type(exc).__name__)
+        (await fail_pipeline_run(execution_id, type(exc).__name__))
         raise

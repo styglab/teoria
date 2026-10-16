@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Protocol
 
-import psycopg
+from teoria.persistence.postgres import connect
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -14,30 +14,35 @@ from teoria.settings import Settings, bootstrap_settings
 
 
 class PolicyTelemetryRepository(Protocol):
-    def record_decisions(self, events: list[dict[str, Any]]) -> None: ...
-    def record_status(self, status: dict[str, Any]) -> None: ...
+    async def record_decisions(self, events: list[dict[str, Any]]) -> None: ...
+    async def record_status(self, status: dict[str, Any]) -> None: ...
 
 
 class PostgresPolicyTelemetryRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
 
-    def record_decisions(self, events: list[dict[str, Any]]) -> None:
+    async def record_decisions(self, events: list[dict[str, Any]]) -> None:
         rows = [
             (
-                event["decision_id"], json.dumps(event.get("labels") or {}),
-                json.dumps(event.get("bundles") or {}), event.get("path"),
-                json.dumps(event.get("input")), json.dumps(event.get("result")),
-                event.get("requested_by"), event.get("timestamp"), json.dumps(event),
+                event["decision_id"],
+                json.dumps(event.get("labels") or {}),
+                json.dumps(event.get("bundles") or {}),
+                event.get("path"),
+                json.dumps(event.get("input")),
+                json.dumps(event.get("result")),
+                event.get("requested_by"),
+                event.get("timestamp"),
+                json.dumps(event),
             )
             for event in events
             if isinstance(event, dict) and event.get("decision_id")
         ]
         if not rows:
             return
-        with psycopg.connect(self.database_url) as connection:
-            with connection.cursor() as cursor:
-                cursor.executemany(
+        async with connect(self.database_url) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.executemany(
                     """
                     INSERT INTO policy.opa_decision_logs (
                         decision_id, labels, bundles, decision_path, input_document,
@@ -48,12 +53,12 @@ class PostgresPolicyTelemetryRepository:
                     rows,
                 )
 
-    def record_status(self, status: dict[str, Any]) -> None:
+    async def record_status(self, status: dict[str, Any]) -> None:
         labels = status.get("labels") or {}
         instance_id = str(labels.get("id") or "unknown")
-        with psycopg.connect(self.database_url) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
+        async with connect(self.database_url) as connection:
+            async with connection.cursor() as cursor:
+                await cursor.execute(
                     """
                     INSERT INTO policy.opa_status_reports (instance_id, report)
                     VALUES (%s, %s::jsonb)
@@ -99,7 +104,7 @@ def create_policy_control_plane_app(
             raise HTTPException(status_code=503, detail={"code": "bundle_unavailable"})
         return FileResponse(bundle_path, media_type="application/gzip")
 
-    @app.post("/logs", status_code=204)
+    @(app.post("/logs", status_code=204))
     async def decision_logs(
         request: Request,
         authorization: str | None = Header(default=None),
@@ -110,16 +115,22 @@ def create_policy_control_plane_app(
             try:
                 payload = gzip.decompress(payload)
             except gzip.BadGzipFile as exc:
-                raise HTTPException(status_code=400, detail={"code": "invalid_gzip"}) from exc
+                raise HTTPException(
+                    status_code=400, detail={"code": "invalid_gzip"}
+                ) from exc
         try:
             events = json.loads(payload)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise HTTPException(status_code=400, detail={"code": "invalid_json"}) from exc
+            raise HTTPException(
+                status_code=400, detail={"code": "invalid_json"}
+            ) from exc
         if not isinstance(events, list):
-            raise HTTPException(status_code=400, detail={"code": "decision_log_array_required"})
-        repository.record_decisions(events)
+            raise HTTPException(
+                status_code=400, detail={"code": "decision_log_array_required"}
+            )
+        await repository.record_decisions(events)
 
-    @app.post("/status", status_code=204)
+    @(app.post("/status", status_code=204))
     async def status(
         request: Request,
         authorization: str | None = Header(default=None),
@@ -127,8 +138,10 @@ def create_policy_control_plane_app(
         authorize(authorization)
         report = await request.json()
         if not isinstance(report, dict):
-            raise HTTPException(status_code=400, detail={"code": "status_object_required"})
-        repository.record_status(report)
+            raise HTTPException(
+                status_code=400, detail={"code": "status_object_required"}
+            )
+        await repository.record_status(report)
 
     return app
 

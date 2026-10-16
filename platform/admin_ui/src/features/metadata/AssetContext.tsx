@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { adminApi, type AssetContextResult } from "../../api/admin";
+import { metadataApi, type AssetContextResult } from "../../api/metadata";
 
 const statuses: Record<string, string> = {completed:"완료", running:"실행 중", failed:"실패", approved:"승인", draft:"초안", deprecated:"사용 종료", rejected:"거절", pending:"검토 대기", applied:"적용 완료", changes_requested:"수정 요청", applying:"적용 중"};
 const date = (value: unknown) => value ? new Date(String(value)).toLocaleString("ko-KR") : "기록 없음";
@@ -18,13 +18,13 @@ export function AssetContext({ tableId, section = "all" }: { tableId: string; se
     setContext(null); setError(null);
     setLineage(null);
     setLineageError(null);
-    adminApi.assetContext(tableId).then(value => { if (active) setContext(value); }).catch(reason => { if (active) setError((reason as Error).message); });
+    metadataApi.assetContext(tableId).then(value => { if (active) setContext(value); }).catch(reason => { if (active) setError((reason as Error).message); });
     return () => { active = false; ++lineageRequest.current; };
   }, [tableId]);
   const loadLineage = async () => {
     const request = ++lineageRequest.current;
     setLineage(null); setLineageError(null);
-    try { const value = await adminApi.metadataLineage(tableId); if (request === lineageRequest.current) setLineage(value); }
+    try { const value = await metadataApi.metadataLineage(tableId); if (request === lineageRequest.current) setLineage(value); }
     catch (reason) { if (request === lineageRequest.current) setLineageError((reason as Error).message); }
   };
   if (error) return <section className="asset-context"><p role="alert">통합 정보 조회 실패: {error}</p></section>;

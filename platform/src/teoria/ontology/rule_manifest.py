@@ -33,21 +33,26 @@ class BusinessRuleManifest(BaseModel):
         return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
-def apply_business_rule_manifest(
+async def apply_business_rule_manifest(
     repository: OntologyAuthoringRepository,
     manifest: BusinessRuleManifest,
     *,
     actor: str,
 ) -> dict[str, Any]:
     version = next(
-        (item for item in repository.list_versions(manifest.ontology_namespace)
-         if item["version"] == manifest.ontology_version),
+        (
+            item
+            for item in (await repository.list_versions(manifest.ontology_namespace))
+            if item["version"] == manifest.ontology_version
+        ),
         None,
     )
     if version is None or version["status"] != "draft":
-        raise ValueError("Business rules can only be applied to the requested draft version")
+        raise ValueError(
+            "Business rules can only be applied to the requested draft version"
+        )
     version_id = UUID(version["ontology_version_id"])
-    detail = repository.get_version(version_id)
+    detail = await repository.get_version(version_id)
     objects = {item["code"]: item for item in detail["objects"]}
     existing = {item["code"] for item in detail["rules"]}
     created = 0
@@ -57,7 +62,7 @@ def apply_business_rule_manifest(
         subject = objects.get(rule.subject)
         if subject is None:
             raise ValueError(f"Unknown rule subject: {rule.subject}")
-        repository.add_item(
+        await repository.add_item(
             version_id,
             kind="rule",
             payload={
@@ -71,5 +76,5 @@ def apply_business_rule_manifest(
         "status": "complete",
         "created": created,
         "unchanged": len(manifest.rules) - created,
-        "validation": repository.validate(version_id),
+        "validation": (await repository.validate(version_id)),
     }

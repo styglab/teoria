@@ -16,20 +16,26 @@ REGISTRIES = Path(__file__).parents[3] / "registries"
 
 
 class FakeDatabaseExecutor:
-    def execute(self, catalog, source_id, relation_id, query):
+    async def execute(self, catalog, source_id, relation_id, query):
         assert source_id == "teoria_public_procurement"
         assert relation_id == "contracts"
-        assert query == {"filters": [{
-            "field": "unified_contract_number",
-            "operator": "eq",
-            "value": "R26TE17086494",
-        }]}
-        return [{
-            "unified_contract_number": "R26TE17086494",
-            "contract_type": "service",
-            "contract_name": "테스트 계약",
-            "contracting_organization_code": "B550554",
-        }]
+        assert query == {
+            "filters": [
+                {
+                    "field": "unified_contract_number",
+                    "operator": "eq",
+                    "value": "R26TE17086494",
+                }
+            ]
+        }
+        return [
+            {
+                "unified_contract_number": "R26TE17086494",
+                "contract_type": "service",
+                "contract_name": "테스트 계약",
+                "contracting_organization_code": "B550554",
+            }
+        ]
 
 
 def test_materializes_contract_participation_from_database_relation() -> None:
@@ -38,15 +44,17 @@ def test_materializes_contract_participation_from_database_relation() -> None:
         catalog,
         "teoria_public_procurement",
         "contract_suppliers",
-        [{
-            "unified_contract_number": "R26TE17086494",
-            "supplier_sequence": 1,
-            "business_registration_number": "1234567890",
-            "supplier_name": "테스트 업체",
-            "supplier_role_name": "주계약업체",
-            "joint_contract_method_name": "공동",
-            "participation_share_rate": 80,
-        }],
+        [
+            {
+                "unified_contract_number": "R26TE17086494",
+                "supplier_sequence": 1,
+                "business_registration_number": "1234567890",
+                "supplier_name": "테스트 업체",
+                "supplier_role_name": "주계약업체",
+                "joint_contract_method_name": "공동",
+                "participation_share_rate": 80,
+            }
+        ],
     )
 
     objects, links = OntologyMaterializer().materialize(
@@ -74,10 +82,14 @@ def test_materializes_contract_participation_from_database_relation() -> None:
     assert registration.ontology == "company"
     assert registration.properties["business_registration_number"] == "1234567890"
     participation_link = next(
-        item for item in links if item.link_type == "business_registration_has_contract_participation"
+        item
+        for item in links
+        if item.link_type == "business_registration_has_contract_participation"
     )
     contract_link = next(
-        item for item in links if item.link_type == "contract_participation_is_for_contract"
+        item
+        for item in links
+        if item.link_type == "contract_participation_is_for_contract"
     )
     assert participation_link.source_object_id == registration.object_id
     assert participation_link.target_object_id == participation.object_id
@@ -89,54 +101,78 @@ def test_materializes_bid_award_and_opening_participation_relationships() -> Non
     catalog = RegistryLoader(REGISTRIES).load()
     award_id = "R26BK00000001:000:0:000"
     award_fragments = MappingDecoder().decode_database_rows(
-        catalog, "teoria_public_procurement", "bid_awards", [{
-            "award_id": award_id,
-            "bid_notice_id": "R26BK00000001:000",
-            "notice_number": "R26BK00000001",
-            "notice_order": "000",
-            "bid_classification_number": "0",
-            "rebid_number": "000",
-            "work_type": "service",
-            "notice_name": "테스트 용역",
-            "winner_business_registration_number": "1234567890",
-            "winner_name": "낙찰기업",
-            "winning_amount": 100000000,
-            "demand_organization_code": "B000001",
-            "demand_organization_name": "테스트기관",
-        }],
+        catalog,
+        "teoria_public_procurement",
+        "bid_awards",
+        [
+            {
+                "award_id": award_id,
+                "bid_notice_id": "R26BK00000001:000",
+                "notice_number": "R26BK00000001",
+                "notice_order": "000",
+                "bid_classification_number": "0",
+                "rebid_number": "000",
+                "work_type": "service",
+                "notice_name": "테스트 용역",
+                "winner_business_registration_number": "1234567890",
+                "winner_name": "낙찰기업",
+                "winning_amount": 100000000,
+                "demand_organization_code": "B000001",
+                "demand_organization_name": "테스트기관",
+            }
+        ],
     )
     participant_fragments = MappingDecoder().decode_database_rows(
-        catalog, "teoria_public_procurement", "bid_opening_participants", [{
-            "participation_id": f"{award_id}:1234567890",
-            "award_id": award_id,
-            "bid_notice_id": "R26BK00000001:000",
-            "notice_number": "R26BK00000001",
-            "notice_order": "000",
-            "bid_classification_number": "0",
-            "rebid_number": "000",
-            "business_registration_number": "1234567890",
-            "participant_name": "낙찰기업",
-            "opening_rank": 1,
-            "bid_amount": 100000000,
-        }],
+        catalog,
+        "teoria_public_procurement",
+        "bid_opening_participants",
+        [
+            {
+                "participation_id": f"{award_id}:1234567890",
+                "award_id": award_id,
+                "bid_notice_id": "R26BK00000001:000",
+                "notice_number": "R26BK00000001",
+                "notice_order": "000",
+                "bid_classification_number": "0",
+                "rebid_number": "000",
+                "business_registration_number": "1234567890",
+                "participant_name": "낙찰기업",
+                "opening_rank": 1,
+                "bid_amount": 100000000,
+            }
+        ],
     )
 
     objects, links = OntologyMaterializer().materialize(
-        catalog, [*award_fragments, *participant_fragments], datetime.now(timezone.utc),
-        {"bid_notice", "bid_award", "bid_opening_participation",
-         "business_registration", "public_organization"},
-        {"bid_notice_has_award", "business_registration_wins_bid_award",
-         "public_organization_demands_bid_award",
-         "bid_opening_participation_is_for_award",
-         "business_registration_has_bid_opening_participation"},
+        catalog,
+        [*award_fragments, *participant_fragments],
+        datetime.now(timezone.utc),
+        {
+            "bid_notice",
+            "bid_award",
+            "bid_opening_participation",
+            "business_registration",
+            "public_organization",
+        },
+        {
+            "bid_notice_has_award",
+            "business_registration_wins_bid_award",
+            "public_organization_demands_bid_award",
+            "bid_opening_participation_is_for_award",
+            "business_registration_has_bid_opening_participation",
+        },
     )
 
     assert {item.object_type for item in objects} == {
-        "bid_notice", "bid_award", "bid_opening_participation",
-        "business_registration", "public_organization",
+        "bid_notice",
+        "bid_award",
+        "bid_opening_participation",
+        "business_registration",
+        "public_organization",
     }
     assert {item.link_type for item in links} == {
-        "bid_notice_has_award", "business_registration_wins_bid_award",
+        "bid_notice_has_award",
+        "business_registration_wins_bid_award",
         "public_organization_demands_bid_award",
         "bid_opening_participation_is_for_award",
         "business_registration_has_bid_opening_participation",
@@ -144,7 +180,9 @@ def test_materializes_bid_award_and_opening_participation_relationships() -> Non
 
 
 @pytest.mark.asyncio
-async def test_capability_runner_queries_database_and_materializes_relationships() -> None:
+async def test_capability_runner_queries_database_and_materializes_relationships() -> (
+    None
+):
     catalog = RegistryLoader(REGISTRIES).load()
     result = await CapabilityRunner(database_executor=FakeDatabaseExecutor()).run(
         catalog,
@@ -162,28 +200,47 @@ async def test_capability_runner_queries_database_and_materializes_relationships
 
 
 class PaginatedBidNoticeExecutor:
-    def execute(self, catalog, source_id, relation_id, query):
+    async def execute(self, catalog, source_id, relation_id, query):
         assert source_id == "teoria_public_procurement"
         assert relation_id == "bid_notices"
         assert query == {
             "filters": [
-                {"field": "notice_published_at", "operator": "gte",
-                 "value": datetime(2026, 8, 1, tzinfo=timezone.utc)},
-                {"field": "notice_published_at", "operator": "lte",
-                 "value": datetime(2026, 8, 31, tzinfo=timezone.utc)},
+                {
+                    "field": "notice_published_at",
+                    "operator": "gte",
+                    "value": datetime(2026, 8, 1, tzinfo=timezone.utc),
+                },
+                {
+                    "field": "notice_published_at",
+                    "operator": "lte",
+                    "value": datetime(2026, 8, 31, tzinfo=timezone.utc),
+                },
                 {"field": "work_type", "operator": "eq", "value": "service"},
-                {"field": "notice_organization_code", "operator": "eq",
-                 "value": "B000001"},
-                {"field": "demand_organization_code", "operator": "eq",
-                 "value": "B000002"},
-                {"field": "bid_status", "operator": "in",
-                 "value": ["scheduled", "open", "unknown"]},
+                {
+                    "field": "notice_organization_code",
+                    "operator": "eq",
+                    "value": "B000001",
+                },
+                {
+                    "field": "demand_organization_code",
+                    "operator": "eq",
+                    "value": "B000002",
+                },
+                {
+                    "field": "bid_status",
+                    "operator": "in",
+                    "value": ["scheduled", "open", "unknown"],
+                },
                 {"field": "notice_status", "operator": "eq", "value": "active"},
                 {"field": "lineage_modes", "operator": "contains", "value": "all"},
             ],
             "search": {
-                "fields": ["notice_name", "notice_number", "notice_organization_name",
-                           "demand_organization_name"],
+                "fields": [
+                    "notice_name",
+                    "notice_number",
+                    "notice_organization_name",
+                    "demand_organization_name",
+                ],
                 "value": "정보시스템",
             },
             "order_by": [
@@ -191,20 +248,27 @@ class PaginatedBidNoticeExecutor:
                 {"field": "bid_notice_id", "direction": "asc", "nulls": None},
             ],
             "pagination": {
-                "page": 2, "page_size": 20, "root_field": "bid_notice_id",
+                "page": 2,
+                "page_size": 20,
+                "root_field": "bid_notice_id",
                 "count_distinct": False,
             },
         }
-        return DatabaseQueryResult([{
-            "bid_notice_id": "R26TEST:000",
-            "notice_number": "R26TEST",
-            "notice_order": "000",
-            "notice_name": "정보시스템 운영 용역",
-            "work_type": "service",
-            "bid_statuses": ["scheduled", "open", "unknown"],
-            "notice_organization_code": "B000001",
-            "notice_organization_name": "테스트기관",
-        }], {"page": 2, "page_size": 20, "total_items": 41, "total_pages": 3})
+        return DatabaseQueryResult(
+            [
+                {
+                    "bid_notice_id": "R26TEST:000",
+                    "notice_number": "R26TEST",
+                    "notice_order": "000",
+                    "notice_name": "정보시스템 운영 용역",
+                    "work_type": "service",
+                    "bid_statuses": ["scheduled", "open", "unknown"],
+                    "notice_organization_code": "B000001",
+                    "notice_organization_name": "테스트기관",
+                }
+            ],
+            {"page": 2, "page_size": 20, "total_items": 41, "total_pages": 3},
+        )
 
 
 @pytest.mark.asyncio
@@ -230,11 +294,15 @@ async def test_search_bid_notices_returns_root_object_pagination() -> None:
     response = serialize_capability_result(result, max_objects=1)
 
     assert response["pagination"] == {
-        "page": 2, "page_size": 20, "total_items": 41, "total_pages": 3,
+        "page": 2,
+        "page_size": 20,
+        "total_items": 41,
+        "total_pages": 3,
     }
     assert response["truncated"] is False
     assert {item["type"] for item in response["objects"]} == {
-        "bid_notice", "public_organization",
+        "bid_notice",
+        "public_organization",
     }
 
 
@@ -257,14 +325,20 @@ def test_bid_notice_search_uses_declared_query_defaults() -> None:
         {"field": "bid_notice_id", "direction": "desc", "nulls": None},
     ]
     assert query["pagination"] == {
-        "page": 1, "page_size": 20, "root_field": "bid_notice_id",
+        "page": 1,
+        "page_size": 20,
+        "root_field": "bid_notice_id",
         "count_distinct": False,
     }
     assert query["filters"][-2] == {
-        "field": "notice_status", "operator": "eq", "value": "active",
+        "field": "notice_status",
+        "operator": "eq",
+        "value": "active",
     }
     assert query["filters"][-1] == {
-        "field": "lineage_modes", "operator": "contains", "value": "all",
+        "field": "lineage_modes",
+        "operator": "contains",
+        "value": "all",
     }
 
 
@@ -306,7 +380,9 @@ def test_bid_notice_search_binds_exact_notice_number() -> None:
     )
 
     assert query["filters"][0] == {
-        "field": "notice_number", "operator": "eq", "value": "R26BK01735611",
+        "field": "notice_number",
+        "operator": "eq",
+        "value": "R26BK01735611",
     }
     assert query["pagination"]["count_distinct"] is False
 
@@ -321,8 +397,9 @@ def test_bid_notice_search_binds_procurement_hierarchy_filters() -> None:
         capability.steps[0],
         {
             "notice_published_at_from": datetime(2022, 1, 1, tzinfo=timezone.utc),
-            "notice_published_at_to": datetime(2026, 9, 29, 23, 59, 59,
-                                                tzinfo=timezone.utc),
+            "notice_published_at_to": datetime(
+                2026, 9, 29, 23, 59, 59, tzinfo=timezone.utc
+            ),
             "work_type": "service",
             "large_category": "ICT 서비스",
             "middle_category": "SW 및 시스템 개발",
@@ -343,13 +420,20 @@ def test_bid_notice_search_binds_procurement_hierarchy_filters() -> None:
 def test_bid_notice_search_binds_lineage_mode() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
     capability = catalog.capabilities["search_bid_notices"]
-    query = CapabilityBinder().bind(catalog, capability, capability.steps[0], {
-        "notice_published_at_from": datetime(2026, 8, 1, tzinfo=timezone.utc),
-        "notice_published_at_to": datetime(2026, 9, 30, tzinfo=timezone.utc),
-        "lineage_mode": "grouped",
-    })
+    query = CapabilityBinder().bind(
+        catalog,
+        capability,
+        capability.steps[0],
+        {
+            "notice_published_at_from": datetime(2026, 8, 1, tzinfo=timezone.utc),
+            "notice_published_at_to": datetime(2026, 9, 30, tzinfo=timezone.utc),
+            "lineage_mode": "grouped",
+        },
+    )
     assert query["filters"][-1] == {
-        "field": "lineage_modes", "operator": "contains", "value": "grouped",
+        "field": "lineage_modes",
+        "operator": "contains",
+        "value": "grouped",
     }
 
 
@@ -399,16 +483,22 @@ def test_bid_notice_contracts_binds_exact_notice_number_and_pagination() -> None
     )
 
     assert query == {
-        "filters": [{
-            "field": "notice_number",
-            "operator": "eq",
-            "value": "R26BK00000001",
-        }],
+        "filters": [
+            {
+                "field": "notice_number",
+                "operator": "eq",
+                "value": "R26BK00000001",
+            }
+        ],
         "order_by": [
             {"field": "concluded_date", "direction": "desc", "nulls": "last"},
             {"field": "unified_contract_number", "direction": "desc", "nulls": None},
         ],
-        "pagination": {"page": 2, "page_size": 50, "root_field": "unified_contract_number"},
+        "pagination": {
+            "page": 2,
+            "page_size": 50,
+            "root_field": "unified_contract_number",
+        },
     }
 
 

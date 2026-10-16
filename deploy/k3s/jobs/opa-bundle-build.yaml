@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opa-bundle-build
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: opa-bundle-build
+    spec:
+      containers:
+      - name: opa-bundle-build
+        image: teoria/opa-builder:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_OPA_BUNDLE_REVISION
+          value: release
+        volumeMounts:
+        - name: opa-signing-keys
+          mountPath: /keys
+          readOnly: false
+        - name: opa-bundles
+          mountPath: /bundle
+          readOnly: false
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      volumes:
+      - name: opa-signing-keys
+        persistentVolumeClaim:
+          claimName: opa-signing-keys
+      - name: opa-bundles
+        persistentVolumeClaim:
+          claimName: opa-bundles
+      restartPolicy: Never

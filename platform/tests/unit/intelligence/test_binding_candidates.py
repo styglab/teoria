@@ -1,4 +1,4 @@
-from teoria.intelligence.binding_candidates import rank_binding_candidates
+from teoria.intelligence.suggestions.binding_candidates import rank_binding_candidates
 
 
 def test_contract_amount_column_prefers_contract_amount_property() -> None:

@@ -33,19 +33,6 @@ def test_capabilities_load_and_references_are_valid() -> None:
     assert detail.processor == "company_identity.get_company_detail_context"
     assert detail.inputs["financial_year_limit"].default == 3
     assert detail.inputs["financial_lookback_years"].default == 7
-    requirements = catalog.capabilities["get_bid_requirements"]
-    assert [step.call for step in requirements.steps] == [
-        "teoria_public_procurement.bid_requirement_sets",
-        "teoria_public_procurement.bid_requirements",
-        "teoria_public_procurement.bid_requirement_evidence",
-    ]
-    assert "public_procurement.bid_requirement_evidence" in requirements.returns
-    assert "public_procurement.bid_requirement_supported_by_evidence" in requirements.returns
-    findings = catalog.capabilities["get_bid_participation_findings"]
-    assert [step.call for step in findings.steps] == [
-        "teoria_public_procurement.bid_participation_findings",
-        "teoria_public_procurement.bid_participation_finding_evidence",
-    ]
     assert catalog.capabilities["search_bid_awards"].steps[0].call == (
         "teoria_public_procurement.bid_awards"
     )
@@ -59,40 +46,40 @@ def test_capabilities_load_and_references_are_valid() -> None:
 
 def test_capability_kind_distinguishes_compute_results_from_persisted_actions() -> None:
     common = {
-        "id": "assess_company_bid_eligibility",
+        "id": "compute_company_profile",
         "description": "입찰 참가자격을 평가한다.",
-        "steps": [{"call": "teoria_public_procurement.bid_requirements"}],
-        "returns": ["assessment.bid_eligibility_assessment"],
+        "steps": [{"call": "fsc_company_basic.get_company_overview"}],
+        "returns": ["company.legal_entity"],
     }
 
     compute = CapabilityDefinition.model_validate(
         {
             **common,
             "kind": "compute",
-            "processor": "assessment.evaluate_bid_eligibility",
+            "processor": "company_identity.compute_profile",
             "effects": {
-                "reads": ["public_procurement.bid_requirement"],
-                "produces": ["assessment.bid_eligibility_assessment"],
+                "reads": ["company.business_registration"],
+                "produces": ["company.legal_entity"],
             },
         }
     )
     assert compute.kind == "compute"
-    assert compute.effects.produces == ["assessment.bid_eligibility_assessment"]
+    assert compute.effects.produces == ["company.legal_entity"]
 
     with pytest.raises(ValueError, match="only an action capability"):
         CapabilityDefinition.model_validate(
             {
                 **common,
                 "kind": "compute",
-                "processor": "assessment.evaluate_bid_eligibility",
-                "effects": {"creates": ["assessment.bid_eligibility_assessment"]},
+                "processor": "company_identity.compute_profile",
+                "effects": {"creates": ["company.legal_entity"]},
             }
         )
 
 
 def test_reports_unknown_capability_effect_reference() -> None:
     catalog = deepcopy(RegistryLoader(REGISTRIES).load())
-    capability = catalog.capabilities["get_bid_requirements"]
+    capability = catalog.capabilities["get_bid_notice"]
     capability.effects.reads = ["assessment.missing_object"]
 
     diagnostics = RegistryValidator().validate(catalog)

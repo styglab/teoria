@@ -6,11 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import psycopg
 
-from teoria.domains.public_procurement.bid_eligibility.assessment import (
-    execute_bid_eligibility_assessment,
-    execute_bid_eligibility_assessments,
-)
-from teoria.domains.public_procurement.market_analysis.activity import (
+from teoria.domains.public_procurement.market_analysis.activity.service import (
     execute_procurement_activity_search,
 )
 from teoria.domains.public_procurement.market_analysis.bid_context.bid_participation import (
@@ -25,15 +21,15 @@ from teoria.domains.public_procurement.market_analysis.contracts.contract_search
 from teoria.domains.public_procurement.market_analysis.contracts.project_lineage import (
     execute_bid_project_lineage,
 )
-from teoria.domains.public_procurement.market_analysis.outcomes import (
+from teoria.domains.public_procurement.market_analysis.outcomes.service import (
     execute_procurement_outcome_search,
 )
-from teoria.domains.public_procurement.market_analysis.participation import (
+from teoria.domains.public_procurement.market_analysis.participation.service import (
     execute_company_participation_search,
     execute_bid_notice_participations,
     execute_company_competitor_analysis,
 )
-from teoria.domains.public_procurement.market_analysis.profiles.profiles import (
+from teoria.domains.public_procurement.market_analysis.profiles.service import (
     execute_organization_procurement_profile,
     execute_company_procurement_profile,
     execute_organization_supplier_entry_search,
@@ -47,12 +43,16 @@ from teoria.domains.public_procurement.market_analysis.related_projects.similar_
 from teoria.domains.public_procurement.market_analysis.relationships.organization_relationship import (
     execute_organization_company_relationship,
 )
-from teoria.domains.public_procurement.exploration import (
+from teoria.domains.public_procurement.exploration.discovery import (
     execute_autocomplete_procurement_entities,
     execute_procurement_classification_catalog,
-    execute_procurement_field_market,
-    execute_procurement_network,
     execute_procurement_region_filter_options,
+)
+from teoria.domains.public_procurement.exploration.field_market import (
+    execute_procurement_field_market,
+)
+from teoria.domains.public_procurement.exploration.network import (
+    execute_procurement_network,
 )
 from teoria.registry.loader import RegistryCatalog
 from teoria.runtime.capability.contracts import CapabilityExecutionError, CapabilityResult
@@ -110,12 +110,6 @@ def register_processors(handlers: CapabilityHandlers) -> None:
     handlers.register_processor(
         "procurement_exploration.get_procurement_region_filter_options",
         _query(execute_procurement_region_filter_options, cache=True),
-    )
-    handlers.register_processor(
-        "assessment.evaluate_bid_eligibility", execute_bid_eligibility_assessment,
-    )
-    handlers.register_processor(
-        "assessment.evaluate_bid_eligibilities", execute_bid_eligibility_assessments,
     )
     handlers.register_processor(
         "market_context.find_bid_project_lineage", _query(execute_bid_project_lineage),

@@ -4,16 +4,20 @@ from collections import Counter
 from pathlib import Path
 from typing import Literal
 
-import psycopg
+from teoria.persistence.postgres import connect
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from teoria.registry.loader import RegistryCatalog
 
 
 class LegacyObjectDisposition(BaseModel):
-    classification: Literal["BUSINESS_CONCEPT", "RUNTIME_PROJECTION", "ASSESSMENT_RESULT", "DEPRECATED"]
-    migration_status: Literal["mapped", "planned", "runtime_contract", "retain", "deprecated"]
+    classification: Literal[
+        "BUSINESS_CONCEPT", "RUNTIME_PROJECTION", "ASSESSMENT_RESULT", "DEPRECATED"
+    ]
+    migration_status: Literal[
+        "mapped", "planned", "runtime_contract", "retain", "deprecated"
+    ]
     rationale: str
     target_stable_key: str | None = None
 
@@ -30,7 +34,7 @@ class OntologyMigrationManifest(BaseModel):
         return cls.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
-def build_migration_report(
+async def build_migration_report(
     catalog: RegistryCatalog,
     manifest: OntologyMigrationManifest,
     *,
@@ -55,17 +59,23 @@ def build_migration_report(
     mapping_usage: Counter[str] = Counter()
     for mapping in catalog.mappings.values():
         for object_ref in mapping.bindings:
-            qualified = object_ref if object_ref.startswith(f"{mapping.ontology}.") else f"{mapping.ontology}.{object_ref}"
+            qualified = (
+                object_ref
+                if object_ref.startswith(f"{mapping.ontology}.")
+                else f"{mapping.ontology}.{object_ref}"
+            )
             candidate = ".".join(qualified.split(".")[:2])
             if candidate in registry_objects:
                 mapping_usage[candidate] += 1
     published_concepts = (
-        _load_published_concepts(application_database_url)
-        if application_database_url else {}
+        (await _load_published_concepts(application_database_url))
+        if application_database_url
+        else {}
     )
     stable_keys = set(published_concepts)
     missing_targets = sorted(
-        ref.target_stable_key for ref in manifest.objects.values()
+        ref.target_stable_key
+        for ref in manifest.objects.values()
         if ref.target_stable_key
         and application_database_url is not None
         and ref.target_stable_key not in stable_keys
@@ -73,7 +83,9 @@ def build_migration_report(
     classifications = Counter(item.classification for item in manifest.objects.values())
     statuses = Counter(item.migration_status for item in manifest.objects.values())
     return {
-        "status": "valid" if not missing and not unknown and not missing_targets else "invalid",
+        "status": "valid"
+        if not missing and not unknown and not missing_targets
+        else "invalid",
         "source_registry_release": manifest.source_registry_release,
         "registry_object_count": len(registry_objects),
         "manifest_object_count": len(manifest_objects),
@@ -92,7 +104,8 @@ def build_migration_report(
             "verified" if application_database_url is not None else "not_checked"
         ),
         "published_target_count": sum(
-            1 for item in manifest.objects.values()
+            1
+            for item in manifest.objects.values()
             if item.target_stable_key in published_concepts
         ),
         "capability_referenced_object_count": len(capability_usage),
@@ -105,7 +118,8 @@ def build_migration_report(
                 "mapping_reference_count": mapping_usage[ref],
                 "published_target": (
                     published_concepts.get(manifest.objects[ref].target_stable_key)
-                    if manifest.objects[ref].target_stable_key else None
+                    if manifest.objects[ref].target_stable_key
+                    else None
                 ),
                 "runtime_contract_required": bool(
                     capability_usage[ref] or mapping_usage[ref]
@@ -123,10 +137,11 @@ def build_migration_report(
     }
 
 
-def _load_published_concepts(database_url: str) -> dict[str, dict[str, str]]:
-    with psycopg.connect(database_url) as connection:
-        rows = connection.execute(
-            """
+async def _load_published_concepts(database_url: str) -> dict[str, dict[str, str]]:
+    async with connect(database_url) as connection:
+        rows = await (
+            await connection.execute(
+                """
             WITH published_members AS (
                 SELECT bo.concept_id,bo.ontology_version_id
                   FROM ontology.business_objects bo
@@ -148,6 +163,7 @@ def _load_published_concepts(database_url: str) -> dict[str, dict[str, str]]:
               JOIN ontology.runtime_artifacts a USING (ontology_version_id)
              WHERE v.status='published' AND c.retired_at IS NULL
             """
+            )
         ).fetchall()
     return {
         row[0]: {

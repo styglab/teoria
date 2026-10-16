@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OntologyAuthoring } from "./OntologyAuthoring";
 import { MemoryRouter } from "react-router-dom";
-import { adminApi, type OntologyVersionDetail } from "../../api/admin";
+import { ontologyApi, type OntologyVersionDetail } from "../../api/ontology";
 
 describe("OntologyAuthoring", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -47,12 +47,12 @@ describe("OntologyAuthoring", () => {
   });
 
   it("opens the persisted draft in its owning ontology instead of the published version", async () => {
-    vi.spyOn(adminApi, "authoredOntologies").mockResolvedValue({ items: [] });
-    const versions = vi.spyOn(adminApi, "ontologyVersions").mockResolvedValue({ items: [
+    vi.spyOn(ontologyApi, "authoredOntologies").mockResolvedValue({ items: [] });
+    const versions = vi.spyOn(ontologyApi, "ontologyVersions").mockResolvedValue({ items: [
       { ontology_version_id: "published", version: "1", status: "published", created_at: "2026-10-01" },
       { ontology_version_id: "draft-id", version: "2", status: "draft", created_at: "2026-10-14" },
     ] });
-    const detail = vi.spyOn(adminApi, "ontologyVersion").mockResolvedValue({
+    const detail = vi.spyOn(ontologyApi, "ontologyVersion").mockResolvedValue({
       ontology_version_id: "draft-id", version: "2", namespace: "second_domain", ontology_name: "새 업무", status: "draft", created_at: "2026-10-14",
       objects: [], relationships: [], rules: [], metrics: [],
     } as OntologyVersionDetail);

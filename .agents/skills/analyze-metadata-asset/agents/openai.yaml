@@ -1,4 +1,0 @@
-interface:
-  display_name: "Metadata Analysis Compatibility"
-  short_description: "기존 메타데이터 분석 요청을 현재 자산 진단 Skill에 연결합니다"
-  default_prompt: "Use $analyze-metadata-asset to route an existing metadata analysis request to the current diagnosis skills."

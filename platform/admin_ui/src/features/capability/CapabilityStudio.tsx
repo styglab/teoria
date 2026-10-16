@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowRight, Braces, Check, ChevronRight, CircleDashed, Database, GitFork, ShieldCheck, Workflow } from "lucide-react";
 import { CatalogLayout, PageHeader, SearchField } from "../../components/workspace/WorkspaceLayout";
-import { adminApi, type CapabilityCoverage, type CapabilitySummary, type LineageLink, type MappingSummary, type SourceSummary, type ValidationReport } from "../../api/admin";
+import { capabilityApi, type CapabilityCoverage, type CapabilitySummary } from "../../api/capability";
+import { type LineageLink, type MappingSummary, type SourceSummary, type ValidationReport } from "../../api/registry";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -29,7 +30,7 @@ export function CapabilityStudio({ capabilities, sources, mappings, lineage, val
   const [coverageError, setCoverageError] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
 
-  useEffect(() => { adminApi.capabilityCoverage().then(setCoverage).catch(() => setCoverageError(true)); }, []);
+  useEffect(() => { capabilityApi.capabilityCoverage().then(setCoverage).catch(() => setCoverageError(true)); }, []);
   useEffect(() => { if (!selectedId && capabilities.length) setSelectedId(capabilities[0].id); }, [capabilities, selectedId]);
 
   const filtered = useMemo(() => capabilities.filter((item) => `${item.name} ${item.id} ${item.description}`.toLowerCase().includes(query.toLowerCase())), [capabilities, query]);

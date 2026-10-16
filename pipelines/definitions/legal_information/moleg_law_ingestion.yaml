@@ -1,5 +1,7 @@
 pipeline:
   id: moleg_law_ingestion
+  flow_modules:
+    - teoria_pipelines.domains.legal_information.laws.flows
   description: 지정 법령의 연혁·현행·시행예정 원문을 시행일별 보존하고 구조화한다.
   connector: moleg_law_api
   operations:

@@ -2,7 +2,7 @@
 
 메타데이터 인텔리전스는 OpenMetadata 자산을 대상으로 세 작업을 제공한다.
 Skill은 Admin UI의 개발용 요청을 복사해 Codex에서 실행한다. 모델 gateway를 설정한
-[자동 자산 진단 Worker](../architecture/asset_assessment.md)는 별도 실행 경로이며,
+[자동 자산 진단 Worker](../platform/metadata/asset_assessment.md)는 별도 실행 경로이며,
 첫 버전은 설명·직접 Binding 제안과 법령 검토 findings를 지원한다.
 
 | 사용자 기능 | Skill | 현재 결과 |
@@ -57,7 +57,8 @@ export TEORIA_ADMIN_BASE_URL=http://localhost:8081/admin-api
 python3 .agents/skills/enrich-metadata-asset/scripts/fetch_context.py \
   --table-fqn '<service.database.schema.table>' \
   --output /tmp/teoria_metadata_context.json
-python3 .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py proposal_bundle.json
+uv run --locked --package teoria-platform python \
+  .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py proposal_bundle.json
 ```
 
 Compose 네트워크 안에서는 `http://admin-api:8001`, 로컬 API 단독 실행에서는
@@ -65,8 +66,8 @@ Compose 네트워크 안에서는 `http://admin-api:8001`, 로컬 API 단독 실
 사용한다. fetch와 submit 모두 토큰을 환경변수로 받으며 출력하지 않는다.
 
 사용자가 검토 대기열 등록을 요청했으면 검증 후 `--submit`으로 pending
-Suggestion을 등록한다. 기존 `$analyze-metadata-asset`와 스크립트 경로는
-호환 진입점으로 유지한다.
+Suggestion을 등록한다. 기존 `$analyze-metadata-asset` 호환 Skill과 스크립트는
+제거했다. 위의 세 작업별 Skill을 직접 호출한다.
 
 ## 검토와 적용
 
@@ -91,3 +92,10 @@ OpenMetadata entity 상태나 원본 샘플을 Teoria DB에 복제하지 않는�
 [개방 적합성 진단](../../.agents/skills/assess-data-disclosure/SKILL.md).
 두 제안 Skill의 bundle 형식은
 [proposal schema](../../.agents/skills/enrich-metadata-asset/references/proposal_bundle.schema.json)를 따른다.
+
+Bundle schema는 `platform/src/teoria/intelligence/suggestions/contracts.py`의
+`metadata_proposal_bundle_schema()`에서 생성한다. 변경 시 reference JSON을 재생성하고
+`platform/tests/unit/intelligence/test_proposal_contract.py`로 일치 여부와 검증 동작을 확인한다.
+Skill 검증은 같은 schema를 사용하며 제출 시 `warnings`를 API payload에서 제외한다.
+
+승인·적용·재시도와 결과 확인은 [공통 제안 처리](../platform/metadata/suggestions.md)를 따른다.

@@ -26,7 +26,7 @@ def test_bid_check_consumer_contract_has_unique_capabilities_and_explicit_status
         "reuse_stable_concepts": True,
         "rationale": contract["ontology_decision"]["rationale"],
     }
-    assert len(identifiers) == 32
+    assert len(identifiers) == 28
     assert len(set(identifiers)) == len(identifiers)
     assert {item["status"] for item in capabilities} == {"active"}
 
@@ -43,7 +43,7 @@ def test_bid_check_active_capabilities_are_discoverable_and_migrations_are_expli
         if item["status"] == "migration_required"
     }
 
-    assert len(active) == 32
+    assert len(active) == 28
     assert active <= set(catalog.capabilities)
     assert all(catalog.capabilities[item].lifecycle.status == "active" for item in active)
     assert all(catalog.capabilities[item].exposure == "public" for item in active)
@@ -62,8 +62,6 @@ def test_bid_check_active_capabilities_are_discoverable_and_migrations_are_expli
         )) > 0
         for item in active
     )
-    assert catalog.capabilities["assess_company_bid_eligibility"].kind == "decision"
-    assert catalog.capabilities["assess_company_bid_eligibilities"].kind == "decision"
     assert migrations == {}
     assert set(migrations).isdisjoint(catalog.capabilities)
     assert all(set(replacements) <= set(catalog.capabilities) for replacements in migrations.values())

@@ -1,10 +1,12 @@
 import { PageHeader } from "../../components/workspace/WorkspaceLayout";
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { adminApi, type IntelligenceSuggestion, type MetadataTableDetail } from "../../api/admin";
+import { suggestionApi, type IntelligenceSuggestion } from "../../api/suggestions";
+import { metadataApi, type MetadataTableDetail } from "../../api/metadata";
+import { bindingApi } from "../../api/binding";
 import { AssetContext } from "./AssetContext";
 import { TableDataEvidence } from "./TableDataEvidence";
-import { AssetAssessmentPanel } from "./AssetAssessmentPanel";
+import { AssetAssessmentPanel } from "../intelligence/asset_assessment/AssetAssessmentPanel";
 import { useAdminAccess } from "../access/AdminAccess";
 const tabs = [{id:"technical",label:"개요"},{id:"columns",label:"스키마"},{id:"business",label:"의미"},{id:"governance",label:"거버넌스"},{id:"evidence",label:"품질·프로파일"},{id:"lineage",label:"계보"},{id:"operations",label:"운영"}];
 type DescriptionEditTarget = { label: string; current: string; columnName?: string };
@@ -30,7 +32,7 @@ export function MetadataAssetPage() {
  const {principal,requestLogin}=useAdminAccess();
  useEffect(()=>{
   let active=true;setDetail(null);setError(null);setSuggestion(null);setDescriptionSuggestion(null);setDescriptionTarget(null);setBindingApproved(false);setColumnQuery("");setColumnFilter("all");
-  if(fqn)adminApi.metadataTable(fqn).then(value=>{if(active)setDetail(value)}).catch(reason=>{if(active)setError((reason as Error).message)});
+  if(fqn)metadataApi.metadataTable(fqn).then(value=>{if(active)setDetail(value)}).catch(reason=>{if(active)setError((reason as Error).message)});
   return()=>{active=false};
  },[fqn]);
   const copyAnalysisRequest = async (kind: keyof typeof diagnosisRequests) => {
@@ -54,7 +56,7 @@ export function MetadataAssetPage() {
   const reviewSuggestion = async (decision: "approve" | "reject") => {
     if (!suggestion) return;
     setBusy(suggestion.suggestion_id); setError(null);
-    try { setSuggestion(await adminApi.reviewSuggestion(suggestion.suggestion_id, decision)); }
+    try { setSuggestion(await suggestionApi.reviewSuggestion(suggestion.suggestion_id, decision)); }
     catch (reason) { setError((reason as Error).message); }
     finally { setBusy(null); }
   };
@@ -62,7 +64,7 @@ export function MetadataAssetPage() {
   const approveBinding = async () => {
     if (!suggestion?.resulting_binding) return;
     setBusy(suggestion.resulting_binding.binding_id); setError(null);
-    try { await adminApi.reviewBinding(suggestion.resulting_binding.binding_id, "approve", `Suggestion ${suggestion.suggestion_id} 검토 완료`); setBindingApproved(true); }
+    try { await bindingApi.reviewBinding(suggestion.resulting_binding.binding_id, "approve", `Suggestion ${suggestion.suggestion_id} 검토 완료`); setBindingApproved(true); }
     catch (reason) { setError((reason as Error).message); }
     finally { setBusy(null); }
   };
@@ -93,7 +95,7 @@ export function MetadataAssetPage() {
  <td><strong>{column.displayName||column.name}</strong>{column.displayName&&<code>{column.name}</code>}</td><td><code>{column.dataType||"—"}</code></td><td><p className={column.description?"":"asset-value-missing"}>{column.description||"설명 없음"}</p></td><td><div className="asset-labels">{column.tags?.length?column.tags.map((tag,index)=><span key={index}>{String(tag.tagFQN||tag.name||"태그")}</span>):<span className="asset-value-missing">없음</span>}</div></td>
  <td><div className="asset-column-actions"><button onClick={()=>editDescription({label:`${column.displayName||column.name} 컬럼 설명`,current:column.description||"",columnName:column.name})}>설명 변경</button><button disabled={busy===column.name} onClick={async()=>{
   if(!principal){requestLogin();return}setBusy(column.name);setError(null);setBindingApproved(false);
-  try{setSuggestion(await adminApi.suggestColumnBinding(detail.reference.entity_id,column.name))}catch(reason){setError((reason as Error).message)}finally{setBusy(null)}
+  try{setSuggestion(await suggestionApi.suggestColumnBinding(detail.reference.entity_id,column.name))}catch(reason){setError((reason as Error).message)}finally{setBusy(null)}
  }}>{busy===column.name?"생성 중…":"연결 제안"}</button></div></td></tr>)}</tbody></table>{!visibleColumns.length&&<div className="asset-catalog-empty">조건에 맞는 컬럼이 없습니다.</div>}</div>
       {suggestion && <aside className="binding-candidate-review">
         <header><div><span>BINDING SUGGESTION</span><h3>{suggestion.proposed_value.ontology_stable_key}</h3></div><b>{(suggestion.confidence * 100).toFixed(0)}%</b></header>
@@ -114,7 +116,7 @@ export function MetadataAssetPage() {
    onSubmit={async description=>{
     setBusy("description-change");setError(null);
     try {
-      const created=await adminApi.suggestDescriptionChange(detail.reference.entity_id,description,descriptionTarget.columnName);
+      const created=await suggestionApi.suggestDescriptionChange(detail.reference.entity_id,description,descriptionTarget.columnName);
       setDescriptionSuggestion(created);setDescriptionTarget(null);
     } catch(reason) {setError((reason as Error).message)} finally {setBusy(null)}
    }}

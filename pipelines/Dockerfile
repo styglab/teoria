@@ -34,21 +34,12 @@ USER teoria
 ENV TEORIA_PIPELINE_PATH=/app/pipelines
 CMD ["prefect", "worker", "start", "--pool", "teoria-ingestion"]
 
-FROM worker AS ai-worker
+FROM worker AS kubernetes-worker
 
 USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends nodejs npm libreoffice-writer libreoffice-calc \
-    && npm install --global @openai/codex@0.147.0 \
-    && rm -rf /var/lib/apt/lists/*
-COPY --chown=teoria:teoria .agents/skills/extract-bid-eligibility /app/.agents/skills/extract-bid-eligibility
-COPY --chown=teoria:teoria .agents/skills/improve-bid-eligibility /app/.agents/skills/improve-bid-eligibility
-RUN mkdir -p /work /home/teoria/.codex \
-    && chown -R teoria:teoria /work /home/teoria/.codex
-
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --package teoria-pipelines --no-dev --group orchestration --group kubernetes-orchestration --no-editable
 USER teoria
-ENV CODEX_HOME=/home/teoria/.codex
-CMD ["prefect", "worker", "start", "--pool", "teoria-ai-extraction"]
 
 FROM base AS metadata-worker
 

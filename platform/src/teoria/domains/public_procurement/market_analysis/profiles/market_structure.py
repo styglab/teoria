@@ -5,13 +5,16 @@ from decimal import Decimal
 from typing import Any
 
 from ..periods import _shift_years
-from .profile_aggregation import _amount_completeness
 from ..related_projects.similarity import number as _number
+from .profile_aggregation import _amount_completeness
 
 
 def _rolling_12m_supplier_entry(
-    rows: list[dict[str, Any]], first_relationship_dates: dict[str, date],
-    history_available_from: date | None, *, period_to: date,
+    rows: list[dict[str, Any]],
+    first_relationship_dates: dict[str, date],
+    history_available_from: date | None,
+    *,
+    period_to: date,
 ) -> dict[str, Any]:
     """Classify unique suppliers in a fixed current/prior 12-month contract window."""
     period_from = _shift_years(period_to, -1)
@@ -46,7 +49,8 @@ def _rolling_12m_supplier_entry(
     entry_count = len(first_observed) + len(reentering)
     return {
         "window_months": 12,
-        "period_from": period_from, "period_to": period_to,
+        "period_from": period_from,
+        "period_to": period_to,
         "comparison_period_from": comparison_period_from,
         "comparison_period_to": period_from,
         "first_observed_company_count": len(first_observed),
@@ -54,7 +58,9 @@ def _rolling_12m_supplier_entry(
         "incumbent_company_count": len(incumbent),
         "total_company_count": total,
         "classified_company_count": len(first_observed | reentering | incumbent),
-        "first_observed_company_rate": round(len(first_observed) / total, 6) if total else None,
+        "first_observed_company_rate": round(len(first_observed) / total, 6)
+        if total
+        else None,
         "entry_and_reentry_rate": round(entry_count / total, 6) if total else None,
         "history_from": history_available_from,
         "history_to": period_from - timedelta(days=1),
@@ -66,7 +72,10 @@ def _rolling_12m_supplier_entry(
 
 
 def _supplier_entry(
-    rows: list[dict[str, Any]], *, target_year: int, period_to: date,
+    rows: list[dict[str, Any]],
+    *,
+    target_year: int,
+    period_to: date,
     history_available_from: date | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Classify target-year contract suppliers against three prior calendar years."""
@@ -84,18 +93,22 @@ def _supplier_entry(
 
     companies = []
     status_names = {
-        "first_observed": "신규 관측", "reentering": "재진입", "incumbent": "기존",
+        "first_observed": "신규 관측",
+        "reentering": "재진입",
+        "incumbent": "기존",
     }
     for company_number, company_rows in by_company.items():
         target_rows = [
-            row for row in company_rows
+            row
+            for row in company_rows
             if target_from <= row["activity_date"] < target_to_exclusive
         ]
         if not target_rows:
             continue
         prior_rows = [row for row in company_rows if row["activity_date"] < target_from]
         lookback_rows = [
-            row for row in prior_rows
+            row
+            for row in prior_rows
             if lookback_from <= row["activity_date"] < lookback_to_exclusive
         ]
         if lookback_rows:
@@ -107,59 +120,75 @@ def _supplier_entry(
         event_keys = {str(row.get("event_key") or "") for row in target_rows}
         target_amounts = [
             Decimal(str(row["attributed_contract_amount"]))
-            for row in target_rows if row.get("attributed_contract_amount") is not None
+            for row in target_rows
+            if row.get("attributed_contract_amount") is not None
         ]
         # Entry classification remains based on procurement attribution dates,
         # while every public `contract_date` field uses the original contract
         # event date.  Amendment/installment version dates are not substituted.
         target_contract_dates = [
-            row["first_contract_date"] for row in target_rows
+            row["first_contract_date"]
+            for row in target_rows
             if row.get("first_contract_date") is not None
         ]
         prior_contract_dates = [
-            row["first_contract_date"] for row in prior_rows
+            row["first_contract_date"]
+            for row in prior_rows
             if row.get("first_contract_date") is not None
         ]
         all_contract_dates = [
-            row["first_contract_date"] for row in company_rows
+            row["first_contract_date"]
+            for row in company_rows
             if row.get("first_contract_date") is not None
         ]
         named = next(
-            (row.get("company_name") for row in target_rows if row.get("company_name")), None
+            (row.get("company_name") for row in target_rows if row.get("company_name")),
+            None,
         )
-        companies.append({
-            "company_number": company_number, "company_name": named,
-            "entry_status": status, "entry_status_name": status_names[status],
-            "target_year_contract_count": len(event_keys),
-            "target_year_attributed_contract_amount": (
-                _number(sum(target_amounts, Decimal("0")))
-                if target_amounts else None
-            ),
-            "amount_completeness": _amount_completeness([
-                str(row.get("amount_completeness") or "unknown") for row in target_rows
-            ]),
-            "target_year_first_contract_date": (
-                min(target_contract_dates) if target_contract_dates else None
-            ),
-            "target_year_latest_contract_date": (
-                max(target_contract_dates) if target_contract_dates else None
-            ),
-            "first_observed_contract_date": (
-                min(all_contract_dates) if all_contract_dates else None
-            ),
-            "previous_contract_date": (
-                max(prior_contract_dates) if prior_contract_dates else None
-            ),
-            "reentry_contract_date": (
-                min(target_contract_dates)
-                if status == "reentering" and target_contract_dates else None
-            ),
-        })
+        companies.append(
+            {
+                "company_number": company_number,
+                "company_name": named,
+                "entry_status": status,
+                "entry_status_name": status_names[status],
+                "target_year_contract_count": len(event_keys),
+                "target_year_attributed_contract_amount": (
+                    _number(sum(target_amounts, Decimal("0")))
+                    if target_amounts
+                    else None
+                ),
+                "amount_completeness": _amount_completeness(
+                    [
+                        str(row.get("amount_completeness") or "unknown")
+                        for row in target_rows
+                    ]
+                ),
+                "target_year_first_contract_date": (
+                    min(target_contract_dates) if target_contract_dates else None
+                ),
+                "target_year_latest_contract_date": (
+                    max(target_contract_dates) if target_contract_dates else None
+                ),
+                "first_observed_contract_date": (
+                    min(all_contract_dates) if all_contract_dates else None
+                ),
+                "previous_contract_date": (
+                    max(prior_contract_dates) if prior_contract_dates else None
+                ),
+                "reentry_contract_date": (
+                    min(target_contract_dates)
+                    if status == "reentering" and target_contract_dates
+                    else None
+                ),
+            }
+        )
     companies.sort(
         key=lambda item: (
             item["target_year_attributed_contract_amount"] or 0,
-            item["target_year_contract_count"], item["company_number"],
-        ), reverse=True,
+            item["target_year_contract_count"],
+            item["company_number"],
+        ),
+        reverse=True,
     )
     counts = {
         status: sum(item["entry_status"] == status for item in companies)
@@ -203,7 +232,10 @@ def _supplier_entry(
 
 
 def _organization_entry(
-    rows: list[dict[str, Any]], *, target_year: int, period_to: date,
+    rows: list[dict[str, Any]],
+    *,
+    target_year: int,
+    period_to: date,
     history_available_from: date | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Classify a company's target-year contracting organizations.
@@ -219,11 +251,13 @@ def _organization_entry(
         organization_code = str(row.get("organization_code") or "").strip()
         if row.get("activity_type") != "contract" or not organization_code:
             continue
-        projected_rows.append({
-            **row,
-            "company_number": organization_code,
-            "company_name": row.get("organization_name"),
-        })
+        projected_rows.append(
+            {
+                **row,
+                "company_number": organization_code,
+                "company_name": row.get("organization_name"),
+            }
+        )
     supplier_summary, supplier_items = _supplier_entry(
         projected_rows,
         target_year=target_year,
@@ -241,19 +275,13 @@ def _organization_entry(
         "first_observed_organization_count": supplier_summary[
             "first_observed_company_count"
         ],
-        "reentering_organization_count": supplier_summary[
-            "reentering_company_count"
-        ],
-        "incumbent_organization_count": supplier_summary[
-            "incumbent_company_count"
-        ],
+        "reentering_organization_count": supplier_summary["reentering_company_count"],
+        "incumbent_organization_count": supplier_summary["incumbent_company_count"],
         "total_organization_count": supplier_summary["total_company_count"],
         "first_observed_organization_rate": supplier_summary[
             "first_observed_company_rate"
         ],
-        "reentering_organization_rate": supplier_summary[
-            "reentering_company_rate"
-        ],
+        "reentering_organization_rate": supplier_summary["reentering_company_rate"],
         "entry_and_reentry_organization_count": supplier_summary[
             "entry_and_reentry_company_count"
         ],
@@ -268,22 +296,27 @@ def _organization_entry(
         "minimum_sample_size": supplier_summary["minimum_sample_size"],
         "sample_sufficient": supplier_summary["sample_sufficient"],
     }
-    items = [{
-        "organization_code": item["company_number"],
-        "organization_name": item["company_name"],
-        "organization_entry_status": item["entry_status"],
-        "organization_entry_status_name": item["entry_status_name"],
-        "target_year_contract_count": item["target_year_contract_count"],
-        "target_year_attributed_contract_amount": item[
-            "target_year_attributed_contract_amount"
-        ],
-        "amount_completeness": item["amount_completeness"],
-        "target_year_first_contract_date": item["target_year_first_contract_date"],
-        "target_year_latest_contract_date": item["target_year_latest_contract_date"],
-        "first_observed_contract_date": item["first_observed_contract_date"],
-        "previous_contract_date": item["previous_contract_date"],
-        "reentry_contract_date": item["reentry_contract_date"],
-    } for item in supplier_items]
+    items = [
+        {
+            "organization_code": item["company_number"],
+            "organization_name": item["company_name"],
+            "organization_entry_status": item["entry_status"],
+            "organization_entry_status_name": item["entry_status_name"],
+            "target_year_contract_count": item["target_year_contract_count"],
+            "target_year_attributed_contract_amount": item[
+                "target_year_attributed_contract_amount"
+            ],
+            "amount_completeness": item["amount_completeness"],
+            "target_year_first_contract_date": item["target_year_first_contract_date"],
+            "target_year_latest_contract_date": item[
+                "target_year_latest_contract_date"
+            ],
+            "first_observed_contract_date": item["first_observed_contract_date"],
+            "previous_contract_date": item["previous_contract_date"],
+            "reentry_contract_date": item["reentry_contract_date"],
+        }
+        for item in supplier_items
+    ]
     return summary, items
 
 
@@ -299,11 +332,16 @@ def _contract_method_group(value: Any) -> tuple[str, str]:
 
 
 def _organization_market_structure(
-    profile_rows: list[dict[str, Any]], relationships: list[dict[str, Any]],
-    *, notice_rows: list[dict[str, Any]], period_to: date,
+    profile_rows: list[dict[str, Any]],
+    relationships: list[dict[str, Any]],
+    *,
+    notice_rows: list[dict[str, Any]],
+    period_to: date,
     rolling_12m: dict[str, Any] | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
-    contract_rows = [row for row in profile_rows if row.get("activity_type") == "contract"]
+    contract_rows = [
+        row for row in profile_rows if row.get("activity_type") == "contract"
+    ]
 
     notices: dict[str, date] = {}
     for row in notice_rows:
@@ -315,34 +353,49 @@ def _organization_market_structure(
     for published in notices.values():
         quarter_counts[(published.month - 1) // 3 + 1] += 1
     notice_total = len(notices)
-    quarter_distribution = [{
-        "quarter": quarter,
-        "notice_count": count,
-        "notice_share": round(count / notice_total, 6) if notice_total else None,
-    } for quarter, count in quarter_counts.items()]
+    quarter_distribution = [
+        {
+            "quarter": quarter,
+            "notice_count": count,
+            "notice_share": round(count / notice_total, 6) if notice_total else None,
+        }
+        for quarter, count in quarter_counts.items()
+    ]
 
     method_events: dict[str, dict[str, Any]] = {}
     for row in contract_rows:
         event_key = str(row.get("event_key") or "")
-        event = method_events.setdefault(event_key, {
-            "methods": set(), "amount": Decimal("0"), "has_amount": False,
-        })
+        event = method_events.setdefault(
+            event_key,
+            {
+                "methods": set(),
+                "amount": Decimal("0"),
+                "has_amount": False,
+            },
+        )
         event["methods"].add(_contract_method_group(row.get("contract_method_name"))[0])
         if row.get("attributed_contract_amount") is not None:
             event["amount"] += Decimal(str(row["attributed_contract_amount"]))
             event["has_amount"] = True
     grouped: dict[str, dict[str, Any]] = {}
     labels = {
-        "competitive": "경쟁계약", "direct": "수의계약",
-        "other": "기타", "unknown": "미분류",
+        "competitive": "경쟁계약",
+        "direct": "수의계약",
+        "other": "기타",
+        "unknown": "미분류",
     }
     for event in method_events.values():
         methods = event["methods"]
         method = next(iter(methods)) if len(methods) == 1 else "unknown"
-        item = grouped.setdefault(method, {
-            "method": method, "method_name": labels[method],
-            "contract_event_count": 0, "attributed_contract_amount": Decimal("0"),
-        })
+        item = grouped.setdefault(
+            method,
+            {
+                "method": method,
+                "method_name": labels[method],
+                "contract_event_count": 0,
+                "attributed_contract_amount": Decimal("0"),
+            },
+        )
         item["contract_event_count"] += 1
         if event["has_amount"]:
             item["attributed_contract_amount"] += event["amount"]
@@ -352,40 +405,62 @@ def _organization_market_structure(
     )
     method_distribution = []
     for method in ("competitive", "direct", "other", "unknown"):
-        item = grouped.get(method, {
-            "method": method, "method_name": labels[method],
-            "contract_event_count": 0, "attributed_contract_amount": Decimal("0"),
-        })
+        item = grouped.get(
+            method,
+            {
+                "method": method,
+                "method_name": labels[method],
+                "contract_event_count": 0,
+                "attributed_contract_amount": Decimal("0"),
+            },
+        )
         amount = item["attributed_contract_amount"]
         item["attributed_contract_amount"] = _number(amount)
         item["contract_share"] = (
-            round(item["contract_event_count"] / event_total, 6) if event_total else None
+            round(item["contract_event_count"] / event_total, 6)
+            if event_total
+            else None
         )
-        item["amount_share"] = round(float(amount / amount_total), 6) if amount_total else None
+        item["amount_share"] = (
+            round(float(amount / amount_total), 6) if amount_total else None
+        )
         method_distribution.append(item)
 
-    contracted = [item for item in relationships if item.get("contract_event_count", 0) > 0]
+    contracted = [
+        item for item in relationships if item.get("contract_event_count", 0) > 0
+    ]
     ranked = sorted(
         contracted,
         key=lambda item: item.get("total_attributed_contract_amount") or 0,
         reverse=True,
     )
     top_amount = sum(
-        (Decimal(str(item.get("total_attributed_contract_amount") or 0)) for item in ranked[:5]),
+        (
+            Decimal(str(item.get("total_attributed_contract_amount") or 0))
+            for item in ranked[:5]
+        ),
         Decimal("0"),
     )
     amount_statuses = [
         str(row.get("amount_completeness") or "unknown") for row in contract_rows
     ]
     completeness = _amount_completeness(amount_statuses)
-    excluded_events = len({
-        str(row.get("event_key") or "") for row in contract_rows
-        if row.get("attributed_contract_amount") is None
-    })
-    shares = [
-        Decimal(str(item.get("total_attributed_contract_amount") or 0)) / amount_total
-        for item in contracted
-    ] if amount_total else []
+    excluded_events = len(
+        {
+            str(row.get("event_key") or "")
+            for row in contract_rows
+            if row.get("attributed_contract_amount") is None
+        }
+    )
+    shares = (
+        [
+            Decimal(str(item.get("total_attributed_contract_amount") or 0))
+            / amount_total
+            for item in contracted
+        ]
+        if amount_total
+        else []
+    )
     small_population = len(contracted) <= 5
     company_structure = {
         "contracted_company_count": len(contracted),
@@ -405,14 +480,17 @@ def _organization_market_structure(
         "amount_completeness": completeness,
         "concentration_computable": bool(amount_total),
         "concentration_note": (
-            "contracted_company_count_lte_5" if small_population
+            "contracted_company_count_lte_5"
+            if small_population
             else "contracts_without_attributable_amount_excluded"
-            if excluded_events else None
+            if excluded_events
+            else None
         ),
         "excluded_contract_event_count": excluded_events,
         "small_supplier_population": small_population,
         "hhi": round(float(sum((share * Decimal("100")) ** 2 for share in shares)), 3)
-        if shares else None,
+        if shares
+        else None,
         "hhi_scale": "0_to_10000",
         "hhi_basis": "attributed_contract_amount",
         "rolling_12m": rolling_12m,
@@ -421,11 +499,16 @@ def _organization_market_structure(
 
 
 def _previous_period_comparison(
-    rows: list[dict[str, Any]], *, comparison_year: int, current_year: int,
+    rows: list[dict[str, Any]],
+    *,
+    comparison_year: int,
+    current_year: int,
     period_to: date,
 ) -> dict[str, Any]:
     current_start = date(current_year, 1, 1)
-    current_end = period_to if period_to.year == current_year else date(current_year + 1, 1, 1)
+    current_end = (
+        period_to if period_to.year == current_year else date(current_year + 1, 1, 1)
+    )
     elapsed_end = min(current_end, date(current_year + 1, 1, 1))
     previous_start = date(comparison_year, 1, 1)
     previous_end = _shift_years(elapsed_end, -1)
@@ -456,7 +539,8 @@ def _previous_period_comparison(
         "comparison_year": comparison_year,
         "contract_amount_change_rate": (
             round(float((current_amount - previous_amount) / previous_amount), 6)
-            if comparable else None
+            if comparable
+            else None
         ),
         "contract_event_count_change": current_count - previous_count,
         "comparable": comparable,

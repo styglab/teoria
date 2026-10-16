@@ -1,0 +1,211 @@
+from teoria_pipelines.domains.public_procurement.bid_eligibility.expression import (
+    compile_eligibility_facts,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.rules import (
+    _bind_standard_rules,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repair.alternatives import (
+    _repair_absorbed_alternative_branches,
+    _repair_explicit_performance_review_alternative,
+    _hydrate_structured_requirement_attributes,
+    _preserve_company_scale_alternatives,
+)
+
+from .cases import _validated_requirement
+
+
+def test_structured_evidence_restores_region_code_before_document_merge() -> None:
+    requirement = _validated_requirement(
+        "경상남도에 둔 자", type="participation_region"
+    )
+    requirement["evidence"].append(
+        {
+            "source_type": "structured_api",
+            "source_id": "region:1",
+            "document_id": None,
+            "block_id": None,
+            "page": None,
+            "section": None,
+            "excerpt": "경상남도",
+        }
+    )
+    result = {"requirements": [requirement]}
+
+    _hydrate_structured_requirement_attributes(
+        result,
+        {
+            "structured_requirements": [
+                {
+                    "source_id": "region:1",
+                    "kind": "participation_region",
+                    "code": "48",
+                    "name": "경상남도",
+                }
+            ],
+        },
+    )
+    _bind_standard_rules(result)
+
+    assert result["requirements"][0]["rule_arguments"] == {"expected_value": "48"}
+
+
+def test_repairs_explicit_performance_or_prior_review_logic() -> None:
+    text = (
+        "2021년 08월 이후, 600병상 이상 종합병원에 납품 실적을 보유한 업체 또는 "
+        "사전에 별도의 심사를 통하여 입찰 자격을 취득한 업체"
+    )
+    performance = _validated_requirement(
+        "2021년 08월 이후, 600병상 이상 종합병원에 납품 실적을 보유한 업체",
+        type="past_performance",
+    )
+    review = _validated_requirement(
+        "사전에 별도의 심사를 통하여 입찰 자격을 취득한 업체",
+        id="r2",
+        type="custom",
+    )
+    for item in (performance, review):
+        item["evidence"][0].update(
+            {"document_id": "doc", "source_id": "doc", "block_id": "z1b9"}
+        )
+    result = {"requirements": [performance, review], "unresolved_candidates": []}
+    inputs = {
+        "documents": [
+            {
+                "document_id": "doc",
+                "content": {
+                    "blocks": [
+                        {
+                            "block_id": "z1b9",
+                            "page": 1,
+                            "section": "입찰 참가 자격",
+                            "text": text,
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+
+    _repair_explicit_performance_review_alternative(result, inputs)
+
+    placements = [item["logic"]["placements"][0] for item in result["requirements"]]
+    assert placements == [
+        {
+            "scope": "common",
+            "alternative_group": "source_z1b9_performance_review",
+            "alternative_branch": "performance",
+        },
+        {
+            "scope": "common",
+            "alternative_group": "source_z1b9_performance_review",
+            "alternative_branch": "prior_review",
+        },
+    ]
+
+
+def test_semantic_repair_simplifies_absorbed_alternative_conservatively() -> None:
+    original = "중간처리업과 수집운반업 면허 보유자 또는 중간처리업 면허 보유자"
+    intermediate = _validated_requirement(original, type="industry_license")
+    intermediate["logic"] = {
+        "placements": [
+            {
+                "scope": "single",
+                "alternative_group": "license",
+                "alternative_branch": "both",
+            },
+            {
+                "scope": "single",
+                "alternative_group": "license",
+                "alternative_branch": "intermediate",
+            },
+        ]
+    }
+    transport = _validated_requirement(original, id="r2", type="industry_license")
+    transport["logic"] = {
+        "placements": [
+            {
+                "scope": "single",
+                "alternative_group": "license",
+                "alternative_branch": "both",
+            },
+        ]
+    }
+    result = {"requirements": [intermediate, transport], "unresolved_candidates": []}
+
+    _repair_absorbed_alternative_branches(result)
+
+    assert [item["id"] for item in result["requirements"]] == ["r1"]
+    assert result["requirements"][0]["logic"]["placements"] == [
+        {
+            "scope": "single",
+            "alternative_group": "license",
+            "alternative_branch": "intermediate",
+        }
+    ]
+    assert result["unresolved_candidates"] == [
+        {
+            "text": original,
+            "review_reason": "manual_evidence_interpretation",
+            "blocks_qualification": True,
+        }
+    ]
+
+
+def test_repair_recovers_missing_company_scale_or_branch_from_document() -> None:
+    clause = (
+        "중소기업제품 구매촉진 및 판로지원에 관한 법률에 따른 소기업 확인서 또는\n"
+        "소상공인 보호 및 지원에 관한 법률에 따른 소상공인 확인서를 소지한 업체"
+    )
+    existing = _validated_requirement(
+        "소상공인 확인서를 소지한 업체", type="company_scale", operator="equals"
+    )
+    existing["value"]["text"] = "소상공인"
+    existing["evidence"][0].update(
+        {
+            "source_id": "doc",
+            "document_id": "doc",
+            "block_id": "b1",
+            "excerpt": "소상공인 확인서를 소지한 업체",
+        }
+    )
+    result = {"requirements": [existing], "unresolved_candidates": []}
+    inputs = {
+        "documents": [
+            {
+                "document_id": "doc",
+                "content": {
+                    "blocks": [
+                        {
+                            "block_id": "b1",
+                            "page": 1,
+                            "section": "입찰참가자격",
+                            "text": clause,
+                        }
+                    ]
+                },
+            }
+        ]
+    }
+
+    _preserve_company_scale_alternatives(result, inputs)
+    compiled = compile_eligibility_facts(result)
+
+    assert {item["value"]["text"] for item in result["requirements"]} == {
+        "소기업",
+        "소상공인",
+    }
+    assert compiled["expression"]["operator"] == "any"
+    assert {
+        item["requirement_id"] for item in compiled["expression"]["conditions"]
+    } == {
+        "r1",
+        "r2",
+    }
+    assert {
+        next(
+            attribute["value"]
+            for attribute in item["value"]["attributes"]
+            if attribute["name"] == "company_scale_type"
+        )
+        for item in result["requirements"]
+    } == {"small_enterprise", "small_business_owner"}

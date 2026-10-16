@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import date
 import hashlib
 import re
+from datetime import date
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -81,7 +81,8 @@ def _official_contract_change_identity(
 
 
 def _decorate_contract_amount(
-    contract: dict[str, Any], source: dict[str, Any],
+    contract: dict[str, Any],
+    source: dict[str, Any],
 ) -> None:
     source_total = _number(source.get("total_amount"))
     current_amount = contract.get("current_contract_amount")
@@ -96,18 +97,23 @@ def _decorate_contract_amount(
         total_amount = None
         total_basis = (
             "source_total_zero_treated_as_unavailable"
-            if source_total == 0 else "source_total_missing"
+            if source_total == 0
+            else "source_total_missing"
         )
-    contract.update({
-        "total_contract_amount": total_amount,
-        "total_contract_amount_basis": total_basis,
-        "phase_contract_amount": current_amount,
-        "amount_tax_basis": "unknown",
-    })
+    contract.update(
+        {
+            "total_contract_amount": total_amount,
+            "total_contract_amount_basis": total_basis,
+            "phase_contract_amount": current_amount,
+            "amount_tax_basis": "unknown",
+        }
+    )
 
 
 def _decorate_contract_lineage(
-    contracts: list[dict[str, Any]], *, bid_notice_id: str | None,
+    contracts: list[dict[str, Any]],
+    *,
+    bid_notice_id: str | None,
 ) -> None:
     """Add evidence-labelled family metadata without asserting title-based identity."""
     candidates: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -123,9 +129,7 @@ def _decorate_contract_lineage(
             "bid_notice_id": bid_notice_id,
             "contract_structure": structure,
             "normalized_contract_name": family_name,
-            "long_term_continuation_type": source.get(
-                "long_term_continuation_type"
-            ),
+            "long_term_continuation_type": source.get("long_term_continuation_type"),
             "request_number": source.get("request_number"),
         }
         official_identity = _official_contract_change_identity(source)
@@ -139,15 +143,22 @@ def _decorate_contract_lineage(
 
     decorated_members: set[int] = set()
     for contract_number, members in official_families.items():
-        members.sort(key=lambda value: (
-            int((value.get("_official_contract_identity") or {})["change_order"]),
-            value.get("first_contract_date") or date.max,
-            str(value.get("contract_event_id") or ""),
-        ))
-        original = next((
-            member for member in members
-            if (member.get("_official_contract_identity") or {}).get("change_order") == 0
-        ), None)
+        members.sort(
+            key=lambda value: (
+                int((value.get("_official_contract_identity") or {})["change_order"]),
+                value.get("first_contract_date") or date.max,
+                str(value.get("contract_event_id") or ""),
+            )
+        )
+        original = next(
+            (
+                member
+                for member in members
+                if (member.get("_official_contract_identity") or {}).get("change_order")
+                == 0
+            ),
+            None,
+        )
         original_id = original.get("contract_event_id") if original else None
         for index, member in enumerate(members):
             source = member.get("_lineage_source") or {}
@@ -164,58 +175,65 @@ def _decorate_contract_lineage(
             next_identity = (
                 next_member.get("_official_contract_identity") if next_member else None
             )
-            member.update({
-                "contract_family_id": f"contract-family:source:{contract_number}",
-                "contract_record_type": "original" if is_original else "amendment",
-                "parent_contract_event_id": (
-                    previous.get("contract_event_id")
-                    if previous is not None
-                    and int(previous_identity["change_order"]) + 1
-                    == int(identity["change_order"])
-                    else None
-                ),
-                "original_contract_event_id": original_id,
-                "is_current_record": is_current,
-                "superseded_by_contract_event_id": (
-                    next_member.get("contract_event_id")
-                    if next_member is not None
-                    and int(identity["change_order"]) + 1
-                    == int(next_identity["change_order"])
-                    else None
-                ),
-                "amount_record_type": (
-                    "initial_total" if is_original else "current_total"
-                ),
-                "effective_contract_amount": effective_amount,
-                "include_in_family_total": is_current and effective_amount is not None,
-                "relationship_status": "confirmed",
-                "relationship_basis": {
-                    "contract_event_identity": _contract_event_identity(source),
-                    "source_contract_numbers": _contract_source_numbers(source),
-                    "source_contract_family": {
-                        **identity,
-                        "confirmed_number_matches_contract_number_and_change_order": True,
+            member.update(
+                {
+                    "contract_family_id": f"contract-family:source:{contract_number}",
+                    "contract_record_type": "original" if is_original else "amendment",
+                    "parent_contract_event_id": (
+                        previous.get("contract_event_id")
+                        if previous is not None
+                        and int(previous_identity["change_order"]) + 1
+                        == int(identity["change_order"])
+                        else None
+                    ),
+                    "original_contract_event_id": original_id,
+                    "is_current_record": is_current,
+                    "superseded_by_contract_event_id": (
+                        next_member.get("contract_event_id")
+                        if next_member is not None
+                        and int(identity["change_order"]) + 1
+                        == int(next_identity["change_order"])
+                        else None
+                    ),
+                    "amount_record_type": (
+                        "initial_total" if is_original else "current_total"
+                    ),
+                    "effective_contract_amount": effective_amount,
+                    "include_in_family_total": is_current
+                    and effective_amount is not None,
+                    "relationship_status": "confirmed",
+                    "relationship_basis": {
+                        "contract_event_identity": _contract_event_identity(source),
+                        "source_contract_numbers": _contract_source_numbers(source),
+                        "source_contract_family": {
+                            **identity,
+                            "confirmed_number_matches_contract_number_and_change_order": True,
+                        },
+                        "amount_basis": member.get("total_contract_amount_basis"),
+                        "family_inference": None,
                     },
-                    "amount_basis": member.get("total_contract_amount_basis"),
-                    "family_inference": None,
-                },
-            })
+                }
+            )
 
     for (structure, family_name), members in candidates.items():
         members = [member for member in members if id(member) not in decorated_members]
         if len(members) < 2:
             continue
         family_evidence = "|".join((str(bid_notice_id or ""), structure, family_name))
-        family_id = "contract-family:inferred:" + hashlib.sha256(
-            family_evidence.encode("utf-8")
-        ).hexdigest()[:20]
+        family_id = (
+            "contract-family:inferred:"
+            + hashlib.sha256(family_evidence.encode("utf-8")).hexdigest()[:20]
+        )
         original = min(
             members,
             key=lambda value: (
-                0 if "총괄" in str(
-                    (value.get("_lineage_source") or {}).get("contract_name") or ""
-                ) else 1,
-                value.get("phase_number") if value.get("phase_number") is not None else 10**9,
+                0
+                if "총괄"
+                in str((value.get("_lineage_source") or {}).get("contract_name") or "")
+                else 1,
+                value.get("phase_number")
+                if value.get("phase_number") is not None
+                else 10**9,
                 value.get("first_contract_date") or date.max,
                 str(value.get("contract_event_id") or ""),
             ),
@@ -227,14 +245,19 @@ def _decorate_contract_lineage(
             if phase_number is not None:
                 phase_sequences.setdefault(int(phase_number), []).append(member)
         for phase_members in phase_sequences.values():
-            phase_members.sort(key=lambda value: (
+            phase_members.sort(
+                key=lambda value: (
+                    value.get("first_contract_date") or date.max,
+                    str(value.get("contract_event_id") or ""),
+                )
+            )
+        chronological_members = sorted(
+            members,
+            key=lambda value: (
                 value.get("first_contract_date") or date.max,
                 str(value.get("contract_event_id") or ""),
-            ))
-        chronological_members = sorted(members, key=lambda value: (
-            value.get("first_contract_date") or date.max,
-            str(value.get("contract_event_id") or ""),
-        ))
+            ),
+        )
         latest_member = chronological_members[-1]
         for member in members:
             source = member.get("_lineage_source") or {}
@@ -269,40 +292,44 @@ def _decorate_contract_lineage(
             effective_amount = (
                 member.get("total_contract_amount") if is_current else None
             )
-            member.update({
-                "contract_family_id": family_id,
-                "contract_record_type": record_type,
-                "parent_contract_event_id": parent_id,
-                "original_contract_event_id": original_id,
-                "is_current_record": is_current,
-                "superseded_by_contract_event_id": same_phase_next,
-                "amount_record_type": (
-                    "current_total" if effective_amount is not None
-                    else "phase_amount" if member.get("phase_number") is not None
-                    else "unknown"
-                ),
-                "effective_contract_amount": (
-                    effective_amount
-                    if effective_amount is not None
-                    else member.get("phase_contract_amount")
-                ),
-                "include_in_family_total": effective_amount is not None,
-                "relationship_status": "inferred",
-                "relationship_basis": {
-                    "contract_event_identity": _contract_event_identity(source),
-                    "source_contract_numbers": _contract_source_numbers(source),
-                    "family_inference": {
-                        "bid_notice_id": bid_notice_id,
-                        "long_term_continuation_type": source.get(
-                            "long_term_continuation_type"
-                        ),
-                        "normalized_contract_name": family_name,
-                        "phase_marker": member.get("phase_number"),
-                        "parent_link_basis": parent_link_basis,
+            member.update(
+                {
+                    "contract_family_id": family_id,
+                    "contract_record_type": record_type,
+                    "parent_contract_event_id": parent_id,
+                    "original_contract_event_id": original_id,
+                    "is_current_record": is_current,
+                    "superseded_by_contract_event_id": same_phase_next,
+                    "amount_record_type": (
+                        "current_total"
+                        if effective_amount is not None
+                        else "phase_amount"
+                        if member.get("phase_number") is not None
+                        else "unknown"
+                    ),
+                    "effective_contract_amount": (
+                        effective_amount
+                        if effective_amount is not None
+                        else member.get("phase_contract_amount")
+                    ),
+                    "include_in_family_total": effective_amount is not None,
+                    "relationship_status": "inferred",
+                    "relationship_basis": {
+                        "contract_event_identity": _contract_event_identity(source),
+                        "source_contract_numbers": _contract_source_numbers(source),
+                        "family_inference": {
+                            "bid_notice_id": bid_notice_id,
+                            "long_term_continuation_type": source.get(
+                                "long_term_continuation_type"
+                            ),
+                            "normalized_contract_name": family_name,
+                            "phase_marker": member.get("phase_number"),
+                            "parent_link_basis": parent_link_basis,
+                        },
+                        "amount_basis": member.get("total_contract_amount_basis"),
                     },
-                    "amount_basis": member.get("total_contract_amount_basis"),
-                },
-            })
+                }
+            )
 
     for contract in contracts:
         source = contract.pop("_lineage_source", {}) or {}
@@ -315,33 +342,39 @@ def _decorate_contract_lineage(
         effective_amount = (
             contract.get("total_contract_amount") if independent else None
         )
-        contract.update({
-            "contract_family_id": f"contract-family:{event_id}" if event_id else None,
-            "contract_record_type": "independent" if independent else "unknown",
-            "parent_contract_event_id": None,
-            "original_contract_event_id": event_id if independent else None,
-            "is_current_record": True,
-            "superseded_by_contract_event_id": None,
-            "amount_record_type": "current_total" if independent else "unknown",
-            "effective_contract_amount": effective_amount,
-            "include_in_family_total": independent and effective_amount is not None,
-            "relationship_status": "confirmed" if independent else "unknown",
-            "relationship_basis": {
-                "contract_event_identity": _contract_event_identity(source),
-                "source_contract_numbers": _contract_source_numbers(source),
-                "long_term_continuation_type": source.get(
-                    "long_term_continuation_type"
-                ),
-                "amount_basis": contract.get("total_contract_amount_basis"),
-                "family_inference": None,
-            },
-        })
+        contract.update(
+            {
+                "contract_family_id": f"contract-family:{event_id}"
+                if event_id
+                else None,
+                "contract_record_type": "independent" if independent else "unknown",
+                "parent_contract_event_id": None,
+                "original_contract_event_id": event_id if independent else None,
+                "is_current_record": True,
+                "superseded_by_contract_event_id": None,
+                "amount_record_type": "current_total" if independent else "unknown",
+                "effective_contract_amount": effective_amount,
+                "include_in_family_total": independent and effective_amount is not None,
+                "relationship_status": "confirmed" if independent else "unknown",
+                "relationship_basis": {
+                    "contract_event_identity": _contract_event_identity(source),
+                    "source_contract_numbers": _contract_source_numbers(source),
+                    "long_term_continuation_type": source.get(
+                        "long_term_continuation_type"
+                    ),
+                    "amount_basis": contract.get("total_contract_amount_basis"),
+                    "family_inference": None,
+                },
+            }
+        )
 
     _decorate_contract_series(contracts, bid_notice_id=bid_notice_id)
 
 
 def _decorate_contract_series(
-    contracts: list[dict[str, Any]], *, bid_notice_id: str | None,
+    contracts: list[dict[str, Any]],
+    *,
+    bid_notice_id: str | None,
 ) -> None:
     """Describe cross-family continuation candidates without asserting identity."""
     families: dict[str, list[dict[str, Any]]] = {}
@@ -355,10 +388,13 @@ def _decorate_contract_series(
     family_profiles: dict[str, dict[str, Any]] = {}
     candidates: dict[tuple[str, str], list[str]] = {}
     for family_id, members in families.items():
-        ordered = sorted(members, key=lambda value: (
-            value.get("first_contract_date") or date.max,
-            str(value.get("contract_event_id") or ""),
-        ))
+        ordered = sorted(
+            members,
+            key=lambda value: (
+                value.get("first_contract_date") or date.max,
+                str(value.get("contract_event_id") or ""),
+            ),
+        )
         current = next(
             (member for member in members if member.get("is_current_record")),
             ordered[-1],
@@ -392,9 +428,10 @@ def _decorate_contract_series(
             ),
         )
         evidence = "|".join((str(bid_notice_id or ""), structure, family_name))
-        series_id = "contract-series:inferred:" + hashlib.sha256(
-            evidence.encode("utf-8")
-        ).hexdigest()[:20]
+        series_id = (
+            "contract-series:inferred:"
+            + hashlib.sha256(evidence.encode("utf-8")).hexdigest()[:20]
+        )
         original_family_id = ordered_profiles[0]["family_id"]
         for index, profile in enumerate(ordered_profiles):
             family_id = profile["family_id"]
@@ -410,9 +447,7 @@ def _decorate_contract_series(
                     "long_term_continuation_type"
                 ),
                 "normalized_contract_name": family_name,
-                "source_request_number": profile["candidate"].get(
-                    "request_number"
-                ),
+                "source_request_number": profile["candidate"].get("request_number"),
                 "authoritative_series_identifier": None,
                 "previous_family_effective_amount": previous_amount,
                 "current_family_entry_total": entry_total,
@@ -423,18 +458,20 @@ def _decorate_contract_series(
                 ),
             }
             for member in profile["members"]:
-                member.update({
-                    "contract_series_id": series_id,
-                    "previous_contract_family_id": (
-                        previous["family_id"] if previous else None
-                    ),
-                    "original_contract_family_id": original_family_id,
-                    "family_relationship_type": (
-                        "continuation" if previous else "unknown"
-                    ),
-                    "family_relationship_status": "inferred",
-                    "family_relationship_basis": relationship_basis,
-                })
+                member.update(
+                    {
+                        "contract_series_id": series_id,
+                        "previous_contract_family_id": (
+                            previous["family_id"] if previous else None
+                        ),
+                        "original_contract_family_id": original_family_id,
+                        "family_relationship_type": (
+                            "continuation" if previous else "unknown"
+                        ),
+                        "family_relationship_status": "inferred",
+                        "family_relationship_basis": relationship_basis,
+                    }
+                )
 
     for family_id, profile in family_profiles.items():
         if family_id in decorated_families:
@@ -444,30 +481,34 @@ def _decorate_contract_series(
         for member in profile["members"]:
             member.pop("_series_candidate", None)
             if member.get("contract_structure") == "single":
-                member.update({
-                    "contract_series_id": None,
-                    "previous_contract_family_id": None,
-                    "original_contract_family_id": family_id,
-                    "family_relationship_type": "independent",
-                    "family_relationship_status": "confirmed",
-                    "family_relationship_basis": {
-                        "contract_structure": "single",
-                        "authoritative_series_identifier": None,
-                    },
-                })
+                member.update(
+                    {
+                        "contract_series_id": None,
+                        "previous_contract_family_id": None,
+                        "original_contract_family_id": family_id,
+                        "family_relationship_type": "independent",
+                        "family_relationship_status": "confirmed",
+                        "family_relationship_basis": {
+                            "contract_structure": "single",
+                            "authoritative_series_identifier": None,
+                        },
+                    }
+                )
             else:
-                member.update({
-                    "contract_series_id": None,
-                    "previous_contract_family_id": None,
-                    "original_contract_family_id": family_id,
-                    "family_relationship_type": "unknown",
-                    "family_relationship_status": "unresolved",
-                    "family_relationship_basis": {
-                        "bid_notice_id": bid_notice_id,
-                        "authoritative_series_identifier": None,
-                        "reason": "no_cross_family_source_identifier",
-                    },
-                })
+                member.update(
+                    {
+                        "contract_series_id": None,
+                        "previous_contract_family_id": None,
+                        "original_contract_family_id": family_id,
+                        "family_relationship_type": "unknown",
+                        "family_relationship_status": "unresolved",
+                        "family_relationship_basis": {
+                            "bid_notice_id": bid_notice_id,
+                            "authoritative_series_identifier": None,
+                            "reason": "no_cross_family_source_identifier",
+                        },
+                    }
+                )
 
 
 def _contract_family_summary(contracts: list[dict[str, Any]]) -> dict[str, Any]:
@@ -479,7 +520,8 @@ def _contract_family_summary(contracts: list[dict[str, Any]]) -> dict[str, Any]:
         )
         families.setdefault(family_id, []).append(contract)
     included = [
-        contract for contract in contracts
+        contract
+        for contract in contracts
         if contract.get("include_in_family_total")
         and contract.get("effective_contract_amount") is not None
     ]
@@ -496,14 +538,19 @@ def _contract_family_summary(contracts: list[dict[str, Any]]) -> dict[str, Any]:
     )
     series_families: dict[str, set[str]] = {}
     for family_id, members in families.items():
-        series_id = next((
-            str(member.get("contract_series_id"))
-            for member in members if member.get("contract_series_id")
-        ), None)
+        series_id = next(
+            (
+                str(member.get("contract_series_id"))
+                for member in members
+                if member.get("contract_series_id")
+            ),
+            None,
+        )
         if series_id:
             series_families.setdefault(series_id, set()).add(family_id)
     unresolved_series = any(
-        len(family_ids) > 1 and any(
+        len(family_ids) > 1
+        and any(
             member.get("contract_series_id") == series_id
             and member.get("family_relationship_status") != "confirmed"
             for member in contracts
@@ -512,53 +559,62 @@ def _contract_family_summary(contracts: list[dict[str, Any]]) -> dict[str, Any]:
     )
     unresolved = unresolved_family or unresolved_series
     inferred = any(
-        contract.get("relationship_status") == "inferred"
-        for contract in contracts
+        contract.get("relationship_status") == "inferred" for contract in contracts
     )
     status = (
-        "unresolved" if unresolved else
-        "partially_confirmed" if inferred else
-        "confirmed"
+        "unresolved"
+        if unresolved
+        else "partially_confirmed"
+        if inferred
+        else "confirmed"
     )
     included_family_ids = {
         str(contract.get("contract_family_id")) for contract in included
     }
-    included_event_ids = list(dict.fromkeys(
-        str(contract.get("contract_event_id"))
-        for contract in included if contract.get("contract_event_id")
-    ))
+    included_event_ids = list(
+        dict.fromkeys(
+            str(contract.get("contract_event_id"))
+            for contract in included
+            if contract.get("contract_event_id")
+        )
+    )
     confirmed_amounts = [
-        contract for contract in included
+        contract
+        for contract in included
         if contract.get("relationship_status") == "confirmed"
     ]
     latest_confirmed = max(
         confirmed_amounts,
         key=lambda value: (
             value.get("latest_contract_version_date")
-            or value.get("first_contract_date") or date.min,
+            or value.get("first_contract_date")
+            or date.min,
             str(value.get("contract_event_id") or ""),
         ),
         default=None,
     )
     effective_amount = (
-        None if unresolved else
-        sum(contract["effective_contract_amount"] for contract in included)
-        if included else None
+        None
+        if unresolved
+        else sum(contract["effective_contract_amount"] for contract in included)
+        if included
+        else None
     )
     effective_event_id = (
         included[0].get("contract_event_id")
-        if not unresolved and len(included) == 1 else None
+        if not unresolved and len(included) == 1
+        else None
     )
     aggregation_reason = (
         "long_term_continuation_relationship_unresolved"
-        if unresolved_series else
-        "contract_family_relationship_unresolved"
-        if unresolved_family else
-        "inferred_contract_family_relationship"
-        if inferred else
-        "confirmed_contract_family_aggregation"
-        if included else
-        "no_confirmed_contract_amount"
+        if unresolved_series
+        else "contract_family_relationship_unresolved"
+        if unresolved_family
+        else "inferred_contract_family_relationship"
+        if inferred
+        else "confirmed_contract_family_aggregation"
+        if included
+        else "no_confirmed_contract_amount"
     )
     return {
         "effective_contract_amount": effective_amount,
@@ -566,11 +622,11 @@ def _contract_family_summary(contracts: list[dict[str, Any]]) -> dict[str, Any]:
         "included_contract_event_ids": included_event_ids,
         "latest_confirmed_contract_amount": (
             latest_confirmed.get("effective_contract_amount")
-            if latest_confirmed else None
+            if latest_confirmed
+            else None
         ),
         "latest_confirmed_contract_event_id": (
-            latest_confirmed.get("contract_event_id")
-            if latest_confirmed else None
+            latest_confirmed.get("contract_event_id") if latest_confirmed else None
         ),
         "contract_family_count": len(families),
         "included_contract_family_count": len(included_family_ids),

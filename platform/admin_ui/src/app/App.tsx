@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Boxes, Braces, CheckCircle2, Database, GitFork, Home, Inbox, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck, Wrench } from "lucide-react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { adminApi, type CapabilitySummary, type LineageLink, type MappingSummary, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/admin";
+import { capabilityApi, type CapabilitySummary } from "../api/capability";
+import { registryApi, type LineageLink, type MappingSummary, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/registry";
 import { BindingManager } from "../features/binding/BindingManager";
 import { CapabilityStudio } from "../features/capability/CapabilityStudio";
 import { ContextConsole } from "../features/context/ContextConsole";
@@ -42,12 +43,12 @@ function AdminWorkspace() {
 
   useEffect(() => {
     const requests = [
-      {label:"기능",load:()=>adminApi.capabilities().then(value=>setCapabilities(value.capabilities))},
-      {label:"소스",load:()=>adminApi.sources().then(value=>setSources(value.sources))},
-      {label:"매핑",load:()=>adminApi.mappings().then(value=>setMappings(value.mappings))},
-      {label:"계보",load:()=>adminApi.lineage().then(value=>setLineage(value.links))},
-      {label:"검증",load:()=>adminApi.validation().then(setValidation)},
-      {label:"게시 버전",load:()=>adminApi.registryRelease().then(setRelease)},
+      {label:"기능",load:()=>capabilityApi.capabilities().then(value=>setCapabilities(value.capabilities))},
+      {label:"소스",load:()=>registryApi.sources().then(value=>setSources(value.sources))},
+      {label:"매핑",load:()=>registryApi.mappings().then(value=>setMappings(value.mappings))},
+      {label:"계보",load:()=>registryApi.lineage().then(value=>setLineage(value.links))},
+      {label:"검증",load:()=>registryApi.validation().then(setValidation)},
+      {label:"게시 버전",load:()=>registryApi.registryRelease().then(setRelease)},
     ];
     Promise.allSettled(requests.map(request=>request.load())).then(results=>{
       const unavailable=results.flatMap((result,index)=>result.status==="rejected"?[requests[index].label]:[]);

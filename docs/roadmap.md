@@ -3,49 +3,25 @@
 로드맵은 완료된 migration 일지가 아니라 남은 제품 결과와 완료 조건만 관리한다.
 현재 구현 사실은 코드, Registry와 [Architecture](architecture/overview.md)가 기준이다.
 
-## 현재 기반
+## 현재 제공하는 기반
 
-- 프로젝트와 저장소 권위 경계
-- Source·Mapping·Capability Runtime과 HTTP API
-- Registry 업무 Domain 소유권과 Runtime 계약 namespace를 분리한 계약 배치
-- 업무 Domain·Runtime 계약을 구분한 Admin 집계와 표시명
-- Ontology 게시 트랜잭션·단일 Published version 제약 및 Application DB 동시성 검증
-- 공공조달 참여 분석의 한국시간 개찰 연도·차수별 집계, 수집 상태와 상위 10위 보존 범위
-- Suggestion 적용 실행권·이력·성공 기록과 외부 쓰기 없는 결과 복구
-- 제안 검토의 서버 상태·자산 필터와 cursor 페이지 조회, 승인된 적용 재시도·결과 확인,
-  성공 기록 기반 Binding·Ontology 초안 이동
-- 분석 Reader 기능별 분리와 프로필·참여 Data DB 행 타입 검증
-- Connector·Prefect 수집 및 Data DB
-- 개찰 응답 완전성 검증과 상위 10위·낙찰자 저장 업체 집합의 완료 판정
-- 수집 기능별 Flow·Task·client·정규화 패키지와 실행 관리 분리,
-  참가자격 추출의 모델 실행·근거 검증·의미 보정 분리
-- Ontology version lifecycle과 Registry·Published Ontology·Approved Binding을
-  함께 고정하는 checksum 기반 Runtime bundle
-- Semantic Binding review 기록과 Metadata Intelligence suggestion
-- 승인된 Metadata Intelligence suggestion을 유형별 적용기로 실행하는 변경 경로
-  (OpenMetadata description·Glossary·quality test, Binding Draft, Ontology Draft)
-- OpenMetadata integration과 Admin UI
-- Data Assets의 기술·적재 운영·업무 Binding·거버넌스 통합 조회,
-  명시적 Pipeline output 연결과 원천별 장애 상태
-- 작업 중심 Admin 메뉴·개요, URL 기반 자산 상세와 관점별 탭, 전체 자산 검색,
-  자산별 제안·직접/용어 기반 의미 연결 조회, 공통 관리자 인증과 원천별 오류 격리
-- Runtime API만 호출하는 MCP gateway
-- Domain별 processor 등록과 query 후처리, 공공조달 query handler를 분리한
-  Runtime·Context orchestration
-- 공공조달 시장 분석의 기능별 하위 폴더와 참가자격 실행·근거·캐시·결과 분리,
-  Domain의 조달 데이터·참가자격 검증,
-  Admin 서비스 조립과 기능별 Router 분리
-- Context `plan`·`execute` 분리와 OPA 정책 결정점의 첫 vertical 계약
-- 서명·versioned OPA Bundle 배포, readiness, decision/status audit 수집
-- Capability input Binding의 Ontology–Runtime type·collection 호환성 검사
+- [Pipelines](pipelines/development.md): Connector·Prefect 수집, 원본·정규 적재와 Data DB
+- [Prefect 실행 정책](pipelines/prefect.md): 두 배포의 공통 등록·Queue 우선순위·동시 실행 상한.
+  Compose는 Worker 전체 제한, [K3s](deployment/k3s.md)는 작업별 Job·자원 예산을 적용한다.
+  실제 EC2에서의 병렬 실행·자원 포화 검증은 남아 있다.
+- [Platform Runtime](platform/runtime.md): Source·Mapping·Capability 실행, Context 계획·실행과 OPA 정책 연계
+- [Ontology와 Binding](platform/ontology.md): 작성·검토·게시, Stable Concept와 immutable bundle
+- [Metadata 관리](platform/metadata/asset_assessment.md): OpenMetadata 조회, AI 제안·검토·적용·복구
+- [Admin UI](platform/admin_ui.md)와 [MCP](mcp/gateway.md): 관리·실행 기능의 사용자 진입점
 
-Runtime bundle은 독립 version 디렉터리로 compile한 뒤 atomic active pointer로
-활성화한다. 실행 응답에는 Registry release와 bundle checksum이 함께 기록되며,
-rollback은 검증된 이전 bundle을 다시 활성화하는 방식이다.
+구현 파일·이관 이력은 각 프로젝트의 개발 안내와 Git 이력에서 확인한다.
+실제 질문과 배포 환경의 검증 범위는 [검증 기록](verification/index.md)에 남긴다.
 
 ## 다음 결과
 
 ### 1. Context Engine vertical slice
+
+현재 API·지원 질문·실행 제약은 [Context](platform/context.md)를 따른다.
 
 승인된 Ontology, Binding과 Capability를 사용해 질문을 실행계획으로 변환한다.
 
@@ -66,12 +42,10 @@ rollback은 검증된 이전 bundle을 다시 활성화하는 방식이다.
 provenance를 끝까지 완성하고 실제 사용자 평가로 가치를 검증한다. 검증되지 않은
 Capability는 운영 준비 상태와 명확히 구분한다.
 
-현재 대표 질문의 종단 검증 결과와 남은 metadata 결손은
-[Context vertical 검증 보고서](vertical_slice_verification.md)와
-[Bid notice vertical 검증 보고서](bid_notice_vertical_verification.md),
-[기업-공고 참가 가능성 검증 보고서](company_bid_eligibility_vertical_verification.md)에
-기록한다. 참가 가능성 vertical은 Runtime 종단 실행까지 성공했으며, 현재 남은
-핵심 결손은 전자입찰 등록과 기관별 명부 요건을 판정할 authoritative evidence다.
+대표 질문의 종단 검증 결과와 당시 metadata 결손은
+[Context vertical 검증 보고서](verification/vertical_slice_verification.md)와
+[Bid notice vertical 검증 보고서](verification/bid_notice_vertical_verification.md)에
+기록한다. 현재 준비도는 배포된 계약·실행 결과·근거의 최신 상태를 대조해 평가한다.
 
 ### 3. 필요한 Admin 관리 UX
 
@@ -135,7 +109,7 @@ Ontology canvas, 범용 graph editor, 자동 승인, OpenMetadata entity 복제,
 공공조달의 버전형 분야 분류체계는 별도 Domain 기능으로 구축한다. 그 전까지 물품과
 공사는 원천 공식 분류번호·분류명의 단일 단계를 사용하고, 코드 접두어로 상위 계층을
 추정하지 않는다. 수집원, 기간 유효 분류와 최신 체계 재분류의 완료 조건은
-[공공조달 분야 분류 기준과 확장 계획](domains/public_procurement/procurement_classification.md)을
+[공공조달 분야 분류 기준과 확장 계획](platform/domains/public_procurement/procurement_classification.md)을
 따른다.
 
 ### 법령 기반 데이터 거버넌스
@@ -150,12 +124,11 @@ Ontology canvas, 범용 graph editor, 자동 승인, OpenMetadata entity 복제,
 키워드 검색·snapshot 원문 조회를 제공한다. 기본 메타데이터 ingestion은 샘플과
 프로파일을 자동 수집하지 않는다. 다음 검증 범위는 대상 테이블을 명시한 관측
 수집 workflow, AI 의미 분석·근거 생성과 태그 제안 및 검색 평가다.
-OpenMetadata 2.0.5의 격리 DB 복원·migration·연계·ingestion 및 기존 버전 복구
-검증과 운영 전환 후 API·검색·Prefect ingestion 재검증을 완료했다.
+배포 호환성 결과는 [OpenMetadata 검증 기록](verification/openmetadata_upgrade_2026_10_13.md),
+현재 제안 비교·적용 이력과 화면 사용법은 [Admin UI](platform/admin_ui.md)를 따른다.
 
-제안 검토는 최신 값·제안 값·제안 당시 설명 근거 비교, 자산 버전 변경 안내와
-시도별 적용 이력 조회를 지원한다. 복구 동작은 기존 승인과 실행권 검증을 유지하며,
-근거가 변경된 제안은 최신 자산 확인·재분석으로 연결한다.
+조달 탐색의 고정 snapshot·과거 시점 재현·관계 확장과 성능 검증의 후속 범위는
+[조달 탐색 연동 계약](integration/procurement_exploration_contract.md#후속-요구사항과-성능-평가)을 따른다.
 
-Admin 주요 화면은 데이터 자산 목록의 디자인 기준과 공통 화면 컴포넌트를 공유한다.
-온톨로지의 버전·개념·속성 탐색과 작은 화면의 메뉴 배치를 개선했다.
+EC2 1대의 K3s 배포와 GitHub CD 경로는 [배포 안내](deployment/k3s.md)에 구현되어 있다.
+실제 EC2 연결·배포 검증은 서버·도메인·Secret 설정 후 수행한다.

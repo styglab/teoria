@@ -13,6 +13,28 @@ from teoria.policy import PolicyDecision
 REGISTRIES = Path(__file__).parents[3] / "registries"
 
 
+def test_archived_document_capabilities_are_not_discoverable_or_executable() -> None:
+    runner = CapturingRunner()
+    client = TestClient(create_runtime_app(
+        settings=Settings(runtime_api_token="test-token"),
+        catalog=RegistryLoader(REGISTRIES).load(), runner=runner,
+    ))
+    headers = {"Authorization": "Bearer test-token"}
+    discovered = {item["id"] for item in client.get(
+        "/v1/capabilities", headers=headers
+    ).json()["capabilities"]}
+    for identifier in (
+        "get_bid_requirements", "get_bid_requirements_by_notice_ids",
+        "get_bid_participation_findings", "assess_company_bid_eligibility",
+        "assess_company_bid_eligibilities",
+    ):
+        assert identifier not in discovered
+        assert client.post(
+            f"/v1/capabilities/{identifier}:execute", headers=headers, json={"inputs": {}}
+        ).status_code == 404
+    assert runner.call is None
+
+
 class CapturingRunner:
     def __init__(self) -> None:
         self.call = None
@@ -47,15 +69,6 @@ def test_runtime_api_requires_bearer_auth_and_executes_capability() -> None:
     capabilities = client.get("/v1/capabilities", headers=headers)
     assert capabilities.status_code == 200
     assert any(item["id"] == "search_public_procurement_contracts" for item in capabilities.json()["capabilities"])
-    assessment = next(
-        item for item in capabilities.json()["capabilities"]
-        if item["id"] == "assess_company_bid_eligibility"
-    )
-    assert assessment["kind"] == "decision"
-    assert assessment["exposure"] == "public"
-    assert assessment["version"] == "1.2.0"
-    assert assessment["definition_checksum"].startswith("sha256:")
-    assert "assessment.requirement_assessment" in assessment["effects"]["produces"]
     assert client.get("/v1/version", headers=headers).json()["registry"] == {"status": "draft"}
 
     response = client.post(

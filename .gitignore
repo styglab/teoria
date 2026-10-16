@@ -1,5 +1,5 @@
 # Custom 
-archive/
+archive/*
 references/
 .artifacts/
 !.agents/skills/extract-bid-eligibility/references/
@@ -240,3 +240,11 @@ pipelines/references/providers/moleg/*
 !.agents/skills/enrich-metadata-asset/references/
 !.agents/skills/enrich-metadata-asset/references/evidence_policy.md
 !.agents/skills/enrich-metadata-asset/references/proposal_bundle.schema.json
+
+# Preserve this explicitly retired feature, including its former skill references.
+!archive/bid_document_processing/
+!archive/bid_document_processing/**
+
+# Historical checks retained as inactive evidence, outside active tools and tests.
+!archive/development_checks/
+!archive/development_checks/**

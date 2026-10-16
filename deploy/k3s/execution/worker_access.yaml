@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prefect-job-dispatcher
+rules:
+- apiGroups: [batch]
+  resources: [jobs]
+  verbs: [create, get, list, watch, delete, patch]
+- apiGroups: ['']
+  resources: [pods, pods/log, events]
+  verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: prefect-job-dispatcher
+subjects:
+- kind: ServiceAccount
+  name: teoria-pipeline-worker
+  namespace: teoria
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: prefect-job-dispatcher

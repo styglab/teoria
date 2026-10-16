@@ -23,14 +23,14 @@ binding. Return `unbound`, alternatives or `needs_evidence` when the match is
 missing or ambiguous. Do not invent a concept to fill the gap.
 
 Create one independently reviewable `binding` suggestion per verified match.
-Use the actual contract in `platform/src/teoria/intelligence/service.py` and the
+Use the actual contract in `platform/src/teoria/intelligence/suggestions/contracts.py` and the
 [bundle schema](../enrich-metadata-asset/references/proposal_bundle.schema.json);
 do not invent new API fields. Include the published stable concept key, current
 OpenMetadata version, evidence, confidence and material alternatives.
 Use medium risk unless stronger policy requires high risk. Name-only or
 conflicting matches remain below 0.7 and carry a warning.
 
-Validate with `../enrich-metadata-asset/scripts/submit_proposals.py`.
+Validate from the repository root with `uv run --locked --package teoria-platform python .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py <bundle>`.
 Submit with `--submit` only when requested by the user. Report pending suggestion
 IDs. Approval creates a Binding Draft; a separate Binding review activates it.
 Never call review endpoints, publish Ontology, or write OpenMetadata.

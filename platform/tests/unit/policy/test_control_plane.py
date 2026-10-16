@@ -12,10 +12,10 @@ class Repository:
         self.decisions = []
         self.status = None
 
-    def record_decisions(self, events):
+    async def record_decisions(self, events):
         self.decisions.extend(events)
 
-    def record_status(self, status):
+    async def record_status(self, status):
         self.status = status
 
 
@@ -23,13 +23,15 @@ def test_control_plane_serves_bundle_and_accepts_gzipped_telemetry(tmp_path) -> 
     bundle = tmp_path / "teoria.tar.gz"
     bundle.write_bytes(b"signed-bundle")
     repository = Repository()
-    client = TestClient(create_policy_control_plane_app(
-        settings=Settings(
-            opa_control_plane_token="control-token",
-            opa_bundle_path=bundle,
-        ),
-        repository=repository,
-    ))
+    client = TestClient(
+        create_policy_control_plane_app(
+            settings=Settings(
+                opa_control_plane_token="control-token",
+                opa_bundle_path=bundle,
+            ),
+            repository=repository,
+        )
+    )
     headers = {"Authorization": "Bearer control-token"}
 
     response = client.get("/bundles/teoria.tar.gz", headers=headers)
@@ -44,9 +46,7 @@ def test_control_plane_serves_bundle_and_accepts_gzipped_telemetry(tmp_path) -> 
     assert response.status_code == 204
     assert repository.decisions == events
 
-    response = client.post(
-        "/status", headers=headers, json={"labels": {"id": "opa-1"}}
-    )
+    response = client.post("/status", headers=headers, json={"labels": {"id": "opa-1"}})
     assert response.status_code == 204
     assert repository.status["labels"]["id"] == "opa-1"
 
@@ -54,10 +54,14 @@ def test_control_plane_serves_bundle_and_accepts_gzipped_telemetry(tmp_path) -> 
 def test_control_plane_requires_bearer_token(tmp_path) -> None:
     bundle = tmp_path / "teoria.tar.gz"
     bundle.write_bytes(b"bundle")
-    client = TestClient(create_policy_control_plane_app(
-        settings=Settings(opa_control_plane_token="control-token", opa_bundle_path=bundle),
-        repository=Repository(),
-    ))
+    client = TestClient(
+        create_policy_control_plane_app(
+            settings=Settings(
+                opa_control_plane_token="control-token", opa_bundle_path=bundle
+            ),
+            repository=Repository(),
+        )
+    )
 
     assert client.get("/bundles/teoria.tar.gz").status_code == 401
     assert client.post("/logs", json=[]).status_code == 401

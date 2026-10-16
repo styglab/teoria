@@ -34,7 +34,9 @@ class BlueprintObject(BaseModel):
         property_codes = {item.code for item in self.properties}
         missing = set(self.identity_properties) - property_codes
         if missing:
-            raise ValueError(f"Unknown identity properties for {self.code}: {sorted(missing)}")
+            raise ValueError(
+                f"Unknown identity properties for {self.code}: {sorted(missing)}"
+            )
         return self
 
 
@@ -76,15 +78,17 @@ class OntologyBlueprint(BaseModel):
         return self
 
 
-def apply_ontology_blueprint(
+async def apply_ontology_blueprint(
     repository: OntologyAuthoringRepository,
     blueprint: OntologyBlueprint,
     *,
     actor: str,
 ) -> dict[str, Any]:
     """Create a reviewed ontology blueprint as a draft; never publish implicitly."""
-    versions = repository.list_versions(blueprint.namespace)
-    existing = next((item for item in versions if item["version"] == blueprint.target_version), None)
+    versions = await repository.list_versions(blueprint.namespace)
+    existing = next(
+        (item for item in versions if item["version"] == blueprint.target_version), None
+    )
     if existing:
         return {
             "namespace": blueprint.namespace,
@@ -97,7 +101,7 @@ def apply_ontology_blueprint(
         raise ValueError(
             f"Blueprint bootstrap cannot add a new version to existing ontology: {blueprint.namespace}"
         )
-    revision = repository.create_ontology(
+    revision = await repository.create_ontology(
         namespace=blueprint.namespace,
         name=blueprint.name,
         description=blueprint.description,
@@ -107,7 +111,7 @@ def apply_ontology_blueprint(
     version_id = UUID(revision["ontology_version_id"])
     object_concepts: dict[str, str] = {}
     for item in blueprint.objects:
-        created = repository.add_item(
+        created = await repository.add_item(
             version_id,
             kind="object",
             payload={
@@ -121,7 +125,7 @@ def apply_ontology_blueprint(
         )
         object_concepts[item.code] = created["concept_id"]
         for prop in item.properties:
-            repository.add_item(
+            await repository.add_item(
                 version_id,
                 kind="property",
                 payload={
@@ -131,7 +135,7 @@ def apply_ontology_blueprint(
                 actor=actor,
             )
     for relationship in blueprint.relationships:
-        repository.add_item(
+        await repository.add_item(
             version_id,
             kind="relationship",
             payload={
@@ -147,5 +151,5 @@ def apply_ontology_blueprint(
         "status": "draft",
         "action": "created",
         "ontology_version_id": str(version_id),
-        "validation": repository.validate(version_id),
+        "validation": (await repository.validate(version_id)),
     }

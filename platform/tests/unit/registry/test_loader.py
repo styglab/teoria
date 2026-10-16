@@ -26,15 +26,10 @@ def test_loads_current_registries() -> None:
         "teoria_public_procurement",
     }
     assert "business_registration_number" in catalog.data_types
-    assert set(catalog.runtime_contracts) == {"assessment", "company", "public_procurement"}
+    assert set(catalog.runtime_contracts) == {"company", "public_procurement"}
     assert all(path.parent.name == "runtime_contracts" and path.stem == contract_id
                for contract_id, path in catalog.runtime_contract_paths.items())
-    assert catalog.runtime_contract_paths["assessment"].parent.parent.name == "public_procurement"
-    assert all(catalog.capability_paths[capability_id].parent.parent.name == "public_procurement"
-               for capability_id in ("assess_company_bid_eligibility", "assess_company_bid_eligibilities"))
     assert "business_operating_status_kr" in catalog.value_sets
-    assert "holds_valid_direct_production_confirmation" in catalog.eligibility_rules
-    assert catalog.eligibility_rules["is_valid_women_owned_business"].evaluator == "qualification_valid"
     assert {
         source_id
         for source_id, reference in catalog.references.items()
@@ -55,8 +50,6 @@ def test_loads_current_registries() -> None:
             "analyze_procurement_field_market",
             "get_procurement_classification_catalog",
             "get_procurement_region_filter_options",
-        "assess_company_bid_eligibilities",
-        "assess_company_bid_eligibility",
             "analyze_company_competitors",
             "analyze_bid_participation_context",
             "analyze_organization_procurement_profile",
@@ -90,9 +83,6 @@ def test_loads_current_registries() -> None:
         "search_bid_notices",
         "get_bid_notice",
             "get_bid_notices_by_ids",
-            "get_bid_requirements",
-            "get_bid_requirements_by_notice_ids",
-            "get_bid_participation_findings",
             "get_procurement_supplier",
             "get_procurement_supplier_industries",
             "get_procurement_supplier_products",

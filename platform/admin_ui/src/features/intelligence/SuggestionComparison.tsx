@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { adminApi, type IntelligenceSuggestion, type MetadataTableDetail } from "../../api/admin";
+import { suggestionApi, type IntelligenceSuggestion } from "../../api/suggestions";
+import { type MetadataTableDetail } from "../../api/metadata";
 
 export function SuggestionComparison({ item, table }: { item: IntelligenceSuggestion; table: MetadataTableDetail | null }) {
   const [target, setTarget] = useState<MetadataTableDetail | null>(null);
@@ -12,7 +13,7 @@ export function SuggestionComparison({ item, table }: { item: IntelligenceSugges
     setTarget(null); setError(null);
     if (!supported || !item.proposed_value.table_id) { setLoading(false); return; }
     setLoading(true);
-    adminApi.suggestionTarget(item.suggestion_id)
+    suggestionApi.suggestionTarget(item.suggestion_id)
       .then(value => { if (active) setTarget(value); })
       .catch(() => { if (active) setError("최신 값을 조회하지 못했습니다. 새로고침 후 다시 확인하세요."); })
       .finally(() => { if (active) setLoading(false); });

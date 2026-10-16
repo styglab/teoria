@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-import psycopg
+from teoria.persistence.postgres import connect
 from psycopg import sql
 from psycopg.rows import dict_row
 
@@ -25,13 +25,15 @@ class DatabaseQueryResult:
 class DatabaseSourceExecutor:
     OPERATORS = {"eq": sql.SQL("="), "gte": sql.SQL(">="), "lte": sql.SQL("<=")}
 
-    def __init__(self, environment: Mapping[str, str] | None = None, *, max_rows: int = 1000) -> None:
+    def __init__(
+        self, environment: Mapping[str, str] | None = None, *, max_rows: int = 1000
+    ) -> None:
         if max_rows < 1:
             raise ValueError("max_rows must be at least one")
         self.environment = environment if environment is not None else os.environ
         self.max_rows = max_rows
 
-    def execute(
+    async def execute(
         self,
         catalog: RegistryCatalog,
         source_id: str,
@@ -40,8 +42,12 @@ class DatabaseSourceExecutor:
     ) -> DatabaseQueryResult:
         source = catalog.sources[source_id].source
         if source.type != "database":
-            raise DatabaseSourceExecutionError(f"source '{source_id}' is not a database source")
-        relation = next((item for item in source.relations if item.id == relation_id), None)
+            raise DatabaseSourceExecutionError(
+                f"source '{source_id}' is not a database source"
+            )
+        relation = next(
+            (item for item in source.relations if item.id == relation_id), None
+        )
         if relation is None:
             raise DatabaseSourceExecutionError(
                 f"unknown relation '{relation_id}' on source '{source_id}'"
@@ -64,19 +70,27 @@ class DatabaseSourceExecutor:
                 )
             if operator not in self.OPERATORS:
                 if operator == "contains":
-                    conditions.append(sql.SQL("%s = ANY({})").format(sql.Identifier(field)))
+                    conditions.append(
+                        sql.SQL("%s = ANY({})").format(sql.Identifier(field))
+                    )
                     parameters.append(item["value"])
                     continue
                 if operator != "in":
-                    raise DatabaseSourceExecutionError(f"unsupported database operator '{operator}'")
+                    raise DatabaseSourceExecutionError(
+                        f"unsupported database operator '{operator}'"
+                    )
                 values = item["value"]
                 if not isinstance(values, list) or not values:
-                    raise DatabaseSourceExecutionError("in operator requires a non-empty list")
+                    raise DatabaseSourceExecutionError(
+                        "in operator requires a non-empty list"
+                    )
                 conditions.append(sql.SQL("{} = ANY(%s)").format(sql.Identifier(field)))
                 parameters.append(values)
             else:
                 conditions.append(
-                    sql.SQL("{} {} %s").format(sql.Identifier(field), self.OPERATORS[operator])
+                    sql.SQL("{} {} %s").format(
+                        sql.Identifier(field), self.OPERATORS[operator]
+                    )
                 )
                 parameters.append(item["value"])
 
@@ -89,11 +103,20 @@ class DatabaseSourceExecutor:
                     f"search fields are not declared on relation '{relation_id}': "
                     f"{sorted(unknown_search_fields)}"
                 )
-            escaped = str(search["value"]).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            conditions.append(sql.SQL("(") + sql.SQL(" OR ").join(
-                sql.SQL("{} ILIKE %s ESCAPE %s").format(sql.Identifier(field))
-                for field in search_fields
-            ) + sql.SQL(")"))
+            escaped = (
+                str(search["value"])
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+            conditions.append(
+                sql.SQL("(")
+                + sql.SQL(" OR ").join(
+                    sql.SQL("{} ILIKE %s ESCAPE %s").format(sql.Identifier(field))
+                    for field in search_fields
+                )
+                + sql.SQL(")")
+            )
             for _ in search_fields:
                 parameters.extend([f"%{escaped}%", "\\"])
 
@@ -120,7 +143,9 @@ class DatabaseSourceExecutor:
             nulls = item.get("nulls")
             if direction not in {"asc", "desc"} or nulls not in {None, "first", "last"}:
                 raise DatabaseSourceExecutionError("invalid database sort definition")
-            part = sql.SQL("{} {}").format(sql.Identifier(item["field"]), sql.SQL(direction.upper()))
+            part = sql.SQL("{} {}").format(
+                sql.Identifier(item["field"]), sql.SQL(direction.upper())
+            )
             if nulls:
                 part += sql.SQL(" NULLS ") + sql.SQL(nulls.upper())
             order_parts.append(part)
@@ -142,29 +167,54 @@ class DatabaseSourceExecutor:
                 else sql.SQL("COUNT(*)")
             )
             count_statement = sql.SQL("SELECT {} FROM {}.{}").format(
-                count_expression, sql.Identifier(schema_name), sql.Identifier(table_name)
+                count_expression,
+                sql.Identifier(schema_name),
+                sql.Identifier(table_name),
             )
             if conditions:
-                count_statement += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
+                count_statement += sql.SQL(" WHERE ") + sql.SQL(" AND ").join(
+                    conditions
+                )
             statement += sql.SQL(" LIMIT %s OFFSET %s")
             row_parameters = [*parameters, page_size, (page - 1) * page_size]
         else:
             statement += sql.SQL(" LIMIT %s")
             row_parameters = [*parameters, self.max_rows]
 
-        with psycopg.connect(database_url, row_factory=dict_row) as connection:
+        async with connect(database_url, row_factory=dict_row) as connection:
             if count_statement is not None:
-                count_row = connection.execute(count_statement, parameters).fetchone()
-                count_value = next(iter(count_row.values())) if isinstance(count_row, Mapping) else count_row[0]
+                count_row = await (
+                    await connection.execute(count_statement, parameters)
+                ).fetchone()
+                count_value = (
+                    next(iter(count_row.values()))
+                    if isinstance(count_row, Mapping)
+                    else count_row[0]
+                )
                 total_items = int(count_value)
-                rows = list(connection.execute(statement, row_parameters).fetchall())
+                rows = list(
+                    (
+                        await (
+                            await connection.execute(statement, row_parameters)
+                        ).fetchall()
+                    )
+                )
                 total_pages = (total_items + page_size - 1) // page_size
-                return DatabaseQueryResult(rows, {
-                    "page": page,
-                    "page_size": page_size,
-                    "total_items": total_items,
-                    "total_pages": total_pages,
-                })
+                return DatabaseQueryResult(
+                    rows,
+                    {
+                        "page": page,
+                        "page_size": page_size,
+                        "total_items": total_items,
+                        "total_pages": total_pages,
+                    },
+                )
             return DatabaseQueryResult(
-                list(connection.execute(statement, row_parameters).fetchall())
+                list(
+                    (
+                        await (
+                            await connection.execute(statement, row_parameters)
+                        ).fetchall()
+                    )
+                )
             )

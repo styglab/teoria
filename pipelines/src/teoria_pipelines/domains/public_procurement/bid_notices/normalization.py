@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
 import re
 from typing import Any
-from uuid import NAMESPACE_URL, uuid5
 from zoneinfo import ZoneInfo
 
-from teoria_pipelines.models import ExtractedBatch, NormalizedBidNoticeBatch, RawProviderRecord
+from teoria_pipelines.models import ExtractedBatch, RawProviderRecord
+from teoria_pipelines.domains.public_procurement.bid_notices.models import (
+    NormalizedBidNoticeBatch,
+)
 
 NOTICE_TYPES = {
     "list_construction_bid_notices": "construction",
@@ -21,12 +22,28 @@ NOTICE_TYPES = {
 PPS_TIMEZONE = ZoneInfo("Asia/Seoul")
 
 PARTICIPATION_REGION_CODES = {
-    "전국": "00", "서울특별시": "11", "부산광역시": "26", "대구광역시": "27",
-    "인천광역시": "28", "광주광역시": "29", "대전광역시": "30", "울산광역시": "31",
-    "세종특별자치시": "36", "경기도": "41", "강원도": "42", "충청북도": "43",
-    "충청남도": "44", "전라북도": "45", "전라남도": "46", "경상북도": "47",
-    "경상남도": "48", "제주도": "50", "제주특별자치도": "50",
-    "강원특별자치도": "51", "전북특별자치도": "52", "기타": "99",
+    "전국": "00",
+    "서울특별시": "11",
+    "부산광역시": "26",
+    "대구광역시": "27",
+    "인천광역시": "28",
+    "광주광역시": "29",
+    "대전광역시": "30",
+    "울산광역시": "31",
+    "세종특별자치시": "36",
+    "경기도": "41",
+    "강원도": "42",
+    "충청북도": "43",
+    "충청남도": "44",
+    "전라북도": "45",
+    "전라남도": "46",
+    "경상북도": "47",
+    "경상남도": "48",
+    "제주도": "50",
+    "제주특별자치도": "50",
+    "강원특별자치도": "51",
+    "전북특별자치도": "52",
+    "기타": "99",
 }
 
 
@@ -53,7 +70,9 @@ def parse_permitted_industries(value: Any) -> list[dict[str, str | None]]:
         return []
     bracketed = re.findall(r"\[([^\[\]]+)\]", text)
     parts = bracketed or [part for part in re.split(r"\s*,\s*", text) if part.strip()]
-    return [item for part in parts if (item := parse_industry_reference(part)) is not None]
+    return [
+        item for part in parts if (item := parse_industry_reference(part)) is not None
+    ]
 
 
 def parse_industry_main_field_groups(value: Any) -> list[dict[str, Any]]:
@@ -83,23 +102,28 @@ def normalize_bid_notice_batch(batch: ExtractedBatch) -> NormalizedBidNoticeBatc
     normalized = NormalizedBidNoticeBatch()
     for record in batch.records:
         if record.operation_id in NOTICE_TYPES:
-            notice, documents = normalize_bid_notice(record)
-            normalized.notices.append(notice)
-            normalized.documents.extend(documents)
+            normalized.notices.append(normalize_bid_notice(record))
         elif record.operation_id == "list_license_restrictions":
-            normalized.license_restrictions.append(normalize_license_restriction(record))
+            normalized.license_restrictions.append(
+                normalize_license_restriction(record)
+            )
         elif record.operation_id == "list_participation_regions":
-            normalized.participation_regions.append(normalize_participation_region(record))
+            normalized.participation_regions.append(
+                normalize_participation_region(record)
+            )
         else:
-            raise BidNoticeNormalizationError(f"unsupported operation '{record.operation_id}'")
+            raise BidNoticeNormalizationError(
+                f"unsupported operation '{record.operation_id}'"
+            )
     return normalized
 
 
-def normalize_bid_notice(record: RawProviderRecord) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def normalize_bid_notice(record: RawProviderRecord) -> dict[str, Any]:
     value = record.payload
     notice_number, notice_order = _notice_identity(value, record.operation_id)
     notice = {
-        "notice_number": notice_number, "notice_order": notice_order,
+        "notice_number": notice_number,
+        "notice_order": notice_order,
         "work_type": NOTICE_TYPES[record.operation_id],
         "notice_name": _text(value.get("bidNtceNm")),
         "notice_kind_name": _text(value.get("ntceKindNm")),
@@ -121,8 +145,12 @@ def normalize_bid_notice(record: RawProviderRecord) -> tuple[dict[str, Any], lis
         "contract_method_name": _text(value.get("cntrctCnclsMthdNm")),
         "procurement_classification_number": _text(value.get("pubPrcrmntClsfcNo")),
         "procurement_classification_name": _text(value.get("pubPrcrmntClsfcNm")),
-        "procurement_large_classification_name": _text(value.get("pubPrcrmntLrgClsfcNm")),
-        "procurement_middle_classification_name": _text(value.get("pubPrcrmntMidClsfcNm")),
+        "procurement_large_classification_name": _text(
+            value.get("pubPrcrmntLrgClsfcNm")
+        ),
+        "procurement_middle_classification_name": _text(
+            value.get("pubPrcrmntMidClsfcNm")
+        ),
         "purchase_items": _purchase_items(value.get("purchsObjPrdctList")),
         "estimated_price": _decimal(value.get("presmptPrce")),
         "allocated_budget": _decimal(value.get("asignBdgtAmt") or value.get("bdgtAmt")),
@@ -136,7 +164,7 @@ def normalize_bid_notice(record: RawProviderRecord) -> tuple[dict[str, Any], lis
         "source_record_hash": record.source_record_hash,
         "source_payload": value,
     }
-    return notice, _documents(value, notice_number, notice_order)
+    return notice
 
 
 def _purchase_items(value: Any) -> list[dict[str, str | None]] | None:
@@ -155,7 +183,9 @@ def _purchase_items(value: Any) -> list[dict[str, str | None]] | None:
             sequence, code, name = None, parts[0], parts[1]
         else:
             sequence, code, name = None, None, parts[0]
-        items.append({"sequence": sequence or None, "code": code or None, "name": name or None})
+        items.append(
+            {"sequence": sequence or None, "code": code or None, "name": name or None}
+        )
     return items or None
 
 
@@ -163,7 +193,8 @@ def normalize_license_restriction(record: RawProviderRecord) -> dict[str, Any]:
     value = record.payload
     number, order = _notice_identity(value, record.operation_id)
     return {
-        "notice_number": number, "notice_order": order,
+        "notice_number": number,
+        "notice_order": order,
         "restriction_group_number": _text(value.get("lmtGrpNo")) or "0",
         "restriction_sequence": _text(value.get("lmtSno")) or "0",
         "license_restriction_name": _text(value.get("lcnsLmtNm")),
@@ -180,7 +211,8 @@ def normalize_participation_region(record: RawProviderRecord) -> dict[str, Any]:
     number, order = _notice_identity(value, record.operation_id)
     region_name = _text(value.get("prtcptPsblRgnNm"))
     return {
-        "notice_number": number, "notice_order": order,
+        "notice_number": number,
+        "notice_order": order,
         "restriction_sequence": _text(value.get("lmtSno")) or "0",
         "participation_region_code": participation_region_code(region_name),
         "participation_region_name": region_name,
@@ -190,32 +222,12 @@ def normalize_participation_region(record: RawProviderRecord) -> dict[str, Any]:
     }
 
 
-def _documents(value: dict[str, Any], number: str, order: str) -> list[dict[str, Any]]:
-    candidates = [
-        (f"notice_spec_{i}", _text(value.get(f"ntceSpecFileNm{i}")), _text(value.get(f"ntceSpecDocUrl{i}")))
-        for i in range(1, 11)
-    ]
-    candidates.append(("standard_notice", "표준공고서", _text(value.get("stdNtceDocUrl"))))
-    candidates.extend(
-        (f"site_explanation_{i}", f"현장설명서{i}", _text(value.get(f"sptDscrptDocUrl{i}")))
-        for i in range(1, 6)
-    )
-    records = []
-    for slot, file_name, source_url in candidates:
-        if not source_url:
-            continue
-        records.append({
-            "document_id": uuid5(NAMESPACE_URL, f"pps-bid-document:{number}:{order}:{slot}:{source_url}"),
-            "notice_number": number, "notice_order": order, "document_slot": slot,
-            "file_name": file_name or Path(source_url).name or None, "source_url": source_url,
-        })
-    return records
-
-
 def _notice_identity(value: dict[str, Any], operation_id: str) -> tuple[str, str]:
     number, order = _text(value.get("bidNtceNo")), _text(value.get("bidNtceOrd"))
     if not number or order is None:
-        raise BidNoticeNormalizationError(f"{operation_id} record is missing bidNtceNo or bidNtceOrd")
+        raise BidNoticeNormalizationError(
+            f"{operation_id} record is missing bidNtceNo or bidNtceOrd"
+        )
     return number, order
 
 
@@ -226,25 +238,41 @@ def _text(value: Any) -> str | None:
 
 def _boolean(value: Any) -> bool | None:
     text = (_text(value) or "").upper()
-    if not text: return None
-    if text in {"Y", "YES", "TRUE", "1"}: return True
-    if text in {"N", "NO", "FALSE", "0"}: return False
+    if not text:
+        return None
+    if text in {"Y", "YES", "TRUE", "1"}:
+        return True
+    if text in {"N", "NO", "FALSE", "0"}:
+        return False
     raise BidNoticeNormalizationError(f"invalid boolean value {value!r}")
 
 
 def _decimal(value: Any) -> Decimal | None:
     text = _text(value)
-    if text is None: return None
-    try: return Decimal(text.replace(",", ""))
-    except InvalidOperation as exc: raise BidNoticeNormalizationError(f"invalid decimal value {value!r}") from exc
+    if text is None:
+        return None
+    try:
+        return Decimal(text.replace(",", ""))
+    except InvalidOperation as exc:
+        raise BidNoticeNormalizationError(f"invalid decimal value {value!r}") from exc
 
 
 def _datetime(value: Any) -> datetime | None:
     text = _text(value)
-    if text is None: return None
-    for pattern in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y%m%d%H%M%S", "%Y%m%d%H%M", "%Y-%m-%dT%H:%M:%S"):
+    if text is None:
+        return None
+    for pattern in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y%m%d%H%M%S",
+        "%Y%m%d%H%M",
+        "%Y-%m-%dT%H:%M:%S",
+    ):
         try:
-            local_datetime = datetime.strptime(text, pattern).replace(tzinfo=PPS_TIMEZONE)
+            local_datetime = datetime.strptime(text, pattern).replace(
+                tzinfo=PPS_TIMEZONE
+            )
             return local_datetime.astimezone(timezone.utc)
-        except ValueError: continue
+        except ValueError:
+            continue
     raise BidNoticeNormalizationError(f"invalid datetime value {value!r}")

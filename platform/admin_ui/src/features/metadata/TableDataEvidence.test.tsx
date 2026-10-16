@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
-import { adminApi, type MetadataTableSamples } from "../../api/admin";
+import { metadataApi, type MetadataTableSamples } from "../../api/metadata";
 import { TableDataEvidence } from "./TableDataEvidence";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -11,8 +11,8 @@ const sample: MetadataTableSamples = {
 };
 
 test("fetches masked samples only on request and reports missing profile", async () => {
-  const samples = vi.spyOn(adminApi, "metadataTableSamples").mockResolvedValue(sample);
-  vi.spyOn(adminApi, "metadataTableProfile").mockResolvedValue({available: false, table_metrics: {}, column_metrics: [], reason: "not_collected"});
+  const samples = vi.spyOn(metadataApi, "metadataTableSamples").mockResolvedValue(sample);
+  vi.spyOn(metadataApi, "metadataTableProfile").mockResolvedValue({available: false, table_metrics: {}, column_metrics: [], reason: "not_collected"});
   render(<TableDataEvidence tableId="table-1" />);
   expect(samples).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "샘플 확인" }));
@@ -23,7 +23,7 @@ test("fetches masked samples only on request and reports missing profile", async
 });
 
 test("clears sample values after a permission failure", async () => {
-  vi.spyOn(adminApi, "metadataTableSamples")
+  vi.spyOn(metadataApi, "metadataTableSamples")
     .mockResolvedValueOnce({ ...sample, rows: [["synthetic-value"]], values_included: true })
     .mockRejectedValueOnce(new Error("샘플 값을 조회할 권한이 없습니다."));
   render(<TableDataEvidence tableId="table-1" />);
@@ -36,7 +36,7 @@ test("clears sample values after a permission failure", async () => {
 
 test("does not render a previous table's late sample response", async () => {
   let resolveOld!: (value: MetadataTableSamples) => void;
-  vi.spyOn(adminApi, "metadataTableSamples").mockImplementation(() => new Promise(resolve => { resolveOld = resolve; }));
+  vi.spyOn(metadataApi, "metadataTableSamples").mockImplementation(() => new Promise(resolve => { resolveOld = resolve; }));
   const view = render(<TableDataEvidence tableId="table-1" />);
   fireEvent.click(screen.getByRole("button", { name: "샘플 확인" }));
   view.rerender(<TableDataEvidence tableId="table-2" />);

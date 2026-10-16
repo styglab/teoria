@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from decimal import Decimal
 import re
+from decimal import Decimal
 from typing import Any
-
 
 TITLE_TRIGRAM_SIMILARITY_THRESHOLD = 0.08
 
@@ -23,7 +22,8 @@ def number(value: Any) -> int | float | None:
 def normalized_title(value: str) -> str:
     value = re.sub(
         r"(19|20)\d{2}년|\([^)]*(긴급|재공고|변경|취소)[^)]*\)|\[(긴급|재공고|변경|취소)[^]]*\]",
-        " ", value.casefold(),
+        " ",
+        value.casefold(),
     )
     return " ".join(re.sub(r"[^0-9a-z가-힣]+", " ", value).split())
 
@@ -31,7 +31,8 @@ def normalized_title(value: str) -> str:
 def title_tokens(value: str) -> set[str]:
     stopwords = {"사업", "용역", "구매", "공사", "입찰", "공고", "및", "위한"}
     return {
-        token for token in normalized_title(value).split()
+        token
+        for token in normalized_title(value).split()
         if len(token) > 1 and token not in stopwords
     }
 
@@ -42,7 +43,7 @@ def jaccard(left: set[str], right: set[str]) -> float:
 
 def character_trigrams(value: str) -> set[str]:
     value = compact(normalized_title(value))
-    return {value[index:index + 3] for index in range(max(0, len(value) - 2))}
+    return {value[index : index + 3] for index in range(max(0, len(value) - 2))}
 
 
 def project_types(value: str) -> set[str]:
@@ -54,8 +55,7 @@ def project_types(value: str) -> set[str]:
     }
     value = compact(value)
     return {
-        kind for kind, words in patterns.items()
-        if any(word in value for word in words)
+        kind for kind, words in patterns.items() if any(word in value for word in words)
     }
 
 
@@ -77,31 +77,45 @@ def primary_project_type(value: str) -> str:
 
 def project_type_label(value: str) -> str:
     return {
-        "build": "구축", "improvement": "개선·고도화",
-        "maintenance": "유지관리", "consulting": "컨설팅·감리·설계",
+        "build": "구축",
+        "improvement": "개선·고도화",
+        "maintenance": "유지관리",
+        "consulting": "컨설팅·감리·설계",
         "unknown": "미분류",
     }[value]
 
 
 def work_type_label(value: str) -> str:
     return {
-        "goods": "물품", "service": "용역", "construction": "공사",
-        "foreign": "외자", "other": "기타", "unknown": "미분류",
+        "goods": "물품",
+        "service": "용역",
+        "construction": "공사",
+        "foreign": "외자",
+        "other": "기타",
+        "unknown": "미분류",
     }.get(value, value)
 
 
 def business_fields(value: str) -> set[str]:
     patterns = {
         "information_system": (
-            "정보시스템", "플랫폼", "소프트웨어", "전산", "정보화",
-            "데이터플랫폼", "데이터시스템", "재해복구시스템", "클라우드",
+            "정보시스템",
+            "플랫폼",
+            "소프트웨어",
+            "전산",
+            "정보화",
+            "데이터플랫폼",
+            "데이터시스템",
+            "재해복구시스템",
+            "클라우드",
         ),
         "security": ("정보보호", "보안", "방화벽", "침입방지"),
         "communication": ("정보통신", "통신망", "네트워크"),
     }
     value = compact(value)
     fields = {
-        field for field, words in patterns.items()
+        field
+        for field, words in patterns.items()
         if any(word in value for word in words)
     }
     if any(marker in value for marker in ("리스사선정", "계약은행", "펀드평가사선정")):

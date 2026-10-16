@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle2, Database, Play, Route } from "lucide-react";
 import { PageHeader } from "../../components/workspace/WorkspaceLayout";
-import { adminApi, type ContextQueryResult } from "../../api/admin";
+import { contextApi, type ContextQueryResult } from "../../api/context";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../components/ui/card";
@@ -20,7 +20,7 @@ export function ContextConsole() {
   const [error, setError] = useState<string | null>(null);
   const execute = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError(null);
-    try { setResult(await adminApi.contextQuery(question)); }
+    try { setResult(await contextApi.contextQuery(question)); }
     catch (reason) { setError((reason as Error).message); }
     finally { setBusy(false); }
   };

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { adminApi, type MetadataTableProfile, type MetadataTableSamples } from "../../api/admin";
+import { metadataApi, type MetadataTableProfile, type MetadataTableSamples } from "../../api/metadata";
 
 const metricLabels: Record<string, string> = {
   timestamp: "관측 시각", rowCount: "행 수", columnCount: "컬럼 수", profileSample: "프로파일 표본 설정",
@@ -35,10 +35,10 @@ export function TableDataEvidence({ tableId }: { tableId: string }) {
     if (kind !== "profile") setSamples(null);
     try {
       if (kind === "profile") {
-        const result = await adminApi.metadataTableProfile(tableId);
+        const result = await metadataApi.metadataTableProfile(tableId);
         if (request === requestSequence.current) setProfile(result);
       } else {
-        const result = await adminApi.metadataTableSamples(tableId, kind === "values");
+        const result = await metadataApi.metadataTableSamples(tableId, kind === "values");
         if (request === requestSequence.current) setSamples(result);
       }
     } catch (reason) {

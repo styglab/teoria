@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Database, Folder, RefreshCw, Table2 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { adminApi, type MetadataEntity, type MetadataStatus } from "../../api/admin";
+import { metadataApi, type MetadataEntity, type MetadataStatus } from "../../api/metadata";
 
 import { CatalogLayout, FilterTabs, PageHeader, SearchField } from "../../components/workspace/WorkspaceLayout";
 
@@ -44,7 +44,7 @@ export function MetadataExplorer() {
  },{replace:true});
  useEffect(()=>{
   let active=true;setError(null);setStatus(null);
-  adminApi.metadataStatus().then(value=>{if(active)setStatus(value)}).catch(reason=>{if(active)setError((reason as Error).message)});
+  metadataApi.metadataStatus().then(value=>{if(active)setStatus(value)}).catch(reason=>{if(active)setError((reason as Error).message)});
   return()=>{active=false};
  },[refresh]);
  useEffect(()=>{
@@ -54,7 +54,7 @@ export function MetadataExplorer() {
    const all:MetadataEntity[]=[];const visited=new Set<string>();let cursor:string|undefined;
    try {
     do {
-     const result=await adminApi.metadataSchemas(cursor);if(!active)return;
+     const result=await metadataApi.metadataSchemas(cursor);if(!active)return;
      all.push(...result.items);cursor=result.after||undefined;
      if(cursor){if(visited.has(cursor))throw new Error("스키마 페이지가 반복됩니다.");visited.add(cursor)}
     }while(cursor);
@@ -72,7 +72,7 @@ export function MetadataExplorer() {
     do {
      const options:{after?:string;limit:number;databaseSchema?:string}={after:cursor,limit:100};
      if(schema)options.databaseSchema=schema;
-     const result=await adminApi.metadataTables(options);if(!active)return;
+     const result=await metadataApi.metadataTables(options);if(!active)return;
      all.push(...result.items);setTotal(result.total);setLoaded(all.length);cursor=result.after||undefined;
      if(cursor){if(visited.has(cursor))throw new Error("자산 페이지가 반복됩니다.");visited.add(cursor)}
     }while(cursor);
@@ -104,7 +104,7 @@ export function MetadataExplorer() {
     if (!token || authBusy) return;
     setAuthBusy(true); setAuthError(null);
     window.sessionStorage.setItem("teoria-admin-token", token);
-    try { const next = await adminApi.metadataStatus(); setStatus(next); setAdminToken(""); setShowAdminToken(false); setError(null); setRefresh(value=>value+1); }
+    try { const next = await metadataApi.metadataStatus(); setStatus(next); setAdminToken(""); setShowAdminToken(false); setError(null); setRefresh(value=>value+1); }
     catch (reason) {
       window.sessionStorage.removeItem("teoria-admin-token");
       setAuthError((reason as Error).message.includes("(401)")

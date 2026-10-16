@@ -1,0 +1,235 @@
+from teoria_pipelines.domains.public_procurement.bid_eligibility.normalization import (
+    _consolidate_requirements,
+)
+
+from .cases import _validated_requirement
+
+
+def test_consolidates_document_and_structured_requirement_and_rewrites_expression() -> (
+    None
+):
+    document_evidence = {
+        "source_type": "document",
+        "source_id": "doc",
+        "document_id": "doc",
+        "block_id": "b1",
+        "page": 1,
+        "section": None,
+        "excerpt": "업종 1253",
+    }
+    structured_evidence = {
+        "source_type": "structured_api",
+        "source_id": "license:1:1",
+        "document_id": None,
+        "block_id": None,
+        "page": None,
+        "section": None,
+        "excerpt": "중간처리업/1253",
+    }
+    base = {
+        "type": "industry_license",
+        "operator": "exists",
+        "holder_scope": "bidder",
+        "reference_date_type": "none",
+        "mandatory": True,
+        "review_status": "extracted",
+        "confidence": 1.0,
+    }
+    result = {
+        "requirements": [
+            {
+                **base,
+                "id": "r1",
+                "value": {
+                    "text": "중간처리업",
+                    "number": None,
+                    "boolean": True,
+                    "items": ["1253"],
+                    "attributes": [],
+                },
+                "original_text": "업종 1253",
+                "evidence": [document_evidence, document_evidence],
+            },
+            {
+                **base,
+                "id": "r2",
+                "value": {
+                    "text": "중간처리업",
+                    "number": None,
+                    "boolean": True,
+                    "items": ["1253"],
+                    "attributes": [{"name": "industry_code", "value": "1253"}],
+                },
+                "original_text": "중간처리업/1253",
+                "evidence": [structured_evidence],
+            },
+        ],
+        "expression": {
+            "operator": "all",
+            "requirement_id": None,
+            "conditions": [
+                {"operator": "leaf", "requirement_id": "r1", "conditions": []},
+                {"operator": "leaf", "requirement_id": "r2", "conditions": []},
+            ],
+        },
+    }
+
+    _consolidate_requirements(result)
+
+    assert [item["id"] for item in result["requirements"]] == ["r1"]
+    assert {item["source_type"] for item in result["requirements"][0]["evidence"]} == {
+        "document",
+        "structured_api",
+    }
+    assert len(result["requirements"][0]["evidence"]) == 2
+    assert result["expression"] == {
+        "operator": "leaf",
+        "requirement_id": "r1",
+        "conditions": [],
+    }
+
+
+def test_consolidation_preserves_distinct_reference_dates_and_comparison_modes() -> (
+    None
+):
+    base = {
+        "type": "participation_region",
+        "operator": "equals",
+        "holder_scope": "bidder",
+        "assessment_stage": "bid_entry",
+        "failure_effect": "cannot_bid",
+        "value": {
+            "text": "경기도",
+            "number": None,
+            "boolean": None,
+            "items": [],
+            "attributes": [],
+        },
+        "original_text": "경기도 소재 업체",
+        "mandatory": True,
+        "review_status": "extracted",
+        "confidence": 1.0,
+        "evidence": [],
+        "proof_requirements": [],
+    }
+    result = {
+        "requirements": [
+            {
+                **base,
+                "id": "r1",
+                "reference_date_type": "notice_date",
+                "comparison_mode": "structured",
+            },
+            {
+                **base,
+                "id": "r2",
+                "reference_date_type": "bid_deadline",
+                "comparison_mode": "manual",
+            },
+        ]
+    }
+
+    _consolidate_requirements(result)
+
+    assert [item["id"] for item in result["requirements"]] == ["r1", "r2"]
+
+
+def test_single_only_and_joint_denial_merge_as_one_common_requirement() -> None:
+    first = _validated_requirement(
+        "단독이행이 가능해야 합니다.",
+        id="r1",
+        type="consortium",
+        operator="exists",
+        value={
+            "text": "단독이행 가능",
+            "number": None,
+            "boolean": True,
+            "items": [],
+            "attributes": [],
+        },
+        logic={
+            "placements": [
+                {
+                    "scope": "common",
+                    "alternative_group": "mode",
+                    "alternative_branch": "single",
+                }
+            ]
+        },
+    )
+    second = _validated_requirement(
+        "공동수급은 불가합니다.",
+        id="r2",
+        type="consortium",
+        operator="not_exists",
+        value={
+            "text": "공동수급 불가",
+            "number": None,
+            "boolean": False,
+            "items": [],
+            "attributes": [
+                {"name": "allowed", "value": "true"},
+                {"name": "arrangement_type", "value": "subcontracting"},
+            ],
+        },
+        logic={
+            "placements": [
+                {
+                    "scope": "common",
+                    "alternative_group": "mode",
+                    "alternative_branch": "joint",
+                }
+            ]
+        },
+    )
+    result = {"requirements": [first, second], "unresolved_candidates": []}
+
+    _consolidate_requirements(result)
+
+    assert len(result["requirements"]) == 1
+    item = result["requirements"][0]
+    assert item["operator"] == "not_exists"
+    assert item["value"]["text"] == "공동수급 불가"
+    assert item["value"]["attributes"] == [{"name": "allowed", "value": "false"}]
+    assert item["logic"]["placements"] == [
+        {
+            "scope": "common",
+            "alternative_group": None,
+            "alternative_branch": None,
+        }
+    ]
+    assert len(item["evidence"]) == 2
+
+
+def test_consolidation_keeps_distinct_company_scale_alternatives_from_same_sentence() -> (
+    None
+):
+    original = "소기업 또는 소상공인으로서 확인서를 소지한 업체"
+    base = _validated_requirement(original, type="company_scale", operator="equals")
+    result = {
+        "requirements": [
+            {**base, "id": "r1", "value": {**base["value"], "text": "소기업"}},
+            {**base, "id": "r2", "value": {**base["value"], "text": "소상공인"}},
+        ]
+    }
+
+    _consolidate_requirements(result)
+
+    assert [item["id"] for item in result["requirements"]] == ["r1", "r2"]
+
+
+def test_consolidation_keeps_shortest_verbatim_original_text() -> None:
+    short = _validated_requirement("입찰참가등록사항을 변경등록하지 않은 입찰은 무효")
+    long = {
+        **short,
+        "id": "r2",
+        "original_text": (
+            "이전 페이지의 무관한 문장. 입찰참가등록사항을 변경등록하지 않은 입찰은 무효. "
+            "다음 절의 무관한 문장"
+        ),
+    }
+    result = {"requirements": [long, short]}
+
+    _consolidate_requirements(result)
+
+    assert result["requirements"][0]["original_text"] == short["original_text"]

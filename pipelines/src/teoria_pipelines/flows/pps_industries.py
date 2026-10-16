@@ -1,4 +1,4 @@
-"""Compatibility imports for existing Prefect deployment entrypoints."""
+"""Keep pps-industry-monthly working until its deployment entrypoint is migrated."""
 
 from teoria_pipelines.domains.public_procurement.industries.flows import (
     sync_pps_industries,

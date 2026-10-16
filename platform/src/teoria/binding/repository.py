@@ -5,7 +5,7 @@ from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 from uuid import UUID, uuid4
 
-import psycopg
+from teoria.persistence.postgres import connect
 from psycopg.rows import dict_row
 
 
@@ -19,12 +19,16 @@ class BindingRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
 
-    def get_published_concept(
-        self, stable_key: str, *, ontology_namespace: str | None = None,
+    async def get_published_concept(
+        self,
+        stable_key: str,
+        *,
+        ontology_namespace: str | None = None,
     ) -> dict[str, Any] | None:
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            rows = connection.execute(
-                """
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            rows = await (
+                await connection.execute(
+                    """
                 SELECT DISTINCT c.concept_id,c.concept_kind,c.stable_key
                   FROM ontology.concepts c
                   JOIN ontology.ontologies o USING (ontology_id)
@@ -39,7 +43,8 @@ class BindingRepository:
                    AND (%s::text IS NULL OR o.namespace=%s)
                    AND (bo.concept_id IS NOT NULL OR owner.business_object_id IS NOT NULL OR r.concept_id IS NOT NULL OR br.concept_id IS NOT NULL OR m.concept_id IS NOT NULL)
                 """,
-                (stable_key, ontology_namespace, ontology_namespace),
+                    (stable_key, ontology_namespace, ontology_namespace),
+                )
             ).fetchall()
         if len(rows) > 1:
             raise ValueError(
@@ -48,10 +53,11 @@ class BindingRepository:
             )
         return _jsonable(dict(rows[0])) if rows else None
 
-    def list_published_property_concepts(self) -> list[dict[str, Any]]:
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            rows = connection.execute(
-                """
+    async def list_published_property_concepts(self) -> list[dict[str, Any]]:
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            rows = await (
+                await connection.execute(
+                    """
                 SELECT c.concept_id,c.concept_kind,c.stable_key,p.code,p.name,p.description,
                        p.value_type,p.cardinality,p.unit,bo.code AS object_code,
                        bo.name AS object_name,o.namespace,v.version
@@ -64,23 +70,31 @@ class BindingRepository:
                  WHERE v.status='published' AND c.concept_kind='property'
                  ORDER BY c.stable_key
                 """
+                )
             ).fetchall()
         return [_jsonable(dict(row)) for row in rows]
 
-    def get_active_binding(self, *, ontology_concept_id: UUID, target_type: str, target_locator: str) -> dict[str, Any] | None:
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            row = connection.execute(
-                """SELECT * FROM binding.ontology_bindings
+    async def get_active_binding(
+        self, *, ontology_concept_id: UUID, target_type: str, target_locator: str
+    ) -> dict[str, Any] | None:
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            row = await (
+                await connection.execute(
+                    """SELECT * FROM binding.ontology_bindings
                     WHERE ontology_concept_id=%s AND target_type=%s AND target_locator=%s
                       AND status IN ('draft','approved')""",
-                (ontology_concept_id, target_type, target_locator),
+                    (ontology_concept_id, target_type, target_locator),
+                )
             ).fetchone()
         return _jsonable(dict(row)) if row else None
 
-    def get_property_context(self, namespace: str, object_code: str, property_code: str) -> dict[str, Any] | None:
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            property_row = connection.execute(
-                """
+    async def get_property_context(
+        self, namespace: str, object_code: str, property_code: str
+    ) -> dict[str, Any] | None:
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            property_row = await (
+                await connection.execute(
+                    """
                 SELECT p.property_id, o.namespace, v.version AS ontology_version,
                        b.code AS object_code, b.name AS object_name,
                        p.code AS property_code, p.name AS property_name,
@@ -94,12 +108,14 @@ class BindingRepository:
                  ORDER BY (v.status = 'published') DESC, v.created_at DESC
                  LIMIT 1
                 """,
-                (namespace, object_code, property_code),
+                    (namespace, object_code, property_code),
+                )
             ).fetchone()
             if property_row is None:
                 return None
-            binding_rows = connection.execute(
-                """
+            binding_rows = await (
+                await connection.execute(
+                    """
                 SELECT ob.binding_id, ob.target_type, ob.target_locator,
                        ob.target_version, ob.binding_type, ob.purpose,
                        ob.authority, ob.priority, ob.condition, ob.confidence,
@@ -123,7 +139,8 @@ class BindingRepository:
                    AND ob.ontology_ref_id = %s
                  ORDER BY ob.priority, ob.target_type, ob.target_locator
                 """,
-                (property_row["property_id"],),
+                    (property_row["property_id"],),
+                )
             ).fetchall()
         result = dict(property_row)
         result["property_id"] = str(result["property_id"])
@@ -131,8 +148,13 @@ class BindingRepository:
         result["bindings"] = [_jsonable(dict(row)) for row in binding_rows]
         return result
 
-    def list_bindings(self, *, status: str | None = None, limit: int = 100,
-                      binding_ids: list[UUID] | None = None) -> list[dict[str, Any]]:
+    async def list_bindings(
+        self,
+        *,
+        status: str | None = None,
+        limit: int = 100,
+        binding_ids: list[UUID] | None = None,
+    ) -> list[dict[str, Any]]:
         conditions = []
         values: list[Any] = []
         if status:
@@ -143,9 +165,10 @@ class BindingRepository:
             values.append(binding_ids)
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         params = tuple(values + [limit])
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            rows = connection.execute(
-                f"""
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            rows = await (
+                await connection.execute(
+                    f"""
                 SELECT ob.*, c.stable_key AS ontology_stable_key,
                        c.concept_kind AS ontology_concept_kind,
                        o.namespace AS ontology_namespace,
@@ -173,14 +196,16 @@ class BindingRepository:
                  ORDER BY ob.created_at DESC
                  LIMIT %s
                 """,
-                params,
+                    params,
+                )
             ).fetchall()
         return [_jsonable(dict(row)) for row in rows]
 
-    def list_approved_capability_bindings(self) -> list[dict[str, Any]]:
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            rows = connection.execute(
-                """
+    async def list_approved_capability_bindings(self) -> list[dict[str, Any]]:
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            rows = await (
+                await connection.execute(
+                    """
                 SELECT ct.capability_id,ct.target_scope AS capability_target_scope,
                        ct.field_path AS capability_field_path,ct.contract_version,
                        ct.registry_version,ob.binding_type,ob.purpose,ob.authority,
@@ -194,20 +219,32 @@ class BindingRepository:
                    AND (ob.valid_to IS NULL OR ob.valid_to >= current_date)
                  ORDER BY ct.capability_id,ct.target_scope,ct.field_path
                 """
+                )
             ).fetchall()
         return [_jsonable(dict(row)) for row in rows]
 
-    def create_openmetadata_binding(
-        self, *, ontology_ref_type: str, ontology_ref_id: UUID | None,
-        ontology_concept_id: UUID | None, target_type: str,
-        external_entity_id: str, entity_type: str, fully_qualified_name: str,
-        external_version: str | None, binding_type: str, purpose: str | None,
-        authority: str, priority: int, confidence: float | None,
-        provenance: dict[str, Any], created_by: str,
+    async def create_openmetadata_binding(
+        self,
+        *,
+        ontology_ref_type: str,
+        ontology_ref_id: UUID | None,
+        ontology_concept_id: UUID | None,
+        target_type: str,
+        external_entity_id: str,
+        entity_type: str,
+        fully_qualified_name: str,
+        external_version: str | None,
+        binding_type: str,
+        purpose: str | None,
+        authority: str,
+        priority: int,
+        confidence: float | None,
+        provenance: dict[str, Any],
+        created_by: str,
     ) -> dict[str, Any]:
         binding_id, target_id = uuid4(), uuid4()
         locator = f"openmetadata://{entity_type}/{fully_qualified_name}"
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+        async with connect(self.database_url, row_factory=dict_row) as connection:
             ref_table, ref_column = {
                 "object": ("ontology.business_objects", "business_object_id"),
                 "property": ("ontology.object_properties", "property_id"),
@@ -216,30 +253,37 @@ class BindingRepository:
                 "metric": ("ontology.metrics", "metric_id"),
             }[ontology_ref_type]
             if ontology_ref_id is not None:
-                ontology_row = connection.execute(
-                    f"SELECT x.{ref_column} AS revision_id,x.concept_id "
-                    f"FROM {ref_table} x {('JOIN ontology.business_objects owner ON owner.business_object_id=x.business_object_id JOIN ontology.ontology_versions v ON v.ontology_version_id=owner.ontology_version_id' if ontology_ref_type == 'property' else 'JOIN ontology.ontology_versions v ON v.ontology_version_id=x.ontology_version_id')} "
-                    f"WHERE x.{ref_column}=%s AND v.status IN ('draft','published')",
-                    (ontology_ref_id,),
+                ontology_row = await (
+                    await connection.execute(
+                        f"SELECT x.{ref_column} AS revision_id,x.concept_id "
+                        f"FROM {ref_table} x {('JOIN ontology.business_objects owner ON owner.business_object_id=x.business_object_id JOIN ontology.ontology_versions v ON v.ontology_version_id=owner.ontology_version_id' if ontology_ref_type == 'property' else 'JOIN ontology.ontology_versions v ON v.ontology_version_id=x.ontology_version_id')} "
+                        f"WHERE x.{ref_column}=%s AND v.status IN ('draft','published')",
+                        (ontology_ref_id,),
+                    )
                 ).fetchone()
             elif ontology_concept_id is not None:
                 version_join = (
                     "JOIN ontology.business_objects owner ON owner.business_object_id=x.business_object_id "
                     "JOIN ontology.ontology_versions v ON v.ontology_version_id=owner.ontology_version_id"
-                    if ontology_ref_type == "property" else
-                    "JOIN ontology.ontology_versions v ON v.ontology_version_id=x.ontology_version_id"
+                    if ontology_ref_type == "property"
+                    else "JOIN ontology.ontology_versions v ON v.ontology_version_id=x.ontology_version_id"
                 )
-                ontology_row = connection.execute(
-                    f"SELECT x.{ref_column} AS revision_id,x.concept_id FROM {ref_table} x {version_join} WHERE x.concept_id=%s AND v.status='published'",
-                    (ontology_concept_id,),
+                ontology_row = await (
+                    await connection.execute(
+                        f"SELECT x.{ref_column} AS revision_id,x.concept_id FROM {ref_table} x {version_join} WHERE x.concept_id=%s AND v.status='published'",
+                        (ontology_concept_id,),
+                    )
                 ).fetchone()
             else:
                 ontology_row = None
             if ontology_row is None:
-                raise ValueError(f"Unknown published ontology {ontology_ref_type} reference")
+                raise ValueError(
+                    f"Unknown published ontology {ontology_ref_type} reference"
+                )
             ontology_ref_id = ontology_row["revision_id"]
-            target_row = connection.execute(
-                """
+            target_row = await (
+                await connection.execute(
+                    """
                 INSERT INTO binding.metadata_targets
                     (metadata_target_id, system, external_entity_id, entity_type,
                      fully_qualified_name, external_version, locator, last_verified_at)
@@ -252,10 +296,19 @@ class BindingRepository:
                     last_verified_at=now()
                 RETURNING metadata_target_id
                 """,
-                (target_id, external_entity_id, entity_type, fully_qualified_name, external_version, locator),
+                    (
+                        target_id,
+                        external_entity_id,
+                        entity_type,
+                        fully_qualified_name,
+                        external_version,
+                        locator,
+                    ),
+                )
             ).fetchone()
-            row = connection.execute(
-                """
+            row = await (
+                await connection.execute(
+                    """
                 INSERT INTO binding.ontology_bindings
                     (binding_id, ontology_ref_type, ontology_ref_id, ontology_concept_id, target_type,
                      metadata_target_id, target_locator, target_version, binding_type,
@@ -263,14 +316,28 @@ class BindingRepository:
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s::jsonb,%s)
                 RETURNING *
                 """,
-                (binding_id, ontology_ref_type, ontology_ref_id, ontology_row["concept_id"], target_type,
-                 target_row["metadata_target_id"], locator, external_version,
-                 binding_type, purpose, authority, priority, confidence,
-                 json.dumps(provenance), created_by),
+                    (
+                        binding_id,
+                        ontology_ref_type,
+                        ontology_ref_id,
+                        ontology_row["concept_id"],
+                        target_type,
+                        target_row["metadata_target_id"],
+                        locator,
+                        external_version,
+                        binding_type,
+                        purpose,
+                        authority,
+                        priority,
+                        confidence,
+                        json.dumps(provenance),
+                        created_by,
+                    ),
+                )
             ).fetchone()
         return _jsonable(dict(row))
 
-    def create_capability_binding(
+    async def create_capability_binding(
         self,
         *,
         ontology_ref_type: str,
@@ -303,15 +370,16 @@ class BindingRepository:
             locator = f"{locator}/{target_scope}/{field_path}"
 
         binding_id, target_id = uuid4(), uuid4()
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            ontology_row = self._resolve_published_revision(
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            ontology_row = await self._resolve_published_revision(
                 connection,
                 ontology_ref_type=ontology_ref_type,
                 ontology_ref_id=ontology_ref_id,
                 ontology_concept_id=ontology_concept_id,
             )
-            target_row = connection.execute(
-                """
+            target_row = await (
+                await connection.execute(
+                    """
                 INSERT INTO binding.capability_targets
                     (capability_target_id, capability_id, target_scope, field_path,
                      contract_version, registry_version, last_verified_at)
@@ -320,10 +388,19 @@ class BindingRepository:
                 DO UPDATE SET registry_version=EXCLUDED.registry_version, last_verified_at=now()
                 RETURNING capability_target_id
                 """,
-                (target_id, capability_id, target_scope, field_path, contract_version, registry_version),
+                    (
+                        target_id,
+                        capability_id,
+                        target_scope,
+                        field_path,
+                        contract_version,
+                        registry_version,
+                    ),
+                )
             ).fetchone()
-            row = connection.execute(
-                """
+            row = await (
+                await connection.execute(
+                    """
                 INSERT INTO binding.ontology_bindings
                     (binding_id, ontology_ref_type, ontology_ref_id, ontology_concept_id,
                      target_type, capability_target_id, target_locator, target_version,
@@ -332,17 +409,28 @@ class BindingRepository:
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s::jsonb,%s)
                 RETURNING *
                 """,
-                (
-                    binding_id, ontology_ref_type, ontology_row["revision_id"],
-                    ontology_row["concept_id"], target_type,
-                    target_row["capability_target_id"], locator, contract_version,
-                    binding_type, purpose, authority, priority, confidence,
-                    json.dumps(provenance), created_by,
-                ),
+                    (
+                        binding_id,
+                        ontology_ref_type,
+                        ontology_row["revision_id"],
+                        ontology_row["concept_id"],
+                        target_type,
+                        target_row["capability_target_id"],
+                        locator,
+                        contract_version,
+                        binding_type,
+                        purpose,
+                        authority,
+                        priority,
+                        confidence,
+                        json.dumps(provenance),
+                        created_by,
+                    ),
+                )
             ).fetchone()
         return _jsonable(dict(row))
 
-    def create_api_field_binding(
+    async def create_api_field_binding(
         self,
         *,
         ontology_ref_type: str,
@@ -362,17 +450,20 @@ class BindingRepository:
         provenance: dict[str, Any],
         created_by: str,
     ) -> dict[str, Any]:
-        locator = f"provider://{source_id}/{operation_id}/response/{object_id}.{field_path}"
+        locator = (
+            f"provider://{source_id}/{operation_id}/response/{object_id}.{field_path}"
+        )
         binding_id, target_id = uuid4(), uuid4()
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            ontology_row = self._resolve_published_revision(
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            ontology_row = await self._resolve_published_revision(
                 connection,
                 ontology_ref_type=ontology_ref_type,
                 ontology_ref_id=ontology_ref_id,
                 ontology_concept_id=ontology_concept_id,
             )
-            target_row = connection.execute(
-                """
+            target_row = await (
+                await connection.execute(
+                    """
                 INSERT INTO binding.api_field_targets
                     (api_field_target_id,source_id,operation_id,object_id,field_path,
                      contract_version,registry_version,last_verified_at)
@@ -381,11 +472,20 @@ class BindingRepository:
                 DO UPDATE SET registry_version=EXCLUDED.registry_version,last_verified_at=now()
                 RETURNING api_field_target_id
                 """,
-                (target_id, source_id, operation_id, object_id, field_path,
-                 contract_version, registry_version),
+                    (
+                        target_id,
+                        source_id,
+                        operation_id,
+                        object_id,
+                        field_path,
+                        contract_version,
+                        registry_version,
+                    ),
+                )
             ).fetchone()
-            row = connection.execute(
-                """
+            row = await (
+                await connection.execute(
+                    """
                 INSERT INTO binding.ontology_bindings
                     (binding_id,ontology_ref_type,ontology_ref_id,ontology_concept_id,
                      target_type,api_field_target_id,target_locator,target_version,
@@ -395,17 +495,28 @@ class BindingRepository:
                         'draft',%s::jsonb,%s)
                 RETURNING *
                 """,
-                (
-                    binding_id, ontology_ref_type, ontology_row["revision_id"],
-                    ontology_row["concept_id"], target_row["api_field_target_id"],
-                    locator, contract_version, binding_type, purpose, authority,
-                    priority, confidence, json.dumps(provenance), created_by,
-                ),
+                    (
+                        binding_id,
+                        ontology_ref_type,
+                        ontology_row["revision_id"],
+                        ontology_row["concept_id"],
+                        target_row["api_field_target_id"],
+                        locator,
+                        contract_version,
+                        binding_type,
+                        purpose,
+                        authority,
+                        priority,
+                        confidence,
+                        json.dumps(provenance),
+                        created_by,
+                    ),
+                )
             ).fetchone()
         return _jsonable(dict(row))
 
     @staticmethod
-    def _resolve_published_revision(
+    async def _resolve_published_revision(
         connection,
         *,
         ontology_ref_type: str,
@@ -432,19 +543,24 @@ class BindingRepository:
         )
         if value is None:
             raise ValueError("ontology_ref_id or ontology_concept_id is required")
-        row = connection.execute(
-            f"SELECT x.{ref_column} AS revision_id,x.concept_id FROM {ref_table} x "
-            f"{version_join} WHERE {selector} AND v.status='published'",
-            (value,),
+        row = await (
+            await connection.execute(
+                f"SELECT x.{ref_column} AS revision_id,x.concept_id FROM {ref_table} x "
+                f"{version_join} WHERE {selector} AND v.status='published'",
+                (value,),
+            )
         ).fetchone()
         if row is None:
-            raise ValueError(f"Unknown published ontology {ontology_ref_type} reference")
+            raise ValueError(
+                f"Unknown published ontology {ontology_ref_type} reference"
+            )
         return row
 
-    def validate_bindings(self) -> dict[str, Any]:
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            rows = connection.execute(
-                """
+    async def validate_bindings(self) -> dict[str, Any]:
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            rows = await (
+                await connection.execute(
+                    """
                 SELECT ob.binding_id, ob.status, ob.target_type, ob.target_locator,
                        CASE ob.ontology_ref_type
                          WHEN 'object' THEN EXISTS (SELECT 1 FROM ontology.business_objects x WHERE x.business_object_id=ob.ontology_ref_id)
@@ -466,14 +582,19 @@ class BindingRepository:
              LEFT JOIN binding.capability_targets ct ON ct.capability_target_id=ob.capability_target_id
              LEFT JOIN binding.api_field_targets at ON at.api_field_target_id=ob.api_field_target_id
                 """
+                )
             ).fetchall()
         diagnostics = []
         for raw in rows:
             row = _jsonable(dict(raw))
             if not row["ontology_ref_exists"]:
-                diagnostics.append({"binding_id": row["binding_id"], "code": "ontology_ref_missing"})
+                diagnostics.append(
+                    {"binding_id": row["binding_id"], "code": "ontology_ref_missing"}
+                )
             if not row["target_ref_exists"]:
-                diagnostics.append({"binding_id": row["binding_id"], "code": "target_ref_missing"})
+                diagnostics.append(
+                    {"binding_id": row["binding_id"], "code": "target_ref_missing"}
+                )
         return {
             "status": "valid" if not diagnostics else "invalid",
             "binding_count": len(rows),
@@ -481,32 +602,59 @@ class BindingRepository:
             "diagnostics": diagnostics,
         }
 
-    def review_binding(self, binding_id: UUID, *, decision: str, reviewer: str, comment: str | None) -> dict[str, Any]:
-        next_status = {"approve": "approved", "reject": "rejected", "deprecate": "deprecated"}[decision]
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
+    async def review_binding(
+        self, binding_id: UUID, *, decision: str, reviewer: str, comment: str | None
+    ) -> dict[str, Any]:
+        next_status = {
+            "approve": "approved",
+            "reject": "rejected",
+            "deprecate": "deprecated",
+        }[decision]
+        async with connect(self.database_url, row_factory=dict_row) as connection:
             if decision == "approve":
-                connection.execute(
+                await connection.execute(
                     "SELECT o.ontology_id FROM ontology.ontologies o "
                     "JOIN ontology.concepts c USING (ontology_id) "
                     "JOIN binding.ontology_bindings b ON b.ontology_concept_id=c.concept_id "
-                    "WHERE b.binding_id=%s FOR UPDATE OF o", (binding_id,)
+                    "WHERE b.binding_id=%s FOR UPDATE OF o",
+                    (binding_id,),
                 )
-            existing = connection.execute(
-                "SELECT status,ontology_ref_type,ontology_concept_id FROM binding.ontology_bindings WHERE binding_id=%s FOR UPDATE", (binding_id,)
+            existing = await (
+                await connection.execute(
+                    "SELECT status,ontology_ref_type,ontology_concept_id FROM binding.ontology_bindings WHERE binding_id=%s FOR UPDATE",
+                    (binding_id,),
+                )
             ).fetchone()
             if existing is None:
                 raise KeyError(str(binding_id))
             allowed = {"draft": {"approve", "reject"}, "approved": {"deprecate"}}
             if decision not in allowed.get(existing["status"], set()):
-                raise ValueError(f"Cannot {decision} binding in {existing['status']} status")
+                raise ValueError(
+                    f"Cannot {decision} binding in {existing['status']} status"
+                )
             if decision == "approve":
-                owner = connection.execute("SELECT ontology_id FROM ontology.concepts WHERE concept_id=%s", (existing["ontology_concept_id"],)).fetchone()
+                owner = await (
+                    await connection.execute(
+                        "SELECT ontology_id FROM ontology.concepts WHERE concept_id=%s",
+                        (existing["ontology_concept_id"],),
+                    )
+                ).fetchone()
                 if owner is None:
                     raise ValueError("Binding has no stable ontology concept")
-                revision = self._resolve_published_revision(connection, ontology_ref_type=existing["ontology_ref_type"], ontology_ref_id=None, ontology_concept_id=existing["ontology_concept_id"])
-                connection.execute("UPDATE binding.ontology_bindings SET ontology_ref_id=%s WHERE binding_id=%s", (revision["revision_id"],binding_id))
-                published = connection.execute(
-                    """SELECT CASE ob.ontology_ref_type
+                revision = await self._resolve_published_revision(
+                    connection,
+                    ontology_ref_type=existing["ontology_ref_type"],
+                    ontology_ref_id=None,
+                    ontology_concept_id=existing["ontology_concept_id"],
+                )
+                await connection.execute(
+                    "UPDATE binding.ontology_bindings SET ontology_ref_id=%s WHERE binding_id=%s",
+                    (revision["revision_id"], binding_id),
+                )
+                published = (
+                    await (
+                        await connection.execute(
+                            """SELECT CASE ob.ontology_ref_type
                              WHEN 'property' THEN EXISTS (
                                SELECT 1 FROM ontology.object_properties p
                                JOIN ontology.business_objects bo USING (business_object_id)
@@ -523,21 +671,27 @@ class BindingRepository:
                                   br.business_rule_id=ob.ontology_ref_id OR m.metric_id=ob.ontology_ref_id))
                            END AS value
                       FROM binding.ontology_bindings ob WHERE ob.binding_id=%s""",
-                    (binding_id,),
-                ).fetchone()["value"]
+                            (binding_id,),
+                        )
+                    ).fetchone()
+                )["value"]
                 if not published:
-                    raise ValueError("Cannot approve binding until its ontology revision is published")
-            connection.execute(
+                    raise ValueError(
+                        "Cannot approve binding until its ontology revision is published"
+                    )
+            await connection.execute(
                 "INSERT INTO binding.binding_reviews (binding_review_id,binding_id,decision,reviewer,comment) VALUES (%s,%s,%s,%s,%s)",
                 (uuid4(), binding_id, decision, reviewer, comment),
             )
-            row = connection.execute(
-                "UPDATE binding.ontology_bindings SET status=%s, approved_by=CASE WHEN %s='approved' THEN %s ELSE approved_by END WHERE binding_id=%s RETURNING *",
-                (next_status, next_status, reviewer, binding_id),
+            row = await (
+                await connection.execute(
+                    "UPDATE binding.ontology_bindings SET status=%s, approved_by=CASE WHEN %s='approved' THEN %s ELSE approved_by END WHERE binding_id=%s RETURNING *",
+                    (next_status, next_status, reviewer, binding_id),
+                )
             ).fetchone()
         return _jsonable(dict(row))
 
-    def bind_openmetadata_reference(
+    async def bind_openmetadata_reference(
         self,
         *,
         namespace: str,
@@ -556,12 +710,15 @@ class BindingRepository:
         created_by: str,
     ) -> str:
         reference_key = f"openmetadata:{entity_type}:{external_entity_id}"
-        binding_key = f"{namespace}.{object_code}.{property_code}:{target_type}:{locator}"
+        binding_key = (
+            f"{namespace}.{object_code}.{property_code}:{target_type}:{locator}"
+        )
         reference_id = uuid5(NAMESPACE_URL, reference_key)
         binding_id = uuid5(NAMESPACE_URL, binding_key)
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            property_row = connection.execute(
-                """
+        async with connect(self.database_url, row_factory=dict_row) as connection:
+            property_row = await (
+                await connection.execute(
+                    """
                 SELECT p.property_id, p.concept_id
                   FROM ontology.object_properties p
                   JOIN ontology.business_objects b ON b.business_object_id = p.business_object_id
@@ -570,11 +727,14 @@ class BindingRepository:
                  WHERE o.namespace = %s AND b.code = %s AND p.code = %s
                    AND v.status = 'published'
                 """,
-                (namespace, object_code, property_code),
+                    (namespace, object_code, property_code),
+                )
             ).fetchone()
             if property_row is None:
-                raise ValueError(f"Unknown published ontology property: {namespace}.{object_code}.{property_code}")
-            connection.execute(
+                raise ValueError(
+                    f"Unknown published ontology property: {namespace}.{object_code}.{property_code}"
+                )
+            await connection.execute(
                 """
                 INSERT INTO binding.metadata_targets (
                     metadata_target_id, system, external_entity_id,
@@ -588,13 +748,24 @@ class BindingRepository:
                     locator = EXCLUDED.locator,
                     last_verified_at = now()
                 """,
-                (reference_id, external_entity_id, entity_type, fully_qualified_name, external_version, locator),
+                (
+                    reference_id,
+                    external_entity_id,
+                    entity_type,
+                    fully_qualified_name,
+                    external_version,
+                    locator,
+                ),
             )
-            actual_reference = connection.execute(
-                "SELECT metadata_target_id FROM binding.metadata_targets WHERE system = 'openmetadata' AND external_entity_id = %s",
-                (external_entity_id,),
-            ).fetchone()["metadata_target_id"]
-            connection.execute(
+            actual_reference = (
+                await (
+                    await connection.execute(
+                        "SELECT metadata_target_id FROM binding.metadata_targets WHERE system = 'openmetadata' AND external_entity_id = %s",
+                        (external_entity_id,),
+                    )
+                ).fetchone()
+            )["metadata_target_id"]
+            await connection.execute(
                 """
                 INSERT INTO binding.ontology_bindings (
                     binding_id, ontology_ref_type, ontology_ref_id, ontology_concept_id, target_type,
@@ -615,11 +786,20 @@ class BindingRepository:
                     approved_by = EXCLUDED.approved_by
                 """,
                 (
-                    binding_id, property_row["property_id"], property_row["concept_id"], target_type,
-                    actual_reference, locator, external_version, binding_type,
-                    purpose, authority, priority,
+                    binding_id,
+                    property_row["property_id"],
+                    property_row["concept_id"],
+                    target_type,
+                    actual_reference,
+                    locator,
+                    external_version,
+                    binding_type,
+                    purpose,
+                    authority,
+                    priority,
                     json.dumps({"source": "openmetadata", "resolution": "confirmed"}),
-                    created_by, created_by,
+                    created_by,
+                    created_by,
                 ),
             )
         return str(binding_id)

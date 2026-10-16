@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from teoria_pipelines.domains.public_procurement.calendar import procurement_today
+
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Any
 
-from teoria_pipelines.models import ExtractedBatch, NormalizedBatch, RawProviderRecord
+from teoria_pipelines.models import ExtractedBatch, RawProviderRecord
+from teoria_pipelines.domains.public_procurement.contracts.models import NormalizedBatch
 
 CONTRACT_TYPES = {
     "list_goods_contracts": "goods",
@@ -23,7 +26,9 @@ def normalize_contract_batch(batch: ExtractedBatch) -> NormalizedBatch:
     normalized = NormalizedBatch()
     organizations: dict[str, dict[str, Any]] = {}
     for record in batch.records:
-        contract, suppliers, demands, record_organizations = normalize_contract_record(record)
+        contract, suppliers, demands, record_organizations = normalize_contract_record(
+            record
+        )
         normalized.contracts.append(contract)
         normalized.suppliers.extend(suppliers)
         normalized.demand_organizations.extend(demands)
@@ -42,7 +47,9 @@ def normalize_contract_record(record: RawProviderRecord):
         )
     contract_type = CONTRACT_TYPES.get(record.operation_id)
     if contract_type is None:
-        raise ContractNormalizationError(f"unsupported operation '{record.operation_id}'")
+        raise ContractNormalizationError(
+            f"unsupported operation '{record.operation_id}'"
+        )
     currency_default = None if contract_type == "foreign_procurement" else "KRW"
     contract = {
         "unified_contract_number": unified_number,
@@ -57,9 +64,11 @@ def normalize_contract_record(record: RawProviderRecord):
         "contract_period_text": _text(value.get("cntrctPrd")),
         "basis_law_name": _text(value.get("baseLawNm")),
         "total_amount": _decimal(value.get("totCntrctAmt")),
-        "total_amount_currency": _text(value.get("totCntrctAmtCrncy")) or currency_default,
+        "total_amount_currency": _text(value.get("totCntrctAmtCrncy"))
+        or currency_default,
         "current_contract_amount": _decimal(value.get("thtmCntrctAmt")),
-        "current_contract_amount_currency": _text(value.get("thtmCntrctAmtCrncy")) or currency_default,
+        "current_contract_amount_currency": _text(value.get("thtmCntrctAmtCrncy"))
+        or currency_default,
         "guarantee_deposit_rate": _decimal(value.get("grntymnyRate")),
         "payment_method_name": _text(value.get("payDivNm")),
         "request_number": _text(value.get("reqNo")),
@@ -79,45 +88,53 @@ def normalize_contract_record(record: RawProviderRecord):
     suppliers = []
     for fields in _parse_bracket_list(value.get("corpList"), expected_fields=10):
         business_number = re.sub(r"\D", "", fields[9]) or None
-        suppliers.append({
-            "unified_contract_number": unified_number,
-            "supplier_sequence": _integer(fields[0]),
-            "supplier_role_name": _text(fields[1]),
-            "joint_contract_method_name": _text(fields[2]),
-            "business_registration_number": business_number,
-            "supplier_name": _text(fields[3]),
-            "representative_name": _text(fields[4]),
-            "nationality_name": _text(fields[5]),
-            "participation_share_rate": _decimal(fields[6]),
-            "creditor_name": _text(fields[7]),
-            "supplier_manager_name": _text(fields[8]),
-        })
+        suppliers.append(
+            {
+                "unified_contract_number": unified_number,
+                "supplier_sequence": _integer(fields[0]),
+                "supplier_role_name": _text(fields[1]),
+                "joint_contract_method_name": _text(fields[2]),
+                "business_registration_number": business_number,
+                "supplier_name": _text(fields[3]),
+                "representative_name": _text(fields[4]),
+                "nationality_name": _text(fields[5]),
+                "participation_share_rate": _decimal(fields[6]),
+                "creditor_name": _text(fields[7]),
+                "supplier_manager_name": _text(fields[8]),
+            }
+        )
 
     demands = []
     organizations = []
     contracting_code = contract["contracting_organization_code"]
     if contracting_code:
-        organizations.append({
-            "organization_code": contracting_code,
-            "organization_name": _text(value.get("cntrctInsttNm")),
-            "jurisdiction_type": _text(value.get("cntrctInsttJrsdctnDivNm")),
-        })
+        organizations.append(
+            {
+                "organization_code": contracting_code,
+                "organization_name": _text(value.get("cntrctInsttNm")),
+                "jurisdiction_type": _text(value.get("cntrctInsttJrsdctnDivNm")),
+            }
+        )
     for fields in _parse_bracket_list(value.get("dminsttList"), expected_fields=7):
         organization_code = _text(fields[1])
-        demands.append({
-            "unified_contract_number": unified_number,
-            "demand_organization_sequence": _integer(fields[0]),
-            "organization_code": organization_code,
-            "department_name": _text(fields[4]),
-            "manager_name": _text(fields[5]),
-            "telephone_number": _text(fields[6]),
-        })
-        if organization_code:
-            organizations.append({
+        demands.append(
+            {
+                "unified_contract_number": unified_number,
+                "demand_organization_sequence": _integer(fields[0]),
                 "organization_code": organization_code,
-                "organization_name": _text(fields[2]),
-                "jurisdiction_type": _text(fields[3]),
-            })
+                "department_name": _text(fields[4]),
+                "manager_name": _text(fields[5]),
+                "telephone_number": _text(fields[6]),
+            }
+        )
+        if organization_code:
+            organizations.append(
+                {
+                    "organization_code": organization_code,
+                    "organization_name": _text(fields[2]),
+                    "jurisdiction_type": _text(fields[3]),
+                }
+            )
     return contract, suppliers, demands, organizations
 
 
@@ -126,7 +143,9 @@ def _parse_bracket_list(value: Any, *, expected_fields: int) -> list[list[str]]:
     if not text:
         return []
     if not (text.startswith("[") and text.endswith("]")):
-        raise ContractNormalizationError("list value does not use documented bracket format")
+        raise ContractNormalizationError(
+            "list value does not use documented bracket format"
+        )
     # Provider values may contain literal brackets inside a field (for example a
     # supplier's English name). Only `],[` separates records in this wire format.
     records = re.split(r"\]\s*,\s*\[", text[1:-1])
@@ -183,7 +202,13 @@ def _date(value: Any) -> date | None:
     for pattern in ("%Y-%m-%d", "%Y%m%d"):
         try:
             parsed = datetime.strptime(text, pattern).date()
-            return parsed if date(1900, 1, 1) <= parsed <= date.today() + timedelta(days=366) else None
+            return (
+                parsed
+                if date(1900, 1, 1)
+                <= parsed
+                <= procurement_today() + timedelta(days=366)
+                else None
+            )
         except ValueError:
             continue
     raise ContractNormalizationError(f"invalid date value {value!r}")
@@ -196,7 +221,13 @@ def _datetime(value: Any) -> datetime | None:
     for pattern in ("%Y-%m-%d %H:%M:%S", "%Y%m%d%H%M%S", "%Y-%m-%dT%H:%M:%S"):
         try:
             parsed = datetime.strptime(text, pattern)
-            return parsed if date(1900, 1, 1) <= parsed.date() <= date.today() + timedelta(days=366) else None
+            return (
+                parsed
+                if date(1900, 1, 1)
+                <= parsed.date()
+                <= procurement_today() + timedelta(days=366)
+                else None
+            )
         except ValueError:
             continue
     raise ContractNormalizationError(f"invalid datetime value {value!r}")

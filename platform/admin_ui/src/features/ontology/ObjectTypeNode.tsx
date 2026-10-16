@@ -1,7 +1,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { CSSProperties } from "react";
 import { Box } from "lucide-react";
-import type { ObjectNode } from "../../api/admin";
+import { type ObjectNode } from "../../api/registry";
 
 export function ObjectTypeNode({ data, selected }: NodeProps) {
   const object = data as unknown as ObjectNode;

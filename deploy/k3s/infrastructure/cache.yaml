@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prefect-redis
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runtime-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: runtime-redis
+  template:
+    metadata:
+      labels:
+        app: runtime-redis
+    spec:
+      containers:
+      - name: runtime-redis
+        image: redis:7-alpine
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env: []
+        command:
+        - redis-server
+        - --maxmemory
+        - 256mb
+        - --maxmemory-policy
+        - allkeys-lru
+        ports:
+        - containerPort: 6379
+        readinessProbe:
+          exec: &id001
+            command:
+            - redis-cli
+            - ping
+          periodSeconds: 5
+        startupProbe:
+          exec: *id001
+          periodSeconds: 5
+          failureThreshold: 90
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: runtime-redis
+spec:
+  selector:
+    app: runtime-redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prefect-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-redis
+  template:
+    metadata:
+      labels:
+        app: prefect-redis
+    spec:
+      containers:
+      - name: prefect-redis
+        image: redis:7-alpine
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env: []
+        command:
+        - redis-server
+        - --appendonly
+        - 'yes'
+        ports:
+        - containerPort: 6379
+        readinessProbe:
+          exec: &id001
+            command:
+            - redis-cli
+            - ping
+          periodSeconds: 5
+        startupProbe:
+          exec: *id001
+          periodSeconds: 5
+          failureThreshold: 90
+        volumeMounts:
+        - name: prefect-redis
+          mountPath: /data
+          readOnly: false
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      volumes:
+      - name: prefect-redis
+        persistentVolumeClaim:
+          claimName: prefect-redis
+  serviceName: prefect-redis
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prefect-redis
+spec:
+  selector:
+    app: prefect-redis
+  ports:
+  - port: 6379
+    targetPort: 6379

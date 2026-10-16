@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prefect-register
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: prefect-register
+    spec:
+      containers:
+      - name: prefect-register
+        image: teoria/pipelines:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_PIPELINE_PATH
+          value: /app/pipelines
+        - name: PREFECT_API_URL
+          value: http://prefect-server:4200/api
+        - name: TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE
+          value: teoria/ingestion:release
+        - name: PREFECT_API_AUTH_STRING
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_AUTH_STRING
+        - name: TEORIA_PIPELINE_JOB_IMAGE
+          value: teoria/pipelines:release
+        - name: TEORIA_PIPELINE_CONCURRENCY
+          value: '2'
+        - name: TEORIA_PIPELINE_BACKFILL_CONCURRENCY
+          value: '1'
+        command:
+        - teoria-pipelines
+        - register
+        - --backend
+        - kubernetes
+        - --kind
+        - all
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      restartPolicy: Never

@@ -1,44 +1,41 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 from uuid import UUID, uuid4
 
 from prefect import flow
 from prefect.runtime import flow_run
 
-from teoria_pipelines.domains.public_procurement.bid_notices.tasks import (
-    BACKFILL_PIPELINE_ID,
-    ENRICHMENT_BACKFILL_PIPELINE_ID,
-    NOTICE_OPERATIONS,
-    PIPELINE_ID,
-    claim_bid_documents,
-    claim_expired_bid_document_objects,
+from teoria_pipelines.domains.public_procurement.bid_notices.enrichment_tasks import (
     claim_pending_bid_notice_enrichment,
+    extract_bid_notice_enrichment,
+    normalize_bid_notice_enrichment,
+    upsert_bid_notice_enrichment,
+)
+from teoria_pipelines.domains.public_procurement.bid_notices.ingestion_tasks import (
     combine_bid_notice_summary,
     determine_bid_notice_backfill_windows,
     determine_bid_notice_window,
-    extract_bid_notice_enrichment,
     extract_bid_notice_operation,
-    normalize_bid_notice_enrichment,
     normalize_bid_notices,
-    omit_historical_bid_documents,
-    process_bid_documents,
-    purge_expired_bid_document_objects,
-    purge_expired_eligibility_outputs,
-    record_bid_document_purge,
     update_bid_notice_checkpoint,
-    upsert_bid_notice_enrichment,
     upsert_bid_notices,
 )
+from teoria_pipelines.domains.public_procurement.bid_notices.models import BidNoticeKey
+from teoria_pipelines.domains.public_procurement.bid_notices.resources import (
+    ENRICHMENT_BACKFILL_PIPELINE_ID,
+    NOTICE_OPERATIONS,
+    PIPELINE_ID,
+)
+from teoria_pipelines.domains.public_procurement.models import LoadSummary
+from teoria_pipelines.domains.public_procurement.tasks import complete_pipeline_run
 from teoria_pipelines.execution.tasks import (
     combine_extracted_batches,
-    complete_pipeline_run,
     fail_pipeline_run,
     save_raw_records,
     start_pipeline_run,
 )
-from teoria_pipelines.models import BidNoticeKey, CollectionWindow, LoadSummary
-
+from teoria_pipelines.models import CollectionWindow
 
 OPERATION_TASK_NAMES = {
     "list_construction_bid_notices": "공사 입찰공고 수집",
@@ -55,7 +52,6 @@ async def sync_pps_bid_notice_window(
     pipeline_root: str = "/app/pipelines",
     pipeline_id: str = PIPELINE_ID,
     checkpoint_cursor: date | None = None,
-    include_documents: bool = True,
     enrichment_batch_size: int = 20,
     include_enrichment: bool = True,
 ) -> LoadSummary:
@@ -63,7 +59,7 @@ async def sync_pps_bid_notice_window(
         raise ValueError("enrichment_batch_size must be positive")
     prefect_run_id = flow_run.get_id()
     execution_id = UUID(prefect_run_id) if prefect_run_id else uuid4()
-    started_execution_id = start_pipeline_run(execution_id, pipeline_id, window)
+    started_execution_id = await start_pipeline_run(execution_id, pipeline_id, window)
     try:
         batches = []
         previous = None
@@ -73,17 +69,15 @@ async def sync_pps_bid_notice_window(
             )(started_execution_id, window, operation_id, pipeline_root, previous)
             batches.append(previous)
         notices = combine_extracted_batches(execution_id, window, batches, previous)
-        raw_notice_count = save_raw_records(notices)
+        raw_notice_count = await save_raw_records(notices)
         normalized_notices = normalize_bid_notices(notices, raw_notice_count)
-        if not include_documents:
-            normalized_notices = omit_historical_bid_documents(normalized_notices)
-        notice_load = upsert_bid_notices(normalized_notices)
+        notice_load = await upsert_bid_notices(normalized_notices)
         changed_notices = notice_load[1] if include_enrichment else []
 
         raw_enrichment_counts = []
         enrichment_loads = []
         for start in range(0, len(changed_notices), enrichment_batch_size):
-            notice_chunk = changed_notices[start:start + enrichment_batch_size]
+            notice_chunk = changed_notices[start : start + enrichment_batch_size]
             enrichment = await extract_bid_notice_enrichment.with_options(
                 name=(
                     "공고번호별 면허·지역 수집 "
@@ -91,11 +85,11 @@ async def sync_pps_bid_notice_window(
                     f"{(len(changed_notices) + enrichment_batch_size - 1) // enrichment_batch_size}"
                 )
             )(execution_id, window, notice_chunk, pipeline_root, notice_load)
-            raw_enrichment_count = save_raw_records(enrichment)
+            raw_enrichment_count = await save_raw_records(enrichment)
             normalized_enrichment = normalize_bid_notice_enrichment(
                 enrichment, raw_enrichment_count
             )
-            enrichment_load = upsert_bid_notice_enrichment(
+            enrichment_load = await upsert_bid_notice_enrichment(
                 normalized_enrichment, notice_chunk, enrichment
             )
             raw_enrichment_counts.append(raw_enrichment_count)
@@ -103,12 +97,12 @@ async def sync_pps_bid_notice_window(
         summary = combine_bid_notice_summary(
             raw_notice_count, raw_enrichment_counts, notice_load, enrichment_loads
         )
-        checkpointed = update_bid_notice_checkpoint(
+        checkpointed = await update_bid_notice_checkpoint(
             execution_id, checkpoint_cursor or window.end, summary, pipeline_id
         )
-        return complete_pipeline_run(execution_id, checkpointed)
+        return await complete_pipeline_run(execution_id, checkpointed)
     except BaseException as exc:
-        fail_pipeline_run(execution_id, type(exc).__name__)
+        (await fail_pipeline_run(execution_id, type(exc).__name__))
         raise
 
 
@@ -121,7 +115,9 @@ async def sync_pps_bid_notices(
 ) -> LoadSummary:
     window = determine_bid_notice_window(lookback_days)
     return await sync_pps_bid_notice_window(
-        window, pipeline_root, pipeline_id,
+        window,
+        pipeline_root,
+        pipeline_id,
         enrichment_batch_size=enrichment_batch_size,
     )
 
@@ -134,7 +130,7 @@ async def sync_pps_bid_notice_backfill(
     pipeline_root: str = "/app/pipelines",
     batch_days: int = 30,
 ) -> list[LoadSummary]:
-    windows = determine_bid_notice_backfill_windows(
+    windows = await determine_bid_notice_backfill_windows(
         checkpoint_id, start_date, end_date, batch_days
     )
     return [
@@ -143,7 +139,6 @@ async def sync_pps_bid_notice_backfill(
             pipeline_root,
             checkpoint_id,
             window.end,
-            include_documents=False,
             include_enrichment=False,
         )
         for window in windows
@@ -161,7 +156,7 @@ async def sync_pps_bid_notice_enrichment_backfill(
 ) -> LoadSummary:
     if chunk_size < 1:
         raise ValueError("chunk_size must be positive")
-    pending = claim_pending_bid_notice_enrichment(
+    pending = await claim_pending_bid_notice_enrichment(
         batch_size, minimum_age_days, lease_minutes
     )
     if not pending:
@@ -171,12 +166,12 @@ async def sync_pps_bid_notice_enrichment_backfill(
     window = CollectionWindow(min(published_dates), max(published_dates))
     prefect_run_id = flow_run.get_id()
     execution_id = UUID(prefect_run_id) if prefect_run_id else uuid4()
-    started_execution_id = start_pipeline_run(execution_id, pipeline_id, window)
+    started_execution_id = await start_pipeline_run(execution_id, pipeline_id, window)
     raw_counts: list[int] = []
     loads: list[LoadSummary] = []
     try:
         for start in range(0, len(pending), chunk_size):
-            selected = pending[start:start + chunk_size]
+            selected = pending[start : start + chunk_size]
             keys = [
                 BidNoticeKey(item["notice_number"], item["notice_order"])
                 for item in selected
@@ -184,42 +179,18 @@ async def sync_pps_bid_notice_enrichment_backfill(
             enrichment = await extract_bid_notice_enrichment.with_options(
                 name=f"과거 공고 참가제한 수집 {start // chunk_size + 1}"
             )(started_execution_id, window, keys, pipeline_root)
-            raw_count = save_raw_records(enrichment)
+            raw_count = await save_raw_records(enrichment)
             normalized = normalize_bid_notice_enrichment(enrichment, raw_count)
-            loads.append(upsert_bid_notice_enrichment(normalized, keys, enrichment))
+            loads.append(
+                (await upsert_bid_notice_enrichment(normalized, keys, enrichment))
+            )
             raw_counts.append(raw_count)
         summary = LoadSummary(
             raw_records=sum(raw_counts),
             license_restrictions=sum(item.license_restrictions for item in loads),
             participation_regions=sum(item.participation_regions for item in loads),
         )
-        return complete_pipeline_run(execution_id, summary)
+        return await complete_pipeline_run(execution_id, summary)
     except BaseException as exc:
-        fail_pipeline_run(execution_id, type(exc).__name__)
+        (await fail_pipeline_run(execution_id, type(exc).__name__))
         raise
-
-
-@flow(name="나라장터 입찰공고 첨부파일 수집")
-async def sync_pps_bid_documents(
-    batch_size: int = 500,
-    concurrency: int = 8,
-) -> LoadSummary:
-    documents = claim_bid_documents(batch_size)
-    return await process_bid_documents(documents, concurrency)
-
-
-@flow(name="나라장터 입찰공고 첨부파일 보존기간 삭제")
-def purge_expired_pps_bid_documents(
-    retention_days: int = 90,
-    batch_size: int = 500,
-) -> LoadSummary:
-    purge_run_id = uuid4()
-    started_at = datetime.now(timezone.utc)
-    documents = claim_expired_bid_document_objects(retention_days, batch_size)
-    document_result = purge_expired_bid_document_objects(documents)
-    result = purge_expired_eligibility_outputs(
-        retention_days, batch_size, document_result
-    )
-    return record_bid_document_purge(
-        purge_run_id, retention_days, started_at, result
-    )

@@ -1,0 +1,187 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: platform-postgres
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 30Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:17
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            memory: 4Gi
+            cpu: '2'
+        env:
+        - name: POSTGRES_USER
+          value: teoria_pipeline
+        - name: POSTGRES_DB
+          value: teoria_data
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_DATA_DB_PASSWORD
+        ports:
+        - containerPort: 5432
+        readinessProbe:
+          exec: &id001
+            command:
+            - pg_isready
+            - -U
+            - teoria_pipeline
+            - -d
+            - teoria_data
+          periodSeconds: 5
+        startupProbe:
+          exec: *id001
+          periodSeconds: 5
+          failureThreshold: 90
+        volumeMounts:
+        - name: postgres
+          mountPath: /var/lib/postgresql/data
+          readOnly: false
+        - name: dshm
+          mountPath: /dev/shm
+          readOnly: false
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      volumes:
+      - name: postgres
+        persistentVolumeClaim:
+          claimName: postgres
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Gi
+  serviceName: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: platform-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: platform-postgres
+  template:
+    metadata:
+      labels:
+        app: platform-postgres
+    spec:
+      containers:
+      - name: platform-postgres
+        image: postgres:17
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            memory: 4Gi
+            cpu: '2'
+        env:
+        - name: POSTGRES_USER
+          value: platform_admin
+        - name: POSTGRES_DB
+          value: postgres
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_PLATFORM_DB_PASSWORD
+        ports:
+        - containerPort: 5432
+        readinessProbe:
+          exec: &id001
+            command:
+            - pg_isready
+            - -U
+            - platform_admin
+            - -d
+            - postgres
+          periodSeconds: 5
+        startupProbe:
+          exec: *id001
+          periodSeconds: 5
+          failureThreshold: 90
+        volumeMounts:
+        - name: platform-postgres
+          mountPath: /var/lib/postgresql/data
+          readOnly: false
+        - name: dshm
+          mountPath: /dev/shm
+          readOnly: false
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      volumes:
+      - name: platform-postgres
+        persistentVolumeClaim:
+          claimName: platform-postgres
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Gi
+  serviceName: platform-postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-postgres
+spec:
+  selector:
+    app: platform-postgres
+  ports:
+  - port: 5432
+    targetPort: 5432

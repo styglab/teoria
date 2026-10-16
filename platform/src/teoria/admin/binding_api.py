@@ -98,67 +98,105 @@ def create_binding_router(
 
     def require_repository() -> BindingRepository:
         if repository is None:
-            raise HTTPException(status_code=503, detail={"code": "app_database_unavailable"})
+            raise HTTPException(
+                status_code=503, detail={"code": "app_database_unavailable"}
+            )
         return repository
 
     @router.get("")
-    def list_bindings(status: str | None = None, limit: int = Query(100, ge=1, le=500),
-                      binding_id: list[UUID] | None = Query(None, max_length=50)) -> dict:
+    async def list_bindings(
+        status: str | None = None,
+        limit: int = Query(100, ge=1, le=500),
+        binding_id: list[UUID] | None = Query(None, max_length=50),
+    ) -> dict:
         filters = {"binding_ids": binding_id} if binding_id is not None else {}
-        return {"items": require_repository().list_bindings(status=status, limit=limit, **filters)}
+        return {
+            "items": (
+                await require_repository().list_bindings(
+                    status=status, limit=limit, **filters
+                )
+            )
+        }
 
     @router.get("/validation")
-    def validate_bindings() -> dict:
-        return require_repository().validate_bindings()
+    async def validate_bindings() -> dict:
+        return await require_repository().validate_bindings()
 
     @router.get("/capability-coverage")
-    def capability_coverage() -> dict:
-        bindings = require_repository().list_approved_capability_bindings()
+    async def capability_coverage() -> dict:
+        bindings = await require_repository().list_approved_capability_bindings()
         return build_capability_binding_coverage(catalog, bindings)
 
     @router.post("", status_code=201)
-    def create_binding(
+    async def create_binding(
         payload: OpenMetadataBindingInput,
-        principal: AdminPrincipal = Depends(authorizer.require("binding_reviewer", "metadata_admin")),
+        principal: AdminPrincipal = Depends(
+            authorizer.require("binding_reviewer", "metadata_admin")
+        ),
     ) -> dict:
         try:
-            return require_repository().create_openmetadata_binding(
-                **payload.model_dump(mode="python"), created_by=principal.actor,
+            return await require_repository().create_openmetadata_binding(
+                **payload.model_dump(mode="python"),
+                created_by=principal.actor,
             )
         except psycopg.errors.UniqueViolation as exc:
-            raise HTTPException(status_code=409, detail={"code": "active_binding_exists"}) from exc
+            raise HTTPException(
+                status_code=409, detail={"code": "active_binding_exists"}
+            ) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail={"code": "unknown_ontology_reference", "message": str(exc)}) from exc
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "unknown_ontology_reference", "message": str(exc)},
+            ) from exc
 
     @router.post("/capability", status_code=201)
-    def create_capability_binding(
+    async def create_capability_binding(
         payload: CapabilityBindingInput,
-        principal: AdminPrincipal = Depends(authorizer.require("binding_reviewer", "metadata_admin")),
+        principal: AdminPrincipal = Depends(
+            authorizer.require("binding_reviewer", "metadata_admin")
+        ),
     ) -> dict:
         capability = catalog.capabilities.get(payload.capability_id)
         if capability is None:
             raise HTTPException(status_code=422, detail={"code": "unknown_capability"})
-        if payload.target_scope == "input" and payload.field_path not in capability.inputs:
-            raise HTTPException(status_code=422, detail={"code": "unknown_capability_input"})
-        if payload.target_scope == "output" and payload.field_path not in capability.returns:
-            raise HTTPException(status_code=422, detail={"code": "unknown_capability_output"})
+        if (
+            payload.target_scope == "input"
+            and payload.field_path not in capability.inputs
+        ):
+            raise HTTPException(
+                status_code=422, detail={"code": "unknown_capability_input"}
+            )
+        if (
+            payload.target_scope == "output"
+            and payload.field_path not in capability.returns
+        ):
+            raise HTTPException(
+                status_code=422, detail={"code": "unknown_capability_output"}
+            )
         registry_version = catalog.release.version if catalog.release else "draft"
         try:
-            return require_repository().create_capability_binding(
+            return await require_repository().create_capability_binding(
                 **payload.model_dump(mode="python"),
                 contract_version=registry_version,
                 registry_version=registry_version,
                 created_by=principal.actor,
             )
         except psycopg.errors.UniqueViolation as exc:
-            raise HTTPException(status_code=409, detail={"code": "active_binding_exists"}) from exc
+            raise HTTPException(
+                status_code=409, detail={"code": "active_binding_exists"}
+            ) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail={"code": "invalid_capability_binding", "message": str(exc)}) from exc
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_capability_binding", "message": str(exc)},
+            ) from exc
 
     @router.post("/api-field", status_code=201)
-    def create_api_field_binding(
+    async def create_api_field_binding(
         payload: ApiFieldBindingInput,
-        principal: AdminPrincipal = Depends(authorizer.require("binding_reviewer", "metadata_admin")),
+        principal: AdminPrincipal = Depends(
+            authorizer.require("binding_reviewer", "metadata_admin")
+        ),
     ) -> dict:
         try:
             contract = resolve_api_field_contract(
@@ -172,30 +210,45 @@ def create_binding_router(
             raise HTTPException(status_code=422, detail={"code": exc.code}) from exc
         registry_version = catalog.release.version if catalog.release else "draft"
         try:
-            return require_repository().create_api_field_binding(
+            return await require_repository().create_api_field_binding(
                 **payload.model_dump(mode="python"),
                 contract_version=contract["contract_version"],
                 registry_version=registry_version,
                 created_by=principal.actor,
             )
         except psycopg.errors.UniqueViolation as exc:
-            raise HTTPException(status_code=409, detail={"code": "active_binding_exists"}) from exc
+            raise HTTPException(
+                status_code=409, detail={"code": "active_binding_exists"}
+            ) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail={"code": "invalid_api_field_binding", "message": str(exc)}) from exc
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "invalid_api_field_binding", "message": str(exc)},
+            ) from exc
 
     @router.post("/{binding_id}/reviews")
-    def review_binding(
+    async def review_binding(
         binding_id: UUID,
         payload: BindingReviewInput,
-        principal: AdminPrincipal = Depends(authorizer.require("binding_reviewer", "ontology_owner")),
+        principal: AdminPrincipal = Depends(
+            authorizer.require("binding_reviewer", "ontology_owner")
+        ),
     ) -> dict:
         try:
-            return require_repository().review_binding(
-                binding_id, decision=payload.decision, reviewer=principal.actor, comment=payload.comment,
+            return await require_repository().review_binding(
+                binding_id,
+                decision=payload.decision,
+                reviewer=principal.actor,
+                comment=payload.comment,
             )
         except KeyError as exc:
-            raise HTTPException(status_code=404, detail={"code": "binding_not_found"}) from exc
+            raise HTTPException(
+                status_code=404, detail={"code": "binding_not_found"}
+            ) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=409, detail={"code": "invalid_binding_transition", "message": str(exc)}) from exc
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "invalid_binding_transition", "message": str(exc)},
+            ) from exc
 
     return router

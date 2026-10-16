@@ -1,0 +1,28 @@
+name: postgres-etl-example
+prefect-version: 3.8.1
+build: null
+push: null
+pull:
+  - prefect.deployments.steps.set_working_directory:
+      directory: "{{ $ETL_EXAMPLE_DIRECTORY }}"
+deployments:
+  - name: orders-daily
+    version: v2
+    description: 전날 updated_at 변경분 조회 → 변환 → 검증 → DW 갱신 (삭제 표시 포함)
+    entrypoint: flows.py:orders_etl
+    parameters:
+      business_date: null  # 예약 시각의 한국 날짜 기준 전날. 수동 재처리는 날짜 지정.
+      # Flow가 받아 Extract/Load Task의 with_options에 적용하는 입력값이다.
+      db_retries: 2
+      db_retry_delay_seconds: 5
+      db_task_timeout_seconds: 60
+    concurrency_limit:
+      limit: 1
+      collision_strategy: ENQUEUE
+    schedules:
+      - cron: '0 22 * * *'
+        timezone: Asia/Seoul
+        active: false
+    work_pool:
+      name: example-etl
+      work_queue_name: default

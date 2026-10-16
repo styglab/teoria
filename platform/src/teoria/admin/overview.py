@@ -9,7 +9,7 @@ from teoria.registry.composition import create_registry_validator
 def build_registry_overview(catalog: RegistryCatalog) -> dict[str, Any]:
     diagnostics = create_registry_validator().validate(catalog)
     owners = set()
-    for paths in (catalog.runtime_contract_paths, catalog.capability_paths, catalog.mapping_paths, catalog.eligibility_rule_paths):
+    for paths in (catalog.runtime_contract_paths, catalog.capability_paths, catalog.mapping_paths):
         for path in paths.values():
             relative = path.relative_to(catalog.root)
             if len(relative.parts) > 2 and relative.parts[0] == "domains":
@@ -28,7 +28,6 @@ def build_registry_overview(catalog: RegistryCatalog) -> dict[str, Any]:
             "sources": len(catalog.sources),
             "mappings": len(catalog.mappings),
             "capabilities": len(catalog.capabilities),
-            "eligibility_rules": len(catalog.eligibility_rules),
             "data_types": len(catalog.data_types),
             "value_sets": len(catalog.value_sets),
         },

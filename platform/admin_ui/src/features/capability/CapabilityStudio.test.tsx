@@ -1,10 +1,10 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import { adminApi } from "../../api/admin";
+import { capabilityApi } from "../../api/capability";
 import { CapabilityStudio } from "./CapabilityStudio";
 
-vi.spyOn(adminApi, "capabilityCoverage").mockResolvedValue({
+vi.spyOn(capabilityApi, "capabilityCoverage").mockResolvedValue({
   summary: { capability_count: 1, capability_bound_count: 1, input_count: 1, bound_input_count: 1, output_count: 1, bound_output_count: 0, capability_coverage_rate: 1 },
   items: [{ capability_id: "get_bid_notice", status: "partial", capability_bound: true, inputs: { total: 1, bound: 1, unbound_fields: [] }, outputs: { total: 1, bound: 0, unbound_fields: ["public_procurement.bid_notice"] } }],
 });

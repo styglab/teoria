@@ -30,7 +30,7 @@ Provider API ─▶ Pipelines/Prefect ─▶ Teoria Data DB
 
 | 시스템 | 권위 데이터 | 두지 않는 것 |
 |---|---|---|
-| Prefect | workflow, schedule, retry, checkpoint | Ontology와 metadata 의미 |
+| Prefect | workflow 실행, schedule과 retry | Ontology와 metadata 의미 |
 | Teoria Data DB | raw 관찰과 정규화된 업무 데이터 | governance metadata |
 | OpenMetadata | asset, schema, glossary, owner, lineage, quality, usage | Business Ontology |
 | Teoria App DB | Ontology, Binding, Suggestion, Review, context 설정 | OpenMetadata entity 본문 |
@@ -71,10 +71,17 @@ Control/Application PostgreSQL에 둔다. database 간 SQL join은 허용하지 
 부하, 장애 격리 또는 backup 정책이 달라지면 connection URL을 변경해 별도
 인스턴스로 분리한다.
 
+수집 Flow·Task는 두 배포가 공유한다. Compose는 Process Worker, K3s는 별도
+`teoria-pipelines` namespace의 실행별 Kubernetes Job을 사용한다. ResourceQuota와
+work pool 동시 실행 제한으로 정해진 자원 예산 안에서 병렬 실행한다.
+설정은 [K3s 배포](../deployment/k3s.md)를 따른다.
+
 OpenMetadata ingestion 일정과 재시도는 Prefect가 소유한다. 공식 ingestion
 image를 ephemeral Job으로 실행하며 일반 Prefect Worker에 ingestion dependency를
-설치하지 않는다. Compose에서는 격리된 Docker worker를, k3s에서는 전용
-Kubernetes work pool을 사용한다.
+설치하지 않는다. 지원되는 Compose는 격리된 Docker worker를 사용한다.
+K3s에서는 전용 metadata Worker가 네임스페이스 권한으로 공식 ingestion image의
+Kubernetes Job을 생성한다. 이미지 allowlist와 Secret 참조 범위를 제한하며,
+[EC2 배포](../deployment/k3s.md)의 실제 환경 검증은 서버 설정 후 수행한다.
 
 ## 변경 불변식
 
@@ -92,6 +99,6 @@ Kubernetes work pool을 사용한다.
   개발·테스트에서만 허용한다.
 - OPA readiness는 최초 서명 bundle 활성화와 management plugin 상태를 포함한다.
 
-Ontology 모델은 [Ontology](ontology.md), Registry 계약은
-[Registry guide](../registry/README.md), 배포 방법은 [Deployment](../../deploy/README.md)를
+Ontology 모델은 [Ontology](../platform/ontology.md), Registry 계약은
+[Registry guide](../platform/registry/guide.md), 배포 방법은 [Deployment](../deployment/compose.md)를
 참고한다.

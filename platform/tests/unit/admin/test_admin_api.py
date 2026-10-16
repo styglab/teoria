@@ -16,11 +16,10 @@ def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:
 
     overview = client.get("/v1/admin/overview")
     assert overview.status_code == 200
-    assert overview.json()["counts"]["runtime_contract_domains"] == 3
-    assert overview.json()["counts"]["runtime_contracts"] == 3
+    assert overview.json()["counts"]["runtime_contract_domains"] == 2
+    assert overview.json()["counts"]["runtime_contracts"] == 2
     assert overview.json()["counts"]["business_domains"] == 2
-    assert overview.json()["counts"]["runtime_object_types"] == 46
-    assert overview.json()["counts"]["eligibility_rules"] == 12
+    assert overview.json()["counts"]["runtime_object_types"] == 38
     assert overview.json()["validation"]["status"] == "valid"
 
     release = client.get("/v1/admin/registry-release")
@@ -43,24 +42,16 @@ def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:
 
     capabilities = client.get("/v1/admin/capabilities").json()["capabilities"]
     assert any(item["kind"] == "query" and item["steps"] for item in capabilities)
-    assessment = next(item for item in capabilities if item["id"] == "assess_company_bid_eligibility")
-    assert assessment["kind"] == "decision"
-    assert assessment["exposure"] == "public"
     assert next(
         item for item in capabilities if item["id"] == "get_bid_notices_by_ids"
     )["exposure"] == "internal"
-    assert assessment["steps"] == []
-    rules = client.get("/v1/admin/eligibility-rules").json()["eligibility_rules"]
-    direct_production = next(item for item in rules if item["id"] == "holds_valid_direct_production_confirmation")
-    assert direct_production["evaluator"] == "product_certificate_valid"
-    assert "public_procurement.direct_production_confirmation.detailed_product_code" in direct_production["required_facts"]
     assert any(source["type"] == "database" for source in client.get("/v1/admin/sources").json()["sources"])
     assert client.get("/v1/admin/mappings").json()["mappings"][0]["binding_count"] > 0
     assert any(link["kind"] == "mapping" for link in client.get("/v1/admin/lineage").json()["links"])
 
     contracts = client.get("/v1/admin/runtime-contracts")
     assert contracts.status_code == 200
-    assert len(contracts.json()["runtime_contracts"]) == 3
+    assert len(contracts.json()["runtime_contracts"]) == 2
 
     graph = client.get("/v1/admin/runtime-contracts/public_procurement/graph")
     assert graph.status_code == 200
@@ -136,35 +127,3 @@ def test_admin_mutations_require_configured_bearer_token() -> None:
         json={"version": "0.3.0"}, headers={"Authorization": "Bearer test-secret"},
     )
     assert forbidden.status_code == 403
-
-
-def test_admin_api_exposes_pipeline_bid_check_results() -> None:
-    class Reader:
-        def list_notices(self, *, page: int, page_size: int, query: str | None,
-                         bid_status: str | None, work_type: str | None,
-                         extraction_status: str | None, review_status: str | None):
-            assert (page, page_size, query) == (2, 20, "테스트")
-            assert (bid_status, work_type, extraction_status, review_status) == (
-                "open", "service", "extracted", "required"
-            )
-            return {"items": [{"bid_notice_id": "R26TEST:000", "requirement_count": 2}], "page": 2, "page_size": 20, "total": 21, "total_pages": 2}
-
-        def get_requirements(self, bid_notice_id: str):
-            assert bid_notice_id == "R26TEST:000"
-            return [{"requirement_id": "requirement-1", "original_text": "중소기업이어야 한다"}]
-
-    app = create_admin_app(
-        settings=Settings(), catalog=RegistryLoader(REGISTRIES).load(), bid_check_reader=Reader()
-    )
-    client = TestClient(app)
-
-    page = client.get(
-        "/v1/admin/bid-check/notices?page=2&page_size=20&query=테스트"
-        "&bid_status=open&work_type=service&extraction_status=extracted&review_status=required"
-    ).json()
-    assert page["items"][0]["requirement_count"] == 2
-    assert page["total_pages"] == 2
-    requirements = client.get(
-        "/v1/admin/bid-check/notices/R26TEST%3A000/requirements"
-    ).json()["requirements"]
-    assert requirements[0]["requirement_id"] == "requirement-1"

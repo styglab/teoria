@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import type { LinkEdge, ObjectNode } from "../../api/admin";
+import { type LinkEdge, type ObjectNode } from "../../api/registry";
 
 export function DetailPanel({ item, onClose, mode = "runtime" }: { item: ObjectNode | LinkEdge; onClose: () => void; mode?: "runtime" | "business" }) {
   const isLink = "link_type" in item;

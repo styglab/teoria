@@ -35,12 +35,13 @@ dev = [
 teoria = "teoria.entrypoints.cli:main"
 teoria-runtime-api = "teoria.entrypoints.runtime_api:main"
 teoria-admin-api = "teoria.entrypoints.admin_api:main"
-teoria-metadata-assessment-worker = "teoria.entrypoints.metadata_assessment_worker:main"
+teoria-metadata-assessment-worker = "teoria.entrypoints.asset_assessment_worker:main"
 teoria-policy-control-plane = "teoria.entrypoints.policy_control_plane:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/teoria"]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 pythonpath = ["src"]
 testpaths = ["tests"]

@@ -1,0 +1,288 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-server
+  template:
+    metadata:
+      labels:
+        app: prefect-server
+    spec:
+      containers:
+      - name: prefect-server
+        image: prefecthq/prefect:3.8.1-python3.12
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: PREFECT_MESSAGING_BROKER
+          value: prefect_redis.messaging
+        - name: PREFECT_MESSAGING_CACHE
+          value: prefect_redis.messaging
+        - name: PREFECT_REDIS_MESSAGING_HOST
+          value: prefect-redis
+        - name: PREFECT_REDIS_MESSAGING_PORT
+          value: '6379'
+        - name: PREFECT_REDIS_MESSAGING_DB
+          value: '0'
+        - name: PREFECT_SERVER_DOCKET_URL
+          value: redis://prefect-redis:6379/1
+        - name: PREFECT_SERVER_UI_API_URL
+          value: /prefect/api
+        - name: PREFECT_SERVER_UI_SERVE_BASE
+          value: /prefect
+        - name: PREFECT_API_DATABASE_CONNECTION_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_DATABASE_CONNECTION_URL
+        - name: PREFECT_SERVER_API_AUTH_STRING
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_AUTH_STRING
+        command:
+        - prefect
+        - server
+        - start
+        - --host
+        - 0.0.0.0
+        - --no-services
+        ports:
+        - containerPort: 4200
+        readinessProbe:
+          httpGet: &id001
+            path: /api/health
+            port: 4200
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 90
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prefect-server
+spec:
+  selector:
+    app: prefect-server
+  ports:
+  - port: 4200
+    targetPort: 4200
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-services
+  template:
+    metadata:
+      labels:
+        app: prefect-services
+    spec:
+      containers:
+      - name: prefect-services
+        image: prefecthq/prefect:3.8.1-python3.12
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: PREFECT_MESSAGING_BROKER
+          value: prefect_redis.messaging
+        - name: PREFECT_MESSAGING_CACHE
+          value: prefect_redis.messaging
+        - name: PREFECT_REDIS_MESSAGING_HOST
+          value: prefect-redis
+        - name: PREFECT_REDIS_MESSAGING_PORT
+          value: '6379'
+        - name: PREFECT_REDIS_MESSAGING_DB
+          value: '0'
+        - name: PREFECT_SERVER_DOCKET_URL
+          value: redis://prefect-redis:6379/1
+        - name: PREFECT_API_DATABASE_CONNECTION_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_DATABASE_CONNECTION_URL
+        command:
+        - prefect
+        - server
+        - services
+        - start
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+  strategy:
+    type: Recreate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-worker
+  template:
+    metadata:
+      labels:
+        app: prefect-worker
+    spec:
+      containers:
+      - name: prefect-worker
+        image: teoria/pipelines:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_PIPELINE_PATH
+          value: /app/pipelines
+        - name: PREFECT_API_URL
+          value: http://prefect-server:4200/api
+        - name: PREFECT_API_AUTH_STRING
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_AUTH_STRING
+        - name: PREFECT_INTEGRATIONS_KUBERNETES_OBSERVER_NAMESPACES
+          value: teoria-pipelines
+        command:
+        - prefect
+        - worker
+        - start
+        - --pool
+        - teoria-ingestion-k3s
+        - --type
+        - kubernetes
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: true
+      serviceAccountName: teoria-pipeline-worker
+  strategy:
+    type: Recreate
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-metadata-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-metadata-worker
+  template:
+    metadata:
+      labels:
+        app: prefect-metadata-worker
+    spec:
+      containers:
+      - name: prefect-metadata-worker
+        image: teoria/metadata-worker:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_PIPELINE_PATH
+          value: /app/pipelines
+        - name: PREFECT_API_URL
+          value: http://prefect-server:4200/api
+        - name: TEORIA_OPENMETADATA_INGESTION_BACKEND
+          value: kubernetes
+        - name: TEORIA_KUBERNETES_NAMESPACE
+          value: teoria
+        - name: TEORIA_KUBERNETES_IMAGE_PULL_SECRET
+          value: teoria-registry
+        - name: TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE
+          value: teoria/ingestion:release
+        - name: PREFECT_API_AUTH_STRING
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_AUTH_STRING
+        command:
+        - prefect
+        - worker
+        - start
+        - --pool
+        - teoria-metadata
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: true
+      serviceAccountName: teoria-metadata-worker
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: teoria-metadata-worker
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: teoria-metadata-worker
+rules:
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - get
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: teoria-metadata-worker
+subjects:
+- kind: ServiceAccount
+  name: teoria-metadata-worker
+  namespace: teoria
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: teoria-metadata-worker
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: teoria-pipeline-worker

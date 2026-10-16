@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-migrate
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: postgres-migrate
+    spec:
+      containers:
+      - name: postgres-migrate
+        image: teoria/pipelines:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_PIPELINE_DATA_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_PIPELINE_DATA_DATABASE_URL
+        command:
+        - teoria-pipelines
+        - migrate
+        - --migrations
+        - /app/pipelines/database/migrations
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      restartPolicy: Never

@@ -4,7 +4,8 @@ import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { CatalogLayout, FilterTabs, PageHeader, PageState, SearchField } from "../../components/workspace/WorkspaceLayout";
 import { useSearchParams } from "react-router-dom";
-import { adminApi, type LinkEdge, type ObjectNode, type OntologyBindingImpact, type OntologyDiff, type OntologySummary, type OntologyVersion, type OntologyVersionDetail, type RuntimeContractGraph, type ValidationReport } from "../../api/admin";
+import { type LinkEdge, type ObjectNode, type RuntimeContractGraph, type ValidationReport } from "../../api/registry";
+import { ontologyApi, type OntologyBindingImpact, type OntologyDiff, type OntologySummary, type OntologyVersion, type OntologyVersionDetail } from "../../api/ontology";
 import { DetailPanel } from "./DetailPanel";
 import { OntologyGraph } from "./OntologyGraph";
 
@@ -38,11 +39,11 @@ export function OntologyAuthoring() {
     const request = ++loadRequest.current;
     setLoading(true); setError(null); setSelectedGraphItem(null);
     try {
-      const target = requestedVersion ? await adminApi.ontologyVersion(requestedVersion) : null;
+      const target = requestedVersion ? await ontologyApi.ontologyVersion(requestedVersion) : null;
       const resolvedNamespace = target?.namespace ?? namespace;
-      const result = await adminApi.ontologyVersions(resolvedNamespace);
+      const result = await ontologyApi.ontologyVersions(resolvedNamespace);
       const preferred = result.items.find((item) => item.status === "published") ?? result.items[0];
-      const nextDetail = target ?? (preferred ? await adminApi.ontologyVersion(preferred.ontology_version_id) : null);
+      const nextDetail = target ?? (preferred ? await ontologyApi.ontologyVersion(preferred.ontology_version_id) : null);
       if (request !== loadRequest.current) return;
       setVersions(result.items);
       setDetail(nextDetail);
@@ -53,7 +54,7 @@ export function OntologyAuthoring() {
 
   useEffect(() => { load(); return () => { loadRequest.current++; }; }, [load]);
   useEffect(() => {
-    adminApi.authoredOntologies().then((result) => {
+    ontologyApi.authoredOntologies().then((result) => {
       setOntologies(result.items);
       if (!requestedVersion && !result.items.some((item) => item.namespace === namespace) && result.items[0]) setNamespace(result.items[0].namespace);
     }).catch((reason: Error) => setError(reason.message));
@@ -134,9 +135,9 @@ export function OntologyAuthoring() {
     let cancelled = false;
     setReviewLoading(true);
     Promise.all([
-      adminApi.ontologyVersionValidation(detail.ontology_version_id),
-      adminApi.ontologyVersionBindingImpact(detail.ontology_version_id),
-      compareVersionId ? adminApi.ontologyVersionDiff(detail.ontology_version_id, compareVersionId) : Promise.resolve(null),
+      ontologyApi.ontologyVersionValidation(detail.ontology_version_id),
+      ontologyApi.ontologyVersionBindingImpact(detail.ontology_version_id),
+      compareVersionId ? ontologyApi.ontologyVersionDiff(detail.ontology_version_id, compareVersionId) : Promise.resolve(null),
     ]).then(([nextValidation, nextImpact, nextDiff]) => {
       if (cancelled) return;
       setValidation(nextValidation);
@@ -160,7 +161,7 @@ export function OntologyAuthoring() {
   return <CatalogLayout className="ontology-catalog" label="온톨로지 버전 탐색" sidebar={<>
     <h2>온톨로지</h2>
     <label className="catalog-select-label">업무 모델<select aria-label="온톨로지" value={namespace} disabled={busy} onChange={event => { setParams({}); setNamespace(event.target.value); }}>{ontologies.map(item => <option value={item.namespace} key={item.namespace}>{item.namespace}</option>)}</select></label>
-    <div className="catalog-sidebar-heading"><span>버전</span><Button variant="ghost" size="sm" disabled={busy || loading || !detail} onClick={() => { const version = window.prompt("새 초안 버전"); if (version) mutate(() => adminApi.createOntologyDraft(namespace, version)); }}><Plus size={13}/>새 초안</Button></div>
+    <div className="catalog-sidebar-heading"><span>버전</span><Button variant="ghost" size="sm" disabled={busy || loading || !detail} onClick={() => { const version = window.prompt("새 초안 버전"); if (version) mutate(() => ontologyApi.createOntologyDraft(namespace, version)); }}><Plus size={13}/>새 초안</Button></div>
     {versions.map(item => <button className={`catalog-version ${detail?.ontology_version_id === item.ontology_version_id ? "selected" : ""}`} aria-pressed={detail?.ontology_version_id === item.ontology_version_id} disabled={busy} key={item.ontology_version_id} onClick={() => setParams({ version: item.ontology_version_id })}><GitBranch size={16}/><span><strong>v{item.version}</strong><small>{statusLabels[item.status] ?? item.status}</small></span><ChevronRight size={14}/></button>)}
     {!loading && !versions.length && <p>등록된 버전이 없습니다.</p>}
   </>}>
@@ -168,9 +169,9 @@ export function OntologyAuthoring() {
     {loading ? <PageState loading title="온톨로지를 불러오고 있습니다…"/> : !detail ? <PageState title="표시할 온톨로지가 없습니다" description="다른 업무 모델을 선택하거나 연결 상태를 확인하세요."/> : <>
       <PageHeader title={`${detail.ontology_name} v${detail.version}`} description="업무 개념과 관계를 살펴보고 버전별 변경을 검토합니다." actions={<>
         <button className="page-icon-button" aria-label="온톨로지 새로고침" disabled={busy} onClick={load}><RefreshCw size={16}/></button>
-        {detail.status === "draft" && <Button disabled={busy} onClick={() => mutate(() => adminApi.transitionOntology(detail.ontology_version_id, "submit"))}>검토 요청</Button>}
-        {detail.status === "in_review" && <Button disabled={busy} onClick={() => mutate(() => adminApi.transitionOntology(detail.ontology_version_id, "approve"))}>승인</Button>}
-        {detail.status === "approved" && <Button disabled={busy} onClick={() => mutate(() => adminApi.publishOntology(detail.ontology_version_id))}>게시</Button>}
+        {detail.status === "draft" && <Button disabled={busy} onClick={() => mutate(() => ontologyApi.transitionOntology(detail.ontology_version_id, "submit"))}>검토 요청</Button>}
+        {detail.status === "in_review" && <Button disabled={busy} onClick={() => mutate(() => ontologyApi.transitionOntology(detail.ontology_version_id, "approve"))}>승인</Button>}
+        {detail.status === "approved" && <Button disabled={busy} onClick={() => mutate(() => ontologyApi.publishOntology(detail.ontology_version_id))}>게시</Button>}
       </>}><div className="page-header-meta"><code>{detail.namespace}</code><Badge variant={detail.status === "published" ? "success" : "outline"}>{statusLabels[detail.status] ?? detail.status}</Badge></div></PageHeader>
       {view !== "review" && <SearchField label="온톨로지 검색" placeholder="이름, Stable Key, 속성 검색" value={query} onChange={setQuery}/>}
       <div className="page-controls"><FilterTabs<View> label="온톨로지 보기" value={view} onChange={setView} items={[

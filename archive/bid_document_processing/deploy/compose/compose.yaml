@@ -1,0 +1,779 @@
+name: teoria
+
+x-pipeline-runner: &pipeline-runner
+  image: teoria-pipelines:latest
+  build:
+    context: ../..
+    dockerfile: pipelines/Dockerfile
+    target: worker
+
+x-prefect-services-environment: &prefect-services-environment
+  PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}@platform-postgres:5432/prefect
+  PREFECT_MESSAGING_BROKER: prefect_redis.messaging
+  PREFECT_MESSAGING_CACHE: prefect_redis.messaging
+  PREFECT_REDIS_MESSAGING_HOST: prefect-redis
+  PREFECT_REDIS_MESSAGING_PORT: 6379
+  PREFECT_REDIS_MESSAGING_DB: 0
+  PREFECT_SERVER_DOCKET_URL: redis://prefect-redis:6379/1
+
+services:
+  nginx:
+    image: teoria-nginx:latest
+    build:
+      context: ../..
+      dockerfile: deploy/compose/nginx/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+      runtime-api:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+      admin-ui:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "${TEORIA_HTTP_PORT:-8081}:80"
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    # Parallel PostgreSQL queries allocate dynamic shared memory in /dev/shm.
+    shm_size: 1gb
+    environment:
+      POSTGRES_DB: teoria_data
+      POSTGRES_USER: teoria_pipeline
+      POSTGRES_PASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teoria_pipeline -d teoria_data"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+  postgres-migrate:
+    <<: *pipeline-runner
+    command: ["teoria-pipelines", "migrate", "--migrations", "/app/pipelines/database/migrations"]
+    environment:
+      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
+    depends_on:
+      postgres-init:
+        condition: service_completed_successfully
+
+  postgres-init:
+    image: postgres:17
+    command:
+      - sh
+      - -ec
+      - |
+        psql --set=ON_ERROR_STOP=1 \
+          --set=runtime_password="$${TEORIA_LOCAL_RUNTIME_DB_PASSWORD}" \
+          --set=metadata_password="$${TEORIA_METADATA_DB_PASSWORD}" <<'SQL'
+        SELECT format('CREATE ROLE teoria_runtime LOGIN PASSWORD %L', :'runtime_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_runtime')
+        \gexec
+        ALTER ROLE teoria_runtime PASSWORD :'runtime_password';
+        ALTER ROLE teoria_runtime SET statement_timeout = '30s';
+        SELECT format('CREATE ROLE teoria_metadata LOGIN PASSWORD %L', :'metadata_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_metadata')
+        \gexec
+        ALTER ROLE teoria_metadata PASSWORD :'metadata_password';
+        ALTER ROLE teoria_metadata SET statement_timeout = '60s';
+        GRANT CONNECT ON DATABASE teoria_data TO teoria_metadata;
+        SQL
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: teoria_data
+      PGUSER: teoria_pipeline
+      PGPASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
+      TEORIA_LOCAL_RUNTIME_DB_PASSWORD: ${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}
+      TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres-metadata-grants:
+    image: postgres:17
+    command:
+      - sh
+      - -ec
+      - |
+        psql --set=ON_ERROR_STOP=1 <<'SQL'
+        REVOKE ALL ON SCHEMA ingestion FROM teoria_metadata;
+        REVOKE ALL ON ALL TABLES IN SCHEMA ingestion FROM teoria_metadata;
+        ALTER DEFAULT PRIVILEGES FOR ROLE teoria_pipeline IN SCHEMA ingestion REVOKE ALL ON TABLES FROM teoria_metadata;
+        GRANT USAGE ON SCHEMA public_procurement TO teoria_metadata;
+        GRANT SELECT ON ALL TABLES IN SCHEMA public_procurement TO teoria_metadata;
+        ALTER DEFAULT PRIVILEGES FOR ROLE teoria_pipeline IN SCHEMA public_procurement GRANT SELECT ON TABLES TO teoria_metadata;
+        SQL
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: teoria_data
+      PGUSER: teoria_pipeline
+      PGPASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+
+  platform-postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: platform_admin
+      POSTGRES_PASSWORD: ${TEORIA_LOCAL_PLATFORM_DB_PASSWORD:-platform_local}
+      TEORIA_LOCAL_APP_DB_PASSWORD: ${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}
+      TEORIA_LOCAL_PREFECT_DB_PASSWORD: ${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}
+      OPENMETADATA_DB_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata_local}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform_admin -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "5432"
+    volumes:
+      - platform-postgres:/var/lib/postgresql/data
+
+  platform-postgres-init:
+    image: postgres:17
+    restart: "no"
+    command:
+      - sh
+      - -ec
+      - |
+        psql --set=ON_ERROR_STOP=1 \
+          --set=teoria_app_password="$${TEORIA_LOCAL_APP_DB_PASSWORD}" \
+          --set=prefect_password="$${TEORIA_LOCAL_PREFECT_DB_PASSWORD}" \
+          --set=openmetadata_password="$${OPENMETADATA_DB_PASSWORD}" <<'SQL'
+        SELECT format('CREATE ROLE teoria_app LOGIN PASSWORD %L', :'teoria_app_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_app')
+        \gexec
+        ALTER ROLE teoria_app PASSWORD :'teoria_app_password';
+        SELECT format('CREATE ROLE prefect LOGIN PASSWORD %L', :'prefect_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'prefect')
+        \gexec
+        ALTER ROLE prefect PASSWORD :'prefect_password';
+        SELECT format('CREATE ROLE openmetadata_user LOGIN PASSWORD %L', :'openmetadata_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmetadata_user')
+        \gexec
+        ALTER ROLE openmetadata_user PASSWORD :'openmetadata_password';
+        SELECT 'CREATE DATABASE teoria_app OWNER teoria_app'
+        WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'teoria_app')
+        \gexec
+        SELECT 'CREATE DATABASE prefect OWNER prefect'
+        WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'prefect')
+        \gexec
+        SELECT 'CREATE DATABASE openmetadata_db OWNER openmetadata_user'
+        WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'openmetadata_db')
+        \gexec
+        REVOKE CONNECT ON DATABASE teoria_app FROM PUBLIC;
+        GRANT CONNECT ON DATABASE teoria_app TO teoria_app, platform_admin;
+        REVOKE CONNECT ON DATABASE prefect FROM PUBLIC;
+        GRANT CONNECT ON DATABASE prefect TO prefect, platform_admin;
+        REVOKE CONNECT ON DATABASE openmetadata_db FROM PUBLIC;
+        GRANT CONNECT ON DATABASE openmetadata_db TO openmetadata_user, platform_admin;
+        SQL
+    environment:
+      PGHOST: platform-postgres
+      PGPORT: 5432
+      PGDATABASE: postgres
+      PGUSER: platform_admin
+      PGPASSWORD: ${TEORIA_LOCAL_PLATFORM_DB_PASSWORD:-platform_local}
+      TEORIA_LOCAL_APP_DB_PASSWORD: ${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}
+      TEORIA_LOCAL_PREFECT_DB_PASSWORD: ${TEORIA_LOCAL_PREFECT_DB_PASSWORD:-prefect_local}
+      OPENMETADATA_DB_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata_local}
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+
+  app-postgres-migrate:
+    image: teoria-platform-authoring:latest
+    build:
+      context: ../..
+      dockerfile: platform/Dockerfile
+      target: authoring
+    command: ["teoria", "migrate-app", "--migrations", "/app/platform/database/migrations"]
+    environment:
+      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
+    depends_on:
+      platform-postgres-init:
+        condition: service_completed_successfully
+
+  prefect-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - prefect-redis:/data
+
+  runtime-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - runtime-redis:/data
+
+  opa-bundle-build:
+    image: teoria-opa-bundle-builder:1.21.1
+    build:
+      context: ../..
+      dockerfile: deploy/compose/opa/Dockerfile
+      target: bundle_builder
+    restart: "no"
+    environment:
+      TEORIA_OPA_BUNDLE_REVISION: ${TEORIA_OPA_BUNDLE_REVISION:-development}
+    volumes:
+      - opa-signing-keys:/keys
+      - opa-bundles:/bundle
+
+  policy-control-plane:
+    image: teoria-platform-authoring:latest
+    build:
+      context: ../..
+      dockerfile: platform/Dockerfile
+      target: authoring
+    restart: unless-stopped
+    command: ["teoria-policy-control-plane"]
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
+      TEORIA_OPA_CONTROL_PLANE_TOKEN: ${TEORIA_OPA_CONTROL_PLANE_TOKEN:?set TEORIA_OPA_CONTROL_PLANE_TOKEN}
+      TEORIA_OPA_BUNDLE_PATH: /var/lib/teoria/opa/teoria.tar.gz
+    volumes:
+      - opa-bundles:/var/lib/teoria/opa:ro
+    depends_on:
+      app-postgres-migrate:
+        condition: service_completed_successfully
+      opa-bundle-build:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "8002"
+
+  opa:
+    image: teoria-opa:1.21.1
+    build:
+      context: ../..
+      dockerfile: deploy/compose/opa/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    command:
+      - run
+      - --server
+      - --addr=0.0.0.0:8181
+      - --log-format=json
+      - --config-file=/config/opa_config.yaml
+      - --set-file=keys.teoria.key=/keys/public.pem
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_OPA_CONTROL_PLANE_TOKEN: ${TEORIA_OPA_CONTROL_PLANE_TOKEN:?set TEORIA_OPA_CONTROL_PLANE_TOKEN}
+    volumes:
+      - opa-signing-keys:/keys:ro
+      - opa-state:/var/lib/opa
+    depends_on:
+      policy-control-plane:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8181/health?bundles=true&plugins=true"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "8181"
+
+  prefect-server:
+    image: prefecthq/prefect:3-python3.12
+    restart: unless-stopped
+    command: ["prefect", "server", "start", "--host", "0.0.0.0", "--no-services"]
+    environment:
+      <<: *prefect-services-environment
+      PREFECT_SERVER_API_HOST: 0.0.0.0
+      PREFECT_SERVER_UI_API_URL: /prefect/api
+      PREFECT_SERVER_UI_SERVE_BASE: /prefect
+      PREFECT_SERVER_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      platform-postgres-init:
+        condition: service_completed_successfully
+      prefect-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4200/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    expose:
+      - "4200"
+
+  prefect-services:
+    image: prefecthq/prefect:3-python3.12
+    restart: unless-stopped
+    command: ["prefect", "server", "services", "start"]
+    environment:
+      <<: *prefect-services-environment
+    depends_on:
+      platform-postgres-init:
+        condition: service_completed_successfully
+      prefect-redis:
+        condition: service_healthy
+      prefect-server:
+        condition: service_healthy
+
+  prefect-init:
+    <<: *pipeline-runner
+    command: ["prefect", "work-pool", "create", "--type", "process", "--overwrite", "teoria-ingestion"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+
+  prefect-ai-init:
+    <<: *pipeline-runner
+    command: ["prefect", "work-pool", "create", "--type", "process", "--overwrite", "teoria-ai-extraction"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+
+  prefect-metadata-init:
+    profiles: ["metadata-orchestration"]
+    <<: *pipeline-runner
+    command: ["prefect", "work-pool", "create", "--type", "process", "--overwrite", "teoria-metadata"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+
+  prefect-deploy:
+    <<: *pipeline-runner
+    command: ["prefect", "deploy", "--all", "--prefect-file", "/app/pipelines/prefect.yaml"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-init:
+        condition: service_completed_successfully
+      prefect-ai-init:
+        condition: service_completed_successfully
+
+  prefect-metadata-deploy:
+    profiles: ["metadata-orchestration"]
+    image: teoria-pipelines-metadata:latest
+    build:
+      context: ../..
+      dockerfile: pipelines/Dockerfile
+      target: metadata-worker
+    command: ["prefect", "deploy", "--all", "--prefect-file", "/app/pipelines/prefect.metadata.yaml"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-metadata-init:
+        condition: service_completed_successfully
+      openmetadata-server:
+        condition: service_healthy
+
+  prefect-worker:
+    <<: *pipeline-runner
+    restart: unless-stopped
+    command: ["teoria-pipelines", "worker", "--pool", "teoria-ingestion"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+      TEORIA_PIPELINE_PATH: /app/pipelines
+      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
+      TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY: ${TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY:-}
+      TEORIA_CONNECTOR_MOLEG_LAW_API_KEY: ${TEORIA_CONNECTOR_MOLEG_LAW_API_KEY:-}
+      TEORIA_CONNECTOR_PPS_BID_RESULT_API_KEY: ${TEORIA_CONNECTOR_PPS_BID_RESULT_API_KEY:-${TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY:-}}
+      TEORIA_CONNECTOR_PPS_BID_NOTICE_API_KEY: ${TEORIA_CONNECTOR_PPS_BID_NOTICE_API_KEY:-}
+      TEORIA_CONNECTOR_PPS_INDUSTRY_API_KEY: ${TEORIA_CONNECTOR_PPS_INDUSTRY_API_KEY:-${TEORIA_SOURCE_PPS_USER_API_KEY:-}}
+      TEORIA_OBJECT_STORAGE_ENDPOINT: ${TEORIA_OBJECT_STORAGE_ENDPOINT:?set external TEORIA_OBJECT_STORAGE_ENDPOINT}
+      TEORIA_OBJECT_STORAGE_ACCESS_KEY: ${TEORIA_OBJECT_STORAGE_ACCESS_KEY:?set TEORIA_OBJECT_STORAGE_ACCESS_KEY}
+      TEORIA_OBJECT_STORAGE_SECRET_KEY: ${TEORIA_OBJECT_STORAGE_SECRET_KEY:?set TEORIA_OBJECT_STORAGE_SECRET_KEY}
+      TEORIA_OBJECT_STORAGE_BUCKET: ${TEORIA_OBJECT_STORAGE_BUCKET:-teoria}
+      TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS: ${TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS:-30}
+      TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS: ${TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS:-5}
+      TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS: ${TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS:-60}
+      TEORIA_PIPELINE_CONTRACT_REQUESTS_PER_SECOND: ${TEORIA_PIPELINE_CONTRACT_REQUESTS_PER_SECOND:-0.5}
+      TEORIA_PIPELINE_BID_NOTICE_ENRICHMENT_REQUESTS_PER_SECOND: ${TEORIA_PIPELINE_BID_NOTICE_ENRICHMENT_REQUESTS_PER_SECOND:-1}
+      TEORIA_PIPELINE_BID_DOCUMENT_RETENTION_DAYS: ${TEORIA_PIPELINE_BID_DOCUMENT_RETENTION_DAYS:-90}
+      TEORIA_PIPELINE_BID_DOCUMENT_PURGE_BATCH_SIZE: ${TEORIA_PIPELINE_BID_DOCUMENT_PURGE_BATCH_SIZE:-500}
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      prefect-deploy:
+        condition: service_completed_successfully
+
+  prefect-ai-worker:
+    image: teoria-pipelines-ai:latest
+    build:
+      context: ../..
+      dockerfile: pipelines/Dockerfile
+      target: ai-worker
+    restart: unless-stopped
+    command: ["prefect", "worker", "start", "--pool", "teoria-ai-extraction"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+      TEORIA_ENVIRONMENT: production
+      TEORIA_PIPELINE_PATH: /app/pipelines
+      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
+      TEORIA_OBJECT_STORAGE_ENDPOINT: ${TEORIA_OBJECT_STORAGE_ENDPOINT:?set external TEORIA_OBJECT_STORAGE_ENDPOINT}
+      TEORIA_OBJECT_STORAGE_ACCESS_KEY: ${TEORIA_OBJECT_STORAGE_ACCESS_KEY:?set TEORIA_OBJECT_STORAGE_ACCESS_KEY}
+      TEORIA_OBJECT_STORAGE_SECRET_KEY: ${TEORIA_OBJECT_STORAGE_SECRET_KEY:?set TEORIA_OBJECT_STORAGE_SECRET_KEY}
+      TEORIA_OBJECT_STORAGE_BUCKET: ${TEORIA_OBJECT_STORAGE_BUCKET:-teoria}
+      TEORIA_PIPELINE_BID_DOCUMENT_MAX_ATTEMPTS: ${TEORIA_PIPELINE_BID_DOCUMENT_MAX_ATTEMPTS:-3}
+      TEORIA_PIPELINE_BID_DOCUMENT_PARSE_MAX_ATTEMPTS: ${TEORIA_PIPELINE_BID_DOCUMENT_PARSE_MAX_ATTEMPTS:-3}
+      TEORIA_PIPELINE_BID_ELIGIBILITY_INPUT_MAX_CHARS: ${TEORIA_PIPELINE_BID_ELIGIBILITY_INPUT_MAX_CHARS:-30000}
+      CODEX_HOME: /home/teoria/.codex
+      TEORIA_CODEX_MODEL: ${TEORIA_CODEX_MODEL:-gpt-5.6-sol}
+      TEORIA_CODEX_FALLBACK_MODEL: ${TEORIA_CODEX_FALLBACK_MODEL:-gpt-5.6-terra}
+    volumes:
+      - codex-auth:/home/teoria/.codex
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      prefect-deploy:
+        condition: service_completed_successfully
+
+  prefect-metadata-worker:
+    profiles: ["metadata-orchestration"]
+    image: teoria-pipelines-metadata:latest
+    build:
+      context: ../..
+      dockerfile: pipelines/Dockerfile
+      target: metadata-worker
+    restart: unless-stopped
+    command: ["prefect", "worker", "start", "--pool", "teoria-metadata"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+      TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
+      OPENMETADATA_INGESTION_BOT_TOKEN: ${OPENMETADATA_INGESTION_BOT_TOKEN:-}
+      TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-2.0.5}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      prefect-metadata-deploy:
+        condition: service_completed_successfully
+      openmetadata-server:
+        condition: service_healthy
+
+  platform-check:
+    profiles: ["tools"]
+    image: teoria-platform-authoring:latest
+    build:
+      context: ../..
+      dockerfile: platform/Dockerfile
+      target: authoring
+    command: ["teoria", "validate", "/app/platform/registries"]
+    volumes:
+      - ../../platform/registries:/app/platform/registries:ro
+      - ../../platform/references:/app/platform/references:ro
+
+  runtime-api:
+    image: teoria-platform-runtime:latest
+    build:
+      context: ../..
+      dockerfile: platform/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    command: ["teoria-runtime-api"]
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_REGISTRY_PATH: /app/platform/registries
+      TEORIA_REGISTRY_REQUIRE_PUBLISHED: "true"
+      TEORIA_RUNTIME_ARTIFACT_STORE: /app/runtime_artifacts
+      TEORIA_RUNTIME_API_ROOT_PATH: /runtime-api
+      TEORIA_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
+      TEORIA_RUNTIME_CACHE_BACKEND: redis
+      TEORIA_RUNTIME_CACHE_URL: redis://runtime-redis:6379/0
+      TEORIA_RUNTIME_CACHE_PREFIX: teoria:runtime
+      TEORIA_POLICY_MODE: opa
+      TEORIA_OPA_URL: http://opa:8181
+      TEORIA_OPA_DECISION_PATH: teoria/authz/decision
+      TEORIA_RUNTIME_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
+      TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY: ${TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY:-}
+      TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY:-}
+      TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY:-}
+      TEORIA_SOURCE_PPS_USER_API_KEY: ${TEORIA_SOURCE_PPS_USER_API_KEY:-}
+      TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY: ${TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY:-}
+    volumes:
+      - runtime-artifacts:/app/runtime_artifacts:ro
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      runtime-redis:
+        condition: service_healthy
+      opa:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "8000"
+
+  admin-api:
+    image: teoria-platform-authoring:latest
+    build:
+      context: ../..
+      dockerfile: platform/Dockerfile
+      target: authoring
+    restart: unless-stopped
+    command: ["teoria-admin-api"]
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_REGISTRY_PATH: /app/platform/registries
+      TEORIA_ADMIN_API_ROOT_PATH: /admin-api
+      TEORIA_ADMIN_AUTH_MODE: ${TEORIA_ADMIN_AUTH_MODE:-disabled}
+      TEORIA_ADMIN_METADATA_PUBLIC_READ: ${TEORIA_ADMIN_METADATA_PUBLIC_READ:-false}
+      TEORIA_ADMIN_API_TOKEN: ${TEORIA_ADMIN_API_TOKEN:-}
+      TEORIA_ADMIN_API_ACTOR: ${TEORIA_ADMIN_API_ACTOR:-system:admin}
+      TEORIA_ADMIN_API_ROLES: ${TEORIA_ADMIN_API_ROLES:-metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner}
+      TEORIA_RUNTIME_ARTIFACT_STORE: /app/runtime_artifacts
+      TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
+      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
+      TEORIA_OPENMETADATA_ENABLED: ${TEORIA_OPENMETADATA_ENABLED:-true}
+      TEORIA_ASSESSMENT_ENABLED: ${TEORIA_ASSESSMENT_ENABLED:-false}
+      TEORIA_ASSESSMENT_MODEL_URL: ${TEORIA_ASSESSMENT_MODEL_URL:-}
+      TEORIA_ASSESSMENT_MODEL_NAME: ${TEORIA_ASSESSMENT_MODEL_NAME:-}
+      TEORIA_OPENMETADATA_BASE_URL: ${TEORIA_OPENMETADATA_BASE_URL:-http://openmetadata-server:8585/api}
+      TEORIA_OPENMETADATA_AUTH_TOKEN: ${TEORIA_OPENMETADATA_AUTH_TOKEN:-${OPENMETADATA_INGESTION_BOT_TOKEN:-}}
+      TEORIA_OPENMETADATA_DATABASE_SERVICE: ${TEORIA_OPENMETADATA_DATABASE_SERVICE:-teoria_postgresql}
+      TEORIA_CONTEXT_RUNTIME_API_URL: http://runtime-api:8000
+      TEORIA_CONTEXT_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
+      TEORIA_POLICY_MODE: opa
+      TEORIA_OPA_URL: http://opa:8181
+      TEORIA_OPA_DECISION_PATH: teoria/authz/decision
+    volumes:
+      - runtime-artifacts:/app/runtime_artifacts:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    expose:
+      - "8001"
+    depends_on:
+      app-postgres-migrate:
+        condition: service_completed_successfully
+      runtime-api:
+        condition: service_healthy
+      opa:
+        condition: service_healthy
+
+  metadata-assessment-worker:
+    image: teoria-platform-authoring:latest
+    build:
+      context: ../..
+      dockerfile: platform/Dockerfile
+      target: authoring
+    profiles: [intelligence]
+    restart: unless-stopped
+    command: ["teoria-metadata-assessment-worker"]
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_ASSESSMENT_ENABLED: ${TEORIA_ASSESSMENT_ENABLED:-false}
+      TEORIA_ASSESSMENT_MODEL_URL: ${TEORIA_ASSESSMENT_MODEL_URL:-}
+      TEORIA_ASSESSMENT_MODEL_NAME: ${TEORIA_ASSESSMENT_MODEL_NAME:-}
+      TEORIA_ASSESSMENT_MODEL_TOKEN: ${TEORIA_ASSESSMENT_MODEL_TOKEN:-}
+      TEORIA_ASSESSMENT_MODEL_TIMEOUT_SECONDS: ${TEORIA_ASSESSMENT_MODEL_TIMEOUT_SECONDS:-90}
+      TEORIA_ASSESSMENT_MODEL_MAX_TOKENS: ${TEORIA_ASSESSMENT_MODEL_MAX_TOKENS:-6000}
+      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
+      TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
+      TEORIA_OPENMETADATA_ENABLED: ${TEORIA_OPENMETADATA_ENABLED:-true}
+      TEORIA_OPENMETADATA_BASE_URL: ${TEORIA_OPENMETADATA_BASE_URL:-http://openmetadata-server:8585/api}
+      TEORIA_OPENMETADATA_AUTH_TOKEN: ${TEORIA_OPENMETADATA_AUTH_TOKEN:-${OPENMETADATA_INGESTION_BOT_TOKEN:-}}
+    depends_on:
+      app-postgres-migrate:
+        condition: service_completed_successfully
+
+  admin-ui:
+    image: teoria-platform-admin-ui:latest
+    build:
+      context: ../..
+      dockerfile: platform/admin_ui/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      admin-api:
+        condition: service_healthy
+    expose:
+      - "80"
+
+  openmetadata-search:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.0
+    profiles: ["metadata"]
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: ${OPENMETADATA_SEARCH_JAVA_OPTS:--Xms1g -Xmx1g}
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --fail http://localhost:9200/_cluster/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - openmetadata-search:/usr/share/elasticsearch/data
+
+  openmetadata-migrate:
+    image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-2.0.5}
+    profiles: ["metadata"]
+    restart: "no"
+    environment:
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_SCHEME: postgresql
+      DB_PARAMS: allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+      DB_USER: openmetadata_user
+      DB_USER_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata_local}
+      DB_HOST: platform-postgres
+      DB_PORT: 5432
+      OM_DATABASE: openmetadata_db
+      SEARCH_TYPE: elasticsearch
+      ELASTICSEARCH_HOST: openmetadata-search
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+      PIPELINE_SERVICE_CLIENT_ENABLED: "false"
+      AUTHENTICATION_PROVIDER: basic
+      AUTHORIZER_CLASS_NAME: org.openmetadata.service.security.DefaultAuthorizer
+    entrypoint: ["/bin/bash", "bootstrap/openmetadata-ops.sh", "migrate"]
+    depends_on:
+      platform-postgres-init:
+        condition: service_completed_successfully
+      openmetadata-search:
+        condition: service_healthy
+
+  openmetadata-server:
+    image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-2.0.5}
+    profiles: ["metadata"]
+    restart: unless-stopped
+    environment:
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_SCHEME: postgresql
+      DB_PARAMS: allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+      DB_USER: openmetadata_user
+      DB_USER_PASSWORD: ${OPENMETADATA_DB_PASSWORD:-openmetadata_local}
+      DB_HOST: platform-postgres
+      DB_PORT: 5432
+      OM_DATABASE: openmetadata_db
+      SEARCH_TYPE: elasticsearch
+      ELASTICSEARCH_HOST: openmetadata-search
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+      PIPELINE_SERVICE_CLIENT_ENABLED: "false"
+      AUTHENTICATION_PROVIDER: basic
+      AUTHORIZER_CLASS_NAME: org.openmetadata.service.security.DefaultAuthorizer
+    depends_on:
+      openmetadata-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8586'"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+    ports:
+      - "${OPENMETADATA_HTTP_PORT:-8585}:8585"
+
+  # One-shot ingestion runner. Scheduling and retries belong to Prefect; this
+  # service deliberately contains no Airflow control plane.
+  openmetadata-ingestion-job:
+    image: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-2.0.5}
+    build:
+      context: ../..
+      dockerfile: deploy/compose/openmetadata/Dockerfile
+      args:
+        OPENMETADATA_VERSION: ${OPENMETADATA_VERSION:-2.0.5}
+    profiles: ["metadata-ingestion"]
+    restart: "no"
+    environment:
+      TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
+      OPENMETADATA_INGESTION_BOT_TOKEN: ${OPENMETADATA_INGESTION_BOT_TOKEN:-}
+    entrypoint: ["metadata"]
+    command: ["ingest", "-c", "/config/teoria-postgres.yaml"]
+    depends_on:
+      openmetadata-server:
+        condition: service_healthy
+
+  pipelines-check:
+    profiles: ["tools"]
+    build:
+      context: ../..
+      dockerfile: pipelines/Dockerfile
+      target: check
+    command: ["teoria-pipelines", "validate-integration", "/app/pipelines", "--platform-registries", "/app/platform/registries"]
+    volumes:
+      - ../../pipelines/connectors:/app/pipelines/connectors:ro
+      - ../../pipelines/definitions:/app/pipelines/definitions:ro
+      - ../../pipelines/verification_cases:/app/pipelines/verification_cases:ro
+      - ../../pipelines/references:/app/pipelines/references:ro
+      - ../../platform/registries:/app/platform/registries:ro
+      - ../../platform/references:/app/platform/references:ro
+
+  mcp:
+    profiles: ["mcp"]
+    image: teoria-mcp:latest
+    build:
+      context: ../..
+      dockerfile: mcp/Dockerfile
+    command: ["teoria-mcp"]
+    stdin_open: true
+    environment:
+      TEORIA_MCP_RUNTIME_MODE: remote
+      TEORIA_MCP_RUNTIME_API_URL: http://runtime-api:8000
+      TEORIA_MCP_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
+      TEORIA_MCP_RUNTIME_TIMEOUT_SECONDS: ${TEORIA_MCP_RUNTIME_TIMEOUT_SECONDS:-150}
+      TEORIA_MCP_RUNTIME_MAX_ATTEMPTS: ${TEORIA_MCP_RUNTIME_MAX_ATTEMPTS:-3}
+      TEORIA_MCP_RUNTIME_RETRY_BACKOFF_SECONDS: ${TEORIA_MCP_RUNTIME_RETRY_BACKOFF_SECONDS:-0.25}
+    depends_on:
+      runtime-api:
+        condition: service_healthy
+
+volumes:
+  postgres:
+    name: teoria_data-db
+  platform-postgres:
+    name: teoria_platform-db
+  prefect-redis:
+  runtime-redis:
+  runtime-artifacts:
+    name: teoria_runtime-artifacts
+  opa-bundles:
+    name: teoria_opa-bundles
+  opa-signing-keys:
+    name: teoria_opa-signing-keys
+  opa-state:
+    name: teoria_opa-state
+  codex-auth:
+  openmetadata-search:

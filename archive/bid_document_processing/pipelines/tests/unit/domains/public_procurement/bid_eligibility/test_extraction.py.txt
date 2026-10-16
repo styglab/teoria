@@ -1,0 +1,510 @@
+import json
+from pathlib import Path
+from subprocess import CompletedProcess
+from unittest.mock import MagicMock, patch
+import pytest
+from teoria_pipelines.domains.public_procurement.bid_eligibility.tasks import (
+    _ensure_codex_authenticated,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.extraction import (
+    _skill_instructions,
+    _runtime_extraction_instructions,
+    _is_transient_codex_failure,
+    _input_fingerprint,
+    _allocate_document_char_budgets,
+    _deterministic_document_facts,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.tasks import (
+    extract_bid_eligibility_notice,
+)
+from teoria_pipelines.domains.public_procurement.bid_eligibility.repository import (
+    _filter_covered_unavailable_documents,
+    eligibility_requires_review,
+)
+
+
+PIPELINES = Path(__file__).resolve().parents[5]
+
+from .cases import _simple_document_inputs
+
+
+def test_document_budget_reuses_capacity_left_by_short_documents() -> None:
+    documents = [
+        {"content": {"blocks": [{"text": "가" * 2_000}]}},
+        {"content": {"blocks": [{"text": "나" * 11_000}]}},
+        {"content": {"blocks": [{"text": "다" * 10_000}]}},
+    ]
+
+    assert _allocate_document_char_budgets(documents, 30_000) == [2_000, 11_000, 10_000]
+
+
+def test_document_budget_stays_within_notice_cap_for_large_documents() -> None:
+    documents = [
+        {"content": {"blocks": [{"text": "가" * 50_000}]}},
+        {"content": {"blocks": [{"text": "나" * 10_000}]}},
+    ]
+
+    budgets = _allocate_document_char_budgets(documents, 30_000)
+
+    assert sum(budgets) <= 30_000
+    assert budgets[0] > budgets[1]
+
+
+def test_codex_authentication_uses_cached_chatgpt_login() -> None:
+    with patch(
+        "teoria_pipelines.domains.public_procurement.bid_eligibility.tasks.subprocess.run",
+        return_value=CompletedProcess(["codex", "login", "status"], 0),
+    ) as run:
+        _ensure_codex_authenticated()
+
+    assert run.call_args.args[0] == ["codex", "login", "status"]
+
+
+def test_codex_authentication_failure_has_login_instruction() -> None:
+    with patch(
+        "teoria_pipelines.domains.public_procurement.bid_eligibility.tasks.subprocess.run",
+        return_value=CompletedProcess(["codex", "login", "status"], 1),
+    ):
+        try:
+            _ensure_codex_authenticated()
+        except RuntimeError as exc:
+            assert "codex login --device-auth" in str(exc)
+        else:
+            raise AssertionError("missing Codex login must fail")
+
+
+def test_simple_document_eligibility_uses_deterministic_fast_path() -> None:
+    text = (
+        "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하고, "
+        "중소기업확인서를 소지하여야 한다."
+    )
+
+    facts = _deterministic_document_facts(_simple_document_inputs(text))
+
+    assert facts is not None
+    assert [
+        (item["type"], item["value"]["text"]) for item in facts["requirements"]
+    ] == [
+        ("industry_license", "정보통신공사업"),
+        ("participation_region", "서울특별시"),
+        ("certificate", "중소기업확인서"),
+    ]
+    assert all(item["evidence"][0]["excerpt"] == text for item in facts["requirements"])
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하여야 한다.",
+        "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하고, 중소기업확인서를 소지하여야 한다. 공동수급은 불허한다.",
+    ],
+)
+def test_simple_document_fast_path_falls_back_for_missing_or_extra_conditions(
+    text: str,
+) -> None:
+    assert _deterministic_document_facts(_simple_document_inputs(text)) is None
+
+
+def test_simple_document_fast_path_falls_back_when_other_sources_exist() -> None:
+    inputs = _simple_document_inputs(
+        "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하고, "
+        "중소기업확인서를 소지하여야 한다."
+    )
+    inputs["structured_requirements"] = [{"source_id": "region:1"}]
+
+    assert _deterministic_document_facts(inputs) is None
+
+
+def test_extraction_review_rolls_up_requirement_and_unresolved_state() -> None:
+    notice = {"coverage": {"requires_review": False}}
+    result = {
+        "requirements": [{"review_status": "extracted"}],
+        "unresolved_candidates": [],
+    }
+    assert not eligibility_requires_review(notice, result)
+
+    result["requirements"][0]["review_status"] = "needs_review"
+    assert eligibility_requires_review(notice, result)
+    result["requirements"][0]["review_status"] = "extracted"
+    result["unresolved_candidates"] = [
+        {
+            "text": "추가 확인",
+            "review_reason": "referenced_document_missing",
+            "blocks_qualification": True,
+        }
+    ]
+    assert eligibility_requires_review(notice, result)
+    result["unresolved_candidates"][0]["blocks_qualification"] = False
+    assert not eligibility_requires_review(notice, result)
+    result["unresolved_candidates"] = []
+    result["requirements"][0]["failure_effect"] = "needs_review"
+    assert eligibility_requires_review(notice, result)
+    result["requirements"][0]["failure_effect"] = "cannot_bid"
+    result["requirements"][0]["proof_requirements"] = [
+        {"review_status": "needs_review"}
+    ]
+    assert eligibility_requires_review(notice, result)
+
+
+def test_extraction_skill_separates_eligibility_stages_and_proofs() -> None:
+    skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
+    with patch(
+        "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT",
+        skill_root,
+    ):
+        policy = _skill_instructions()
+
+    assert "bid entry, qualification review, or contracting" in policy
+    assert "offered-product specifications and conformity" in policy
+    assert "vehicle allocation" in policy
+    assert "submission checklist" in policy
+    assert "requested proof" in policy
+    assert "unresolved_candidates" in policy
+    assert "semantic normalization pass" in policy
+    assert "never keep both a known-type requirement and a `custom`" in policy
+    assert "`공동수급 불허` and `하도급 불허`" in policy
+    assert "electronic certificate registration" in policy
+    assert "`consortium_representative`" in policy
+    assert "직접생산확인증명서 as `certificate`" in policy
+    assert "never by source text alone" in policy
+    assert "logic.placements" in policy
+    assert "Pipeline, not the model" in policy
+    assert "proof_requirements" in policy
+    assert "qualification_review" in policy
+    assert "failure_effect" in policy
+    assert "조세포탈" in policy
+
+
+def test_runtime_extraction_policy_removes_duplicate_skill_overview() -> None:
+    skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
+    with patch(
+        "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT",
+        skill_root,
+    ):
+        full = _skill_instructions()
+        runtime = _runtime_extraction_instructions()
+
+    assert len(runtime) < len(full) * 0.75
+    assert "Source priority" in runtime
+    assert "structured API" in runtime
+    assert "qualification_review" in runtime
+
+
+def test_runtime_prompt_keeps_explicit_eligibility_score_cutoff() -> None:
+    source = Path(
+        PIPELINES
+        / "src/teoria_pipelines/domains/public_procurement/bid_eligibility/extraction.py"
+    ).read_text()
+
+    assert "적격업체 여부를 직접 결정하는 명시적 최저 총점" in source
+
+
+def test_only_capacity_and_rate_limit_errors_are_transient() -> None:
+    assert _is_transient_codex_failure(
+        "Selected model is at capacity. Please try again"
+    )
+    assert _is_transient_codex_failure("429 Too Many Requests: rate limit exceeded")
+    assert not _is_transient_codex_failure("invalid output schema")
+
+
+def test_extraction_fingerprint_changes_with_codex_model(monkeypatch) -> None:
+    notice = {
+        "notice_hash": "notice-hash",
+        "documents": [],
+        "unavailable_documents": [],
+        "licenses": [],
+        "regions": [],
+        "consortiums": [],
+    }
+    monkeypatch.setenv("TEORIA_CODEX_MODEL", "gpt-5.6-luna")
+    luna = _input_fingerprint(notice)
+    monkeypatch.setenv("TEORIA_CODEX_MODEL", "gpt-5.6-terra")
+    terra = _input_fingerprint(notice)
+
+    assert luna != terra
+
+    monkeypatch.setenv("TEORIA_CODEX_MODEL", "gpt-5.6-luna")
+    monkeypatch.setenv("TEORIA_CODEX_FALLBACK_MODEL", "gpt-5.6-terra")
+    with_fallback = _input_fingerprint(notice)
+    monkeypatch.setenv("TEORIA_CODEX_FALLBACK_MODEL", "gpt-5.6-sol")
+    assert with_fallback != _input_fingerprint(notice)
+
+
+def test_extraction_schema_distinguishes_consortium_representative_scope() -> None:
+    schema_path = (
+        PIPELINES.parent / ".agents/skills/extract-bid-eligibility/references/"
+        "eligibility_extraction.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    scopes = schema["properties"]["requirements"]["items"]["properties"][
+        "holder_scope"
+    ]["enum"]
+
+    assert "representative" in scopes
+    assert "consortium_representative" in scopes
+
+
+def test_unavailable_renditions_are_covered_transitively_by_parsed_pdf() -> None:
+    documents = [("pdf", "공고문.pdf", "pdf-checksum", "parsed-key")]
+    unavailable = [
+        (
+            "hwp",
+            "공고문.hwp",
+            "stored",
+            3,
+            None,
+            "unsupported",
+            3,
+            "failed",
+            "hwp-checksum",
+        ),
+        (
+            "standard",
+            "표준공고서",
+            "stored",
+            3,
+            None,
+            "unsupported",
+            3,
+            "failed",
+            "hwp-checksum",
+        ),
+        (
+            "other",
+            "별첨.hwp",
+            "stored",
+            3,
+            None,
+            "unsupported",
+            3,
+            "failed",
+            "other-checksum",
+        ),
+    ]
+
+    assert _filter_covered_unavailable_documents(documents, unavailable) == [
+        unavailable[2]
+    ]
+
+
+@pytest.mark.asyncio
+async def test_write_free_extraction_never_persists_outputs_or_failures() -> None:
+    store = MagicMock()
+    storage = MagicMock()
+    storage.get_bytes.return_value = json.dumps(
+        {
+            "blocks": [
+                {"block_id": "b1", "page": 1, "section": "안내", "text": "일반 안내"}
+            ],
+        }
+    ).encode()
+    settings = MagicMock(bid_eligibility_input_max_chars=120_000)
+    notice = {
+        "notice_number": "sample",
+        "notice_order": "000",
+        "notice_hash": "hash",
+        "bid_deadline_at": None,
+        "documents": [
+            {
+                "document_id": "doc",
+                "file_name": "공고문.pdf",
+                "checksum": "checksum",
+                "parsed_object_key": "parsed.json",
+            }
+        ],
+        "unavailable_documents": [],
+        "licenses": [],
+        "regions": [],
+        "consortiums": [],
+        "coverage": {
+            "completeness": "complete",
+            "requires_review": False,
+            "total_document_count": 1,
+            "parsed_document_count": 1,
+            "unavailable_document_count": 0,
+            "structured_requirement_count": 0,
+        },
+    }
+    process = CompletedProcess(
+        args=[],
+        returncode=0,
+        stdout=json.dumps(
+            {
+                "schema_version": "1.4.0",
+                "requirements": [],
+                "unresolved_candidates": [],
+            }
+        ),
+        stderr="",
+    )
+    skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
+    with (
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction._resources",
+            return_value=(store, storage),
+        ),
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.bootstrap_pipeline_settings",
+            return_value=settings,
+        ),
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.subprocess.run",
+            return_value=process,
+        ),
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT",
+            skill_root,
+        ),
+    ):
+        result = await extract_bid_eligibility_notice.fn(notice, persist=False)
+
+    assert result["requirements"] == []
+    store.save_eligibility_failure.assert_not_called()
+    store.save_eligibility_extraction.assert_not_called()
+    storage.put_bytes.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_simple_document_extraction_skips_codex_and_compiles_result() -> None:
+    text = (
+        "입찰참가자는 정보통신공사업(코드 0036) 등록업체로서 서울특별시에 소재하고, "
+        "중소기업확인서를 소지하여야 한다."
+    )
+    store = MagicMock()
+    storage = MagicMock()
+    storage.get_bytes.return_value = json.dumps(
+        {
+            "blocks": [
+                {"block_id": "b1", "page": 1, "section": "입찰참가자격", "text": text}
+            ],
+        }
+    ).encode()
+    settings = MagicMock(bid_eligibility_input_max_chars=120_000)
+    notice = {
+        "notice_number": "simple",
+        "notice_order": "000",
+        "notice_hash": "hash",
+        "bid_deadline_at": None,
+        "documents": [
+            {
+                "document_id": "doc",
+                "file_name": "공고문.pdf",
+                "checksum": "checksum",
+                "parsed_object_key": "parsed.json",
+            }
+        ],
+        "unavailable_documents": [],
+        "licenses": [],
+        "regions": [],
+        "consortiums": [],
+        "coverage": {
+            "completeness": "complete",
+            "requires_review": False,
+            "total_document_count": 1,
+            "parsed_document_count": 1,
+            "unavailable_document_count": 0,
+            "structured_requirement_count": 0,
+        },
+    }
+    skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
+    with (
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction._resources",
+            return_value=(store, storage),
+        ),
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.bootstrap_pipeline_settings",
+            return_value=settings,
+        ),
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.subprocess.run"
+        ) as codex,
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT",
+            skill_root,
+        ),
+    ):
+        result = await extract_bid_eligibility_notice.fn(notice, persist=False)
+
+    codex.assert_not_called()
+    assert [item["type"] for item in result["requirements"]] == [
+        "industry_license",
+        "participation_region",
+        "certificate",
+    ]
+    assert result["expression"]["operator"] == "all"
+
+
+@pytest.mark.asyncio
+async def test_api_only_extraction_skips_codex_and_uses_structured_compiler() -> None:
+    store = MagicMock()
+    storage = MagicMock()
+    settings = MagicMock(bid_eligibility_input_max_chars=120_000)
+    notice = {
+        "notice_number": "api-only",
+        "notice_order": "000",
+        "notice_hash": "hash",
+        "bid_deadline_at": "2026-08-27T16:00:00+00:00",
+        "documents": [],
+        "unavailable_documents": [],
+        "licenses": [
+            {
+                "group": "1",
+                "sequence": "1",
+                "name": "학술.연구용역/1169",
+                "permitted_industries": [],
+                "main_fields": None,
+                "business_type": "용역",
+                "source_hash": "license-hash",
+            }
+        ],
+        "regions": [],
+        "consortiums": [
+            {
+                "sequence": "method",
+                "name": "(전자)공동이행",
+                "source_hash": "consortium-hash",
+            }
+        ],
+        "coverage": {
+            "completeness": "api_only",
+            "requires_review": False,
+            "total_document_count": 0,
+            "parsed_document_count": 0,
+            "unavailable_document_count": 0,
+            "structured_requirement_count": 2,
+        },
+    }
+    skill_root = PIPELINES.parent / ".agents/skills/extract-bid-eligibility"
+    with (
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction._resources",
+            return_value=(store, storage),
+        ),
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.bootstrap_pipeline_settings",
+            return_value=settings,
+        ),
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.subprocess.run"
+        ) as codex,
+        patch(
+            "teoria_pipelines.domains.public_procurement.bid_eligibility.extraction.SKILL_ROOT",
+            skill_root,
+        ),
+    ):
+        result = await extract_bid_eligibility_notice.fn(notice, persist=False)
+
+    codex.assert_not_called()
+    assert [
+        (item["type"], item["operator"], item["reference_date_type"])
+        for item in result["requirements"]
+    ] == [
+        ("industry_license", "exists", "qualification_registration_deadline"),
+        ("consortium", "equals", "qualification_registration_deadline"),
+    ]
+    assert result["requirements"][0]["value"]["attributes"][-2:] == [
+        {"name": "industry_name", "value": "학술.연구용역"},
+        {"name": "industry_code", "value": "1169"},
+    ]
+    assert result["expression"]["operator"] == "all"

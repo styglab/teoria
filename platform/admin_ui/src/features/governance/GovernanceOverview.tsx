@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/workspace/WorkspaceLayout";
-import { adminApi, type MetadataEntity } from "../../api/admin";
+import { metadataApi, type MetadataEntity } from "../../api/metadata";
 
 type Coverage = { total: number; missingDescription: number; missingOwner: number; missingTags: number };
 
@@ -16,7 +16,7 @@ export function GovernanceOverview() {
       const visited = new Set<string>();
       let after: string | undefined;
       do {
-        const page = await adminApi.metadataTables({ limit: 100, after });
+        const page = await metadataApi.metadataTables({ limit: 100, after });
         if (!active) return;
         assets.push(...page.items);
         after = page.after || undefined;

@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: teoria/nginx:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env: []
+        ports:
+        - containerPort: 80
+        readinessProbe:
+          httpGet: &id001
+            path: /health
+            port: 80
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 90
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+spec:
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: teoria
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: 'true'
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - teoria.invalid
+    secretName: teoria-tls
+  rules:
+  - host: teoria.invalid
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nginx
+            port:
+              number: 80

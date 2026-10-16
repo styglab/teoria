@@ -1,0 +1,110 @@
+name: Deploy K3s on EC2
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: k3s-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: runtime, dockerfile: platform/Dockerfile, target: runtime}
+          - {name: authoring, dockerfile: platform/Dockerfile, target: authoring}
+          - {name: admin-ui, dockerfile: platform/admin_ui/Dockerfile}
+          - {name: nginx, dockerfile: deploy/compose/nginx/Dockerfile}
+          - {name: pipelines, dockerfile: pipelines/Dockerfile, target: kubernetes-worker}
+          - {name: metadata-worker, dockerfile: pipelines/Dockerfile, target: metadata-worker}
+          - {name: opa, dockerfile: deploy/compose/opa/Dockerfile, target: runtime}
+          - {name: opa-builder, dockerfile: deploy/compose/opa/Dockerfile, target: bundle_builder}
+          - {name: ingestion, dockerfile: deploy/compose/openmetadata/Dockerfile}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Resolve commit image tag
+        run: |
+          echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          echo "REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target || '' }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:${{ env.REVISION }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Deploy committed manifests through SSH
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EC2_HOST: ${{ vars.EC2_HOST }}
+          EC2_USER: ${{ vars.EC2_USER }}
+          EC2_SSH_PORT: ${{ vars.EC2_SSH_PORT || '22' }}
+          PUBLIC_HOST: ${{ vars.TEORIA_PUBLIC_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.EC2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          revision=$(git rev-parse HEAD)
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [ "$revision" != "$latest" ]; then
+            echo 'A newer main commit exists; skipping this superseded deployment.'
+            exit 0
+          fi
+          for variable in EC2_HOST EC2_USER PUBLIC_HOST SSH_PRIVATE_KEY SSH_KNOWN_HOSTS; do
+            if [ -z "${!variable}" ]; then echo "Configure production setting: $variable" >&2; exit 1; fi
+          done
+          [[ "$EC2_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$EC2_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$EC2_SSH_PORT" =~ ^[0-9]+$ ]]
+          [[ "$PUBLIC_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]]
+          umask 077
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/ec2_key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
+          trap 'rm -f "$RUNNER_TEMP/ec2_key" "$RUNNER_TEMP/known_hosts"' EXIT
+          ssh_args=(-i "$RUNNER_TEMP/ec2_key" -o "UserKnownHostsFile=$RUNNER_TEMP/known_hosts" -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=20)
+          target="$EC2_USER@$EC2_HOST"
+          ssh "${ssh_args[@]}" -p "$EC2_SSH_PORT" "$target" "mkdir -p ~/.teoria/releases/$revision"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/k3s_release.tar.gz" HEAD deploy/k3s
+          scp "${ssh_args[@]}" -P "$EC2_SSH_PORT" "$RUNNER_TEMP/k3s_release.tar.gz" "$target:.teoria/releases/$revision/release.tar.gz"
+          image_prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
+          ssh "${ssh_args[@]}" -p "$EC2_SSH_PORT" "$target" \
+            "cd ~/.teoria/releases/$revision && tar -xzf release.tar.gz && bash deploy/k3s/deploy.sh '$image_prefix' '$revision' '$PUBLIC_HOST'"
