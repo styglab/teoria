@@ -13,6 +13,9 @@
 - [Ontology와 Binding](platform/ontology.md): 작성·검토·게시, Stable Concept와 immutable bundle
 - [Metadata 관리](platform/metadata/asset_assessment.md): OpenMetadata 조회, AI 제안·검토·적용·복구
 - [Admin UI](platform/admin_ui.md)와 [MCP](mcp/gateway.md): 관리·실행 기능의 사용자 진입점
+- HTTP·DB native async 실행과 연결 상한: 계산·검증은 일반 함수로 유지하고
+  승인·적용·checkpoint 순서와 취소 시 rollback을 보존한다. 로컬 Compose 반영과 실제
+  실행은 [2026-10-16 검증](verification/async_deployment_collection_2026_10_16.md)에서 확인했다.
 
 구현 파일·이관 이력은 각 프로젝트의 개발 안내와 Git 이력에서 확인한다.
 실제 질문과 배포 환경의 검증 범위는 [검증 기록](verification/index.md)에 남긴다.
@@ -99,6 +102,8 @@ Capability 목록을 그대로 노출하는 수준을 넘어 semantic discovery�
 - Data/Control plane의 독립 backup·restore 검증
 - Kubernetes workload와 secret 계약 완성
 - suggestion 품질 평가셋과 승인 성과 측정
+- 수집 처리량과 데이터 완전성을 분리한 운영 지표, 개찰 보강 잔량·부분완료·
+  조회 실패 및 계약 미해결 구간의 복구. 현재 잔량은 날짜별 검증 기록으로 관리한다.
 
 ## 의도적으로 미루는 항목
 

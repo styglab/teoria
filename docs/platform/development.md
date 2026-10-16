@@ -53,7 +53,7 @@ PostgreSQL은 `persistence/postgres.py`의 `connect()`와 Psycopg `AsyncConnecti
 사용한다. 연결을 빠져나가면 성공 시 commit, 예외·취소 시 rollback하고 연결을 닫는다.
 한 transaction의 SQL 실행 순서와 승인·효과 기록 경계를 유지한다.
 
-`TEORIA_DATABASE_CONCURRENCY_LIMIT`는 event loop별·DB별 활성 연결 상한이며 기본값은
+`TEORIA_DATABASE_CONCURRENCY_LIMIT`는 event loop별·접속 URL별 활성 연결 상한이며 기본값은
 10이다. 프로세스가 여러 개면 각 프로세스의 상한이 합산되므로 DB 전체 연결 예산에
 맞춰 설정한다. 연결을 재사용하는 pool은 아니며 연결을 요청·Task 사이에 공유하지 않는다.
 

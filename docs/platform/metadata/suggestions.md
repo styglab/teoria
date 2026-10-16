@@ -72,7 +72,10 @@ Admin OpenAPI를 따른다. 목록·단건·비교·이력 조회에는 관리�
 `admin/intelligence_api.py`는 인증·역할 검사와 HTTP 오류 변환을 담당한다.
 `intelligence/suggestions/service.py`는 자산 기준 제안 조회, 원천 대상 비교,
 제안 생성·조회·적용 이력과 재시도 조건을 소유한다. OpenMetadata 자산 식별 확인과
-대상 참조 구성은 서비스에서 수행하며, 비동기 경로의 동기 DB 조회는 thread pool에서 실행한다.
+대상 참조 구성은 서비스에서 수행한다. API → Service → Repository → PostgreSQL은
+native async 호출을 `await`로 연결한다. 승인·실행권 선점·효과 시작·성공·적용 결과 기록의
+순서를 유지하며 같은 transaction의 SQL을 무분별하게 병렬 실행하지 않는다.
+연결 상한과 취소 처리는 [Platform 개발 안내](../development.md#io와-동시-실행)를 따른다.
 
 현재 화면은 [Admin UI](../admin_ui.md), Codex 제출 경로는
 [진단 Skills](../../skills/analyze_metadata_asset.md)를 참고한다.

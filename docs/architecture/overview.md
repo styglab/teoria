@@ -42,8 +42,10 @@ source이며 `CapabilityTargetRef` Binding으로 Ontology와 연결한다.
 
 ## 실행과 데이터 흐름
 
-- Pipeline은 Provider API를 지속 수집하고 raw와 정규 데이터를 모두 저장한 뒤
-  checkpoint를 갱신한다.
+- Pipeline은 Provider API를 지속 수집하고 정의된 원본 보존·정규 적재 단계를 완료한 뒤
+  checkpoint를 갱신한다. 계약·공고·업종은 Raw를 보존하고, 법령은 전용 XML 보관 구조를
+  사용한다. 낙찰·개찰은 `retain_raw_records: false` 계약에 따라 성공 응답 본문을
+  보존하지 않으며 정규 행의 원천 hash와 실행 이력을 남긴다.
 - Pipeline의 Flow·Task·client·정규화는 업무 기능별 패키지에 모은다. 실행 기록과
   checkpoint Task는 `execution/`, 저장은 `persistence/`, OpenMetadata ingestion
   Job orchestration은 `metadata/`가 소유한다.
@@ -64,6 +66,13 @@ source이며 `CapabilityTargetRef` Binding으로 Ontology와 연결한다.
   집계는 공공조달 query handler가 담당한다.
 
 ## 저장소와 배포
+
+HTTP·DB I/O는 API·Service·Repository와 Prefect DB Task까지 native async로 연결한다.
+계산·정규화·검증은 일반 함수를 사용한다. DB 연결은 event loop별·접속 URL별로 제한하며
+같은 transaction의 순서와 승인·적용·checkpoint 경계는 유지한다. 연결을 빠져나가면
+성공 시 commit, 예외·취소 시 rollback 후 닫는다. 자세한 상한과 구현 위치는
+[Platform](../platform/development.md#io와-동시-실행)과
+[Pipelines](../pipelines/development.md#io와-동시-실행) 개발 안내를 따른다.
 
 로컬 Compose는 Data Plane인 `teoria_data`를 별도 PostgreSQL에 두고,
 `teoria_app`, `prefect`, `openmetadata_db`는 database와 role을 분리해

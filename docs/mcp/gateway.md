@@ -1,6 +1,8 @@
 # Teoria MCP Gateway
 
-`mcp/`는 Registry Capability를 MCP Tool로 노출한다. Tool 이름은 Capability ID이며 입력 schema는 Registry에서 생성한다.
+`mcp/`는 Runtime API의 공개 Capability discovery를 MCP Tool로 노출한다.
+Tool 이름은 Capability ID이며 입력 schema는 배포된 Runtime discovery 응답에서 받는다.
+MCP 프로세스가 Registry 원본이나 DB를 직접 읽지 않는다.
 
 ## 코드 위치
 
@@ -32,9 +34,12 @@ cwd = "/absolute/path/to/teoria"
 
 [mcp_servers.teoria.env]
 TEORIA_MCP_RUNTIME_MODE = "remote"
-TEORIA_MCP_RUNTIME_API_URL = "http://runtime-api:8000"
+TEORIA_MCP_RUNTIME_API_URL = "http://localhost:8081/runtime-api"
 TEORIA_MCP_RUNTIME_API_TOKEN = "development-token"
 ```
+
+위 URL은 호스트에서 실행하는 예다. Compose 내부 MCP 컨테이너는
+`http://runtime-api:8000`을 사용하고 token 예시는 실제 배포의 secret으로 교체한다.
 
 운영 구조는 `AI Client → MCP Gateway → Runtime HTTP API`다. MCP는 Registry, Source 키와 DB 권한을 갖지 않는다.
 

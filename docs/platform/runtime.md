@@ -84,3 +84,10 @@ artifact 검증·구성은 `registry/artifact.py`와 관련 모듈, App DB snaps
 `registry/artifact_snapshot.py`, 명령은 `cli/registry.py`에서 찾는다.
 Runtime cache는 `runtime/cache/`가 소유한다. Redis 장애는 실행을 막지 않고 캐시 없이
 동작한다. 정책 bundle 빌드·서명·서비스 시작 순서는 [Compose](../deployment/compose.md)를 따른다.
+
+Source DB 실행과 시장 분석 reader는 native async PostgreSQL을 사용한다.
+HTTP부터 Repository까지 `await`를 연결하고 분류 계층 보강 같은 내부 SQL helper도
+같은 연결·transaction 안에서 완료를 기다린다. 동시 실행·취소의 기준은
+[Platform 개발 안내](development.md#io와-동시-실행)를 따른다.
+실제 기관 프로필·활동 검색과 분류 보강 경로의 배포 검증은
+[2026-10-16 검증 기록](../verification/async_deployment_collection_2026_10_16.md)에 있다.

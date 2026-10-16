@@ -22,6 +22,14 @@ Provider 원본은 `ingestion.raw_provider_payloads`에 hash 기준으로 한 �
 실행 감사는 `ingestion.pipeline_runs`, 업무 데이터는 `public_procurement`와
 `legal_information` 스키마가 소유한다. 법령 XML은 전용 raw·snapshot 구조를 사용한다.
 
+원본 보존 여부는 `definitions/`의 `provenance.retain_raw_records`와 실제 Flow를
+함께 확인한다. 현재 계약·입찰공고·업종 수집은 Raw를 보존하고, 법령은 전용 XML
+보관 구조를 사용한다. 낙찰·개찰은 `retain_raw_records: false`이며 성공 응답 본문은
+정규화·검증 후 버리고 정규 행의 `source_record_hash`와 실행 감사를 남긴다.
+따라서 이 경로의 `raw_record_count=0`만으로 수집 결과가 비어 있다고 판단하지 않는다.
+낙찰·참여·공고 결과의 정규 처리 건수와 보강 큐의 검증 상태를 함께 확인한다.
+이 경로는 원본 본문을 통한 사후 재현을 제공하지 않는다.
+
 Pipeline writer와 Runtime reader의 role을 분리한다. Runtime에는 필요한 정규 relation과
 read view만 허용하고 `ingestion` 작업 테이블·raw 권한을 확장하지 않는다.
 OpenMetadata entity·설명·소유자·태그를 Data DB에 복제하지 않는다.

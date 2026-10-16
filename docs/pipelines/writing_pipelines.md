@@ -200,7 +200,7 @@ Python에서 `.with_options(...)`로 Extract와 Load Task에 적용한다.
 | 같은 배포의 동시 실행 | 한 번에 하나, 추가 실행은 대기 |
 | 정기 실행 | 한국 시간 매일 22:00, 처음에는 비활성화 |
 
-Prefect timeout만으로 실행 중인 동기 SQL이 즉시 종료된다고 가정하지 않는다.
+DB Task는 native async 연결을 사용한다. Prefect timeout 외에도 DB 자체의 실행 제한을 둔다.
 코드에도 연결 제한 10초, SQL 실행 제한 30초, 적재 잠금 대기 제한 5초를 둔다.
 실제 쿼리 시간에 맞춰 조정한다.
 

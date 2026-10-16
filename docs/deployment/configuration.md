@@ -13,6 +13,7 @@ uv sync --locked --all-packages --all-groups
 |---|---|
 | Platform·Runtime·Admin | `platform/src/teoria/settings.py` |
 | Pipelines | `pipelines/src/teoria_pipelines/settings.py` |
+| DB 연결 상한 | Platform `persistence/postgres.py`, Pipelines `persistence/connection.py`의 환경변수 |
 | MCP | `mcp/src/teoria_mcp/settings.py` |
 | Compose 서비스·포트·이미지·필수 인증 | `deploy/compose/compose.yaml`, `.env.example` |
 | EC2 K3s·GitHub CD | `deploy/k3s/`, `.github/workflows/deploy_k3s.yaml` |

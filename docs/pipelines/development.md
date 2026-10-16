@@ -8,6 +8,9 @@ Platform이 담당하며 Pipeline 실행 코드가 Platform Runtime을 호출하
 Connector API → 조회 → Raw 저장 → 정규화 → 정규 적재 → Checkpoint
 ```
 
+위는 Raw 보존 수집의 흐름이다. 낙찰·개찰의 성공 응답은 정규화 후 버리며 원천 hash와
+실행 이력을 보존한다. 기능별 정책은 [Data DB](database.md#원본관찰정규-데이터)를 따른다.
+
 Prefect가 처음이라면 [PostgreSQL ETL 예제](writing_pipelines.md)를 먼저 실행해 본다.
 이 문서는 실제 수집 기능의 코드 위치와 개발·검증 환경을 설명한다.
 
@@ -42,7 +45,7 @@ src/teoria_pipelines/
 ├── metadata/                       격리된 OpenMetadata Job 실행
 ├── execution/                      실행 기록·Raw 저장·Checkpoint Task
 ├── checkpoints/                    수집 범위·재개 정책
-├── persistence/                    DB·Raw·Object Storage 기반
+├── persistence/                    비동기 DB 연결·Raw·실행 기록·Checkpoint 저장
 └── flows/pps_industries.py          기존 운영 배포 한 개의 호환 경로
 ```
 
@@ -72,7 +75,7 @@ API·DB Task는 `async def`로 정의하고 Flow에서 `await`한다. 변환·�
 
 DB 연결은 `persistence/connection.py`의 `connect()`가 소유한다.
 `TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT`의 기본값은 10이며 event loop별·DB별
-활성 연결을 제한한다. 여러 Worker·프로세스의 상한은 합산해서 DB 연결 예산에 맞춘다.
+활성 연결을 제한한다. 여기서 DB는 동일한 접속 URL 단위다. 여러 Worker·프로세스의 상한은 합산해서 DB 연결 예산에 맞춘다.
 연결을 재사용하는 pool이 아니며 Prefect Task 사이에 connection·transaction을 전달하지 않는다.
 성공 시 commit, 예외·취소 시 rollback 후 연결을 닫고 대기 슬롯을 반환한다.
 

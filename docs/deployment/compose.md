@@ -107,6 +107,17 @@ Process 실행이므로 Flow별 CPU·메모리 격리를 제공하지 않는다.
 중단하지 않는다. 처음부터 일시정지돼 있던 pool은 재배포 후에도 일시정지를 유지한다.
 `--no-deps`로 대상 서비스만 갱신하면 이 변경과 관계없는 DB·API 컨테이너를 유지할 수 있다.
 
+현재 DB I/O는 native async이며 Platform과 Pipeline의 연결 상한은 각각
+`TEORIA_DATABASE_CONCURRENCY_LIMIT`, `TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT`로
+설정한다. 둘 다 기본값은 10이며 event loop별·접속 URL별 제한이다. Prefect의 Flow
+동시 실행 제한과 다른 값이고 여러 프로세스의 연결 예산은 합산해서 관리한다.
+
+API 재생성 직후에는 healthcheck 완료와 nginx의 DNS 갱신을 기다린 뒤 공개 주소로
+검증한다. 등록 서비스 exit code 0, 새 Worker heartbeat, 인증 차단, 실제 DB 조회와
+Task 재시도·checkpoint 저장을 확인하고 미대기 코루틴 경고가 없는지 로그를 검사한다.
+이미지 교체만 할 때는 Runtime artifact를 새로 발행하지 않고 기존 version을 확인한다.
+확인한 범위와 남은 결손은 [2026-10-16 검증 기록](../verification/async_deployment_collection_2026_10_16.md)에 있다.
+
 `prefect-redis`는 Prefect 메시징 전용이고 `runtime-redis`는 Runtime Capability 결과 캐시
 전용이다. Runtime API를 여러 replica로 실행해도 Registry 버전과 Capability 입력이 같은 결과를
 공유한다. Redis 조회·저장 장애는 Capability 실행을 중단시키지 않고 캐시 미사용으로 전환된다.

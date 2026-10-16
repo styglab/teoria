@@ -6,6 +6,7 @@
 
 | 기록 | 검증한 범위 |
 |---|---|
+| [비동기 배포·수집 상태: 2026-10-16](async_deployment_collection_2026_10_16.md) | API·실제 Worker·재시도·checkpoint·분류 조회·남은 수집 잔량 |
 | [Context vertical](vertical_slice_verification.md) | 대표 계약금액 질문의 의미 연결·실행·DB 대조 |
 | [공고 Context vertical](bid_notice_vertical_verification.md) | 공고 질문·실행 계약·데이터 품질 |
 | [공공조달 수집 점검: 2026-10-12](procurement_collection_2026_10_12.md) | 특정 과거 계약 구간의 원본·적재 결손 |

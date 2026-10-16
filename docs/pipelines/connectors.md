@@ -44,7 +44,8 @@ pps_contract_api → pps_contract_ingestion
   YAML 계약이며 Python 호출 코드는 해당 기능의 `client.py`다.
 - DB SQL과 transaction은 기능별 `repository.py`가 소유한다. Task는 repository를
   호출해 실행·재시도 경계를 표현한다. 조달 전체 저장소를 합치는 facade는 두지 않는다.
-- Raw에는 connector, operation, fetched time, hash와 payload를 남기고 secret은 저장하지 않는다.
+- Raw 보존 수집에는 connector, operation, fetched time, hash와 payload를 남기고 secret은 저장하지 않는다.
+  `retain_raw_records: false`인 낙찰·개찰의 원본 비보존과 정규 이력 정책은 [Data DB](database.md#원본관찰정규-데이터)를 따른다.
 - Checkpoint는 적재 성공 후에만 이동한다.
 - 계약기관(`cntrctInstt*`)과 복수 수요기관(`dminsttList`) 역할을 구분한다.
 

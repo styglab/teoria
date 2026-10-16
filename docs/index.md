@@ -4,6 +4,11 @@ Teoria는 OpenMetadata의 데이터 자산과 Business Ontology·Capability를 �
 Metadata & Ontology Platform이다. 처음 사용할 때는 시작 안내를 읽고, 기능을 고치거나
 운영할 때는 해당 프로젝트의 문서로 이동한다. 명령은 별도 안내가 없으면 저장소 루트에서 실행한다.
 
+문서 대조·취합 기준일은 **2026-10-16**이다. [인쇄용 Word](teoria_documentation_2026_10_16.docx)와
+[인쇄용 PDF](teoria_documentation_2026_10_16.pdf)는 이 폴더의 Markdown 전체와 YAML 예제·템플릿을
+파일명·원문 경로·목차·페이지 번호와 함께 취합한 시점별 사본이다. 수정의 기준은 원문 문서이며,
+배포·수집의 실제 확인 범위와 남은 결손은 [최신 검증 기록](verification/async_deployment_collection_2026_10_16.md)을 따른다.
+
 ## 처음 시작하기
 
 - [시작과 역할별 작업](platform-guide.md): 로컬 실행, 데이터 운영·메타데이터 관리·개발의 순서
@@ -31,7 +36,8 @@ Metadata & Ontology Platform이다. 처음 사용할 때는 시작 안내를 읽
 
 ## 업무 정책과 외부 연동
 
-공공조달의 의미·계산 기준은 Platform, 수집·문서 처리 절차는 Pipelines가 소유한다.
+공공조달의 의미·계산 기준은 Platform, 수집·API 보강 절차는 Pipelines가 소유한다.
+첨부문서 처리와 문서 기반 참가자격 판단은 보류되어 활성 기능에 포함하지 않는다.
 
 - [계약 집계 기준](platform/domains/public_procurement/contract_aggregation.md)과 [활동·참여 집계](platform/domains/public_procurement/activity_aggregation.md)
 - [공고 상태](platform/domains/public_procurement/notice_status.md)
@@ -40,7 +46,7 @@ Metadata & Ontology Platform이다. 처음 사용할 때는 시작 안내를 읽
 - [입찰체크 연동](integration/bid-check-service.md), [탐색 계약](integration/procurement_exploration_contract.md)
 - [Source 작성 Skill](skills/source-registry-author.md)
 
-## 검증 기록과 실험 배포
+## 검증 기록과 배포 범위
 
 [검증 기록 목차](verification/index.md)는 특정 날짜·version에서 확인한 결과와 한계를
 보존한다. 현재 설정·스케줄·기능 수로 읽지 않는다. Kubernetes는

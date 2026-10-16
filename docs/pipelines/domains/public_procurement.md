@@ -93,6 +93,15 @@ Incremental은 지연 반영을 고려해 최근 3일을 중복 조회하며 정
 재조회 없이 일괄 완료로 바꾸지 않는다. 전체 조회는 기존 timeout·호출 속도 제한을
 따르므로 참가자가 많은 공고는 제한 시간 내에 완료하지 못해 재시도할 수 있다.
 
+응답 불완전은 최대 3회 시도 후 `partial_completed`, 조회 실패는 최대 5회 시도 후
+`permanent_failure`로 종결한다. 두 상태는 Runtime에서 `failed`이며 전체 성공으로
+합산하지 않는다. 원인을 해결한 뒤 운영자가 재처리 여부를 판단한다.
+처리 제한은 `087_bound_bid_opening_retries.sql`과 해당 repository가 소유한다.
+
+성공한 낙찰·개찰 응답은 정규화 후 보존하지 않는다. 수집 계약의
+`retain_raw_records: false`에 따라 정규 원천 hash·실행 이력·검증한 업체 집합으로
+추적하며 Raw 건수 대신 정규 처리 건수와 보강 완료 상태를 확인한다.
+
 ## 구현을 수정할 때
 
 입찰공고 Task는 `ingestion_tasks.py`와 `enrichment_tasks.py`가 수집·API 보강을 담당한다.

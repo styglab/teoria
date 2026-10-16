@@ -13,7 +13,8 @@ cp deploy/compose/.env.example deploy/compose/.env
 uv sync --locked --all-packages --all-groups
 ```
 
-`.env`의 필수 token·DB 암호·Prefect 인증정보와 외부 S3 호환 저장소를 준비한다.
+`.env`의 필수 token·DB 암호·Prefect 인증정보를 준비한다.
+현재 기본 배포는 첨부문서 처리용 S3 호환 저장소를 요구하지 않는다.
 설정 이름과 기본값은 [환경 설정](deployment/configuration.md), 서비스 시작 조건은
 [Compose](deployment/compose.md)를 따른다.
 
@@ -43,7 +44,7 @@ K3s 설정과 검증 범위는 [K3s 배포](deployment/k3s.md)를 따른다.
 
 1. [배포 목록](pipelines/deployments.md)에서 수집 계약·Flow·파라미터를 찾는다.
 2. [Prefect](pipelines/prefect.md)에서 실행하고 실패 Task와 재시도를 확인한다.
-3. 원본 관찰과 정규 적재가 성공한 뒤 checkpoint가 이동했는지 확인한다.
+3. 수집 정의의 원본 보존 정책과 정규 적재 결과를 확인한 뒤 checkpoint 이동을 확인한다.
 4. OpenMetadata Job을 실행해 수집된 테이블·view를 catalog에서 찾는다.
 
 조달의 최신·보정·Backfill 수집은 [공공조달 수집](pipelines/domains/public_procurement.md),

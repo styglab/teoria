@@ -114,3 +114,25 @@ docker compose -f deploy/compose/compose.yaml down
 
 `down -v`는 수집 데이터와 실행 이력을 삭제하므로 데이터를 폐기할 때만 사용한다.
 Worker에는 `.env` 전체가 아니라 Compose가 선언한 변수만 전달한다.
+
+## 수집이 실제로 진행되는지 확인하기
+
+Worker의 `ONLINE`과 Flow의 `Completed`만으로 데이터가 모두 채워졌다고 판단하지 않는다.
+다음 항목을 함께 확인한다.
+
+1. 배포의 예약 시각·활성 상태, 최근 성공·실패·재시도와 10분 이상 늦은 실행을 확인한다.
+2. `ingestion.pipeline_runs`의 완료 시각과 기능별 처리 건수를 확인한다. 재조회·갱신이
+   포함되므로 처리 건수는 신규 고유 레코드 수와 다를 수 있다.
+3. `ingestion.pipeline_checkpoints`를 조회해 성공한 범위까지만 진행했는지 확인한다.
+   역방향 Backfill은 날짜가 과거로 이동하며, 시작 날짜에 도달한 예약은 처리할 구간이 없을 수 있다.
+4. 개찰 보강의 `pending`·`processing`·`retry_wait`, `partial_completed`·`permanent_failure`와
+   계약 `pipeline_backfill_gaps`의 미해결 구간을 따로 확인한다.
+5. 현재 예약 간격과 비교한다. 4시간마다 실행하는 계약·낙찰의 마지막 성공이
+   시간 단위 공고보다 오래됐다는 이유만으로 장애로 판정하지 않는다.
+
+`CANCEL_NEW`에 따른 중복 예약 취소는 실행 중인 기존 수집을 취소한 것과 구분한다.
+부분 응답이나 조회 실패를 보강 큐에 남긴 Flow는 `Completed`일 수 있으므로,
+실행 실패 0건을 전체 데이터 완전성의 증거로 사용하지 않는다.
+원본 비보존 경로의 `raw_record_count=0` 해석은 [Data DB](database.md)를 따른다.
+시간대·건수·남은 결손을 포함한 최근 확인은
+[2026-10-16 배포·수집 검증](../verification/async_deployment_collection_2026_10_16.md)에 있다.
