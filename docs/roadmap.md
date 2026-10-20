@@ -117,6 +117,58 @@ Ontology canvas, 범용 graph editor, 자동 승인, OpenMetadata entity 복제,
 [공공조달 분야 분류 기준과 확장 계획](platform/domains/public_procurement/procurement_classification.md)을
 따른다.
 
+### 조달 규격 인텔리전스 서비스 설계 제안
+
+[설계 초안](procurement_specification_intelligence/overview.md)은 첨부 규격서에서
+품목별 요구조건을 추출해 검색·비교하는 조달 Domain 기능을 제안한다. 현재 첨부 처리
+보류 정책을 해제하지 않으며 운영 제공 기능이나 확정된 개발 일정으로 간주하지 않는다.
+초기 대상은 서버이며, 평가 corpus·원문 근거·다품목 배정과 검토된 스냅샷 검색을 먼저
+검증한다. 두 번째 검증 품목은 아직 확정하지 않으며 제품 구성 평가는 후속 단계다.
+
+[도메인 모델 검토안](procurement_specification_intelligence/domain_model.md)을 바탕으로
+현재는 [구성품·세부 규격 연결](procurement_specification_intelligence/composition_analysis.md)을
+검증한다. Codex가 저장된 파싱 결과에서 주요 구성·하위 대상·외부 참조를 구별하고
+대표 규격을 연결한다. 네 개발 표본의 주요 목록 28개·대표 규격 27개를 검토했으며
+전체 속성 추출·새 문서 정확도·자동 의미 검증은 미완료다.
+
+예전 단계별 품목·구성요소·요구조건·통합·사전 구축 코드는 제거했다.
+현재 독립 실행 경로는 분석 입력 준비 → Codex 제안 → 코드 검사 → 원문 재검토·목록 대조다.
+원본·파싱·과거 결과는 보존하며 예전 속성 52개는 현재 사전으로 사용하지 않는다.
+다음은 전체 요구조건 추출·귀속 확인 → 의미 정리 → 기존 승인 사전 대조 → 제안·승인·
+버전 갱신이다. [초기 사전 구축](procurement_specification_intelligence/dictionary_building_pipeline.md)은
+10건씩 100건을 점진 검토하는 목표다. 새 생성·최종 검토·수정·로컬 승인 CLI를 구현했으며
+입력 10건 고정·해시·단위 차원·의미 범위·이전 지적사항·재검증을 확인한다.
+[보존 서버 공고 10건으로 초기 구축](procurement_specification_intelligence/verification/server_dictionary_bootstrap_2026_10_20.md)을
+실행해 원문 관찰 385개·정의 후보 152개를 만들고 수정·재검증했다.
+미해결 문제 19개와 단일 공고 정의 107개의 추가 검토가 남아 미승인 상태다.
+후속 [속성 단위 감사](procurement_specification_intelligence/attribute_registry.md#현재-초안의-과분리와-재검토)는
+과분리·복합 정의·요구조건 혼입을 확인했다. 기존 152개와 보완안 189개를 표준 속성 수로
+집계하지 않으며, 원문 관찰·값 해석·표준 정의·요구조건의 경계를 먼저 수정한다.
+독립 의미 정확도 평가는 아직 수행하지 않았다.
+
+각 단계의 상세 설계는 입력·대안·처리 순서·결과·실패·자원·버전·검증 기준을 문서로
+정한 뒤 검토한다. 이전 메타데이터 식별기·평가 코드와 전용 테스트는 사용자 요청으로
+삭제했다. [규격서 후보 식별 재설계](procurement_specification_intelligence/document_identification.md)는
+컴퓨터서버(4321150102)를 첫 검증 품목으로 삼고 모든 물품에 적용할 처리 계약을
+검토한다. 이후 사용자 요청으로 공통 확인 우선순위 함수를 구현했다. 기존 문서 5개와
+추가 2개 공고의 전체 첨부 7개에서 kordoc 최소 파싱을 실행하고
+[관측과 한계](procurement_specification_intelligence/computer_server_validation.md)를 기록했다.
+메타데이터는 확인 우선순위를 정하고 실제 규격 포함·품목 귀속은 원문 검수 또는
+파싱·문서 이해로 확인한다. 선별 평가는 kordoc을 고정하고 선정·미선정 첨부의 내용 검수로
+규격서 선별의 정밀도·회수율·비용을 측정했다. 새 20개 공고를 개발·평가 10개씩
+고정해 첨부 68개를 확인했고 공통 문서명 규칙 v2를 검증했다.
+[첫 선별 평가](procurement_specification_intelligence/selection_evaluation_2026_10_20.md)에서
+평가 집단의 공고 회수율 8/9·선정 파일 정밀도 10/11을 관측했으며 미확인과 작은 표본의
+한계를 별도로 보고한다. 평가 표본을 재사용해 새 규칙의 독립 성능을 주장하지 않는다.
+현재는 Precision 우선 v3 정책을 적용하고 선정 후보 8개·한계 확인 PDF 2개로
+[OCR 제외 파서 비교](procurement_specification_intelligence/parser_evaluation_2026_10_20.md)를 수행했다.
+6개 도구·추가 설정을 비교해 kordoc 기본 구조 출력과 형식별 원본 검사·근거 연결을
+권장한다. [모듈 설계](procurement_specification_intelligence/document_parsing.md)의 공통 JSON은
+최소 계약 초안이며 전체 문서 품질 승인·운영 연결은 후속 작업이다. 독립 실행과
+중간 결과 재사용 원칙을 따르며 OCR은 사용하지 않는다.
+[과거 평가 기록](procurement_specification_intelligence/evaluation_2026_10_20.md)은
+삭제한 구현의 실험 기록으로만 보존하며 현재 성능이나 새 구현의 근거로 사용하지 않는다.
+
 ### 법령 기반 데이터 거버넌스
 
 법령 근거 저장소는 Pipeline의 시행일별 원문 수집·구조화·재가공 기능을 사용한다.

@@ -4,9 +4,9 @@ Teoria는 OpenMetadata의 데이터 자산과 Business Ontology·Capability를 �
 Metadata & Ontology Platform이다. 처음 사용할 때는 시작 안내를 읽고, 기능을 고치거나
 운영할 때는 해당 프로젝트의 문서로 이동한다. 명령은 별도 안내가 없으면 저장소 루트에서 실행한다.
 
-문서 대조·취합 기준일은 **2026-10-16**이다. [인쇄용 Word](teoria_documentation_2026_10_16.docx)와
-[인쇄용 PDF](teoria_documentation_2026_10_16.pdf)는 이 폴더의 Markdown 전체와 YAML 예제·템플릿을
-파일명·원문 경로·목차·페이지 번호와 함께 취합한 시점별 사본이다. 수정의 기준은 원문 문서이며,
+문서 대조·취합 기준일은 **2026-10-16**이다. 당시 인쇄용 Word·PDF 사본은 현재
+저장소에서 제거되어 제공하지 않는다. 수정과 조회의 기준은 이 폴더의 Markdown
+원문과 YAML 예제·템플릿이며,
 배포·수집의 실제 확인 범위와 남은 결손은 [최신 검증 기록](verification/async_deployment_collection_2026_10_16.md)을 따른다.
 
 ## 처음 시작하기
@@ -42,6 +42,7 @@ Metadata & Ontology Platform이다. 처음 사용할 때는 시작 안내를 읽
 - [계약 집계 기준](platform/domains/public_procurement/contract_aggregation.md)과 [활동·참여 집계](platform/domains/public_procurement/activity_aggregation.md)
 - [공고 상태](platform/domains/public_procurement/notice_status.md)
 - [분야 분류와 확장 계획](platform/domains/public_procurement/procurement_classification.md)
+- [조달 규격 인텔리전스 설계 문서](procurement_specification_intelligence/index.md): 서비스 전체 설계·도메인 모델·단계별 처리 로직을 한 폴더에서 관리
 - [시장 분석 구현](platform/domains/public_procurement/market_analysis.md)
 - [입찰체크 연동](integration/bid-check-service.md), [탐색 계약](integration/procurement_exploration_contract.md)
 - [Source 작성 Skill](skills/source-registry-author.md)
@@ -57,6 +58,8 @@ Metadata & Ontology Platform이다. 처음 사용할 때는 시작 안내를 읽
 문서 위치는 소유 프로젝트를 따른다. Platform의 조회·진단과 Pipelines의 수집은 같은
 외부 시스템을 사용해도 구분한다. 전체 설계는 `architecture/`, 서비스 조립은
 `deployment/`, 외부 호출 계약은 `integration/`, Skill 사용은 `skills/`에 둔다.
+조달 규격 인텔리전스의 설계 문서는 `procurement_specification_intelligence/`에 모으며,
+각 문서에서 실제 구현을 소유할 프로젝트를 구분한다.
 
 각 문서는 독자가 해결할 질문을 먼저 밝힌다. 개념 설명, 실행 절차, 계약 참조를
 구분해 작성하고 같은 작업을 설명하는 짧은 문서는 합친다. 변경 이유·독자·검증 범위가

@@ -89,5 +89,8 @@ Teoria 소유 경로와 내부 ID의 기본 형식은 `snake_case`다. 클래스
 `tests/documentation/`에 함께 두며 루트 `tools/`를 추가하지 않는다.
 문서는 `platform/`, `pipelines/`, `mcp/`, `packages/`의 소유권을 따르며 전체 설계는
 `architecture/`, 서비스 배포는 `deployment/`, 외부 연동은 `integration/`에 둔다.
+조달 규격 인텔리전스의 서비스 설계 문서는 검토 흐름을 한곳에서 읽도록
+[`procurement_specification_intelligence/`](../procurement_specification_intelligence/index.md)에
+모은다. 이 문서 배치는 실행 코드·계약의 프로젝트 소유권을 변경하지 않는다.
 현재 계약과 절차는 계속 갱신하고, 날짜·버전에 종속된 결과는 `verification/`에 보관한다.
 문서 작성·통합 기준과 읽는 순서는 [문서 목차](../index.md)를 따른다.

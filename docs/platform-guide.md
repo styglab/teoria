@@ -51,8 +51,39 @@ K3s 설정과 검증 범위는 [K3s 배포](deployment/k3s.md)를 따른다.
 법령 원문·시행 버전은 [법령 수집](pipelines/domains/legal_information.md)을 따른다. Flow를 수정할
 때는 [Pipelines 개발 안내](pipelines/development.md)에서 구현과 검증 위치를 찾는다.
 
-첨부파일 다운로드·문서 입찰요건 추출·참가자격 판단은 보류되어
-[archive](../archive/bid_document_processing/README.md)에 보관한다. 현재 배포와 API에서 제공하지 않는다.
+첨부파일 다운로드·문서 입찰요건 추출·참가자격 판단은 현재 배포와 API에서 제공하지 않는다.
+당시 보류·제거 범위는 [검증 기록](verification/bid_document_archive_2026_10_16.md)에 남아 있다.
+해당 파일 보관본은 현재 저장소에서 제거되었다.
+
+후속 기능의 범위·데이터 모델·검증 단계는
+[조달 규격 인텔리전스 서비스 설계 초안](procurement_specification_intelligence/overview.md)을
+참고한다. 설계 제안이며 현재 보류 정책이나 실행 기능을 변경하지 않는다.
+이전 메타데이터 후보 식별기와 평가 코드는 삭제했다. 이후 사용자 요청으로
+[물품 공통 확인 우선순위](procurement_specification_intelligence/document_identification.md)를
+구현하고 [서버 문서 최소 파싱](procurement_specification_intelligence/computer_server_validation.md)을
+검증했다. 개발 실험이며 수집 배포·API에 연결하지 않았다. 메타데이터 우선순위와
+실제 규격 포함 여부의 내용 검수를 구분하며 전체 파싱 계약은 후속 설계다.
+[규격서 선별 적정성 평가](procurement_specification_intelligence/selection_evaluation_2026_10_20.md)는
+kordoc을 고정한 새 공고 20건의 개발·평가 결과와 공통 규칙 v2, 미확인·실패 사례를 기록한다.
+현재 후보 선정은 Precision 우선 v3다. 이후 [OCR 제외 파서 비교](procurement_specification_intelligence/parser_evaluation_2026_10_20.md)에서
+기존 후보 10개와 6개 도구를 진단하고, [독립 파싱 모듈 설계](procurement_specification_intelligence/document_parsing.md)에
+kordoc·형식별 원본 검사 조합과 최소 데이터 계약을 정리했다. 전체 파싱 모듈과 운영
+연결은 아직 구현하지 않았다.
+현재 [Codex 직접 분석](procurement_specification_intelligence/codex_analysis.md)과
+[구성품·세부 규격 연결](procurement_specification_intelligence/composition_analysis.md)을
+사용한다. 주요 구성·하위 대상·외부 참조를 구별하고 대표 규격을 실제 대상에 연결한다.
+저장된 네 문서에서 주요 목록 28개와 대표 규격 27개를 검토했다. 사용자 검토안을
+이미 본 개발 표본이며 독립 정확도나 전체 속성 추출 완료를 뜻하지 않는다.
+
+예전 품목·구성요소·요구조건·통합·사전 구축 모듈과 전용 테스트·실험 스크립트는
+삭제했다. 원본·파싱 결과와 과거 결과 JSON/CSV는 보존했다. 예전 사전 52개는
+과거 참고 초안이며 현재 입력 사전이 아니다. 새 [초기 사전 구축 경로](procurement_specification_intelligence/dictionary_building_pipeline.md)는
+원문 관찰·의미 통합·초안·최종 검토·수정·재검증·로컬 승인을 지원한다.
+Codex가 의미 제안을 작성한다. [실제 서버 공고 10건의 재검증](procurement_specification_intelligence/verification/server_dictionary_bootstrap_2026_10_20.md)에서
+원문 관찰 385개·속성 정의 후보 152개를 만들었다. 미해결 문제 19개가 남아 미승인 상태다.
+후속 [속성 단위 감사](procurement_specification_intelligence/attribute_registry.md#현재-초안의-과분리와-재검토)에서
+중복·표현 차이·요구 문장이 섞인 것을 확인했다. 152개는 정제된 표준 속성 수가 아니다.
+구조 검사와 의미 검토는 별개이고 자동 승인·운영 Flow·API 연결은 없다.
 
 ## Metadata 관리자: 자산을 이해하고 변경하기
 
