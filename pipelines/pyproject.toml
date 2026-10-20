@@ -38,6 +38,9 @@ metadata-orchestration = [
 validation = [
   "teoria-platform",
 ]
+specification-evaluation = [
+  "harness2 ; python_version >= '3.12'",
+]
 etl-example = [
   "great-expectations>=1.8,<2",
   "pandas>=2.1,<3",
@@ -49,6 +52,7 @@ teoria-pipelines = "teoria_pipelines.cli:main"
 [tool.uv.sources]
 teoria-platform = { workspace = true }
 teoria-provider-api = { workspace = true }
+harness2 = { git = "https://github.com/google-research/harness2", rev = "1cfe254e8d25b15f37048c3730134686abe60335" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/teoria_pipelines"]

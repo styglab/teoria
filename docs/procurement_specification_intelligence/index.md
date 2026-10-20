@@ -24,6 +24,7 @@
 | [새 구축 파이프라인 검증](verification/dictionary_bootstrap_2026_10_20.md) | 합성 10건 배치·수정·재검증·다음 배치 | 계약 검증·실제 정확도 미측정 |
 | [서버 실제 10건 구축 결과](verification/server_dictionary_bootstrap_2026_10_20.md) | 사전 없는 추출·통합·수정·최종 검사·파일 위치 | 152개 정의 후보·미승인 |
 | [속성 사전의 구조](attribute_registry.md) | 속성·요구값·구성요소 유형의 차이 | 설계 |
+| [검색 평가·개선 자동화](search_evaluation_pipeline.md) | 80/20 분리·Codex 질문 정답·Harness2·개발 관찰 통합 | 독립 실험 CLI |
 | [Codex 분석 방식](codex_analysis.md) | 현재 분석·저장·검증 순서 | 현재 방식 |
 | [코드 정리 내역](verification/pipeline_cleanup_2026_10_20.md) | 삭제·유지 범위와 과거 자료 취급 | 정리 기록 |
 

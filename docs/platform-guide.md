@@ -84,6 +84,10 @@ Codex가 의미 제안을 작성한다. [실제 서버 공고 10건의 재검증
 후속 [속성 단위 감사](procurement_specification_intelligence/attribute_registry.md#현재-초안의-과분리와-재검토)에서
 중복·표현 차이·요구 문장이 섞인 것을 확인했다. 152개는 정제된 표준 속성 수가 아니다.
 구조 검사와 의미 검토는 별개이고 자동 승인·운영 Flow·API 연결은 없다.
+후속 [검색 평가·개선 CLI](procurement_specification_intelligence/search_evaluation_pipeline.md)는
+공고 단위 80/20 분리·Codex 원문 질문 정답 생성과 별도 검토·구조화 결과 평가·
+Harness2 프롬프트 제안과 개발셋 선택·검증셋 비교를 자동화한다.
+정답은 사람 검수 전 silver label이며 속성 사전 후보는 개발 관찰에서만 만든다.
 
 ## Metadata 관리자: 자산을 이해하고 변경하기
 
