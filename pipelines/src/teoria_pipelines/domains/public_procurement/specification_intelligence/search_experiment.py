@@ -286,6 +286,8 @@ def complete_experiment(args) -> None:
         "selection": selection, "baseline_validation": baseline_validation,
         "selected_development": selected_development, "pipeline_lock": lock,
         "selected_validation": selected_validation, "development_remaining_failures": dict(failures),
+        "validation_improved": selected_validation["passed"] > baseline_validation["passed"],
+        "ontology_approval": "unapproved; QA results do not publish or approve ontology",
         "next_updates": [f"Investigate {key}: {count} development failures" for key, count in failures.most_common()],
         "holdout_policy": "report only; do not tune using validation failures",
         "backend": "Codex CLI; no Qwen fallback",

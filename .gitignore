@@ -1,5 +1,7 @@
 # Custom 
-archive/*
+/archive/teoria_docparse/verification/
+##archive/*
+##!archive/teoria_docparse/
 references/
 .artifacts/
 !.agents/skills/extract-bid-eligibility/references/

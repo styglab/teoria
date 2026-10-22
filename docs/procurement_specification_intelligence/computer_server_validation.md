@@ -1,5 +1,7 @@
 # 컴퓨터서버 첫 검증과 공통 선별기 구현 기록
 
+> 과거 파서 실험 기록이다. 첨부 후보 선정 코드와 전용 테스트는 삭제했으며 현재 실행은 [의미 분석 배치](semantic_batch.md)를 따른다.
+
 검증일은 **2026-10-20**이다. 첫 검증 품목은 원천 세부품명번호 **4321150102
 (컴퓨터서버)**이며, 처리 구조는 물품에 독립적으로 설계한다. 이번에 구현한 것은
 메타데이터의 **확인 우선순위**다. 실제 규격 포함 여부를 확정하는 분류기·전체 파싱
@@ -121,8 +123,6 @@ MD5 정렬 상위 2건을 규칙 작성 후 선택했다. 계약 유형·첨부 
 
 ## 6 구현·자료 위치와 재현
 
-- [공통 우선순위 함수](../../pipelines/src/teoria_pipelines/domains/public_procurement/specification_intelligence/attachment_selection.py)
-- [소유 프로젝트 테스트](../../pipelines/tests/unit/domains/public_procurement/specification_intelligence/test_attachment_selection.py)
 - 기존 원본: `.artifacts/procurement_specifications/computer_server/`
 - 실험 루트: `.artifacts/procurement_specifications/server_validation/`
 - `parser_probe/package-lock.json`: 설치한 파서·의존성 고정. 저장소 의존성에는 추가하지 않음

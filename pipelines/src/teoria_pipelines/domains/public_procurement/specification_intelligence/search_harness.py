@@ -7,6 +7,7 @@ repository filesystem is exposed to an improver session.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 
@@ -104,7 +105,8 @@ def adapt(root: Path, *, model: str | None, tasks: int = 2) -> dict:
                 "For experience return files:[] and <edits>/<experience> (or NO_ENTRY). "
                 "Use observed source fidelity, never a hidden answer or a grade."
             )
-            cache = work / "proposer" / f"{len(self._calls):04}_{label.replace('/', '_')}.json"
+            task_context = hashlib.sha256(str(directory.relative_to(work)).encode()).hexdigest()[:16]
+            cache = work / "proposer" / task_context / f"{label.replace('/', '_')}.json"
             result = asyncio.run(CodexRunner(model=model).generate(instruction, {"mission": mission, "files": files}, cache))
             workspace = directory / "harness" if kwargs.get("harvest") else None
             for edit in result.get("files", []):

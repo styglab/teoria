@@ -1,0 +1,13 @@
+# Keep the archived parser reviewable without committing local environments or corpora.
+/*
+!/.gitignore
+!/LICENSE
+!/NOTICE
+!/pyproject.toml
+!/uv.lock
+!/src/
+!/tests/
+!/docs/
+!/third_party/
+# Historical verification tools and results remain local in their entirety.
+/verification/

@@ -58,36 +58,31 @@ K3s 설정과 검증 범위는 [K3s 배포](deployment/k3s.md)를 따른다.
 후속 기능의 범위·데이터 모델·검증 단계는
 [조달 규격 인텔리전스 서비스 설계 초안](procurement_specification_intelligence/overview.md)을
 참고한다. 설계 제안이며 현재 보류 정책이나 실행 기능을 변경하지 않는다.
-이전 메타데이터 후보 식별기와 평가 코드는 삭제했다. 이후 사용자 요청으로
-[물품 공통 확인 우선순위](procurement_specification_intelligence/document_identification.md)를
-구현하고 [서버 문서 최소 파싱](procurement_specification_intelligence/computer_server_validation.md)을
-검증했다. 개발 실험이며 수집 배포·API에 연결하지 않았다. 메타데이터 우선순위와
-실제 규격 포함 여부의 내용 검수를 구분하며 전체 파싱 계약은 후속 설계다.
-[규격서 선별 적정성 평가](procurement_specification_intelligence/selection_evaluation_2026_10_20.md)는
-kordoc을 고정한 새 공고 20건의 개발·평가 결과와 공통 규칙 v2, 미확인·실패 사례를 기록한다.
-현재 후보 선정은 Precision 우선 v3다. 이후 [OCR 제외 파서 비교](procurement_specification_intelligence/parser_evaluation_2026_10_20.md)에서
-기존 후보 10개와 6개 도구를 진단하고, [독립 파싱 모듈 설계](procurement_specification_intelligence/document_parsing.md)에
-kordoc·형식별 원본 검사 조합과 최소 데이터 계약을 정리했다. 전체 파싱 모듈과 운영
-연결은 아직 구현하지 않았다.
-현재 [Codex 직접 분석](procurement_specification_intelligence/codex_analysis.md)과
-[구성품·세부 규격 연결](procurement_specification_intelligence/composition_analysis.md)을
-사용한다. 주요 구성·하위 대상·외부 참조를 구별하고 대표 규격을 실제 대상에 연결한다.
-저장된 네 문서에서 주요 목록 28개와 대표 규격 27개를 검토했다. 사용자 검토안을
-이미 본 개발 표본이며 독립 정확도나 전체 속성 추출 완료를 뜻하지 않는다.
-
-예전 품목·구성요소·요구조건·통합·사전 구축 모듈과 전용 테스트·실험 스크립트는
-삭제했다. 원본·파싱 결과와 과거 결과 JSON/CSV는 보존했다. 예전 사전 52개는
-과거 참고 초안이며 현재 입력 사전이 아니다. 새 [초기 사전 구축 경로](procurement_specification_intelligence/dictionary_building_pipeline.md)는
-원문 관찰·의미 통합·초안·최종 검토·수정·재검증·로컬 승인을 지원한다.
-Codex가 의미 제안을 작성한다. [실제 서버 공고 10건의 재검증](procurement_specification_intelligence/verification/server_dictionary_bootstrap_2026_10_20.md)에서
-원문 관찰 385개·속성 정의 후보 152개를 만들었다. 미해결 문제 19개가 남아 미승인 상태다.
-후속 [속성 단위 감사](procurement_specification_intelligence/attribute_registry.md#현재-초안의-과분리와-재검토)에서
-중복·표현 차이·요구 문장이 섞인 것을 확인했다. 152개는 정제된 표준 속성 수가 아니다.
-구조 검사와 의미 검토는 별개이고 자동 승인·운영 Flow·API 연결은 없다.
+과거 첨부 후보 선정·선별 평가·문서 적합성 코드와 전용 테스트는 삭제했다.
+기존 원본과 파싱 결과를 입력으로 재사용하며 첨부 선정·다운로드를 실행하지 않는다.
+과거 [파서 비교](procurement_specification_intelligence/parser_evaluation_2026_10_20.md)와
+[파싱 설계](procurement_specification_intelligence/document_parsing.md)는 참고 자료다.
+현재 구현된 의미 분석 경로는 [사전 구축 배치](procurement_specification_intelligence/semantic_batch.md) 하나다.
+v3는 고정한 원본·파싱 입력에서 공고 구매 목적 이해 → 재귀 구성 트리 식별·검토 → 대상별 규격 추출 → 동일 대상·관계
+정리 → 원문 검증 → 문서 간 의미 통합 → 결과 저장을 수행한다. 기존 일괄 추출·link·문자 수
+분할 로직은 제거했다. 원문 검증 오류가 있으면 의미 통합과 고정 사전 재사용을 차단한다.
+`prepare`는 파싱 결과를 입력으로 고정하며 파서를 실행하지 않는다. 최종 결과는
+공통 사전 초안과 문서별 의미 그래프·매핑·미해결 목록이다. 새 규격서를 게시된 기존
+사전에 매핑하는 운영용 흐름과 증분 확장은 아직 구현하지 않았다.
+별도 `semantic_evaluation`은 고정 사전의 오프라인 재사용과 원문 기반 의미 사례를
+검증한다. 소수 문서의 자동 실행·누락·귀속·오병합 평가를 먼저 확인하고,
+이후 분류별 구축 80건·개발 검증 20건·별도 최종 검증 20건으로 확대한다.
+두 흐름은 대상·역할·관계·규격 추출 기능과 IR을 재사용하는 설계다.
+기존 구성 분석·사전 bootstrap 코드와 파생 결과는 사용자 요청으로 삭제했다.
+이전 미승인 사전은 재사용하지 않고 원본·파싱 자료와 Harness2 경로는 보존한다.
+모든 의미 결과는 제안이며 사람 승인·Ontology 게시·운영 연결은 하지 않는다.
 후속 [검색 평가·개선 CLI](procurement_specification_intelligence/search_evaluation_pipeline.md)는
 공고 단위 80/20 분리·Codex 원문 질문 정답 생성과 별도 검토·구조화 결과 평가·
 Harness2 프롬프트 제안과 개발셋 선택·검증셋 비교를 자동화한다.
 정답은 사람 검수 전 silver label이며 속성 사전 후보는 개발 관찰에서만 만든다.
+[첫 20건 실행](procurement_specification_intelligence/verification/search_experiment_2026_10_20.md)에서
+120문항을 만들고 평가했다. 원문 대조·사전 적용 변경안은 개발 77/96 → 83/96,
+검증 20/24 → 13/24로 검증 성능이 낮아져 기본안으로 승격하지 않는다.
 
 ## Metadata 관리자: 자산을 이해하고 변경하기
 

@@ -1,0 +1,56 @@
+teoria-docparse is an independent experimental Python implementation.
+It is not the official kordoc Python SDK and does not invoke JavaScript while parsing.
+
+Porting reference: kordoc 4.22.15, https://github.com/chrisryugj/kordoc
+Copyright (c) 2026 chrisryugj. MIT license, reproduced in LICENSE.
+Adapted portions: HWP5 record/control decoding, addressed table assembly,
+HWP3 paragraph/control decoding, Johab and Hancom character mapping tables.
+Modifications: Python rewrite, dataclass contracts, explicit source references,
+bounded input handling and a differential comparison runner.
+
+Version 0.2.0 additionally adapts clip rectangle adjacency/containment and visible
+table band reconstruction from src/pdf/clip-cells.ts and src/table/layout-frames.ts
+of kordoc 4.22.15. These modules are attributed to kordoc under its MIT license.
+
+The HWP algorithms and character tables in kordoc in turn derive from rhwp:
+https://github.com/edwardkim/rhwp
+Copyright edwardkim. MIT license, reproduced in third_party/rhwp_license.txt.
+
+The PDF implementation uses pdfplumber/pdfminer and PDFium for primitives and
+includes the above clip/layout adaptations. It is not a complete port of
+kordoc's PDF.js/OpenDataLoader-based table detection. Dependencies retain their
+own licenses. OCR is an optional RapidOCR integration, not identical to kordoc OCR.
+
+Version 0.3.0 adds single-pass pdfminer decoding, indexed rule coverage and
+form/page continuation reconstruction. Optional PyMuPDF integration calls the
+installed library API; no PyMuPDF source or binary is vendored in this package.
+PyMuPDF / MuPDF is offered under GNU AGPL v3 or an Artifex commercial license:
+https://pymupdf.io/licensing . The pdf_native extra is optional and explicit.
+fontTools, used to inspect embedded glyph outlines, retains its own MIT license.
+
+Version 0.4.0 preserves pdfplumber 0.11.10 glyph clustering semantics while
+replacing quadratic source-order lookup, and indexes glyph centers for cell
+selection. It uses MuPDF's compact drawing tuples to avoid temporary geometry
+wrappers. No parsed document result is cached or reused across parse calls.
+
+Version 0.5.0 adds source-checked decorative-strip and duplicate-grid filtering,
+PDF typography-based headings and lettered/three-page cell continuation with
+page-region preservation. OCR changes are excluded from this release's evaluation.
+
+Version 0.6.0 streams worksheet XML to discard formatting-only cells, joins
+repeated-header numbered PDF tables and removes text/shading-derived duplicate
+grids inside complete ruled forms. Two-field ruled headers can coalesce invisible
+value/unit clipping columns while retaining original fragment coordinates.
+Evaluation uses newly downloaded public bid attachments, without OCR.
+
+Version 0.7.0 uses MuPDF as the only PDF interpreter and OCR rasterizer.
+PyMuPDF and fontTools are required dependencies; pdfplumber, pdfminer.six and
+PDFium are no longer runtime dependencies. Historical optional-extra notices
+above describe versions through 0.6.0. PyMuPDF retains its AGPL/commercial terms.
+
+Coordinate-only word grouping and ruled-cell reconstruction in pdf_words.py and
+pdf_rules.py adapt pdfplumber 0.11.10 (MIT), Copyright (c) 2015 Jeremy Singer-Vine.
+Its license is reproduced in third_party/pdfplumber_license.txt. No pdfplumber or
+pdfminer PDF interpreter is vendored. Reviewed font-outline digests contain no
+font binaries; their source and visual-review evidence are recorded in
+verification/pdf_glyph_review_v0_7_0.json.

@@ -5,6 +5,12 @@
 소유 코드는 `pipelines/src/teoria_pipelines/domains/public_procurement/specification_intelligence/`다.
 운영 Flow·Platform Ontology 게시와 연결하지 않는 독립 실험이다.
 
+현재 우선순위는 [의미 분석 파이프라인](semantic_batch.md)의 소수 문서 자동 실행과
+Semantic IR 평가를 먼저 검증하는 것이다. 기존 Harness2는 보존하며, 이 문서의 수치 QA
+task를 엔티티·관계·규격 귀속 평가가 구현된 것으로 해석하지 않는다. Semantic IR 전용
+task 연결은 해당 기준선을 확보한 뒤 진행한다. 목표 분할은 구축 80건·개발 검증 20건·
+별도 최종 검증 20건이며, 기존 실험의 사후 80/20 분할을 새 최종 검증으로 재사용하지 않는다.
+
 ## 실행
 
 Python 3.12와 인증된 `codex` CLI가 필요하다. 모델은 로컬 Codex 설정을 따르며
