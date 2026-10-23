@@ -2,8 +2,12 @@
 
 **상태: 실험 구현 삭제·현재 적용 안 함.** 사용자 요청에 따라 이 실험의 식별기·평가
 코드와 전용 테스트를 삭제했다. 아래 수치·테스트 결과는 당시 실행 기록이며 현재
-성능이나 새 설계의 검증 결과가 아니다. 입력·기존 결과 파일은 조사 자료로 보존한다.
+성능이나 새 설계의 검증 결과가 아니다. 입력·결과 요약과 최신 결정 기록은 조사 자료로 보존한다.
 현재 판단 기준은 [재설계 검토안](document_identification.md)을 따른다.
+
+2026-10-23 보관 정리에서 입력 JSONL과 최신 v7 결정 기록은 원문 SHA-256을 검증한
+`.jsonl.gz`로 압축했다. 이전 버전의 대용량 개별 `decisions.jsonl`은 제거했고,
+버전별 요약·보고서·입력 manifest는 남겼다. 아래 당시 수치의 의미는 바뀌지 않는다.
 
 ## 범위와 결론
 
@@ -79,12 +83,15 @@ v6 기준 **83개 코드는 후보 발견률 80% 이상**, **60개 코드는 미
 
 ## 재현 자료와 코드
 
-- 로컬 입력: `.artifacts/procurement_specifications/metadata_rules_2026/corpus_with_references.jsonl`
+- 로컬 입력: `.artifacts/procurement_specifications/metadata_rules_2026/corpus_with_references.jsonl.gz`
 - 읽기 전용 SQL: 같은 폴더의 `export.sql`, `specification_references.sql`
-- 결과: 같은 폴더의 `evaluation_v6/`에 모든 5,950개 코드의 `summary.json`·`report.md`, 첨부별 `decisions.jsonl`, `input_manifest.json`, `review_queue.jsonl`
+- 결과: 같은 폴더의 `evaluation_v6/`에 모든 5,950개 코드의 `summary.json`·`report.md`, `input_manifest.json`, `review_queue.jsonl`. 최신 첨부별 결정은 `evaluation_v7/decisions.jsonl.gz`에 보관한다.
 - 입력 SHA-256: `180fad0b89b9f476624832af43201f4dbe04fca3f38e628fe4cbf8a4189ab8ef`
 - 당시 규칙 구현과 평가 실행 코드는 삭제했다. 현재 실행 명령은 제공하지 않는다.
 - [현재 재설계 검토안](document_identification.md)
+
+압축 입력은 `gzip -dk <파일.jsonl.gz>`로 원래 바이트 그대로 복원할 수 있다.
+압축 전 SHA-256과 정리 내역은 로컬 `archive/kory_parser/.artifacts/maintenance_cleanup/result.json`에 기록했다.
 
 원천의 prdctSpecNm는 같은 공고번호·차수로 추가 조회했으며 기존 입력의 90,609건 모두와 짝을 확인했다. 두 조회는 하나의 DB snapshot transaction이 아니므로 실제 운영 평가에서 시점 고정이 필요하다. 이번 진단은 저장한 입력 파일과 checksum을 기준으로 재현한다.
 

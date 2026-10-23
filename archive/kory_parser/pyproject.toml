@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kory-parser"
+dynamic = ["version"]
+description = "Independent Python document parser and differential evaluation against kordoc"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+  "defusedxml>=0.7.1,<1",
+  "olefile>=0.47,<1",
+  "pymupdf>=1.27,<1.28",
+  "fonttools>=4.60,<5",
+  "Pillow>=11,<13",
+  "xlrd>=2.0.1,<3",
+]
+
+[project.optional-dependencies]
+ocr = ["rapidocr>=3.4,<4", "onnxruntime>=1.20,<2"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "build>=1.2,<2", "ruff>=0.14,<1", "xlwt>=1.3,<2", "httpx>=0.28,<1"]
+
+[project.scripts]
+kory-parser = "kory_parser.cli:main"
+kory-parser-compare = "kory_parser.compare:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kory_parser"]
+
+[tool.hatch.version]
+path = "src/kory_parser/version.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "evaluations", "pyproject.toml", "uv.lock", "LICENSE", "NOTICE", "third_party", "docs"]
+exclude = ["verification", ".artifacts", ".venv", "dist"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"third_party" = "kory_parser_licenses"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+pythonpath = ["."]
+
+[tool.uv.workspace]
+members = []
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"

@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "corpus_version": "synthetic_seed_v1",
+  "thresholds": {},
+  "cases": [
+    {
+      "id": "docx_order",
+      "split": "development",
+      "format": "docx",
+      "evidence": "Authored word/document.xml: two w:p elements in document order.",
+      "expected": {
+        "success": true,
+        "blocks": [
+          {
+            "type": "paragraph",
+            "text": "First section"
+          },
+          {
+            "type": "paragraph",
+            "text": "Second section"
+          }
+        ],
+        "contents": []
+      },
+      "options": {},
+      "max_seconds": 10,
+      "parts": {
+        "word/document.xml": "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>First section</w:t></w:r></w:p><w:p><w:r><w:t>Second section</w:t></w:r></w:p></w:body></w:document>"
+      },
+      "sha256": "ea7e53128b3387975c893ab0704e92e8307a0571addf45e6bb967e58ba5d9dd4"
+    },
+    {
+      "id": "hwpx_merged",
+      "split": "development",
+      "format": "hwpx",
+      "evidence": "Authored Contents/section0.xml: cellAddr=(0,0), cellSpan=(1,2), text=항목.",
+      "expected": {
+        "success": true,
+        "blocks": [
+          {
+            "type": "table",
+            "table": {
+              "rows": 1,
+              "cols": 2,
+              "cells": [
+                [
+                  {
+                    "text": "항목",
+                    "row_span": 1,
+                    "col_span": 2
+                  },
+                  {
+                    "text": "",
+                    "covered": true
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "contents": []
+      },
+      "options": {},
+      "max_seconds": 10,
+      "parts": {
+        "Contents/header.xml": "<head><charPr id=\"0\"/></head>",
+        "Contents/section0.xml": "<sec><p><run><tbl rowCnt=\"1\" colCnt=\"2\"><tr><tc><subList><p><run><t>항목</t></run></p></subList><cellAddr rowAddr=\"0\" colAddr=\"0\"/><cellSpan rowSpan=\"1\" colSpan=\"2\"/></tc></tr></tbl></run></p></sec>"
+      },
+      "sha256": "87169642af8e1e6939669a83f8c90674745c95e69f4dd7fa0dbb86e732356c9b"
+    },
+    {
+      "id": "pdf_grid",
+      "split": "development",
+      "format": "pdf",
+      "evidence": "Self-authored PDF content stream: Heading above a ruled 2x2 table, CPU/32 then RAM/64.",
+      "expected": {
+        "success": true,
+        "blocks": [
+          {
+            "type": "paragraph",
+            "text": "Heading"
+          },
+          {
+            "type": "table",
+            "table": {
+              "rows": 2,
+              "cols": 2,
+              "cells": [
+                [
+                  {
+                    "text": "CPU"
+                  },
+                  {
+                    "text": "32"
+                  }
+                ],
+                [
+                  {
+                    "text": "RAM"
+                  },
+                  {
+                    "text": "64"
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "contents": []
+      },
+      "options": {},
+      "max_seconds": 10,
+      "source_path": "pdf_grid.pdf",
+      "sha256": "94efc799432fb03503ff4ec11647bfe9ec6a114c31c2ad4e899f55692a577a84"
+    },
+    {
+      "id": "xlsx_values",
+      "split": "development",
+      "format": "xlsx",
+      "evidence": "Authored workbook name Costs and worksheet A1=Cable, B1=1200.",
+      "expected": {
+        "success": true,
+        "blocks": [
+          {
+            "type": "paragraph",
+            "text": "Costs"
+          },
+          {
+            "type": "table",
+            "table": {
+              "rows": 1,
+              "cols": 2,
+              "cells": [
+                [
+                  {
+                    "text": "Cable"
+                  },
+                  {
+                    "text": "1200"
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "contents": []
+      },
+      "options": {},
+      "max_seconds": 10,
+      "parts": {
+        "xl/workbook.xml": "<workbook xmlns:r=\"rels\"><sheets><sheet name=\"Costs\" r:id=\"r1\"/></sheets></workbook>",
+        "xl/_rels/workbook.xml.rels": "<Relationships><Relationship Id=\"r1\" Target=\"worksheets/sheet1.xml\"/></Relationships>",
+        "xl/worksheets/sheet1.xml": "<worksheet><sheetData><row><c r=\"A1\" t=\"inlineStr\"><is><t>Cable</t></is></c><c r=\"B1\"><v>1200</v></c></row></sheetData></worksheet>"
+      },
+      "sha256": "d16f4772c1065cf8340d2cf3fc85f0b3c70a3c976b24b3ce8b9ac4e1ac197109"
+    },
+    {
+      "id": "docx_unicode",
+      "split": "validation",
+      "format": "docx",
+      "evidence": "Independently authored w:p order and Korean/numeric text.",
+      "expected": {
+        "success": true,
+        "blocks": [
+          {
+            "type": "paragraph",
+            "text": "검증 문서"
+          },
+          {
+            "type": "paragraph",
+            "text": "금액 42,000원"
+          }
+        ],
+        "contents": []
+      },
+      "options": {},
+      "max_seconds": 10,
+      "parts": {
+        "word/document.xml": "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>검증 문서</w:t></w:r></w:p><w:p><w:r><w:t>금액 42,000원</w:t></w:r></w:p></w:body></w:document>"
+      },
+      "sha256": "7807151ad35fc521d6236d10e6186268ada63282beee17a3a6c84f7f3aa41d2e"
+    },
+    {
+      "id": "hwpx_unicode",
+      "split": "validation",
+      "format": "hwpx",
+      "evidence": "Authored section0.xml: two p/run/t elements in order.",
+      "expected": {
+        "success": true,
+        "blocks": [
+          {
+            "type": "paragraph",
+            "text": "첫 번째 문단"
+          },
+          {
+            "type": "paragraph",
+            "text": "다음 문단 256"
+          }
+        ],
+        "contents": []
+      },
+      "options": {},
+      "max_seconds": 10,
+      "parts": {
+        "Contents/header.xml": "<head><charPr id=\"0\"/></head>",
+        "Contents/section0.xml": "<sec><p><run><t>첫 번째 문단</t></run></p><p><run><t>다음 문단 256</t></run></p></sec>"
+      },
+      "sha256": "f4bb55fd1cae76cc0e225a40facb0635196f13e48491d440810702034cac2329"
+    },
+    {
+      "id": "pdf_blank",
+      "split": "validation",
+      "format": "pdf",
+      "evidence": "Independently authored 100x100 PDF page without fonts or contents; no native text.",
+      "expected": {
+        "success": false,
+        "error_code": "NEEDS_OCR"
+      },
+      "options": {},
+      "max_seconds": 10,
+      "source_path": "pdf_blank.pdf",
+      "sha256": "1608478b971ed5190557ca977aeeea08b44fabdae1646252b5f4f6d21642335b"
+    },
+    {
+      "id": "invalid_pdf",
+      "split": "validation",
+      "format": "pdf",
+      "evidence": "Five-byte PDF marker has no catalog or page objects and is invalid.",
+      "expected": {
+        "success": false,
+        "error_code": "INVALID_FILE"
+      },
+      "options": {},
+      "max_seconds": 10,
+      "source_path": "invalid_pdf.pdf",
+      "sha256": "38523c087796e5d5dd1cf9bad1fb026781a838dd9dd2cf8af58b9f6502a46778"
+    }
+  ]
+}

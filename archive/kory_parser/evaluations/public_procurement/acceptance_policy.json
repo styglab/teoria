@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "quality": "Target source-backed PDF page-table checks must improve, with zero regressions in all other reviewed source checks.",
+  "regression": "All unit tests pass; non-target documents must retain output except parser_version, or receive explicit source review.",
+  "timing": {
+    "warmups": 1,
+    "repetitions": 3,
+    "aggregate_max_ratio": 1.05,
+    "per_document_ratio_warning": 1.15,
+    "per_document_absolute_warning_seconds": 0.01,
+    "confirmation_repetitions": 5
+  },
+  "apply": "Only an accepted candidate may replace parser source. Rejected and inconclusive candidates remain evidence only.",
+  "memory": "Not measured in this cycle; no memory improvement claim."
+}
