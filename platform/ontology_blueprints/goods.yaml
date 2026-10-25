@@ -1,0 +1,95 @@
+schema_version: '1.0'
+namespace: goods
+name: 규격 물품
+description: 명시 입력 규격서의 물품·구성품·요구조건을 연결하는 업무 의미. 추출 표준과 문서별 관찰은 별도 관리한다.
+target_version: 0.1.0
+objects:
+- code: specification_document
+  name: 규격서
+  stable_key: goods.specification_document
+  description: 요구사항의 근거가 되는 문서. 같은 파일명의 문서도 원문 checksum으로 구분한다.
+  identity_properties:
+  - source_sha256
+  properties:
+  - code: source_sha256
+    name: 원문 SHA-256
+    stable_key: goods.specification_document.source_sha256
+    value_type: string
+    cardinality: one
+  - code: name
+    name: 문서명
+    stable_key: goods.specification_document.name
+    value_type: string
+- code: item
+  name: 물품 항목
+  stable_key: goods.item
+  description: 규격서가 요구하는 물품 또는 구성품. 모델명 유사성만으로 다른 문서의 항목을 같은 물품으로 병합하지 않는다.
+  identity_properties:
+  - item_id
+  properties:
+  - code: item_id
+    name: 물품 항목 식별자
+    stable_key: goods.item.item_id
+    value_type: string
+    cardinality: one
+  - code: name
+    name: 물품명
+    stable_key: goods.item.name
+    value_type: string
+  - code: classification_code
+    name: 품목 분류 코드
+    stable_key: goods.item.classification_code
+    value_type: string
+- code: requirement
+  name: 규격 요구조건
+  stable_key: goods.requirement
+  description: 물품 또는 구성품에 귀속되는 조건. 원문 표현과 적용 범위를 보존하며 서로 다른 조건을 임의로 합치지 않는다.
+  identity_properties:
+  - requirement_id
+  properties:
+  - code: requirement_id
+    name: 요구조건 식별자
+    stable_key: goods.requirement.requirement_id
+    value_type: string
+    cardinality: one
+  - code: statement
+    name: 요구조건 원문
+    stable_key: goods.requirement.statement
+    value_type: string
+  - code: attribute_key
+    name: 속성 의미 식별자
+    stable_key: goods.requirement.attribute_key
+    value_type: string
+  - code: operator
+    name: 비교 연산자
+    stable_key: goods.requirement.operator
+    value_type: string
+  - code: value_text
+    name: 원문 값
+    stable_key: goods.requirement.value_text
+    value_type: string
+  - code: unit
+    name: 단위
+    stable_key: goods.requirement.unit
+    value_type: string
+relationships:
+- code: describes
+  name: 물품을 기술한다
+  stable_key: goods.describes
+  source: specification_document
+  target: item
+- code: has_component
+  name: 구성품을 갖는다
+  stable_key: goods.has_component
+  source: item
+  target: item
+- code: has_requirement
+  name: 요구조건을 갖는다
+  stable_key: goods.has_requirement
+  source: item
+  target: requirement
+- code: evidences
+  name: 요구조건의 근거다
+  stable_key: goods.evidences
+  source: specification_document
+  target: requirement

@@ -151,26 +151,11 @@ def create_parser(settings: Settings) -> argparse.ArgumentParser:
     )
     rule_parser.add_argument("--manifest", type=Path, required=True)
     rule_parser.add_argument("--actor", default="system:ontology-migration")
-    shadow_parser = subparsers.add_parser(
-        "validate-ontology-shadow",
-        help="compare ontology identity rules with operational procurement data",
-    )
-    shadow_parser.add_argument("--bid-notice-id", required=True)
     extension_parser = subparsers.add_parser(
         "apply-ontology-extension",
         help="add reviewed objects and relationships to an ontology draft",
     )
     extension_parser.add_argument("--manifest", type=Path, required=True)
     extension_parser.add_argument("--actor", default="system:ontology-migration")
-    profile_parser = subparsers.add_parser(
-        "profile-ontology-sources",
-        help="profile Data DB identity and lifecycle coverage",
-    )
-    profile_parser.add_argument(
-        "--deep",
-        action="store_true",
-        help="include expensive cross-table collision and linkage checks",
-    )
-    profile_parser.add_argument("--statement-timeout-ms", type=int, default=30_000)
     _add_verify_parser(subparsers, settings)
     return parser

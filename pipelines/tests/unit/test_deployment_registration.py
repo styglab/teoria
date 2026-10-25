@@ -10,7 +10,7 @@ from teoria_pipelines import deployment
 ROOT = Path(__file__).resolve().parents[3]
 
 
-@pytest.mark.parametrize("kind", ["ingestion", "metadata"])
+@pytest.mark.parametrize("kind", ["ingestion", "legal-information", "metadata"])
 def test_register_cli_returns_success_after_synchronous_registration(monkeypatch, kind):
     from teoria_pipelines.cli import main
 
@@ -67,10 +67,12 @@ async def test_job_resources_and_secrets_survive_prefect_render(monkeypatch):
 
 
 @pytest.mark.parametrize("backend", ["process", "kubernetes"])
-@pytest.mark.parametrize("kind", ["ingestion", "metadata"])
+@pytest.mark.parametrize("kind", ["ingestion", "legal-information", "metadata"])
 def test_registration_preserves_shared_flow_contract(monkeypatch, backend, kind):
     source = ROOT / "pipelines"
-    filename = "prefect.yaml" if kind == "ingestion" else "prefect.metadata.yaml"
+    filename = ("prefect.yaml" if kind == "ingestion" else
+                "prefect.legal_information.yaml" if kind == "legal-information" else
+                "prefect.metadata.yaml")
     original = yaml.safe_load((source / filename).read_text())
     monkeypatch.setenv(
         "TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE", "ghcr.io/example/ingestion:test"
@@ -80,7 +82,9 @@ def test_registration_preserves_shared_flow_contract(monkeypatch, backend, kind)
     def capture(command, **kwargs):
         registered.append(yaml.safe_load(Path(command[-1]).read_text()))
 
-    pool = "teoria-ingestion-k3s" if backend == "kubernetes" else "teoria-ingestion"
+    pool = "teoria-specification-k3s" if backend == "kubernetes" else "teoria-specification"
+    if kind == "legal-information":
+        pool = "teoria-legal-information-k3s" if backend == "kubernetes" else "teoria-legal-information"
     if kind == "metadata":
         pool = "teoria-metadata"
     with (
@@ -101,14 +105,29 @@ def test_registration_preserves_shared_flow_contract(monkeypatch, backend, kind)
     assert yaml.safe_load((source / filename).read_text()) == original
 
 
-@pytest.mark.parametrize("total,backfill", [("0", "1"), ("2", "3")])
+@pytest.mark.parametrize("total", ["0", "-1"])
 @pytest.mark.asyncio
 async def test_invalid_concurrency_is_rejected_before_pool_mutation(
-    monkeypatch, total, backfill
+    monkeypatch, total
 ):
     monkeypatch.setenv("TEORIA_PIPELINE_CONCURRENCY", total)
-    monkeypatch.setenv("TEORIA_PIPELINE_BACKFILL_CONCURRENCY", backfill)
     client = AsyncMock()
     with pytest.raises(ValueError):
         await deployment.configure_pool(client, backend="process", kind="ingestion")
     client.create_work_pool.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_legal_kubernetes_jobs_use_only_the_dedicated_secret(monkeypatch):
+    template = {'job_configuration': {'job_manifest': {'spec': {'template': {
+        'spec': {'containers': [{'envFrom': [{'secretRef': {'name': 'teoria-pipeline-secrets'}}]}]}
+    }}}}}
+    monkeypatch.setattr(deployment, 'kubernetes_job_template', lambda: template)
+    client = AsyncMock()
+    client.read_work_pool.return_value.type = 'kubernetes'
+    pool = await deployment.configure_pool(client, backend='kubernetes', kind='legal-information')
+    assert pool == 'teoria-legal-information-k3s'
+    update = client.update_work_pool.call_args.args[1]
+    pod = update.base_job_template['job_configuration']['job_manifest']['spec']['template']['spec']
+    assert pod['containers'][0]['envFrom'] == [{'secretRef': {'name': 'teoria-legal-information-secrets'}}]
+    assert update.concurrency_limit == 1

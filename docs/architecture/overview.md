@@ -1,113 +1,57 @@
 # Teoria architecture
 
-Teoria는 수집 시스템, metadata catalog, 업무 의미와 실행 계약을 분리한다.
-이 문서는 현재 구조의 기준이며 프로젝트별 파일 소유권은
-[Repository structure](repository-structure.md)를 따른다.
-
-Teoria의 제품 경계는 특정 조달 서비스가 아니라 여러 업무 도메인의 데이터와
-의미를 연결하는 AI-native metadata/ontology platform이다. 공공조달은 Source,
-Ontology, Binding, Capability와 Context 실행을 끝까지 검증하는 첫 vertical
-domain이다. 조달 고유 규칙은 Domain Registry와 기능 패키지 안에 두고 Platform
-공통 계층으로 끌어올리지 않는다.
+Teoria는 AI-Native Metadata & Ontology Platform이다. 현재 활성 업무는 명시 입력 규격서의
+파싱·물품 정보 추출·표준 후보 관리다. 법령 수집·조회는 메타데이터 진단의 근거 저장소로 별도 운영한다. 기존 조달 이력·기업 분석과 조달 API 수집은
+`archive/procurement_services/`로 이동했으며 운영 실행 경로에서 import하지 않는다.
+소유 프로젝트는 [저장소 구조](repository-structure.md)를 따른다.
 
 ```text
-Provider API ─▶ Pipelines/Prefect ─▶ Teoria Data DB
-                                          │
-                         ┌────────────────┴──────────────┐
-                         ▼                               ▼
-                  OpenMetadata                    Platform Runtime
-             technical/governance        Source·Mapping·Capability
-                         │                               │
-                         └──── Semantic Binding ─────────┘
-                                         │
-                                  Runtime API ─▶ MCP
-                                       │
-                                       ▼
-                                  OPA policy decision
+Platform Ontology 작성·검토·게시
+  ├─ Published 개념 → 정규화 프로파일 작성·검토·승인 → 고정 JSON 패키지
+  │                                                       │
+  │                                                       ▼
+  │       명시 입력 규격서 → Pipelines / Prefect → 파일·S3 산출물
+  │                                             + Data DB 실행·참조
+  │
+  ├─ Semantic Binding ↔ OpenMetadata의 Glossary·Asset 참조
+  └─ versioned Runtime artifact → Runtime API → MCP
+                                      │
+                                     OPA
 ```
 
-## 권위 경계
+물품 정규화 프로파일은 Published 개념을 참조하여 작성·승인하고 고정 JSON 패키지로 Pipeline에 전달한다.
+Pipeline은 이를 오프라인 적용하고 새 의미 후보를 산출물로 보존한다. 프로파일을 Business Ontology로 저장하지 않는다.
+미해결 후보의 문맥별 묶기·기존 개념 검색과 선택 결과의 새 프로파일 Draft 작성을 지원한다.
+Codex가 의미 연결·신규 개념 초안을 제안하고 기존 작성 절차로 Draft를 만드는 경로도 제공한다.
+Runtime 물품 Object로 연결하는 단계는 후속 구현이다.
+파일·S3의 추출 결과가 자동으로 Ontology나 Runtime Object가 되는 것은 아니다.
 
-| 시스템 | 권위 데이터 | 두지 않는 것 |
-|---|---|---|
-| Prefect | workflow 실행, schedule과 retry | Ontology와 metadata 의미 |
-| Teoria Data DB | raw 관찰과 정규화된 업무 데이터 | governance metadata |
-| OpenMetadata | asset, schema, glossary, owner, lineage, quality, usage | Business Ontology |
-| Teoria App DB | Ontology, Binding, Suggestion, Review, context 설정 | OpenMetadata entity 본문 |
-| Runtime Registry | Source, Mapping, Capability 실행 계약 | authoring 상태와 수집 workflow |
+## 권위와 실행 경계
 
-OpenMetadata entity는 복제하지 않고 `MetadataTargetRef`의 system, entity ID,
-entity type, FQN과 필요한 version만 저장한다. Capability는 독립된 knowledge
-source이며 `CapabilityTargetRef` Binding으로 Ontology와 연결한다.
+| 시스템 | 소유하는 정보 |
+|---|---|
+| Prefect | workflow 실행·schedule·retry |
+| Data DB | 실행 상태·문서별 결과 요약·산출물 URI·checksum |
+| 파일/S3 | 규격서 원문·추출 결과·표준 draft·Markdown |
+| OpenMetadata | 기술·거버넌스 metadata·Glossary·품질·lineage |
+| Teoria Application DB | Business Ontology·Semantic Binding·Suggestion/Review/Application·Context 설정·물품 정규화 프로파일 |
+| Runtime artifact | 게시 Ontology·승인 Binding·실행 Registry·CapabilityVersion의 불변 snapshot |
 
-## 실행과 데이터 흐름
+OpenMetadata entity 본문을 Teoria DB에 복제하지 않고 MetadataTargetRef로 연결한다.
+Runtime Mapping은 source record→Object·Link, Semantic Binding은 개념↔자산·용어·기능 연결이다.
+Pipeline은 Platform Capability나 Mapping Runtime을 직접 호출하지 않는다.
+MCP는 Runtime HTTP API만 호출하며 DB 권한·Provider credential을 갖지 않는다.
 
-- Pipeline은 Provider API를 지속 수집하고 정의된 원본 보존·정규 적재 단계를 완료한 뒤
-  checkpoint를 갱신한다. 계약·공고·업종은 Raw를 보존하고, 법령은 전용 XML 보관 구조를
-  사용한다. 낙찰·개찰은 `retain_raw_records: false` 계약에 따라 성공 응답 본문을
-  보존하지 않으며 정규 행의 원천 hash와 실행 이력을 남긴다.
-- Pipeline의 Flow·Task·client·정규화는 업무 기능별 패키지에 모은다. 실행 기록과
-  checkpoint Task는 `execution/`, 저장은 `persistence/`, OpenMetadata ingestion
-  Job orchestration은 `metadata/`가 소유한다.
-- Runtime은 직접 호출 Source 또는 Data DB의 read-only relation을 Mapping으로
-  runtime object에 변환하고 Capability를 실행한다.
-- Context Engine은 질문을 versioned Semantic Query Plan으로 만들고 계획과 실행을
-  분리한다. 두 단계 모두 OPA에 동일한 principal·action·resource 계약으로 정책을
-  질의하며 정책 서비스가 응답하지 않으면 운영 요청을 허용하지 않는다.
-- OPA 정책은 이미지에 직접 적재하지 않는다. 전용 build job이 versioned bundle을
-  RSA로 서명하고 Policy Control Plane이 이를 배포한다. OPA는 공개키 검증에 성공한
-  bundle만 활성화하고 decision log와 agent status를 Application DB로 전송한다.
-- MCP는 Runtime HTTP API만 호출하며 DB 권한이나 Provider credential을 갖지 않는다.
-- Provider wire 계약과 HTTP 실행은 `teoria-provider-api`만 담당한다.
-- Pipeline 실행 코드는 Platform Capability나 Mapping Runtime을 호출하지 않는다.
-- 공통 Capability Runner는 명시적으로 등록된 processor와 query 후처리를 실행한다.
-  Company와 공공조달 구현은 `platform/src/teoria/domains/`에 두고 composition에서
-  조립한다. Context Engine은 의미 조회와 정책 검증을 소유하며 조달 질문 해석·
-  집계는 공공조달 query handler가 담당한다.
+## 변경과 운영
 
-## 저장소와 배포
+AI 결과와 추출 표준 자동 채택은 draft다. 승인 전 Published Ontology를 변경하지 않는다.
+Ontology 변경은 새 Draft에서 검토·승인·게시하고 Runtime은 checksum 검증 bundle만 적재한다.
+Admin 쓰기의 actor는 인증 principal이다. 운영은 별도 bearer credential과 OPA를 사용한다.
+HTTP·DB I/O는 native async이며 승인·transaction·체크포인트 순서를 보존한다.
+적용된 migration·게시 artifact·이관 이력은 수정하지 않는다.
 
-HTTP·DB I/O는 API·Service·Repository와 Prefect DB Task까지 native async로 연결한다.
-계산·정규화·검증은 일반 함수를 사용한다. DB 연결은 event loop별·접속 URL별로 제한하며
-같은 transaction의 순서와 승인·적용·checkpoint 경계는 유지한다. 연결을 빠져나가면
-성공 시 commit, 예외·취소 시 rollback 후 닫는다. 자세한 상한과 구현 위치는
-[Platform](../platform/development.md#io와-동시-실행)과
-[Pipelines](../pipelines/development.md#io와-동시-실행) 개발 안내를 따른다.
-
-로컬 Compose는 Data Plane인 `teoria_data`를 별도 PostgreSQL에 두고,
-`teoria_app`, `prefect`, `openmetadata_db`는 database와 role을 분리해
-Control/Application PostgreSQL에 둔다. database 간 SQL join은 허용하지 않는다.
-부하, 장애 격리 또는 backup 정책이 달라지면 connection URL을 변경해 별도
-인스턴스로 분리한다.
-
-수집 Flow·Task는 두 배포가 공유한다. Compose는 Process Worker, K3s는 별도
-`teoria-pipelines` namespace의 실행별 Kubernetes Job을 사용한다. ResourceQuota와
-work pool 동시 실행 제한으로 정해진 자원 예산 안에서 병렬 실행한다.
-설정은 [K3s 배포](../deployment/k3s.md)를 따른다.
-
-OpenMetadata ingestion 일정과 재시도는 Prefect가 소유한다. 공식 ingestion
-image를 ephemeral Job으로 실행하며 일반 Prefect Worker에 ingestion dependency를
-설치하지 않는다. 지원되는 Compose는 격리된 Docker worker를 사용한다.
-K3s에서는 전용 metadata Worker가 네임스페이스 권한으로 공식 ingestion image의
-Kubernetes Job을 생성한다. 이미지 allowlist와 Secret 참조 범위를 제한하며,
-[EC2 배포](../deployment/k3s.md)의 실제 환경 검증은 서버 설정 후 수행한다.
-
-## 변경 불변식
-
-- AI 결과는 Suggestion이며 review, approval, 적용 성공 전에는 권위 정보가 아니다.
-- Admin 쓰기는 인증 principal을 actor로 기록한다.
-- Published Ontology revision은 직접 수정하지 않는다.
-- Runtime은 Published version에서 생성한 checksum 검증 가능한 immutable
-  artifact를 사용한다. 운영 환경은 authoring Registry 경로를 직접 읽지 않으며
-  `TEORIA_RUNTIME_ARTIFACT_PATH` 또는 atomic active pointer를 사용하는
-  `TEORIA_RUNTIME_ARTIFACT_STORE`를 반드시 설정한다.
-- Application DB와 Data DB migration은 이미 적용된 파일을 수정하지 않고 새 순번을 추가한다.
-- Source와 Connector를 같은 API에 중복 등록하지 않는다.
-- 운영에서는 Admin과 Runtime에 별도 bearer credential을 사용한다.
-- 운영에서는 `TEORIA_POLICY_MODE=opa`를 사용한다. `disabled` policy adapter는
-  개발·테스트에서만 허용한다.
-- OPA readiness는 최초 서명 bundle 활성화와 management plugin 상태를 포함한다.
-
-Ontology 모델은 [Ontology](../platform/ontology.md), Registry 계약은
-[Registry guide](../platform/registry/guide.md), 배포 방법은 [Deployment](../deployment/compose.md)를
-참고한다.
+Compose는 Data DB와 Control/Application PostgreSQL을 분리하고,
+후자는 Application·Prefect·OpenMetadata database와 role을 나눈다.
+두 규격서 Flow는 수동 manifest로 제출하며 metadata ingestion은 Prefect가 관리한다.
+OpenMetadata ingestion dependency는 전용 ephemeral Job에 둔다.
+현재 구성과 완료 조건은 [시작 안내](../platform-guide.md)와 [로드맵](../roadmap.md)을 따른다.

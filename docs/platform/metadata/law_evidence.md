@@ -1,5 +1,6 @@
 # 법령 근거 검색
 
+
 법령 검색은 Platform **Admin 진단 API**다. 별도 Ontology,
 임베딩 모델, 벡터 DB와 Neo4j를 사용하지 않는다. Runtime Capability나 MCP Tool로
 등록하지 않았으며, 해당 경로를 추가할 때 Database Source·Mapping·Published

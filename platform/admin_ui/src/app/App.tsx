@@ -5,7 +5,6 @@ import { capabilityApi, type CapabilitySummary } from "../api/capability";
 import { registryApi, type LineageLink, type MappingSummary, type RegistryRelease, type SourceSummary, type ValidationReport } from "../api/registry";
 import { BindingManager } from "../features/binding/BindingManager";
 import { CapabilityStudio } from "../features/capability/CapabilityStudio";
-import { ContextConsole } from "../features/context/ContextConsole";
 import { SuggestionReview } from "../features/intelligence/SuggestionReview";
 import { MetadataExplorer } from "../features/metadata/MetadataExplorer";
 import { MetadataAssetPage } from "../features/metadata/MetadataAssetPage";
@@ -24,7 +23,6 @@ const sections = [
   { path: "/admin/changes/review", label: "제안 검토", description: "AI 제안·근거·적용 결과", icon: Inbox, group: "검토·적용" },
   { path: "/admin/operations", label: "연결 및 수집", description: "메타데이터와 파이프라인 운영", icon: Wrench, group: "운영" },
   { path: "/admin/developer/capabilities", label: "기능 계약", description: "Capability와 준비도", icon: Braces, group: "개발 도구" },
-  { path: "/admin/developer/ask", label: "질문 테스트", description: "의미 기반 실행 결과 검증", icon: Home, group: "개발 도구" },
 ];
 
 export function App() { return <AdminAccessProvider><AdminWorkspace /></AdminAccessProvider>; }
@@ -81,7 +79,6 @@ function AdminWorkspace() {
         <Route path="/admin/overview" element={<WorkspaceFrame><Overview /></WorkspaceFrame>} />
         <Route path="/admin/governance" element={<WorkspaceFrame><GovernanceOverview /></WorkspaceFrame>} />
         <Route path="/admin/operations" element={<WorkspaceFrame><OperationsSettings /></WorkspaceFrame>} />
-        <Route path="/admin/developer/ask" element={<AdminAccess><WorkspaceFrame><ContextConsole /></WorkspaceFrame></AdminAccess>} />
         <Route path="/admin/developer/capabilities" element={<WorkspaceFrame><div>{error && <p role="alert" className="workspace-error">{error}</p>}</div><CapabilityStudio capabilities={capabilities} sources={sources} mappings={mappings} lineage={lineage} validation={validation} onOpenBindings={() => navigate("/admin/semantic-model/bindings")} /></WorkspaceFrame>} />
         <Route path="/admin/data-catalog" element={<WorkspaceFrame><MetadataExplorer /></WorkspaceFrame>} />
         <Route path="/admin/data-catalog/assets/:fqn" element={<WorkspaceFrame><MetadataAssetPage /></WorkspaceFrame>} />
@@ -89,7 +86,7 @@ function AdminWorkspace() {
         <Route path="/admin/semantic-model/bindings" element={<AdminAccess><WorkspaceFrame><BindingManager /></WorkspaceFrame></AdminAccess>} />
         <Route path="/admin/semantic-model/ontology" element={<AdminAccess><WorkspaceFrame><OntologyAuthoring /></WorkspaceFrame></AdminAccess>} />
         <Route path="/admin/settings" element={<Navigate to="/admin/operations" replace />} />
-        <Route path="/admin/ask" element={<Navigate to="/admin/developer/ask" replace />} />
+        <Route path="/admin/ask" element={<Navigate to="/admin/developer/capabilities" replace />} />
         <Route path="/admin/capabilities" element={<Navigate to="/admin/developer/capabilities" replace />} />
         <Route path="/admin/review-queue" element={<Navigate to="/admin/changes/review" replace />} />
         <Route path="/admin/semantic-bindings" element={<Navigate to="/admin/semantic-model/bindings" replace />} />

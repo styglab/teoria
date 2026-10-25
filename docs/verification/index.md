@@ -1,5 +1,10 @@
 # 검증 기록
 
+- [법령 수집·조회 복구](law_recovery_2026_10_25.md): 전용 Worker·정기 수집·인증 조회·AI 근거 연결 재개
+
+- [규격서·물품 Ontology 운영 배포](goods_focus_deployment_2026_10_25.md): 새 bundle·migration·Worker·인증·초안과 실제 기동 검증
+- [규격서·물품 Ontology 중심 재구성](goods_focus_reconfiguration_2026_10_25.md): 활성 업무 정리, 운영 수집 중단, 테스트·이미지 검증과 미배포 범위
+
 특정 날짜·데이터·version에서 확인한 실행 결과와 한계를 보존한다.
 문서의 건수·기능 수·환경값은 검증 당시 관찰이며 현재 운영 상태를 뜻하지 않는다.
 현재 실행·개발 방법은 [문서 목차](../index.md)의 해당 프로젝트 문서를 따른다.

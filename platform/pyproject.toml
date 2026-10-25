@@ -19,11 +19,15 @@ dependencies = [
   "PyYAML>=6.0,<7",
   "redis>=6,<7",
   "teoria-provider-api",
+  "teoria-goods-normalization",
+  "teoria-codex-inference",
   "uvicorn>=0.34,<1",
 ]
 
 [tool.uv.sources]
 teoria-provider-api = { workspace = true }
+teoria-goods-normalization = { workspace = true }
+teoria-codex-inference = { workspace = true }
 
 [dependency-groups]
 dev = [

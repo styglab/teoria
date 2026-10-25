@@ -183,7 +183,7 @@ spec:
         - worker
         - start
         - --pool
-        - teoria-ingestion-k3s
+        - teoria-specification-k3s
         - --type
         - kubernetes
       imagePullSecrets:
@@ -286,3 +286,56 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: teoria-pipeline-worker
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prefect-law-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prefect-law-worker
+  template:
+    metadata:
+      labels:
+        app: prefect-law-worker
+    spec:
+      containers:
+      - name: prefect-law-worker
+        image: teoria/pipelines:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_PIPELINE_PATH
+          value: /app/pipelines
+        - name: PREFECT_API_URL
+          value: http://prefect-server:4200/api
+        - name: PREFECT_API_AUTH_STRING
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_AUTH_STRING
+        - name: PREFECT_INTEGRATIONS_KUBERNETES_OBSERVER_NAMESPACES
+          value: teoria-pipelines
+        command:
+        - prefect
+        - worker
+        - start
+        - --pool
+        - teoria-legal-information-k3s
+        - --type
+        - kubernetes
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: true
+      serviceAccountName: teoria-pipeline-worker
+  strategy:
+    type: Recreate

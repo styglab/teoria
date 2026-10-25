@@ -105,7 +105,16 @@ class PipelineLoader:
                 references[reference.source] = reference
                 reference_paths[reference.source] = path
 
-        if not connectors and not pipelines:
+        from teoria_pipelines.deployment_docs import load_deployments
+
+        document_jobs = [
+            deployment
+            for _, deployment in load_deployments(self.root)
+            if deployment.get("entrypoint", "").startswith(
+                "teoria_pipelines.domains.public_procurement.specification_processing.flows."
+            )
+        ]
+        if not connectors and not pipelines and not document_jobs:
             diagnostics.append(
                 Diagnostic("empty_pipeline_project", "pipeline project contains no Connector or Pipeline definitions", self.root)
             )

@@ -10,7 +10,7 @@ from teoria.runtime.mapping.transforms.common import format_date_yyyymmdd, forma
 from teoria.runtime.mapping.transforms.company import combine_korean_address, normalize_representative_names, parse_korean_tenure_years
 
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 
 
 def test_company_mapping_loads_and_references_are_valid() -> None:

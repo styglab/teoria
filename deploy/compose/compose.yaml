@@ -352,11 +352,49 @@ services:
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       TEORIA_PIPELINE_CONCURRENCY: ${TEORIA_PIPELINE_CONCURRENCY:-2}
-      TEORIA_PIPELINE_BACKFILL_CONCURRENCY: ${TEORIA_PIPELINE_BACKFILL_CONCURRENCY:-1}
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
     depends_on:
       prefect-server:
         condition: service_healthy
+
+  prefect-law-deploy:
+    image: teoria-pipelines-law:latest
+    build:
+      context: ../..
+      dockerfile: pipelines/Dockerfile
+      target: law-worker
+    command: ["teoria-pipelines", "register", "--backend", "process", "--kind", "legal-information"]
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+
+  prefect-law-worker:
+    image: teoria-pipelines-law:latest
+    build:
+      context: ../..
+      dockerfile: pipelines/Dockerfile
+      target: law-worker
+    restart: unless-stopped
+    command: ["teoria-pipelines", "worker", "--pool", "teoria-legal-information"]
+    cpus: 1
+    mem_limit: 2g
+    environment:
+      TEORIA_ENVIRONMENT: production
+      TEORIA_PIPELINE_PATH: /app/pipelines
+      TEORIA_PIPELINE_CONCURRENCY: "1"
+      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
+      TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT:-10}
+      TEORIA_CONNECTOR_MOLEG_LAW_API_KEY: ${TEORIA_CONNECTOR_MOLEG_LAW_API_KEY:-}
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      postgres-migrate:
+        condition: service_completed_successfully
+      prefect-law-deploy:
+        condition: service_completed_successfully
 
   prefect-metadata-deploy:
     profiles: ["metadata-orchestration"]
@@ -381,24 +419,22 @@ services:
     restart: unless-stopped
     cpus: ${TEORIA_PIPELINE_WORKER_CPUS:-4}
     mem_limit: ${TEORIA_PIPELINE_WORKER_MEMORY:-8g}
-    command: ["teoria-pipelines", "worker", "--pool", "teoria-ingestion"]
+    command: ["teoria-pipelines", "worker", "--pool", "teoria-specification"]
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       TEORIA_PIPELINE_CONCURRENCY: ${TEORIA_PIPELINE_CONCURRENCY:-2}
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
       TEORIA_PIPELINE_PATH: /app/pipelines
+      TEORIA_SPECIFICATION_PARSER_PYTHON: /opt/kory_parser/bin/python
       TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
       TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT:-10}
-      TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY: ${TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY:-}
-      TEORIA_CONNECTOR_MOLEG_LAW_API_KEY: ${TEORIA_CONNECTOR_MOLEG_LAW_API_KEY:-}
-      TEORIA_CONNECTOR_PPS_BID_RESULT_API_KEY: ${TEORIA_CONNECTOR_PPS_BID_RESULT_API_KEY:-${TEORIA_CONNECTOR_PPS_CONTRACT_API_KEY:-}}
-      TEORIA_CONNECTOR_PPS_BID_NOTICE_API_KEY: ${TEORIA_CONNECTOR_PPS_BID_NOTICE_API_KEY:-}
-      TEORIA_CONNECTOR_PPS_INDUSTRY_API_KEY: ${TEORIA_CONNECTOR_PPS_INDUSTRY_API_KEY:-${TEORIA_SOURCE_PPS_USER_API_KEY:-}}
       TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS: ${TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS:-30}
       TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS: ${TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS:-5}
       TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS: ${TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS:-60}
-      TEORIA_PIPELINE_CONTRACT_REQUESTS_PER_SECOND: ${TEORIA_PIPELINE_CONTRACT_REQUESTS_PER_SECOND:-0.5}
-      TEORIA_PIPELINE_BID_NOTICE_ENRICHMENT_REQUESTS_PER_SECOND: ${TEORIA_PIPELINE_BID_NOTICE_ENRICHMENT_REQUESTS_PER_SECOND:-1}
+    volumes:
+      - specification-inputs:/app/specification_inputs:ro
+      - specification-artifacts:/app/specification_artifacts
+      - specification-model-auth:/home/teoria/.codex
     depends_on:
       postgres-migrate:
         condition: service_completed_successfully
@@ -463,11 +499,6 @@ services:
       TEORIA_OPA_DECISION_PATH: teoria/authz/decision
       TEORIA_RUNTIME_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
       TEORIA_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_DATABASE_CONCURRENCY_LIMIT:-10}
-      TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY: ${TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY:-}
-      TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY:-}
-      TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY: ${TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY:-}
-      TEORIA_SOURCE_PPS_USER_API_KEY: ${TEORIA_SOURCE_PPS_USER_API_KEY:-}
-      TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY: ${TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY:-}
     volumes:
       - runtime-artifacts:/app/runtime_artifacts:ro
     depends_on:
@@ -520,6 +551,7 @@ services:
       TEORIA_OPA_DECISION_PATH: teoria/authz/decision
     volumes:
       - runtime-artifacts:/app/runtime_artifacts:ro
+      - specification-model-auth:/home/teoria/.codex
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 5s
@@ -703,6 +735,9 @@ services:
         condition: service_healthy
 
 volumes:
+  specification-model-auth:
+  specification-inputs:
+  specification-artifacts:
   postgres:
     name: ${COMPOSE_PROJECT_NAME}_data-db
   platform-postgres:

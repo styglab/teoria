@@ -1,11 +1,13 @@
 """Character tables ported from kordoc 4.22.15 / rhwp (MIT). See NOTICE."""
 
 import json
+import re
 from importlib.resources import files
 
 _TABLES = json.loads(files(__package__).joinpath("character_maps.json").read_text(encoding="utf-8"))
 HANCOM_PUA = {int(k): v for k, v in _TABLES["hancom_pua"].items()}
 JOHAB_SYMBOLS = {int(k): chr(v) for k, v in _TABLES["johab_symbols"].items()}
+_PRIVATE_USE = re.compile("[\ue000-\uf8ff\U000f0000-\U0010ffff]")
 
 _CHO = [-1, -1, *range(19), *([-1] * 11)]
 _JUNG = [
@@ -104,6 +106,9 @@ _EXTRA = {
 
 def map_display_text(text: str) -> str:
     """Render Hancom private glyphs while preserving raw text in document blocks."""
+    if _PRIVATE_USE.search(text) is None:
+        return text
+
     from .hwp_numbering import format_number
 
     def enclosed(number):

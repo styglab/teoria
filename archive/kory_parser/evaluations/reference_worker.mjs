@@ -9,7 +9,7 @@ const pkg = JSON.parse(await readFile(join(config.reference_package, 'package.js
 if (pkg.name !== 'kordoc' || pkg.version !== config.reference_version) throw new Error('Reference version mismatch');
 const { parse } = await import(pathToFileURL(join(config.reference_package, 'dist/index.js')).href);
 const data = await readFile(config.source);
-const options = {ocr:false, formulaOcr:false, images:false, removeHeaderFooter:false, dedupeRunningHeaders:false};
+const options = {ocr:config.ocr ?? false, formulaOcr:false, images:false, removeHeaderFooter:false, dedupeRunningHeaders:false};
 if (['hwp','hwpx'].includes(config.format)) {
   Object.assign(options,{layoutTables:'keep',keepTrailingEmptyCols:true,keepEmptyParagraphs:true});
 }

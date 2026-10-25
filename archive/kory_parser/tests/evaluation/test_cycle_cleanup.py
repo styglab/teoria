@@ -80,6 +80,36 @@ def test_finished_cycle_only_drops_unneeded_successful_samples(tmp_path, monkeyp
     write_json(sample / "manifest.json", rows)
     write_json(root / "source_labels.json", {"cases": [{"document_id": "labelled"}]})
     write_json(root / "next_issues.json", [{"document_id": "problem"}])
+    for row in rows:
+        directory = root / "benchmark" / row["document_id"]
+        directory.mkdir()
+        write_json(directory / "candidate.json", {"blocks": []})
+    replay = root / "regression"
+    replay.mkdir()
+    write_json(
+        replay / "report.json",
+        {
+            "status": "complete",
+            "results": [
+                {
+                    "document_id": "equal",
+                    "equal_except_version": True,
+                    "before_success": True,
+                    "after_success": True,
+                },
+                {
+                    "document_id": "changed",
+                    "equal_except_version": False,
+                    "before_success": True,
+                    "after_success": True,
+                },
+            ],
+        },
+    )
+    for name in ("equal", "changed"):
+        (replay / name).mkdir()
+        for engine in ("baseline", "candidate"):
+            write_json(replay / name / (engine + ".json"), {"blocks": []})
     (root / "discovery").mkdir()
     (root / "discovery/generated.json").write_text("{}")
     monkeypatch.setattr(cleanup, "PROJECT", project)
@@ -91,6 +121,13 @@ def test_finished_cycle_only_drops_unneeded_successful_samples(tmp_path, monkeyp
     assert not (root / "discovery").exists()
     assert (root / "acceptance/acceptance.json").exists()
     assert (root / "report/summary.json").exists()
+    assert not (root / "benchmark/unused/candidate.json").exists()
+    for name in ("labelled", "problem", "failed"):
+        assert (root / "benchmark" / name / "candidate.json").exists()
+    assert not (replay / "equal/candidate.json").exists()
+    assert (replay / "changed/candidate.json").exists()
+    assert (replay / "report.json").exists()
+    assert (root / "benchmark/benchmark.json").exists()
     with CorpusHistory(history) as state:
         assert len(state.state["documents"]) == 5
         assert state.state["documents"][rows[-1]["sha256"]]["retention"] == "removed_after_completed_cycle"

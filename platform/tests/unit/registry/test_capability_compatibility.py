@@ -9,7 +9,7 @@ from teoria.registry.schema.capability import (
 )
 
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 ONTOLOGY_BLUEPRINT = (
     Path(__file__).parents[3]
     / "ontology_migrations"

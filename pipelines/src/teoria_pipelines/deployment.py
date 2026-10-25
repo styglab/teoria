@@ -66,21 +66,30 @@ async def configure_pool(client, *, backend: str, kind: str) -> str:
         pool_name, pool_type, concurrency = "teoria-metadata", "process", 1
         template = ProcessWorker.get_default_base_job_template()
         queues = [("default", 1, 1)]
+    elif kind == "legal-information":
+        pool_name = ("teoria-legal-information-k3s" if backend == "kubernetes"
+                     else "teoria-legal-information")
+        pool_type, concurrency = backend, 1
+        template = (kubernetes_job_template() if backend == "kubernetes"
+                    else ProcessWorker.get_default_base_job_template())
+        if backend == "kubernetes":
+            pod = template["job_configuration"]["job_manifest"]["spec"]["template"]["spec"]
+            pod["containers"][0]["envFrom"] = [
+                {"secretRef": {"name": "teoria-legal-information-secrets"}}
+            ]
+        queues = [("laws", 1, 1)]
     else:
         concurrency = positive_setting("TEORIA_PIPELINE_CONCURRENCY", 2)
-        backfill = positive_setting("TEORIA_PIPELINE_BACKFILL_CONCURRENCY", 1)
-        if backfill > concurrency:
-            raise ValueError("Backfill concurrency cannot exceed pool concurrency")
         pool_type = backend
         pool_name = (
-            "teoria-ingestion-k3s" if backend == "kubernetes" else "teoria-ingestion"
+            "teoria-specification-k3s" if backend == "kubernetes" else "teoria-specification"
         )
         template = (
             kubernetes_job_template()
             if backend == "kubernetes"
             else ProcessWorker.get_default_base_job_template()
         )
-        queues = [("latest", 1, concurrency), ("backfill", 10, backfill)]
+        queues = [("documents", 1, concurrency)]
     try:
         existing = await client.read_work_pool(pool_name)
     except ObjectNotFound:
@@ -132,10 +141,11 @@ def register_deployments(
     if backend not in {"process", "kubernetes"} or kind not in {
         "ingestion",
         "metadata",
+        "legal-information",
         "all",
     }:
         raise ValueError("Unsupported deployment backend or kind")
-    kinds = ("ingestion", "metadata") if kind == "all" else (kind,)
+    kinds = ("ingestion", "legal-information", "metadata") if kind == "all" else (kind,)
 
     async def configure() -> dict[str, str]:
         async with get_client() as client:
@@ -148,14 +158,16 @@ def register_deployments(
     with tempfile.TemporaryDirectory(prefix="teoria_prefect_") as directory:
         for item in kinds:
             filename = (
-                "prefect.yaml" if item == "ingestion" else "prefect.metadata.yaml"
+                "prefect.yaml" if item == "ingestion" else
+                "prefect.legal_information.yaml" if item == "legal-information" else
+                "prefect.metadata.yaml"
             )
             document = yaml.safe_load((pipeline_root / filename).read_text())
             for deployment in document["deployments"]:
                 deployment["work_pool"]["name"] = pools[item]
-                if item == "ingestion":
+                if item in {"ingestion", "legal-information"}:
                     queue = deployment["work_pool"]["work_queue_name"]
-                    if queue not in {"latest", "backfill"}:
+                    if queue != ("laws" if item == "legal-information" else "documents"):
                         raise ValueError(f"Unconfigured ingestion queue: {queue}")
                 elif image := os.getenv("TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE"):
                     deployment["parameters"]["image"] = image

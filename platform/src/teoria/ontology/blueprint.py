@@ -41,6 +41,7 @@ class BlueprintObject(BaseModel):
 
 
 class BlueprintRelationship(BaseModel):
+    description: str = ""
     code: str
     name: str
     stable_key: str

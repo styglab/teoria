@@ -10,7 +10,7 @@ ROOT = Path(__file__).parents[3]
 
 
 def test_api_field_binding_requires_a_verified_source_response_field() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
 
     target = resolve_api_field_contract(
         catalog,

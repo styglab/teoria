@@ -24,10 +24,6 @@ from teoria.cli.registry import (
     run_validate_or_publish,
 )
 from teoria.cli.source_verification import run_verify_source
-from teoria.domains.public_procurement.cli import (
-    run_profile_ontology_sources,
-    run_validate_ontology_shadow,
-)
 from teoria.settings import bootstrap_settings
 
 
@@ -44,9 +40,7 @@ def main() -> int:
         "apply-ontology-blueprint": run_apply_ontology_blueprint,
         "plan-openmetadata-bindings": run_plan_openmetadata_bindings,
         "apply-business-rules": run_apply_business_rules,
-        "validate-ontology-shadow": run_validate_ontology_shadow,
         "apply-ontology-extension": run_apply_ontology_extension,
-        "profile-ontology-sources": run_profile_ontology_sources,
         "activate-artifact": run_activate_artifact,
         "compile-runtime-bundle": run_compile_runtime_bundle,
         "verify": run_verify_source,

@@ -1,205 +1,128 @@
 # Compose 배포와 운영
 
-`deploy/compose/compose.yaml`은 지원되는 로컬 개발·통합 배포의 단일 진입점이다.
-환경변수는 [환경 설정](configuration.md), 수집 실행은 [Prefect 운영](../pipelines/prefect.md),
-선택적 metadata 서비스는 [OpenMetadata 배포](openmetadata.md)를 따른다.
-EC2 운영 배포는 [K3s](k3s.md)를 따른다.
+`deploy/compose/compose.yaml`이 현재 지원하는 로컬 배포 진입점이다.
+규격서 처리 Worker와 Ontology·Binding·Runtime·OpenMetadata 기반을 조립한다.
+이전 조달·기업 분석과 조달 API 수집은 배포 대상이 아니다.
+법령 수집·조회는 별도 pool·Worker로 복구했다.
+환경변수는 [설정 안내](configuration.md), 규격서 실행은 [Prefect](../pipelines/prefect.md),
+실제 전환 결과는 [배포 검증 기록](../verification/goods_focus_deployment_2026_10_25.md)을 따른다.
+EC2 K3s는 [별도 배포](k3s.md)이며 Compose 성공을 K3s 운영 성공으로 기록하지 않는다.
 
 ## Docker Compose
 
-`deploy/compose/compose.yaml`이 전체 로컬 Teoria 스택과 선택적 검증 작업의 단일 진입점이다.
+기본 project name은 `teoria`다. 기존 배포에서는 project name과 환경 파일을 그대로 사용한다.
+project name 변경은 새 볼륨을 선택하므로 데이터 이관 없이 바꾸지 않는다.
+현재 Metadata와 선택적 진단 Worker를 포함한 구성은 다음 명령으로 확인한다.
 
-```text
-deploy/
-├── compose/           로컬 전체 스택 + 선택 profile
-│   ├── compose.yaml
-│   ├── .env.example
-│   └── nginx/         공개 HTTP nginx 이미지와 설정
-└── k3s/              EC2 단일 노드와 GitHub 자동 배포
+```bash
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration --profile intelligence config --quiet
 ```
-
-Compose project name은 `teoria`다. 별도 `container_name` 없이 다음 이름이 자동 생성된다.
-
-```text
-teoria-postgres-1
-teoria-prefect-worker-1
-teoria_default
-teoria_data-db # 기존 데이터를 보존하기 위해 유지하는 물리 volume 이름
-```
-
-환경 분리는 `-p teoria-dev`, `-p teoria-staging`처럼 project name을 덮어쓴다.
-DB·Runtime artifact·OPA를 포함한 모든 관리 볼륨은 project name에 따라 분리된다.
-기본 `teoria`의 기존 `teoria_data-db`, `teoria_platform-db` 등은 그대로 사용한다.
-기존 배포의 project name을 바꾸면 새 빈 볼륨을 사용하므로 데이터 이관 없이 이름을
-변경하지 않는다. 같은 호스트에서 환경을 함께 실행할 때 공개 HTTP 포트도 다르게 지정한다.
 
 ## 기본 스택
 
-`deploy/compose/.env`는 Compose 입력값의 기준이다. 컨테이너 내부 경로·주소와
-운영 정책은 `compose.yaml`이 정의한다. 호스트에서 직접 실행할 때의 주소·인증 설정은
-[환경 설정](configuration.md#호스트에서-직접-실행)을 따른다.
-
-```env
-TEORIA_PREFECT_USERNAME=admin
-TEORIA_PREFECT_PASSWORD=충분히-긴-비밀번호
-TEORIA_RUNTIME_API_TOKEN=충분히-긴-임의-토큰
-TEORIA_ADMIN_API_TOKEN=Runtime과-다른-충분히-긴-임의-토큰
-TEORIA_OPA_CONTROL_PLANE_TOKEN=Runtime과 다른-충분히-긴-임의-토큰
-TEORIA_OPA_BUNDLE_REVISION=배포-commit-또는-policy-release-id
-TEORIA_LOCAL_RUNTIME_DB_PASSWORD=충분히-긴-로컬-비밀번호
-# 비워 두면 Compose 내부 PostgreSQL을 사용한다.
-TEORIA_PIPELINE_DATA_DATABASE_URL=
-TEORIA_RUNTIME_DATA_DATABASE_URL=
-```
-
-Prefect 계정, Admin·Runtime·OPA Control Plane 비밀값이 없으면 Compose는 시작하지 않는다.
-Admin API는 Compose에서 항상 Bearer 인증을 사용한다. 외부 HTTP 요청은 nginx의 단일 포트로만 받고, Admin UI/API, Runtime API, OPA와 Policy Control Plane은 Compose 내부 네트워크에만 노출한다.
-
-Data DB는 기본적으로 Compose의 `postgres`를 사용한다. 외부 PostgreSQL을 사용할 때는 `.env`에
-writer용 `TEORIA_PIPELINE_DATA_DATABASE_URL`과 read-only Runtime용
-`TEORIA_RUNTIME_DATA_DATABASE_URL`을 각각 설정한다. 두 URL은 동일한 database를 가리키되 DB role은
-분리해야 한다. 외부 DB의 role·database 생성, TLS와 방화벽은 외부 DB 운영 영역이며 Compose의
-`postgres-init`이 외부 DB 계정을 생성하지 않는다. 아래 백업 스크립트는 실제 설정된
-Data DB를 논리 백업하며, 외부 DB 서비스의 백업·복구 정책을 대신하지 않는다.
-
-Data DB 컨테이너는 병렬 쿼리의 동적 공유 메모리를 위해 `shm_size: 1gb`를 사용한다.
-Docker 기본값인 64MB가 부족하면 디스크 여유와 무관하게 `could not resize shared memory
-segment`와 `No space left on device` 오류가 발생할 수 있다. 이 설정 변경은 기존 Data DB
-volume을 유지한 채 `postgres` 컨테이너를 재생성해야 적용된다.
-
-```env
-TEORIA_PIPELINE_DATA_DATABASE_URL=postgresql://teoria_pipeline:비밀번호@db.example.com:5432/teoria_data?sslmode=require
-TEORIA_RUNTIME_DATA_DATABASE_URL=postgresql://teoria_runtime:비밀번호@db.example.com:5432/teoria_data?sslmode=require
-```
-
-```bash
-docker compose --env-file deploy/compose/.env \
-  -f deploy/compose/compose.yaml \
-  up --build -d
-```
-
-기본 `up`은 다음 순서로 실행한다.
-
-```text
-PostgreSQL → migration ┐
-                    ├→ prefect-worker
-Prefect DB ─┬→ Server → work pool → prefect-deploy ┘
-Redis ──────┴→ Background Services
-```
-
-OPA는 `opa-bundle-build`가 Rego를 검사하고 RSA 서명 Bundle을 생성한 뒤 시작한다.
-`policy-control-plane`은 인증된 Bundle download, gzip decision log와 status 수집만
-제공한다. OPA healthcheck는 `/health?bundles=true&plugins=true`를 사용하므로 최초
-Bundle 활성화나 management plugin 초기화가 실패하면 Runtime과 Admin API가 시작되지
-않는다. signing private key, Bundle과 OPA last-known-good state는 각각 이름 있는
-volume에 보존된다.
-
-수집 Worker는 기본 CPU 4·메모리 8GiB 안에서 Flow를 최대 2개 실행한다.
-`TEORIA_PIPELINE_WORKER_CPUS`, `TEORIA_PIPELINE_WORKER_MEMORY`로 컨테이너 전체
-상한을 바꾸고, `TEORIA_PIPELINE_CONCURRENCY`로 동시 실행 수를 조정한다.
-Process 실행이므로 Flow별 CPU·메모리 격리를 제공하지 않는다. 최신 수집 우선·Backfill 1개
-정책은 K3s와 공유하며 [Prefect 운영](../pipelines/prefect.md)을 따른다.
-등록 정책 변경 시 `prefect-deploy`를 다시 실행하고 Worker 환경변수 변경 시 Worker를 재생성한다.
-
-실행 중인 수집을 보존하는 Worker 재배포는 이미지 빌드 → 수집·Metadata work pool 일시정지 →
-기존 실행 완료 대기 → 등록 서비스 성공 확인 → Worker 재생성 → 자원 상한·동작 확인 →
-원래 실행 상태 복원 순서로 진행한다. pool 일시정지는 새 실행 제출만 막으며 기존 실행을
-중단하지 않는다. 처음부터 일시정지돼 있던 pool은 재배포 후에도 일시정지를 유지한다.
-`--no-deps`로 대상 서비스만 갱신하면 이 변경과 관계없는 DB·API 컨테이너를 유지할 수 있다.
-
-현재 DB I/O는 native async이며 Platform과 Pipeline의 연결 상한은 각각
-`TEORIA_DATABASE_CONCURRENCY_LIMIT`, `TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT`로
-설정한다. 둘 다 기본값은 10이며 event loop별·접속 URL별 제한이다. Prefect의 Flow
-동시 실행 제한과 다른 값이고 여러 프로세스의 연결 예산은 합산해서 관리한다.
-
-API 재생성 직후에는 healthcheck 완료와 nginx의 DNS 갱신을 기다린 뒤 공개 주소로
-검증한다. 등록 서비스 exit code 0, 새 Worker heartbeat, 인증 차단, 실제 DB 조회와
-Task 재시도·checkpoint 저장을 확인하고 미대기 코루틴 경고가 없는지 로그를 검사한다.
-이미지 교체만 할 때는 Runtime artifact를 새로 발행하지 않고 기존 version을 확인한다.
-확인한 범위와 남은 결손은 [2026-10-16 검증 기록](../verification/async_deployment_collection_2026_10_16.md)에 있다.
-
-`prefect-redis`는 Prefect 메시징 전용이고 `runtime-redis`는 Runtime Capability 결과 캐시
-전용이다. Runtime API를 여러 replica로 실행해도 Registry 버전과 Capability 입력이 같은 결과를
-공유한다. Redis 조회·저장 장애는 Capability 실행을 중단시키지 않고 캐시 미사용으로 전환된다.
-
-첨부파일·문서 요건 기능은 보류되어 AI Worker와 Object Storage 설정을 기본 배포에서 제거했다.
-과거 보관 객체와 인증 volume은 자동 삭제하지 않는다.
-
-공개 주소는 다음과 같다.
-
-| 대상 | 주소 |
+| 구성 | 역할 |
 |---|---|
-| Platform Admin UI | `http://localhost:8081/` |
+| nginx·Admin UI/API | 단일 공개 진입점과 의미 모델·메타데이터 관리 |
+| Runtime API·Redis | checksum 검증된 bundle의 Capability discovery·실행과 캐시 |
+| OPA·Policy Control Plane | 서명 정책과 결정 로그 |
+| Prefect Server·Services·Redis | workflow 실행·예약·재시도 |
+| 법령 Worker | `teoria-legal-information` pool, 법제처 credential만 사용 |
+| 규격서 Worker | `teoria-specification` pool의 명시 입력 작업 |
+| PostgreSQL 2개 | Data DB와 Application·Prefect·OpenMetadata DB 분리 |
+| OpenMetadata·검색 엔진·Metadata Worker | 카탈로그와 격리 ingestion Job |
+
+외부 HTTP는 nginx 기본 포트 `8081`로만 받는다. Admin·Runtime·Prefect·OPA는 내부 네트워크를 사용한다.
+Admin·Runtime·OPA는 별도 token, Prefect는 계정을 사용한다. 토큰 없는 접근과 실제 인증 요청을 모두 검증한다.
+
+| 대상 | 기본 주소 |
+|---|---|
+| Admin UI | `http://localhost:8081/` |
 | Admin API docs | `http://localhost:8081/admin-api/docs` |
 | Runtime API docs | `http://localhost:8081/runtime-api/docs` |
-| Prefect UI | `http://localhost:8081/prefect/` |
+| Prefect | `http://localhost:8081/prefect/` |
 | nginx health | `http://localhost:8081/health` |
 
-공개 포트는 `TEORIA_HTTP_PORT`로 변경할 수 있으며 기본값은 `8081`이다. Teoria PostgreSQL에 로컬 SQL client로 접근할 때는 포트를 공개하지 않고 `docker compose exec postgres psql`을 사용한다. MCP는 STDIO이므로 기본 백그라운드 서비스에 포함하지 않는다.
+OpenMetadata의 별도 접속 경로는 [배포 안내](openmetadata.md)를 따른다.
+MCP는 Runtime HTTP API를 사용하는 선택적 STDIO 프로세스다.
 
-## 선택 profile
+## 규격서 입력·산출물·모델 인증
 
-| Profile | 서비스 | 실행 방식 |
+| volume | 컨테이너 경로 | 용도 |
 |---|---|---|
-| `tools` | `platform-check`, `pipelines-check` | 일회성 검증 |
-| `mcp` | `mcp` | STDIO 실행 |
+| `specification-inputs` | `/app/specification_inputs` | 명시 입력 원본, Worker에서 읽기 전용 |
+| `specification-artifacts` | `/app/specification_artifacts` | 원문 보관·추출 JSON·표준 draft·Markdown |
+| `specification-model-auth` | `/home/teoria/.codex` | 모델 CLI 인증, 이미지와 분리 |
+
+manifest에는 컨테이너 기준 URI를 입력한다. S3를 사용할 때는 [파이프라인 설정](../procurement_specification_processing/pipeline.md)을 따른다.
+모델 CLI는 이미지에 고정하지만 계정 인증은 별도 volume 또는 Secret으로 제공한다.
+인증 상태 검사는 credential 본문을 출력하지 않는다. 모델 인증이 없는 기동 성공을 AI 추출 성공으로 간주하지 않는다.
+
+## 이미지 빌드·migration·등록
+
+기존 DB·네트워크·볼륨을 유지하면서 변경된 서비스를 지정한다.
+Metadata Worker를 지정할 때는 의존 서비스의 `metadata` profile도 활성화한다.
 
 ```bash
-docker compose -f deploy/compose/compose.yaml --profile tools run --build --rm platform-check
-docker compose -f deploy/compose/compose.yaml --profile tools run --build --rm pipelines-check
-docker compose -f deploy/compose/compose.yaml --profile mcp run --rm mcp
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration build runtime-api admin-api admin-ui prefect-worker prefect-metadata-worker
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run --rm --no-deps postgres-migrate
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run --rm --no-deps prefect-deploy
 ```
 
-검증 서비스는 로컬 Registry와 Reference를 read-only로 mount한다.
+migration은 새 순번만 적용한다. 규격서 상태·참조 테이블은 `090`, schema 권한은 `091`에 있다.
+기존 수집 pool과 배포는 일시정지를 유지하고 과거 실행·checkpoint를 지우지 않는다.
+규격서 배포는 cron 없이 manifest를 받는다. [배포 목록](../pipelines/deployments.md)을 확인한다.
+
+## 법령 기능 배포
+
+`prefect-law-worker`는 parser·모델 CLI를 설치하지 않는 `law-worker` 이미지다.
+`TEORIA_CONNECTOR_MOLEG_LAW_API_KEY`는 이 Worker에만 주입한다.
 
 ```bash
-docker compose \
-  -f deploy/compose/compose.yaml \
-  --profile tools run --rm platform-check
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml build prefect-law-worker admin-api
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run --rm --no-deps prefect-law-deploy
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile intelligence up -d --no-deps prefect-law-worker admin-api metadata-assessment-worker
 ```
+
+법령 전용 pool·예약만 재개한다. Runtime bundle과 업무 Capability는 변경하지 않는다.
+[법령 복구 검증](../verification/law_recovery_2026_10_25.md)을 따른다.
+
+## Runtime bundle 전환
+
+코드 이미지 교체와 bundle 활성화는 별도 단계다. 이전 조달 bundle을 그대로 적재하면
+제거한 query Capability가 계속 노출될 수 있다. 새 Registry로 불변 bundle을 만들고
+checksum 검증 후 active pointer를 원자적으로 바꾼다. [Runtime 절차](../platform/runtime.md)를 따른다.
+
+artifact volume은 운영 API에서 읽기 전용이다. 발행 작업만 별도 일회성 컨테이너에서 쓰기 mount를 사용한다.
+기존 root 소유 volume에는 그 작업의 쓰기 권한만 부여하고 운영 API의 권한을 넓히지 않는다.
+이전 version과 `active.json`의 version·checksum을 보존한다.
+
+```bash
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration --profile intelligence up -d --no-deps runtime-api admin-api admin-ui prefect-worker prefect-metadata-worker metadata-assessment-worker
+```
+
+pool을 일시정지하고 기존 작업 종료를 확인한 뒤 Worker를 교체한다.
+healthcheck, Prefect heartbeat·등록 상태, 공개 URL의 인증과 새 `/v1/version`을 확인한다.
+nginx의 내부 DNS 갱신까지 기다린다. 새 bundle은 discovery·실제 요청으로 검증한다.
+진단 Worker는 해당 모델 gateway를 설정한 경우에만 실행한다.
 
 ## 상태와 종료
 
 ```bash
 docker compose -f deploy/compose/compose.yaml ps
-docker compose -f deploy/compose/compose.yaml logs -f prefect-worker
-docker compose -f deploy/compose/compose.yaml down
+docker compose -f deploy/compose/compose.yaml logs --tail 100 runtime-api admin-api prefect-worker
 ```
 
-`down -v`는 수집 데이터와 Prefect 이력을 삭제하므로 데이터를 폐기할 때만 사용한다. Worker에는 `.env` 전체가 아니라 Compose에 선언한 Pipeline 변수만 전달한다.
+`down -v`는 기존 수집 데이터·게시 artifact·인증 volume까지 삭제할 수 있으므로 이번 전환에 사용하지 않는다.
+되돌릴 때는 이전 이미지와 검증된 이전 artifact를 함께 선택한다. DB schema를 과거 SQL로 덮어쓰지 않는다.
 
 ## PostgreSQL 백업과 복원 확인
-
-실행 중인 Compose 스택에서 다음 명령을 사용한다. Bash, Python 3, Docker Compose가 필요하다.
 
 ```bash
 bash deploy/compose/postgres/backup.sh
 ```
 
-기본 환경 파일은 `deploy/compose/.env`이며 `TEORIA_ENV_FILE`로 변경한다.
-Compose와 같은 환경변수 우선순위를 사용하고, `COMPOSE_PROJECT_NAME`으로 대상을 선택한다.
-백업 기본 경로는 `backups/<project>/<UTC timestamp>/`다.
-
-```bash
-TEORIA_ENV_FILE=/path/to/staging.env \
-COMPOSE_PROJECT_NAME=teoria-staging \
-TEORIA_BACKUP_ROOT=/secure/backups \
-  bash deploy/compose/postgres/backup.sh
-```
-
-- `teoria_data.dump`: `postgres-migrate`에 설정된 실제 Data DB URL을 사용한다. 외부 DB를 설정하면 내부 DB 대신 외부 DB를 백업한다.
-- `teoria_app.dump`, `prefect.dump`, `openmetadata_db.dump`: 해당 project의 `platform-postgres`에서 백업한다.
-- `SHA256SUMS`, PostgreSQL 버전과 project 정보: 백업 파일 검증과 복원 환경 선택에 사용한다. 연결 URL·암호는 기록하지 않는다.
-
-Data DB 클라이언트는 해당 project의 실행 중인 `postgres` 컨테이너를 사용한다.
-외부 서버로 접속할 네트워크·권한이 필요하고, 서버 버전에 대응하는 `pg_dump`여야 한다.
-외부 DB용 파일 기반 TLS 인증을 쓴다면 클라이언트 컨테이너에서도 해당 파일에 접근할 수 있어야 한다.
-
-진행 중이거나 실패한 백업은 `.incomplete` 디렉터리에 남는다. 모든 덤프의 archive 목록과
-checksum 검사가 성공한 후에만 완료 이름으로 변경한다. 디렉터리·파일은 기본적으로
-현재 사용자만 접근하며, 실패 상세는 해당 백업의 `*.stderr.log`에서 확인한다.
-
-`pg_restore --list`와 checksum 성공은 복원 성공을 보장하지 않는다. 운영과 분리한
-PostgreSQL에서 덤프를 복원하고 중요 테이블을 조회해 확인한다. DB 초기화·role 생성은
-복원 전에 수행하며, 별도 검증 DB에서는 `pg_restore --no-owner --no-acl`로 복원할 수 있다.
-Runtime artifact·OPA 키·객체 저장소·Codex 인증정보는 이 DB 백업에 포함하지 않는다.
+기본 환경 파일은 `deploy/compose/.env`, 별도 파일은 `TEORIA_ENV_FILE`로 지정한다.
+Data DB가 외부 URL이면 실제 설정된 DB를 백업한다.
+`teoria_app`, `prefect`, `openmetadata_db`는 Control/Application PostgreSQL에서 백업한다.
+완료 파일과 checksum을 확인하고 운영과 분리한 PostgreSQL에 실제 복원해 검증한다.
+WAL·Runtime artifact·모델 인증·파일/S3 산출물은 DB dump와 별도다.

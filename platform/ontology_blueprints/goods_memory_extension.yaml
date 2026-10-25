@@ -1,0 +1,36 @@
+schema_version: '1.0'
+ontology_namespace: goods
+ontology_version: 0.2.0
+objects:
+  - code: memory_target
+    name: 메모리 규격 대상
+    stable_key: goods.memory_target
+    description: 문서의 메모리 규격 대상. capacity와 module_count는 요구조건이 참조할 속성 의미이며 실제 설치 값의 확정을 뜻하지 않는다.
+    identity_properties: [observation_id]
+    properties:
+      - code: observation_id
+        name: 문서별 관찰 식별자
+        stable_key: goods.memory_target.observation_id
+        value_type: string
+        cardinality: one
+      - code: capacity
+        name: 메모리 용량
+        stable_key: goods.memory_target.capacity
+        value_type: decimal
+        unit: GB
+      - code: module_count
+        name: 메모리 모듈 수
+        stable_key: goods.memory_target.module_count
+        value_type: integer
+        unit: 개
+relationships:
+  - code: has_memory_target
+    name: 메모리 규격 대상을 갖는다
+    stable_key: goods.has_memory_target
+    source: item
+    target: memory_target
+  - code: has_memory_requirement
+    name: 메모리 요구조건을 갖는다
+    stable_key: goods.has_memory_requirement
+    source: memory_target
+    target: requirement

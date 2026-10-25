@@ -43,8 +43,7 @@ async def run():
             max_tokens=settings.assessment_model_max_tokens,
         ),
         LawSearchReader(settings.admin_data_database_url)
-        if settings.admin_data_database_url
-        else None,
+        if settings.admin_data_database_url else None,
     )
     while True:
         try:

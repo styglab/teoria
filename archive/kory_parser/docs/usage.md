@@ -8,7 +8,7 @@
 `kory-parser-compare`다. 기존 이름의 import·CLI 별칭은 제공하지 않는다.
 원본 kordoc의 이름·저작권·라이선스 표기는 유지한다.
 
-`kory-parser` 0.9.2는 kordoc 4.22.15를 기준으로 만든 **실험용 독립 Python
+`kory-parser` 0.9.13은 kordoc 4.22.15를 기준으로 만든 **실험용 독립 Python
 패키지**다. Python SDK로 JavaScript 엔진을 호출하는 방식이 아니다. 파싱은 Python과
 설치된 native dependency에서 수행한다. 원본 비교 명령에서만 Node.js를 사용한다.
 
@@ -81,6 +81,51 @@ Task/별도 프로세스에 넣고 동시 실행 수와 실행 시간을 제한�
 두 열 헤더 아래 보이지 않는 값·단위 분할을 개선했다. OCR은 제외했다.
 
 ## 결과 계약
+
+- 0.9.13은 BIFF8 XLS의 외부 참조 시트명에서 잘못된 UTF-16이 발견되면 해당 이름의
+  해석을 생략하고 저장된 로컬 셀 값을 읽는다. `XLS_EXTERNAL_NAMES_SKIPPED` 경고를
+  남기며, 복구 중 정의 이름 평가도 생략되면 별도 경고로 알린다. 원본 바이트·xlrd 전역
+  상태를 바꾸거나 수식을 재계산하지 않는다. URL·공유 문자열·실제 셀의 문자 오류와
+  기존 시트 선택·셀 수 제한을 유지한다. 실제 실패 파일의 5개 시트와 숫자 캐시315개를
+  대조했고 기존 고정 회귀160개 출력도 보존했다.
+
+- 0.9.12는 이미지 OCR에서 빠진 여는 꺾쇠 따옴표와 ASCII 대괄호로 읽은 닫는 기호를
+  원문 획으로 확인한다. 수평 줄의 첫 인식 문자 앞과 닫는 문자 좌표에 서로 대응하는
+  L자 획이 함께 있을 때만 `「」`를 복원한다. 일반 대괄호나 불명확한 모양은 보존한다.
+  밝은 바탕의 짙은 획과 정방향·180도 회전을 검증했으며 임의의 글꼴·기울기나
+  어두운 바탕의 밝은 글자에 대한 일반적 우위를 보장하지 않는다.
+
+- 0.9.11은 이미지 OCR이 ASCII 따옴표로 읽은 문자를 원문 픽셀의 획 모양으로 점검한다.
+  분리된 곡선 획이 뚜렷할 때만 여는/닫는 따옴표를 복원하며 직선·불명확한 기호와
+  인식 단어·공백은 보존한다. 따옴표가 있는 줄만 문자 좌표를 계산하는 RapidOCR adapter를
+  사용한다. 고정 환경의 RapidOCR 3.10.0에서 검증했으며 기호 전체 복원이나 새 글꼴의
+  보편적 정확도를 보장하지 않는다. PDF OCR 경로에는 이 처리를 적용하지 않는다.
+
+- 0.9.10은 `ParseOptions(ocr=True)`의 이미지 OCR에서 한국어 인식 신뢰도로 0/180도 페이지
+  방향을 선택하고 원본 픽셀 좌표로 결과를 돌려준다. 검출·인식 모델을 명시하고 엔진은
+  작업 스레드마다 하나씩 재사용한다. 이미지 엔진은 intra-op 8 / inter-op 2개 thread를 쓰므로
+  호출 측 동시 실행 수도 제한한다. PDF OCR 경로와 기본 OCR 비활성 계약은 유지한다.
+  OCR은 `uv sync --locked --group dev --extra ocr`로 optional dependency를 설치해야 한다.
+  개발용 `python -m evaluations.benchmark --ocr`는 양쪽 엔진에 OCR 활성화를 명시한다. 혼합 방향 문서·전체 레이아웃과
+  메모리·CPU 비용의 우위는 검증하지 않았다.
+
+- 0.9.9는 원본 격자가 셀 수 제한을 넘는 XLS를 `sheet_layout="compact"`에서 빈 행·열을
+  압축해 읽는다. 실제 출력 격자와 저장하는 셀은 기존 `max_cells` 제한 안에 있어야 하며,
+  원본 셀 주소와 병합 관계를 보존하고 `XLS_COMPACTED_GRID` 경고를 남긴다.
+  제한 안의 기존 XLS 출력과 `sheet_layout="source"`의 격자 제한은 유지한다.
+
+- 0.9.8은 BIFF8 XLS의 이름 정의 수식 해석에서 `IndexError`가 발생하면 이름 정의를
+  평가하지 않는 별도 workbook으로 저장된 셀 값을 읽는다. 원본 바이트와 xlrd 전역 상태를
+  바꾸지 않으며 `XLS_DEFINED_NAMES_SKIPPED` 경고로 복구 사실을 알린다.
+  수식을 재계산하지 않고 기존 시트 선택·셀 수 제한을 유지한다. 정상 XLS는 기존 경로로 읽는다.
+  실제 실패 문서의 4개 시트와 원본 숫자 캐시 50개를 점검했고 고정 원문 160개의 출력은 보존했다.
+
+- 0.9.7은 DOCX의 `ganada` 자동 목록 번호 중 기본 `가`부터 `하`까지(1~14)를 복원한다.
+  목록별 카운터, 하위 번호 재시작과 시작값 override를 유지하며, 확인하지 못한 범위는
+  기존 placeholder와 `UNSUPPORTED_DOCX_NUMBER_FORMAT` 경고를 남긴다.
+  공통 표 생성 단계는 배치할 셀을 먼저 채우고 실제 빈 위치에만 빈 셀을 만든다.
+  병합·겹침 검증, 빈 셀의 독립성과 기존 출력 계약은 유지한다.
+  실제 DOCX의 원문 번호 포함 문장 33개와 고정 원문 160개를 재검증했다.
 
 - 0.9.2는 실제 공고 첨부문서에서 확인한 PDF clipping frame의 표·본문 중복을 제거했다.
   [30개 실문서의 기존 버전·kordoc 비교](public_procurement_cycle_2026_10_23.md)에서
@@ -218,8 +263,9 @@ uv run --project archive/kory_parser --locked --extra ocr kory-parser scan.png -
 
 OCR은 로컬 CPU에서 실행하지만 모델이 없으면 RapidOCR이 처음에 내려받는다. 문서
 본문을 외부 OCR API로 보내지 않는다. 기본 recognition은 Korean PP-OCRv5 mobile이며
-detection/분류 모델은 lockfile의 RapidOCR 버전 기본 설정을 따른다. ONNX thread는 2개로
-제한했다. 기존 68개 문서 일치 비교는 OCR을 껐다. 이후의
+PDF OCR의 detection/분류 모델은 lockfile의 RapidOCR 기본 설정을 따르고 ONNX intra-op
+thread는 2개다. 이미지 OCR은 PP-OCRv4 mobile 검출·한국어 PP-OCRv5 mobile 인식과
+페이지 방향 판별을 사용하고 스레드별 엔진을 재사용한다(intra-op 8 / inter-op 2). 기존 68개 문서 일치 비교는 OCR을 껐다. 이후의
 [규격서 원문 품질 평가](quality_evaluation_2026_10_20.md)에서는 이미지 관련 규격서
 2개를 원본과 Python 모두 OCR을 켜서 추가 실행했다. 원본이 OCR 본문·표에서 우세한
 사례와, 양쪽 모두 혼합 PDF의 핵심 규격을 놓친 사례가 확인됐다.

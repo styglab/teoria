@@ -8,7 +8,7 @@ from teoria.registry.schema.capability import CapabilityDefinition
 from teoria.registry.validation.registry import RegistryValidator
 
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 
 
 def test_capabilities_load_and_references_are_valid() -> None:

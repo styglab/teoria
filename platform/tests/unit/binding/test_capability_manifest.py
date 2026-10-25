@@ -16,7 +16,7 @@ ROOT = Path(__file__).parents[3]
 
 
 def test_capability_binding_manifest_references_real_contract_fields() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     manifest = CapabilityBindingManifest.load(
         ROOT
         / "ontology_migrations"
@@ -36,7 +36,7 @@ def test_capability_binding_manifest_references_real_contract_fields() -> None:
 
 
 def test_unified_capability_bindings_target_the_teoria_namespace() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     manifest = CapabilityBindingManifest.load(
         ROOT
         / "ontology_migrations"
@@ -103,7 +103,7 @@ def _single_binding_manifest() -> CapabilityBindingManifest:
 
 
 async def test_approved_capability_binding_requires_registry_release() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
 
     with pytest.raises(ValueError, match="immutable Registry release"):
         await apply_capability_binding_manifest(
@@ -116,7 +116,7 @@ async def test_approved_capability_binding_requires_registry_release() -> None:
 
 
 async def test_replaces_draft_target_with_released_capability_binding() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     catalog.release = RegistryRelease(
         version="2026.10.07.9",
         git_commit="abc123",

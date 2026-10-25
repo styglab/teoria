@@ -138,6 +138,26 @@ def cleanup_cycle(root, *, apply=False, history_path=DEFAULT_HISTORY):
                     and path.is_relative_to(root)
                 ):
                     paths.append(path)
+        # Keep compact benchmark measurements and reviewed/failing cases, not
+        # full parsed bodies for every ordinary successful document.
+        for name in ("benchmark", "benchmark_final", "timing_confirmation"):
+            directory = root / name
+            benchmark_path = directory / "benchmark.json"
+            if not benchmark_path.exists():
+                continue
+            for row in json.loads(benchmark_path.read_text())["results"]:
+                identifier = row["document_id"]
+                if identifier in keep_ids or Path(identifier).name != identifier:
+                    continue
+                engines = row["engines"]
+                if not engines or not all(
+                    engine.get("success") and not engine.get("execution_error") for engine in engines.values()
+                ):
+                    continue
+                paths.extend(
+                    (directory / identifier / (engine + ".json"))
+                    for engine in ("baseline", "candidate", "kordoc")
+                )
         if (root / "benchmark_final/benchmark.json").exists() or (root / "benchmark/benchmark.json").exists():
             paths.append(root / "discovery")
         replay = root / "historical_regression"
@@ -145,6 +165,24 @@ def cleanup_cycle(root, *, apply=False, history_path=DEFAULT_HISTORY):
             # The source/version manifest and report survive; full replay bodies
             # are regenerable from the fixed originals and frozen parser sources.
             paths.extend(p for p in replay.glob("*.json") if p.name not in {"report.json", "progress.json"})
+        for replay in (root / "regression", root / "historical_regression"):
+            report_path = replay / "report.json"
+            if not report_path.exists():
+                continue
+            report = json.loads(report_path.read_text())
+            if report.get("status") != "complete":
+                continue
+            for row in report.get("results", []):
+                identifier = row["document_id"]
+                if (
+                    Path(identifier).name == identifier
+                    and row.get("equal_except_version")
+                    and row.get("before_success")
+                    and row.get("after_success")
+                ):
+                    paths.extend(
+                        replay / identifier / (engine + ".json") for engine in ("baseline", "candidate")
+                    )
         plan = remove_paths(paths, protected, apply=apply)
         result = {
             "schema_version": 1,

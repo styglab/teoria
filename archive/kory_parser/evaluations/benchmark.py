@@ -1,4 +1,4 @@
-"""Same-byte, non-OCR, repeated warm-parse benchmark of Kory snapshots and kordoc."""
+"""Same-byte, repeated warm-parse benchmark with explicitly configured OCR of Kory snapshots and kordoc."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from kory_parser import parse,ParseOptions
 from kory_parser.version import __version__
 c=json.load(sys.stdin)
 data=Path(c['source']).read_bytes()
-options=ParseOptions(ocr=False,images=False)
+options=ParseOptions(ocr=c.get('ocr',False),images=False)
 parse(data,options)
 seconds=[]
 for _ in range(c['repetitions']):
@@ -29,11 +29,13 @@ for _ in range(c['repetitions']):
  result=parse(data,options)
  seconds.append(time.perf_counter()-start)
 Path(c['output']).write_text(json.dumps(result.to_dict(),ensure_ascii=False))
-Path(c['measurement']).write_text(json.dumps({'seconds':seconds,'version':__version__,'options':{'ocr':False,'images':False}}))
+Path(c['measurement']).write_text(json.dumps({'seconds':seconds,'version':__version__,'options':{'ocr':options.ocr,'images':False}}))
 """
 
 
-def benchmark(manifest_path, baseline, reference, output, *, repetitions=3, timeout=90, candidate=PROJECT):
+def benchmark(
+    manifest_path, baseline, reference, output, *, repetitions=3, timeout=90, candidate=PROJECT, ocr=False
+):
     if repetitions < 1 or timeout <= 0:
         raise ValueError("Positive repetitions and timeout required")
     output.mkdir(parents=True, exist_ok=False)
@@ -68,6 +70,7 @@ def benchmark(manifest_path, baseline, reference, output, *, repetitions=3, time
                 "measurement": str(measured.resolve()),
                 "format": item["format"],
                 "repetitions": repetitions,
+                "ocr": ocr,
                 "reference_package": str(reference.resolve()),
                 "reference_version": reference_version,
             }
@@ -137,7 +140,7 @@ def benchmark(manifest_path, baseline, reference, output, *, repetitions=3, time
         "reference_package_sha256": tree_digest(reference),
         "repetitions": repetitions,
         "warmups": 1,
-        "ocr": False,
+        "ocr": ocr,
         "images": False,
         "results": rows,
         "interpretation": "Warm in-memory parsing; worker startup and file reading excluded. Quality requires independent source checks.",
@@ -155,6 +158,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=90)
+    parser.add_argument("--ocr", action="store_true", help="Enable OCR explicitly for both engines")
     args = parser.parse_args()
     benchmark(
         args.manifest.resolve(),
@@ -164,6 +168,7 @@ def main():
         repetitions=args.repetitions,
         timeout=args.timeout,
         candidate=args.candidate.resolve(),
+        ocr=args.ocr,
     )
     return 0
 

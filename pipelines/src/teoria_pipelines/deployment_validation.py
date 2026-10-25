@@ -23,6 +23,21 @@ def validate_deployment_contracts(
             )
         names.add(name)
         module = deployment["entrypoint"].rsplit(".", 1)[0]
+        if module == "teoria_pipelines.domains.public_procurement.specification_processing.flows":
+            if (
+                deployment["entrypoint"].rsplit(".", 1)[-1]
+                not in {"standard_management_flow", "document_processing_flow"}
+                or "feature:specification_processing" not in deployment.get("tags", [])
+                or deployment.get("schedules")
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        "invalid_specification_deployment",
+                        f"'{name}' must be an explicit-input specification flow without schedules",
+                        path,
+                    )
+                )
+            continue
         if module.startswith("teoria_pipelines.metadata."):
             continue
         tags = deployment.get("tags", [])

@@ -5,7 +5,7 @@ from teoria.registry.loader import RegistryLoader
 from teoria.registry.validation.registry import RegistryValidator
 
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 
 
 def test_current_runtime_contract_references_are_valid() -> None:

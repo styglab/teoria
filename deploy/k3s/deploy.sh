@@ -26,7 +26,7 @@ done
 kubectl -n teoria get secret teoria-secrets -o json | python3 -c '
 import base64,json,sys
 values={k:base64.b64decode(v).decode() for k,v in json.load(sys.stdin)["data"].items()}
-required=["TEORIA_LOCAL_DATA_DB_PASSWORD","TEORIA_LOCAL_PLATFORM_DB_PASSWORD","TEORIA_LOCAL_APP_DB_PASSWORD","TEORIA_LOCAL_PREFECT_DB_PASSWORD","TEORIA_LOCAL_RUNTIME_DB_PASSWORD","TEORIA_METADATA_DB_PASSWORD","OPENMETADATA_DB_PASSWORD","TEORIA_ADMIN_API_TOKEN","TEORIA_RUNTIME_API_TOKEN","TEORIA_OPA_CONTROL_PLANE_TOKEN","TEORIA_APP_DATABASE_URL","TEORIA_PIPELINE_DATA_DATABASE_URL","TEORIA_RUNTIME_DATA_DATABASE_URL","PREFECT_API_DATABASE_CONNECTION_URL","PREFECT_API_AUTH_STRING"]
+required=["TEORIA_LOCAL_DATA_DB_PASSWORD","TEORIA_LOCAL_PLATFORM_DB_PASSWORD","TEORIA_LOCAL_APP_DB_PASSWORD","TEORIA_LOCAL_PREFECT_DB_PASSWORD","TEORIA_LOCAL_RUNTIME_DB_PASSWORD","TEORIA_METADATA_DB_PASSWORD","OPENMETADATA_DB_PASSWORD","TEORIA_ADMIN_API_TOKEN","TEORIA_RUNTIME_API_TOKEN","TEORIA_OPA_CONTROL_PLANE_TOKEN","TEORIA_APP_DATABASE_URL","TEORIA_PIPELINE_DATA_DATABASE_URL","TEORIA_RUNTIME_DATA_DATABASE_URL","PREFECT_API_DATABASE_CONNECTION_URL","PREFECT_API_AUTH_STRING","TEORIA_CONNECTOR_MOLEG_LAW_API_KEY"]
 invalid=[k for k in required if not values.get(k) or "CHANGE_ME" in values[k]]
 if invalid: print("Configure Kubernetes Secret keys: "+", ".join(invalid),file=sys.stderr); sys.exit(1)
 '
@@ -35,8 +35,9 @@ kubectl -n teoria get secret teoria-secrets -o json | python3 -c '
 import json,sys
 source=json.load(sys.stdin)["data"]
 keys=["TEORIA_PIPELINE_DATA_DATABASE_URL","PREFECT_API_AUTH_STRING"]
-keys += [k for k in source if k.startswith("TEORIA_CONNECTOR_") and k.endswith("_API_KEY")]
-json.dump({"apiVersion":"v1","kind":"Secret","metadata":{"name":"teoria-pipeline-secrets","namespace":"teoria-pipelines"},"type":"Opaque","data":{k:source[k] for k in keys}},sys.stdout)
+def secret(name, selected):
+    return {"apiVersion":"v1","kind":"Secret","metadata":{"name":name,"namespace":"teoria-pipelines"},"type":"Opaque","data":{k:source[k] for k in selected}}
+json.dump({"apiVersion":"v1","kind":"List","items":[secret("teoria-pipeline-secrets", keys),secret("teoria-legal-information-secrets", keys+["TEORIA_CONNECTOR_MOLEG_LAW_API_KEY"])]},sys.stdout)
 ' | kubectl apply -f -
 kubectl -n teoria get secret teoria-registry -o json | python3 -c '
 import json,sys

@@ -23,7 +23,11 @@ from .models import (
 
 
 def attr(node, key: str, default: str = "") -> str:
-    return next((v for k, v in node.attrib.items() if local_name(k).lower() == key.lower()), default)
+    lowered = key.lower()
+    for name, value in node.attrib.items():
+        if (name == key and "}" not in key) or local_name(name).lower() == lowered:
+            return value
+    return default
 
 
 def children_named(node, name: str):
@@ -31,7 +35,11 @@ def children_named(node, name: str):
 
 
 def first(node, name: str):
-    return next((c for c in node.iter() if local_name(c.tag).lower() == name.lower()), None)
+    lowered = name.lower()
+    for child in node.iter():
+        if (child.tag == name and "}" not in name) or local_name(child.tag).lower() == lowered:
+            return child
+    return None
 
 
 class HangulXmlParser:

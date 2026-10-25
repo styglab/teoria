@@ -6,7 +6,7 @@ from teoria.runtime.capability.binder import CapabilityBinder
 from teoria.runtime.source.database import DatabaseSourceExecutor
 
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 
 
 async def test_database_search_counts_roots_and_pages_with_stable_sort() -> None:

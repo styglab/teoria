@@ -8,6 +8,8 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "teoria-codex-inference",
+    "teoria-goods-normalization",
     "teoria-mcp",
     "teoria-pipelines",
     "teoria-platform",
@@ -719,11 +721,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/30/d4/a7d6fb3f58be99d65
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f6/df/5b14a118322d6097cb9bb30ec6bacad268e546a8ecfcb1f6d0de618dac2f/h2-4.4.0-py3-none-any.whl", hash = "sha256:6acffe1aeab79098d7eb0f8385c1add11f2c7a94815f6fa2b7060eeddee3d87c", size = 62368, upload-time = "2026-07-23T19:14:16.143Z" },
 ]
-
-[[package]]
-name = "harness2"
-version = "0.1.0"
-source = { git = "https://github.com/google-research/harness2?rev=1cfe254e8d25b15f37048c3730134686abe60335#1cfe254e8d25b15f37048c3730134686abe60335" }
 
 [[package]]
 name = "hpack"
@@ -2393,6 +2390,44 @@ wheels = [
 ]
 
 [[package]]
+name = "teoria-codex-inference"
+version = "0.1.0"
+source = { editable = "packages/codex_inference" }
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8,<9" },
+    { name = "pytest-asyncio", specifier = ">=0.24,<2" },
+]
+
+[[package]]
+name = "teoria-goods-normalization"
+version = "0.1.0"
+source = { editable = "packages/goods_normalization" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.7,<3" }]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8,<9" }]
+
+[[package]]
 name = "teoria-mcp"
 version = "0.1.0"
 source = { editable = "mcp" }
@@ -2437,6 +2472,8 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
+    { name = "teoria-codex-inference" },
+    { name = "teoria-goods-normalization" },
     { name = "teoria-provider-api" },
 ]
 
@@ -2461,9 +2498,6 @@ metadata-orchestration = [
 orchestration = [
     { name = "prefect" },
 ]
-specification-evaluation = [
-    { name = "harness2", marker = "python_full_version >= '3.12'" },
-]
 validation = [
     { name = "teoria-platform" },
 ]
@@ -2477,6 +2511,8 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
     { name = "python-dotenv", specifier = ">=1.0,<2" },
     { name = "pyyaml", specifier = ">=6.0,<7" },
+    { name = "teoria-codex-inference", editable = "packages/codex_inference" },
+    { name = "teoria-goods-normalization", editable = "packages/goods_normalization" },
     { name = "teoria-provider-api", editable = "packages/provider_api" },
 ]
 
@@ -2497,7 +2533,6 @@ metadata-orchestration = [
     { name = "prefect", specifier = ">=3,<4" },
 ]
 orchestration = [{ name = "prefect", specifier = ">=3,<4" }]
-specification-evaluation = [{ name = "harness2", marker = "python_full_version >= '3.12'", git = "https://github.com/google-research/harness2?rev=1cfe254e8d25b15f37048c3730134686abe60335" }]
 validation = [{ name = "teoria-platform", editable = "platform" }]
 
 [[package]]
@@ -2515,6 +2550,8 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "redis" },
+    { name = "teoria-codex-inference" },
+    { name = "teoria-goods-normalization" },
     { name = "teoria-provider-api" },
     { name = "uvicorn" },
 ]
@@ -2537,6 +2574,8 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0,<2" },
     { name = "pyyaml", specifier = ">=6.0,<7" },
     { name = "redis", specifier = ">=6,<7" },
+    { name = "teoria-codex-inference", editable = "packages/codex_inference" },
+    { name = "teoria-goods-normalization", editable = "packages/goods_normalization" },
     { name = "teoria-provider-api", editable = "packages/provider_api" },
     { name = "uvicorn", specifier = ">=0.34,<1" },
 ]

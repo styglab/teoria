@@ -47,7 +47,11 @@ async def build_migration_report(
     }
     manifest_objects = set(manifest.objects)
     missing = sorted(registry_objects - manifest_objects)
-    unknown = sorted(manifest_objects - registry_objects)
+    unknown = sorted(
+        ref for ref in manifest_objects - registry_objects
+        if manifest.objects[ref].classification != "DEPRECATED"
+        or manifest.objects[ref].migration_status != "deprecated"
+    )
     capability_usage: Counter[str] = Counter()
     for capability in catalog.capabilities.values():
         for returned in capability.returns:
@@ -125,7 +129,9 @@ async def build_migration_report(
                     capability_usage[ref] or mapping_usage[ref]
                 ),
                 "transition_status": (
-                    "semantically_linked"
+                    "deprecated"
+                    if manifest.objects[ref].classification == "DEPRECATED"
+                    else "semantically_linked"
                     if manifest.objects[ref].target_stable_key in published_concepts
                     else "runtime_only"
                     if manifest.objects[ref].classification != "BUSINESS_CONCEPT"

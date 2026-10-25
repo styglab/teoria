@@ -7,7 +7,7 @@ from teoria.admin.composition import create_admin_services, install_admin_router
 from teoria.registry.loader import RegistryLoader
 from teoria.settings import Settings
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 
 
 def test_router_installation_reuses_injected_services_without_constructing_dependencies():
@@ -15,7 +15,6 @@ def test_router_installation_reuses_injected_services_without_constructing_depen
         list_page=AsyncMock(return_value={"items": [], "next_cursor": None})
     )
     assessments = Mock(list=AsyncMock(return_value=[]))
-    law_reader = Mock()
     context_service = Mock()
     suggestion_service = Mock(
         list_page=AsyncMock(return_value={"items": [], "next_cursor": None})
@@ -27,11 +26,9 @@ def test_router_installation_reuses_injected_services_without_constructing_depen
         assessment_repository=assessments,
         suggestion_service=suggestion_service,
         asset_context_service=context_service,
-        law_search_reader=law_reader,
     )
     assert services.suggestion_service is suggestion_service
     assert services.asset_context_service is context_service
-    assert services.law_search_reader is law_reader
     app = FastAPI()
     # A second construction here would bypass the injected dependency or its configuration.
     with (
@@ -42,7 +39,6 @@ def test_router_installation_reuses_injected_services_without_constructing_depen
         patch(
             "teoria.admin.composition.AssetContextService", side_effect=AssertionError
         ),
-        patch("teoria.admin.composition.LawSearchReader", side_effect=AssertionError),
     ):
         install_admin_routers(app, services)
     http = TestClient(app)

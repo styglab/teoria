@@ -1,0 +1,30 @@
+schema_version: '1.0'
+ontologies:
+  - namespace: goods
+    target_version: 0.2.0
+    properties:
+      - object: requirement
+        code: property_concept_id
+        name: 규격 속성 Stable Concept ID
+        stable_key: goods.requirement.property_concept_id
+        value_type: string
+      - object: requirement
+        code: numeric_value
+        name: 정규화된 요구조건 수치
+        stable_key: goods.requirement.numeric_value
+        value_type: decimal
+      - object: requirement
+        code: canonical_unit
+        name: 정규화 단위
+        stable_key: goods.requirement.canonical_unit
+        value_type: string
+      - object: requirement
+        code: role
+        name: 납품 요구·지원 한도·기보유 구분
+        stable_key: goods.requirement.role
+        value_type: string
+      - object: requirement
+        code: semantic_scope
+        name: 모듈당·전체·지원 한도 적용 범위
+        stable_key: goods.requirement.semantic_scope
+        value_type: string

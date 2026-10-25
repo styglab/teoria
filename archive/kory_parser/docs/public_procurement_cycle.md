@@ -176,3 +176,7 @@ uv run --locked python -m evaluations.public_procurement.report \
 마지막으로 발견한 문제, 수정, 세 구현의 수치, 적용/미적용 이유, 다음 원문 검토 과제를
 기록한다. 이미지의 `NEEDS_OCR`처럼 고정 옵션에서 예상한 제한과 확정 결함을 구분한다.
 다음 사이클은 새 표본과 누적 회귀셋으로 이 과정을 반복한다. 현재 주기 실행 예약은 없다.
+
+## OCR 활성화 비교
+
+`evaluations.benchmark --ocr`는 Python과 kordoc 실행기에 모두 OCR 활성화를 명시하고 보고서에 기록한다. 기본값은 기존처럼 꺼짐이다. kordoc 4.22.15의 이미지 입력은 `ocr=false` 요청에도 OCR을 수행하는 사례가 확인되었으므로, 이미지까지 포함한 비교에서는 `--ocr`와 설치된 OCR optional dependency를 사용한다. 기본 비활성 평가와 OCR 활성 평가의 시간·성공률을 합쳐서 비교하지 않는다. OCR 평가는 별도 manifest·원문 정답·기준 실행을 먼저 고정한다.

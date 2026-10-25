@@ -12,7 +12,7 @@ from teoria.runtime.capability.presentation import serialize_capability_result
 from teoria.runtime.source.database import DatabaseQueryResult
 
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 
 
 class FakeDatabaseExecutor:

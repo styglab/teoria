@@ -22,10 +22,8 @@ from teoria.context.runtime_client import ContextRuntimeClient
 from teoria.context.service import ContextExecutionPolicy
 from teoria.domains.legal_information.admin_api import create_law_search_router
 from teoria.domains.legal_information.search import LawSearchReader
-from teoria.domains.public_procurement.metadata_operations import AssetCollectionReader
-from teoria.domains.public_procurement.ontology_migration import (
-    applied_ontology_migration_manifest,
-)
+from teoria.domains.goods.normalization.admin_api import create_normalization_profile_router
+from teoria.domains.goods.normalization.repository import NormalizationProfileRepository
 from teoria.intelligence.asset_assessment.repository import AssessmentRepository
 from teoria.intelligence.suggestions.repository import SuggestionRepository
 from teoria.intelligence.suggestions.service import SuggestionService
@@ -146,11 +144,6 @@ def create_admin_services(
         resolved_asset_context_service = AssetContextService(
             resolved_metadata_service.client,
             database_service=resolved_metadata_service.database_service,
-            operations_reader=AssetCollectionReader(
-                resolved_settings.admin_data_database_url
-            )
-            if resolved_settings.admin_data_database_url
-            else None,
             application_reader=AssetApplicationReader(
                 resolved_settings.app_database_url
             )
@@ -167,11 +160,6 @@ def create_admin_services(
         if resolved_suggestion_repository
         else None
     )
-    resolved_law_search_reader = law_search_reader or (
-        LawSearchReader(resolved_settings.admin_data_database_url)
-        if resolved_settings.admin_data_database_url
-        else None
-    )
     return AdminServices(
         settings=resolved_settings,
         catalog=resolved_catalog,
@@ -184,14 +172,22 @@ def create_admin_services(
         assessment_repository=resolved_assessment_repository,
         asset_context_service=resolved_asset_context_service,
         suggestion_service=resolved_suggestion_service,
-        law_search_reader=resolved_law_search_reader,
-        ontology_migration_manifest=applied_ontology_migration_manifest(
-            resolved_settings.registry_path
+        law_search_reader=law_search_reader or (
+            LawSearchReader(resolved_settings.admin_data_database_url)
+            if resolved_settings.admin_data_database_url else None
+        ),
+        ontology_migration_manifest=(
+            resolved_settings.registry_path.parent
+            / "ontology_migrations/pending/2026_10_goods_focus/ontology_v2.yaml"
         ),
     )
 
 
 def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
+    app.include_router(create_normalization_profile_router(
+        NormalizationProfileRepository(services.settings.app_database_url) if services.settings.app_database_url else None,
+        services.authorizer,
+    ))
     app.include_router(
         create_asset_assessment_router(
             services.assessment_repository,
@@ -212,12 +208,7 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
             public_read=services.settings.admin_metadata_public_read,
         )
     )
-    app.include_router(
-        create_law_search_router(
-            services.law_search_reader,
-            services.authorizer,
-        )
-    )
+    app.include_router(create_law_search_router(services.law_search_reader, services.authorizer))
     app.include_router(create_property_context_router(services.binding_repository))
     app.include_router(
         create_binding_router(

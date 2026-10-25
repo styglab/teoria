@@ -4,7 +4,12 @@ __pycache__
 *.pyc
 .pytest_cache
 .env
-archive
+archive/*
+!archive/kory_parser
+archive/kory_parser/.venv
+archive/kory_parser/.artifacts
+archive/kory_parser/verification
+archive/kory_parser/dist
 build
 node_modules
 dist

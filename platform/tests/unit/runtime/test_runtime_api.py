@@ -10,7 +10,7 @@ from teoria.runtime.capability.runner import CapabilityResult
 from teoria.policy import PolicyDecision
 
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 
 
 def test_archived_document_capabilities_are_not_discoverable_or_executable() -> None:

@@ -190,20 +190,29 @@ def table_from_cells(
     """Place real anchor cells, retaining explicit placeholders for covered positions."""
     if rows < 1 or cols < 1 or rows * cols > options.max_cells:
         raise ParseError("RESOURCE_LIMIT", "Invalid or oversized table grid")
-    grid = [[Cell() for _ in range(cols)] for _ in range(rows)]
-    occupied: set[tuple[int, int]] = set()
+    pending: list[list[Cell | None]] = [[None] * cols for _ in range(rows)]
     for row, col, cell in addressed:
         if row < 0 or col < 0 or cell.row_span < 1 or cell.col_span < 1:
             raise ParseError("INVALID_TABLE", "Invalid cell address or span")
         if row + cell.row_span > rows or col + cell.col_span > cols:
             raise ParseError("INVALID_TABLE", "Cell extends beyond declared table")
-        positions = {(r, c) for r in range(row, row + cell.row_span) for c in range(col, col + cell.col_span)}
-        if occupied & positions:
+        if cell.row_span == cell.col_span == 1:
+            if pending[row][col] is not None:
+                raise ParseError("INVALID_TABLE", "Overlapping table cells")
+            pending[row][col] = cell
+            continue
+        if any(
+            pending[r][c] is not None
+            for r in range(row, row + cell.row_span)
+            for c in range(col, col + cell.col_span)
+        ):
             raise ParseError("INVALID_TABLE", "Overlapping table cells")
-        occupied.update(positions)
-        grid[row][col] = cell
-        for r, c in positions - {(row, col)}:
-            grid[r][c] = Cell(covered=True)
+        pending[row][col] = cell
+        for r in range(row, row + cell.row_span):
+            for c in range(col, col + cell.col_span):
+                if r != row or c != col:
+                    pending[r][c] = Cell(covered=True)
+    grid = [[cell if cell is not None else Cell() for cell in row] for row in pending]
     if not options.keep_trailing_empty_cols:
         used = max(
             (

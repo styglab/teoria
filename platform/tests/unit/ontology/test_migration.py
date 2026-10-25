@@ -10,7 +10,7 @@ ROOT = Path(__file__).parents[3]
 async def test_current_ontology_v2_migration_manifest_covers_every_registry_object() -> (
     None
 ):
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     manifest = OntologyMigrationManifest.load(
         ROOT
         / "ontology_migrations"

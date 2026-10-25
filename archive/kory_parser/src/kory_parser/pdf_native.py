@@ -92,10 +92,11 @@ def load_native_page(native, options, initial_doctop=0):
     objects = {"char": [], "line": [], "rect": [], "curve": [], "image": []}
     page = NativePage(native.number + 1, native.rect.width, native.rect.height, initial_doctop, objects, [])
     height = page.height
+    page_rotation = native.rotation
     rotation = native.rotation_matrix
 
     def box(kind, bounds, **extra):
-        if native.rotation:
+        if page_rotation:
             bounds = pymupdf.Rect(bounds) * rotation
         x0, top, x1, bottom = bounds
         return {
@@ -121,13 +122,13 @@ def load_native_page(native, options, initial_doctop=0):
             # Broken legacy font ascenders can split same-baseline Han/Hangul
             # spans into apparent rows. Source glyph bboxes remain unchanged.
             baseline_aligned = (
-                not native.rotation
+                not page_rotation
                 and abs(line["dir"][1]) < 0.01
                 and max(s["origin"][1] for s in spans) - min(s["origin"][1] for s in spans) <= 0.5
             )
             for span in line["spans"]:
                 dx, dy = line["dir"]
-                if native.rotation:
+                if page_rotation:
                     dx, dy = dx * rotation.a + dy * rotation.c, dx * rotation.b + dy * rotation.d
                 direction = (
                     "ltr"
@@ -155,7 +156,7 @@ def load_native_page(native, options, initial_doctop=0):
                             upright=abs(dy) < 0.01,
                             **({"layout_top": line["bbox"][1]} if baseline_aligned else {}),
                             **(
-                                {"text_direction": direction} if native.rotation or direction != "ltr" else {}
+                                {"text_direction": direction} if page_rotation or direction != "ltr" else {}
                             ),
                         )
                     )
@@ -172,7 +173,7 @@ def load_native_page(native, options, initial_doctop=0):
             for item in path["items"]:
                 if item[0] == "re":
                     ax, ay, bx, by = item[1]
-                    if native.rotation:
+                    if page_rotation:
                         ax, ay, bx, by = (
                             pymupdf.Rect(min(ax, bx), min(ay, by), max(ax, bx), max(ay, by)) * rotation
                         )

@@ -3,13 +3,20 @@
 Teoria는 AI-Native Metadata & Ontology Platform이다. OpenMetadata가 데이터 자산과
 기술·거버넌스 metadata를, Teoria가 Business Ontology·Semantic Binding·Metadata
 Intelligence·Capability와 Context 실행을 담당한다. Prefect는 수집·변환·동기화를 관리한다.
-공공조달은 이 경로를 검증하는 첫 vertical domain이다.
+현재 활성 업무는 명시 입력 규격서의 파싱·물품 정보 추출·표준 후보 관리와 물품 Ontology 구축이다.
+법령 수집·조회는 메타데이터 진단의 근거 저장소로 운영한다.
+이전 기업·공고·계약·낙찰 분석과 조달 API 수집은 `archive/procurement_services/`에 비활성 보관한다.
 
 ```text
-Provider API → Pipelines / Prefect → Data DB → OpenMetadata
-                                      ↓           ↕ Semantic Binding
+규격서 → Pipelines / Prefect → 원문·추출 산출물 + Data DB 실행·참조
+                                       ↓ metadata
+                                  OpenMetadata
+                                       ↕ Semantic Binding
 AI Client → MCP / Runtime API → Capability·Context ← Ontology
 ```
+
+추출 결과와 물품 Ontology·Capability의 연결은 후속 구현이다. 현재 활성 Registry는
+공통 타입만 포함하며 이전 조달 Capability를 노출하지 않는다.
 
 ## 시작
 
@@ -32,6 +39,8 @@ AI Client → MCP / Runtime API → Capability·Context ← Ontology
 OpenMetadata entity를 Teoria DB에 복제하지 않으며 MCP는 Runtime API만 호출한다.
 운영 Runtime은 게시된 Ontology·승인된 Binding·Registry를 고정한 checksum 검증 bundle을
 사용한다. 자세한 개발 규칙은 [저장소 구조](docs/architecture/repository-structure.md)를 따른다.
+
+실제 Compose 전환과 남은 기능은 [물품 Ontology 배포 검증](docs/verification/goods_focus_deployment_2026_10_25.md)을 따른다.
 
 ## 자주 찾는 문서
 

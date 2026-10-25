@@ -15,7 +15,7 @@ ROOT = Path(__file__).parents[3]
 async def test_source_verification_profiles(profile: str) -> None:
     graph = create_source_verification_graph()
     state = {
-        "registry_root": str(ROOT / "registries"),
+        "registry_root": str(Path("archive/procurement_services/platform/registries")),
         "source_id": "nts_business_registration",
         "operation_id": "get_business_registration_status",
         "profile": profile,
@@ -68,7 +68,7 @@ async def test_live_profile_executes_and_validates_response() -> None:
     graph = create_source_verification_graph(SourceVerificationServices(executor=FakeExecutor()))
     result = await graph.ainvoke(
         {
-            "registry_root": str(ROOT / "registries"),
+            "registry_root": str(Path("archive/procurement_services/platform/registries")),
             "source_id": "nts_business_registration",
             "operation_id": "get_business_registration_status",
             "profile": "live",
@@ -97,7 +97,7 @@ async def test_live_profile_is_blocked_without_credentials() -> None:
     )
     result = await graph.ainvoke(
         {
-            "registry_root": str(ROOT / "registries"),
+            "registry_root": str(Path("archive/procurement_services/platform/registries")),
             "source_id": "nts_business_registration",
             "operation_id": "get_business_registration_status",
             "profile": "live",
@@ -121,7 +121,7 @@ async def test_live_profile_accepts_empty_optional_source_values() -> None:
     )
     result = await graph.ainvoke(
         {
-            "registry_root": str(ROOT / "registries"),
+            "registry_root": str(Path("archive/procurement_services/platform/registries")),
             "source_id": "nts_business_registration",
             "operation_id": "get_business_registration_status",
             "profile": "live",

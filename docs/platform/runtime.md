@@ -4,6 +4,10 @@ Runtime은 Source record를 Mapping으로 Runtime Object·Link에 변환하고 C
 실행한다. MCP와 외부 서비스는 이 HTTP API를 사용한다. Ontology 편집·승인과
 지속 수집은 각각 Admin과 Pipelines가 담당한다.
 
+현재 활성 bundle `2026.10.25.1`에는 업무 Capability가 없다.
+과거 조달 실행은 제공하지 않으며 물품 검색·비교는 후속 구현이다.
+[배포 검증](../verification/goods_focus_deployment_2026_10_25.md)의 실제 상태를 따른다.
+
 ## 요청이 처리되는 순서
 
 ```text
@@ -44,7 +48,9 @@ uv run --locked --package teoria-platform teoria activate-artifact dist/runtime 
   --version 2026.10.16.1
 ```
 
-`compile-runtime-bundle`은 `TEORIA_APP_DATABASE_URL`을 사용한다. 기본 Ontology
+`compile-runtime-bundle`은 `TEORIA_APP_DATABASE_URL`을 사용한다.
+새 Registry에서 제거된 Capability·Source를 가리키는 Binding은 bundle snapshot에서 제외한다.
+Application DB의 승인·검토 이력은 변경하지 않으며, 유지된 대상의 version·호환성 검사는 생략하지 않는다. 기본 Ontology
 namespace는 `teoria`이며 `--ontology-namespace`를 반복해 지정할 수 있다.
 필요한 stable concept를 해석할 수 없거나 호환성이 맞지 않으면 구성이 실패한다.
 
@@ -85,9 +91,5 @@ artifact 검증·구성은 `registry/artifact.py`와 관련 모듈, App DB snaps
 Runtime cache는 `runtime/cache/`가 소유한다. Redis 장애는 실행을 막지 않고 캐시 없이
 동작한다. 정책 bundle 빌드·서명·서비스 시작 순서는 [Compose](../deployment/compose.md)를 따른다.
 
-Source DB 실행과 시장 분석 reader는 native async PostgreSQL을 사용한다.
-HTTP부터 Repository까지 `await`를 연결하고 분류 계층 보강 같은 내부 SQL helper도
-같은 연결·transaction 안에서 완료를 기다린다. 동시 실행·취소의 기준은
-[Platform 개발 안내](development.md#io와-동시-실행)를 따른다.
-실제 기관 프로필·활동 검색과 분류 보강 경로의 배포 검증은
-[2026-10-16 검증 기록](../verification/async_deployment_collection_2026_10_16.md)에 있다.
+Source DB 실행은 native async PostgreSQL을 사용한다. HTTP부터 Repository까지 `await`를
+연결하며 transaction·승인·취소 경계를 보존한다. 이전 시장 분석 reader는 비활성 보관했다.

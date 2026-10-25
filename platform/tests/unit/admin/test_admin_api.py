@@ -7,7 +7,7 @@ from teoria.settings import Settings
 from teoria.registry.loader import RegistryLoader
 
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 
 
 def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:

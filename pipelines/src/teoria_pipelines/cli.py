@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import json
 import os
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -149,7 +148,7 @@ def main() -> int:
         "--backend", choices=("process", "kubernetes"), required=True
     )
     register_parser.add_argument(
-        "--kind", choices=("ingestion", "metadata", "all"), default="ingestion"
+        "--kind", choices=("ingestion", "legal-information", "metadata", "all"), default="ingestion"
     )
     register_parser.add_argument(
         "--pipelines", type=Path, default=_default_pipeline_root()
@@ -157,7 +156,7 @@ def main() -> int:
 
     worker_parser = subparsers.add_parser(
         "worker",
-        help="reconcile finished ingestion runs, then start a Prefect process worker",
+        help="start a bounded specification processing worker",
     )
     worker_parser.add_argument("--pool", required=True)
 
@@ -193,7 +192,24 @@ def main() -> int:
     law_show.add_argument("--mst", required=True)
     law_show.add_argument("--effective-date", type=date.fromisoformat, required=True)
     law_show.add_argument("--article", help="article number, e.g. 24의2")
+    specification_parser = subparsers.add_parser("specification", help="process explicit specification documents and standard proposals")
+    specification_subparsers = specification_parser.add_subparsers(dest="specification_command", required=True)
+    specification_run = specification_subparsers.add_parser("run", help="execute a specification Prefect flow")
+    specification_run.add_argument("--manifest", required=True, type=Path)
+    specification_evaluate = specification_subparsers.add_parser("evaluate", help="freeze, run and clean an extraction improvement cycle")
+    evaluation_steps = specification_evaluate.add_subparsers(dest="evaluation_step", required=True)
+    evaluation_steps.add_parser("schema", help="print the evaluation manifest JSON Schema")
+    evaluation_prepare = evaluation_steps.add_parser("prepare", help="verify classification and freeze a grouped random sample")
+    evaluation_prepare.add_argument("--manifest", required=True, type=Path)
+    for evaluation_step in ("baseline", "candidate", "finish", "abort"):
+        step = evaluation_steps.add_parser(evaluation_step)
+        step.add_argument("--cycle-id", required=True)
+    specification_evaluate.add_argument("--state-dir", type=Path, default=Path(".artifacts/specification_improvement"))
     args = parser.parse_args()
+
+    if args.command == "specification":
+        from teoria_pipelines.domains.public_procurement.specification_processing.cli import run_command
+        return run_command(args)
 
     if args.command == "deployment-docs":
         from teoria_pipelines.deployment_docs import render_deployment_docs
@@ -261,36 +277,10 @@ def main() -> int:
 
     if args.command == "worker":
         from teoria_pipelines.deployment import positive_setting
-        from teoria_pipelines.recovery import reconcile_finished_pipeline_runs
 
         limit = positive_setting("TEORIA_PIPELINE_CONCURRENCY", 2)
-        settings = bootstrap_pipeline_settings()
-        try:
-            recovered = asyncio.run(
-                reconcile_finished_pipeline_runs(
-                    PostgresStore(settings.data_database_url or "")
-                )
-            )
-        except (OSError, ValueError, PostgresError) as exc:
-            print(f"ERROR run_reconciliation_failed: {exc}", file=sys.stderr)
-            return 1
-        for execution_id in recovered:
-            print(f"RECOVERED {execution_id}", flush=True)
-        os.execvp(
-            "prefect",
-            [
-                "prefect",
-                "worker",
-                "start",
-                "--type",
-                "process",
-                "--pool",
-                args.pool,
-                "--limit",
-                str(limit),
-            ],
-        )
-        return 0
+        os.execvp("prefect", ["prefect", "worker", "start", "--type", "process",
+                             "--pool", args.pool, "--limit", str(limit)])
 
     if args.command == "register":
         from teoria_pipelines.deployment import register_deployments

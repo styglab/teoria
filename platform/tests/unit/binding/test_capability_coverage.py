@@ -8,7 +8,7 @@ ROOT = Path(__file__).parents[3]
 
 
 def test_capability_coverage_reports_bound_and_unbound_contract_fields() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     report = build_capability_binding_coverage(
         catalog,
         [

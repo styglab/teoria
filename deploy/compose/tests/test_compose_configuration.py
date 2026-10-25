@@ -106,7 +106,18 @@ class ComposeConfigurationTests(unittest.TestCase):
         self.assertEqual(registration["command"], [
             "teoria-pipelines", "register", "--backend", "process", "--kind", "ingestion",
         ])
-        self.assertEqual(registration["environment"]["TEORIA_PIPELINE_BACKFILL_CONCURRENCY"], "1")
+        self.assertNotIn("TEORIA_PIPELINE_BACKFILL_CONCURRENCY", registration["environment"])
+        self.assertEqual(worker["command"], ["teoria-pipelines", "worker", "--pool", "teoria-specification"])
+        self.assertFalse(any(name.startswith("TEORIA_CONNECTOR_") for name in worker["environment"]))
+        self.assertEqual(worker["environment"]["TEORIA_SPECIFICATION_PARSER_PYTHON"], "/opt/kory_parser/bin/python")
+
+    def test_law_credentials_are_isolated_from_document_worker(self):
+        services = self.resolved("teoria-test-law")["services"]
+        law = services["prefect-law-worker"]
+        self.assertEqual(law["command"], ["teoria-pipelines", "worker", "--pool", "teoria-legal-information"])
+        self.assertEqual(law["environment"]["TEORIA_PIPELINE_CONCURRENCY"], "1")
+        self.assertIn("TEORIA_CONNECTOR_MOLEG_LAW_API_KEY", law["environment"])
+        self.assertNotIn("TEORIA_CONNECTOR_MOLEG_LAW_API_KEY", services["prefect-worker"]["environment"])
 
 
 if __name__ == "__main__":

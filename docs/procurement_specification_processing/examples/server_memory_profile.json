@@ -1,0 +1,51 @@
+{
+  "profile_key": "server_memory",
+  "version": "0.1.0",
+  "classification_code": "4321150102",
+  "entities": [
+    {"rule_id": "memory", "aliases": ["RAM", "메모리", "Memory"], "concept_id": "goods.memory_target"},
+    {"rule_id": "item", "aliases": ["서버"], "concept_id": "goods.item"}
+  ],
+  "requirements": [
+    {
+      "rule_id": "required_capacity",
+      "target_concept_id": "goods.memory_target",
+      "property_concept_id": "goods.memory_target.capacity",
+      "source_property_keys": ["capacity", "module_capacity", "total_capacity"],
+      "roles": ["requirement_candidate"],
+      "scopes": ["per_component", "per_module", "system_total"],
+      "value_type": "number",
+      "units": [{"source_unit": "GB", "canonical_unit": "GB"}]
+    },
+    {
+      "rule_id": "required_module_count",
+      "target_concept_id": "goods.memory_target",
+      "property_concept_id": "goods.memory_target.module_count",
+      "source_property_keys": ["quantity", "module_count"],
+      "roles": ["requirement_candidate"],
+      "scopes": ["per_component", "system_total"],
+      "value_type": "number",
+      "units": [
+        {"source_unit": "개", "canonical_unit": "개"},
+        {"source_unit": "EA", "canonical_unit": "개"},
+        {"source_unit": "ea", "canonical_unit": "개"}
+      ]
+    },
+    {
+      "rule_id": "supported_capacity",
+      "target_concept_id": "goods.memory_target",
+      "property_concept_id": "goods.memory_target.capacity",
+      "source_property_keys": ["capacity", "maximum_capacity", "supported_capacity"],
+      "roles": ["supported_capability"],
+      "scopes": ["support_limit"],
+      "value_type": "number",
+      "units": [
+        {"source_unit": "GB", "canonical_unit": "GB"},
+        {"source_unit": "TB", "canonical_unit": "GB", "multiplier": "1000"}
+      ]
+    }
+  ],
+  "relations": [
+    {"rule_id": "memory_target", "source_kind": "component_of", "relationship_concept_id": "goods.has_memory_target", "reverse": true}
+  ]
+}

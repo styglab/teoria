@@ -88,7 +88,7 @@ export type OntologyBindingImpact = {
 };
 
 export const ontologyApi = {
-  ontologyConcepts: (namespace = "procurement") =>
+  ontologyConcepts: (namespace = "goods") =>
     getJson<{ items: OntologyConcept[] }>(
       `/ontology-authoring/ontologies/${encodeURIComponent(namespace)}/concepts`,
     ),

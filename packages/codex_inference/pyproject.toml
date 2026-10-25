@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "teoria-codex-inference"
+version = "0.1.0"
+description = "Bounded JSON-only Codex subprocess inference for Platform and Pipelines"
+requires-python = ">=3.11,<3.13"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8,<9", "pytest-asyncio>=0.24,<2"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/teoria_codex_inference"]

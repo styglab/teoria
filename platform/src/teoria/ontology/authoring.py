@@ -237,13 +237,14 @@ class OntologyAuthoringRepository:
         if table == "relationship_types":
             await conn.execute(
                 """INSERT INTO ontology.relationship_types
-              (relationship_type_id,ontology_version_id,code,name,source_object_id,target_object_id,source_cardinality,target_cardinality,temporal,transitive,status,concept_id)
-              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s)""",
+              (relationship_type_id,ontology_version_id,code,name,description,source_object_id,target_object_id,source_cardinality,target_cardinality,temporal,transitive,status,concept_id)
+              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s)""",
                 (
                     uuid4(),
                     new_id,
                     item["code"],
                     item["name"],
+                    item.get("description", ""),
                     object_map[item["source_object_id"]],
                     object_map[item["target_object_id"]],
                     item["source_cardinality"],
@@ -424,6 +425,7 @@ class OntologyAuthoringRepository:
                 {
                     "code",
                     "name",
+                    "description",
                     "source_cardinality",
                     "target_cardinality",
                     "temporal",
@@ -641,13 +643,14 @@ class OntologyAuthoringRepository:
             return await (
                 await conn.execute(
                     """INSERT INTO ontology.relationship_types
-              (relationship_type_id,ontology_version_id,code,name,source_object_id,target_object_id,source_cardinality,target_cardinality,temporal,transitive,status,concept_id)
-              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s) RETURNING *""",
+              (relationship_type_id,ontology_version_id,code,name,description,source_object_id,target_object_id,source_cardinality,target_cardinality,temporal,transitive,status,concept_id)
+              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s) RETURNING *""",
                     (
                         uuid4(),
                         version_id,
                         p["code"],
                         p["name"],
+                        p.get("description", ""),
                         subject,
                         target,
                         p.get("source_cardinality", "many"),

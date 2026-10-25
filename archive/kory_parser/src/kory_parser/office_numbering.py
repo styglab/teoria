@@ -123,6 +123,9 @@ class DocxNumbering:
                 "lowerRoman": "ROMAN_SMALL",
                 "decimalEnclosedCircle": "CIRCLED_DIGIT",
             }
+            # Only the verified basic Ganada order; retain warnings outside it.
+            if kind == "ganada" and 1 <= current <= 14:
+                return format_number(current, "HANGUL_SYLLABLE")
             if kind == "decimalZero":
                 return f"{current:02d}"
             if kind not in formats:

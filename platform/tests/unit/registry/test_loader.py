@@ -8,10 +8,10 @@ from teoria.registry.schema import ReferenceFile, RuntimeContractRegistry
 from teoria.registry.validation.registry import RegistryValidator
 
 
-REGISTRIES = Path(__file__).parents[3] / "registries"
+REGISTRIES = Path("archive/procurement_services/platform/registries")
 
 
-def test_loads_current_registries() -> None:
+def test_loads_archived_contract_fixtures() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
 
     assert set(catalog.sources) == {

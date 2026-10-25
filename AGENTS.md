@@ -19,9 +19,16 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - `packages/`에는 둘 이상의 프로젝트가 실제로 사용하는 설치형 라이브러리만 둔다. 각 패키지는 독립 `pyproject.toml`, 테스트와 단일 책임을 가지며 소유 프로젝트를 역으로 import하지 않는다.
 - 미래 사용을 예상한 빈 패키지나 추상화는 만들지 않는다.
 - 로컬 Compose 배포는 `deploy/compose/`, EC2 K3s 배포와 GitHub 자동 배포는 `deploy/k3s/`와 `.github/workflows/deploy_k3s.yaml`에 둔다. 실제 환경 검증 전에는 템플릿 검증을 운영 배포 성공으로 기록하지 않는다.
-- 첨부파일 다운로드·문서 파싱·입찰요건 추출·참가자격 판단은 현재 보류 및 제거 대상이다.
-  보관본은 `archive/bid_document_processing/`에 두고 활성 코드·Registry·Skill·배포에 다시 연결하지 않는다.
-  공고·계약·낙찰·개찰 수집과 API 면허·지역 정보 적재는 유지한다.
+- 명시적으로 입력한 규격서의 파싱·정보 추출·표준 후보 관리·고정 표준 적용은
+  `pipelines/.../domains/public_procurement/specification_processing/`에서 재개한다.
+  산출물 본문은 객체 저장소, 실행 상태·산출물 참조·문서별 결과는 Data DB에 둔다.
+  자동 채택은 추출 표준 draft이며 Published Ontology나 authoritative metadata로 승격하지 않는다.
+  구형 공고 첨부 자동 수집·참가자격 판단과 `archive/bid_document_processing/`의 실행 경로는
+  계속 보류하며 활성 Registry·Skill·배포에 다시 연결하지 않는다.
+  현재 활성 범위는 규격서 처리와 물품 Ontology 구축이다. 기존 공고·계약·낙찰·개찰·업종
+  수집과 기업·조달 분석은 `archive/procurement_services/`에 비활성 보관하며 활성 배포에 연결하지 않는다.
+  Ontology·Binding·Mapping·Capability·Runtime·OpenMetadata·Prefect 기반과 기존 게시·DB 이력은 유지한다.
+  메타데이터 진단용 법령 수집·조회는 활성화하며 `legal_information` 패키지와 전용 Prefect pool에서 운영한다.
 
 ## Understandability and maintainability
 
@@ -72,7 +79,7 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - Prefect는 Workflow와 Data Operations를 소유한다. Metadata 의미나 Ontology를 소유하지 않는다.
 - OpenMetadata ingestion schedule과 retry도 Prefect가 소유한다. 기본 배포에 Airflow를 추가하지 않고 공식 ingestion image를 ephemeral Job으로 실행하며, 일반 Prefect Worker 이미지에 OpenMetadata ingestion dependency를 설치하지 않는다.
 - OpenMetadata는 Technical Metadata와 Governance/Semantic Metadata의 authoritative source다. Data Asset, Schema, Description, Owner, Tag, Glossary, Domain, physical lineage, quality와 usage를 Teoria DB에 복제하지 않는다.
-- Teoria Application DB는 Business Ontology, Semantic Binding, Metadata Intelligence의 Suggestion/Review/Application과 Context 설정만 소유한다.
+- Teoria Application DB는 Business Ontology, Semantic Binding, Metadata Intelligence의 Suggestion/Review/Application, Context 설정과 물품 정규화 프로파일·승인 이력을 소유한다. 문서별 관찰 본문은 파일/S3에 유지한다.
 - Business Ontology에는 지속 가능한 업무 의미만 둔다. API 응답, Capability 응답과 Runtime projection을 Business Object로 만들지 않는다.
 - Runtime Mapping(`source record -> runtime object`)과 Semantic Binding(`ontology concept <-> term/asset/API/capability`)을 혼용하지 않는다.
 - OpenMetadata 연결은 `MetadataTargetRef` 값 객체로만 표현한다. system, entity ID, entity type, FQN과 필요한 version 이외의 OpenMetadata entity 상태를 저장하지 않는다.

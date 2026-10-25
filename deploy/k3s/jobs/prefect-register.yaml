@@ -39,8 +39,6 @@ spec:
           value: teoria/pipelines:release
         - name: TEORIA_PIPELINE_CONCURRENCY
           value: '2'
-        - name: TEORIA_PIPELINE_BACKFILL_CONCURRENCY
-          value: '1'
         command:
         - teoria-pipelines
         - register

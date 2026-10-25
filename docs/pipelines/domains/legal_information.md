@@ -1,5 +1,6 @@
 # 법령 수집 및 버전 관리
 
+
 법제처 공식 API를 직접 호출하는 독립 수집 기능이다. `korean-law-mcp`는
 요청·연혁 처리의 참고 자료이며 실행 의존성이 아니다. 수집·파싱·Data DB는
 `pipelines/src/teoria_pipelines/domains/legal_information/laws/`가 소유한다. 이번 단계는 법령 근거
@@ -140,3 +141,13 @@ Suggestion→Review→Application 절차를 거쳐 OpenMetadata에 적용해야 
 수집된 snapshot을 사용하는 Admin 진단 API와 기준일별 검색 규칙은
 [법령 근거 검색](../../platform/metadata/law_evidence.md)에 설명한다. Pipeline은 원문·버전·
 검색용 read view를 소유하고 Platform은 조회·진단을 소유한다.
+
+## 현재 전용 배포
+
+법령 작업은 `pipelines/prefect.legal_information.yaml`에 정의한다.
+Compose `prefect-law-deploy`가 `teoria-legal-information` pool과 `laws` queue에 등록하고,
+`prefect-law-worker`가 동시 실행 1개·CPU 1·메모리 2GiB 상한으로 실행한다.
+기존 조달 수집 pool을 재개하지 않는다. 월~토 04:15 변경 동기화,
+일요일 04:15 전체 연혁 보정을 실행한다(Asia/Seoul).
+K3s는 전용 dispatcher와 `teoria-legal-information-secrets`를 사용하며 실제 클러스터 검증은 별도다.
+[복구 검증](../../verification/law_recovery_2026_10_25.md)을 따른다.

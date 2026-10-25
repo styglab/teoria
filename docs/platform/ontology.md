@@ -17,26 +17,26 @@ CapabilityVersion은 Ontology revision 자체에 pin하지 않고 필요한 stab
 해석하며 선언된 필수 요구사항을 해석할 수 없으면 publish를 차단한다. Lifecycle과
 특정 Artifact에 대한 compatible/incompatible 판정은 서로 다른 상태로 관리한다.
 
-입찰체크 Ontology 변경은 현재 Published version에서 새 Draft를 생성해 수행한다.
+기존 Published Ontology 변경은 현재 Published version에서 새 Draft를 생성해 수행한다.
 업무 의미가 같은 stable concept는 승계하고, 화면 projection이나 Capability 응답은
 Business Object로 추가하지 않는다. 검토·승인·게시된 새 version만 Runtime bundle에
 포함하며 새 의미 계약을 사용하는 배포는 새 bundle을 사용한다. 이전 bundle은 복구를 위해 보존한다.
 
 ## 모델 경계
 
-공공조달 모델은 하나의 shared ontology 안에서 다음 경계를 유지한다.
+현재 물품 Ontology의 초기 모델은 `platform/ontology_blueprints/goods.yaml`이다.
 
-| 영역 | 대표 개념 |
+| 개념 | 의미 |
 |---|---|
-| Identity | `LegalEntity`, `BusinessRegistration`, `Organization` |
-| Procurement lifecycle | `ProcurementCase`, `BidNotice`, `BidOpening`, `Award`, `Contract` |
-| Qualification | `Qualification`, `Industry`, `RegisteredIndustry`, `Sanction` |
-| Observation | Source별 관찰, 식별 assertion, provenance |
+| `goods.specification_document` | 원문 checksum으로 식별하는 규격서 |
+| `goods.item` | 문서에 등장한 물품·구성품 항목 |
+| `goods.requirement` | 물품·구성품에 귀속되는 규격 요구조건 |
 
-동명이거나 이름이 비슷하다는 이유로 객체를 합치지 않는다. Provider가 제공한
-식별자와 검증된 연결을 사용하고, 서로 다른 원천의 충돌은 값을 덮어쓰기보다
-원 관찰과 authority policy를 보존한다. 계약 snapshot을 계약 사건이나 version
-history로 오해하지 않는다.
+문서→물품 기술, 물품→구성품, 물품→요구조건, 문서→요구조건 근거 관계를 둔다.
+실제 데이터 연결과 후보 검토를 완료한 Published 모델로 간주하지 않는다.
+문서별 관찰 ID·원문 위치와 공통 의미 개념을 구분하며 이름 유사성만으로 항목을 병합하지 않는다.
+기존 `teoria`의 Published version과 예전 namespace는 이력으로 보존한다.
+추출 표준은 `pipeline_selected_draft`이고 Business Ontology 승인·게시와 별도다.
 
 ## Semantic path
 

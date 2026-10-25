@@ -51,7 +51,7 @@ class TimeoutClient(RetryClient):
 
 
 def test_builds_request_from_source_registry() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     request = SourceRequestBuilder().build(
         catalog,
         "nts_business_registration",
@@ -68,7 +68,7 @@ def test_builds_request_from_source_registry() -> None:
 
 
 def test_rejects_invalid_operation_input() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
 
     with pytest.raises(RequestBuildError) as exc_info:
         SourceRequestBuilder().build(
@@ -82,7 +82,7 @@ def test_rejects_invalid_operation_input() -> None:
 
 
 def test_database_source_cannot_be_built_as_an_http_request() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
 
     with pytest.raises(RequestBuildError) as exc_info:
         SourceRequestBuilder().build(catalog, "teoria_public_procurement", "list_contracts", {})
@@ -92,7 +92,7 @@ def test_database_source_cannot_be_built_as_an_http_request() -> None:
 
 @pytest.mark.asyncio
 async def test_retries_idempotent_source_request_on_temporary_failure() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     request = SourceRequestBuilder().build(
         catalog,
         "nts_business_registration",
@@ -120,7 +120,7 @@ async def test_retries_idempotent_source_request_on_temporary_failure() -> None:
 
 @pytest.mark.asyncio
 async def test_reports_structured_source_timeout_after_retries() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     request = SourceRequestBuilder().build(
         catalog,
         "nts_business_registration",
@@ -151,7 +151,7 @@ async def test_reports_structured_source_timeout_after_retries() -> None:
 
 
 def test_allows_empty_optional_source_field() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     request = SourceRequestBuilder().build(
         catalog,
         "nts_business_registration",
@@ -174,7 +174,7 @@ def test_allows_empty_optional_source_field() -> None:
 
 
 def test_recursively_validates_nested_response_refs() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     response = ExecutionResponse(
         status_code=200,
         content_type="application/json",
@@ -213,7 +213,7 @@ def test_recursively_validates_nested_response_refs() -> None:
 
 
 def test_rejects_failed_source_control_code() -> None:
-    catalog = RegistryLoader(ROOT / "registries").load()
+    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     response = ExecutionResponse(
         status_code=200,
         content_type="application/json",

@@ -78,6 +78,13 @@ reports and frozen sources; remove unneeded successful samples and regenerable
 intermediate copies. Do not clean unfinished validation sets or an unapplied
 accepted candidate. Preserve use history even when sample bytes are removed.
 Use `--keep-intermediates` only when the task needs the full debugging artifacts.
+Cleanup is part of completing every cycle, including a rejected candidate. Remove
+ordinary successful sample attachments and full parsed outputs after reporting;
+retain only fixed regression originals and selected source-backed problem evidence.
+Do not promote every inspected attachment into a permanent regression fixture.
+Keep compact measurements, decisions and usage hashes rather than all result bodies.
+Report bytes removed and bytes retained at the end. Before another cycle, check for
+completed cycles whose cleanup was interrupted and finish their cleanup first.
 Keep source documents and executor logs in ignored local artifacts. Never publish,
 commit, apply a saved candidate to another checkout, or change the oracle as an implied
 part of evaluation. Those actions require a task that actually includes them.

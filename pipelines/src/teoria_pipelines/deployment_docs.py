@@ -62,5 +62,7 @@ def render_deployment_docs(pipeline_root: Path) -> str:
             lines.append(
                 f"| `{schedule['cron']}` | `{schedule['timezone']}` | {state} |"
             )
+        if not deployment.get("schedules"):
+            lines.append("| — | — | 수동 실행 |")
         lines.append("")
     return "\n".join(lines)

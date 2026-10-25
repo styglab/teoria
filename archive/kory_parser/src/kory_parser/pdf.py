@@ -53,16 +53,25 @@ def clean_pdf_text(text: str) -> str:
 
 
 def normalize_glyphs(chars: list[dict]) -> tuple[list[dict], int]:
-    chars = dedupe_glyphs(
-        [dict(c, text=c["text"].replace("\x00", "")) for c in chars if c["text"].replace("\x00", "")],
-        tolerance=0.3,
-    )
+    cleaned = []
+    for char in chars:
+        text = char["text"]
+        if "\x00" in text:
+            text = text.replace("\x00", "")
+        if text:
+            copied = char.copy()
+            copied["text"] = text
+            cleaned.append(copied)
+    chars = dedupe_glyphs(cleaned, tolerance=0.3)
+    circles = [(index, c) for index, c in enumerate(chars) if c["text"] in ("◯", "○", "〇")]
+    if not circles:
+        return chars, 0
     digit_items = {id(c): n for n, c in enumerate(chars) if len(c["text"]) == 1 and c["text"] in "0123456789"}
+    if not digit_items:
+        return chars, 0
     digit_index = CharacterIndex([c for c in chars if id(c) in digit_items])
     removed, replacements = set(), {}
-    for index, circle in enumerate(chars):
-        if circle["text"] not in ("◯", "○", "〇"):
-            continue
+    for index, circle in circles:
         digits = [
             (digit_items[id(c)], c)
             for c in digit_index.within(

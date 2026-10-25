@@ -3,6 +3,15 @@
 새 기능을 추가하거나 기존 동작을 수정할 때 어느 프로젝트가 책임지는지 정하는 문서다.
 전체 데이터 흐름과 권위 경계는 [아키텍처](overview.md)를 먼저 참고한다.
 
+## 현재 활성 범위
+
+규격서 파싱·물품 정보 추출·표준 후보 관리와 물품 Ontology 구축, 메타데이터 진단용 법령 수집·조회를 활성 범위로 한다.
+Ontology·Binding·Mapping·Capability·Runtime·Context·OpenMetadata·Prefect 기반은 유지한다.
+법령 기능은 `legal_information` 소유 패키지와 전용 배포로 운영한다.
+기존 기업·조달 이력 분석과 API 수집 코드·계약·전용 테스트는 `archive/procurement_services/`에
+비활성 보관한다. 활성 코드·Registry·이미지에서 이를 import하거나 재등록하지 않는다.
+기존 migration·게시 이력·데이터는 보존한다. [시작 안내](../platform-guide.md)를 따른다.
+
 ## 프로젝트 선택
 
 | 변경하려는 내용 | 소유 프로젝트 | 개발 안내 |
@@ -31,6 +40,9 @@ MCP는 Runtime HTTP API만 호출하고 Source 키·DB 권한·embedded Runtime�
 Pipeline의 별도 통합 검증 진입점만 Platform Registry를 지연 import할 수 있다.
 
 `packages/`에는 둘 이상의 프로젝트가 실제 사용하는 설치형 라이브러리만 둔다.
+`goods_normalization/`은 Platform의 프로파일 발행과 Pipelines의 적용에서 함께 사용하는 데이터 계약이며
+실행 코드·DB·소유 프로젝트를 import하지 않는다.
+`codex_inference/`는 두 프로젝트가 실제 사용하는 JSON 전용 Codex subprocess 실행·시간 제한·취소 처리를 소유한다.
 각 패키지는 독립 `pyproject.toml`, 테스트와 단일 책임을 가지며 소유 프로젝트를
 역으로 import하지 않는다. 미래 재사용을 위한 빈 패키지나 `common`, `shared`,
 `utils` 묶음을 만들지 않는다.
@@ -89,8 +101,8 @@ Teoria 소유 경로와 내부 ID의 기본 형식은 `snake_case`다. 클래스
 `tests/documentation/`에 함께 두며 루트 `tools/`를 추가하지 않는다.
 문서는 `platform/`, `pipelines/`, `mcp/`, `packages/`의 소유권을 따르며 전체 설계는
 `architecture/`, 서비스 배포는 `deployment/`, 외부 연동은 `integration/`에 둔다.
-조달 규격 인텔리전스의 서비스 설계 문서는 검토 흐름을 한곳에서 읽도록
-[`procurement_specification_intelligence/`](../procurement_specification_intelligence/index.md)에
+조달 규격서 처리의 현재 계약·개선 평가와 서비스 설계 자료는 한곳에서 읽도록
+[`procurement_specification_processing/`](../procurement_specification_processing/index.md)에
 모은다. 이 문서 배치는 실행 코드·계약의 프로젝트 소유권을 변경하지 않는다.
 현재 계약과 절차는 계속 갱신하고, 날짜·버전에 종속된 결과는 `verification/`에 보관한다.
 문서 작성·통합 기준과 읽는 순서는 [문서 목차](../index.md)를 따른다.

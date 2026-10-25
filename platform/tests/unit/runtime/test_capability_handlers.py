@@ -90,18 +90,15 @@ def test_duplicate_registration_cannot_replace_existing_handler(method):
 
 @pytest.fixture(scope="module")
 def catalog():
-    return RegistryLoader(Path(__file__).parents[3] / "registries").load()
+    return RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
 
 
-def test_default_handlers_cover_existing_registry_processor_contracts(catalog):
+def test_default_handlers_do_not_load_retired_processors(catalog):
     handlers = create_capability_handlers()
-    processors = {
-        capability.processor
-        for capability in catalog.capabilities.values()
-        if capability.kind != "query"
-    }
+    processors = {capability.processor for capability in catalog.capabilities.values()
+                  if capability.kind != "query"}
     assert processors
-    assert all(handlers.processor(processor) is not None for processor in processors)
+    assert all(handlers.processor(processor) is None for processor in processors)
 
 
 @pytest.mark.asyncio

@@ -51,31 +51,6 @@ spec:
             secretKeyRef:
               name: teoria-secrets
               key: TEORIA_RUNTIME_DATA_DATABASE_URL
-        - name: TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: teoria-secrets
-              key: TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY
-        - name: TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: teoria-secrets
-              key: TEORIA_SOURCE_FSC_COMPANY_BASIC_API_KEY
-        - name: TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: teoria-secrets
-              key: TEORIA_SOURCE_FSC_COMPANY_FINANCIAL_API_KEY
-        - name: TEORIA_SOURCE_PPS_USER_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: teoria-secrets
-              key: TEORIA_SOURCE_PPS_USER_API_KEY
-        - name: TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: teoria-secrets
-              key: TEORIA_SOURCE_KODMA_SMPP_CERTIFICATE_API_KEY
         command:
         - teoria-runtime-api
         ports:

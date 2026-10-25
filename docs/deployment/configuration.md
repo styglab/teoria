@@ -7,6 +7,12 @@ uv sync --locked --all-packages --all-groups
 
 의존성은 사용하는 프로젝트의 `pyproject.toml`에만 추가한다. 루트 `uv.lock`은 개발·CI 재현성을 위해 공유한다.
 
+현재 조달·기업 API credential은 활성 Compose 서비스에 주입하지 않는다.
+법령 전용 Worker에는 `TEORIA_CONNECTOR_MOLEG_LAW_API_KEY`를 주입한다.
+아래 Provider 관련 변수는 공통 엔진의 설정 참조이며 현재 수집 기능을 뜻하지 않는다.
+규격서 모델 인증은 별도 `specification-model-auth` volume, parser는
+`TEORIA_SPECIFICATION_PARSER_PYTHON`을 사용한다.
+
 ## 설정을 읽는 위치
 
 | 대상 | 기준 코드·설정 |
@@ -92,7 +98,7 @@ Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할
 | `TEORIA_ADMIN_METADATA_PUBLIC_READ` | `false` | `true`면 메타데이터 카탈로그·상세·통합 패널·계보·프로파일의 토큰 없는 조회 허용. 데이터 샘플과 변경 API의 인증은 유지 |
 | `TEORIA_ADMIN_API_ACTOR` | `system:admin` | 감사 기록에 남길 인증 principal ID |
 | `TEORIA_ADMIN_API_ROLES` | `metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner` | 쉼표로 구분한 Admin 승인 역할 |
-| `TEORIA_ADMIN_DATA_DATABASE_URL` | 없음 | Admin API가 입찰 데이터 조회에 사용하는 read-only Data DB URL |
+| `TEORIA_ADMIN_DATA_DATABASE_URL` | 없음 | 향후 데이터 조회를 위한 read-only Data DB URL |
 | `TEORIA_DATABASE_CONCURRENCY_LIMIT` | `10` | Platform event loop별·DB별 활성 연결 상한. 여러 프로세스는 상한 합산 |
 | `TEORIA_APP_DATABASE_URL` | 없음 | Ontology v2, Binding, Intelligence를 저장하는 Teoria Application DB URL |
 
@@ -101,10 +107,9 @@ Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할
 | 변수 | 기본값 | 의미 |
 |---|---|---|
 | `TEORIA_PIPELINE_PATH` | `pipelines` | Pipeline 루트 |
-| `TEORIA_PIPELINE_CONCURRENCY` | `2` | 두 배포의 수집 pool 전체 동시 실행 상한. Compose Worker 자체 실행 상한에도 적용 |
-| `TEORIA_PIPELINE_BACKFILL_CONCURRENCY` | `1` | Backfill·보정 Queue 동시 실행 상한. 전체 상한 이하여야 함 |
-| `TEORIA_PIPELINE_WORKER_CPUS` | `4` | Compose 수집 Worker 전체 CPU 상한 |
-| `TEORIA_PIPELINE_WORKER_MEMORY` | `8g` | Compose 수집 Worker 전체 메모리 상한 |
+| `TEORIA_PIPELINE_CONCURRENCY` | `2` | 규격서 pool 전체 동시 실행 상한. Compose Worker 자체 실행 상한에도 적용 |
+| `TEORIA_PIPELINE_WORKER_CPUS` | `4` | Compose 규격서 Worker 전체 CPU 상한 |
+| `TEORIA_PIPELINE_WORKER_MEMORY` | `8g` | Compose 규격서 Worker 전체 메모리 상한 |
 | `TEORIA_PLATFORM_REGISTRY_PATH` | `platform/registries` | Pipeline 통합 검증 대상 |
 | `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
 | `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `5` | Connector의 멱등 요청 최대 시도 횟수 |

@@ -11,6 +11,9 @@ def blocks_to_markdown(blocks: list[Block]) -> str:
     for block in blocks:
         if block.table:
             lines = ["<table>"]
+            if block.table.caption:
+                caption = escape(map_display_text(block.table.caption)).replace("\n", "<br>")
+                lines.append(f"  <caption>{caption}</caption>")
             for row in block.table.cells:
                 lines.append("  <tr>")
                 for cell in row:

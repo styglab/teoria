@@ -1,5 +1,8 @@
 # 입찰체크 서비스 연동
 
+> 과거 구현 자료: 이 기능은 2026-10-25 물품 규격서 중심 전환으로 비활성 보관했다.
+> 아래 명령·연동·건수는 현재 활성 서비스의 실행 기준이 아니다. 현재 안내는 `docs/index.md`를 따른다.
+
 입찰체크 서비스는 MCP나 Data DB에 직접 연결하지 않고 Runtime HTTP API를 호출한다.
 
 호출 가능한 Capability와 입력 계약은 배포된 Runtime의 `GET /v1/capabilities`에서
@@ -45,8 +48,8 @@ Capability 응답의 object와 link에는 type, identity와 provenance가 포함
 ## 기관·업체 계약 집계 표시
 
 기관·업체 조달 프로필의 계약 통계는
-[`analyze_organization_procurement_profile`](../../platform/registries/domains/public_procurement/capabilities/analyze_organization_procurement_profile.yaml)과
-[`analyze_company_procurement_profile`](../../platform/registries/domains/public_procurement/capabilities/analyze_company_procurement_profile.yaml)을 사용한다.
+[`analyze_organization_procurement_profile`](../../archive/procurement_services/platform/registries/domains/public_procurement/capabilities/analyze_organization_procurement_profile.yaml)과
+[`analyze_company_procurement_profile`](../../archive/procurement_services/platform/registries/domains/public_procurement/capabilities/analyze_company_procurement_profile.yaml)을 사용한다.
 산정 규칙의 단일 원본은 [공공조달 계약 집계 기준](../platform/domains/public_procurement/contract_aggregation.md)이다.
 
 입찰체크는 응답의 `analysis_basis`와 `summary.amount_completeness`,

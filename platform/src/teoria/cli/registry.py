@@ -4,10 +4,14 @@ import psycopg
 
 from teoria.registry.artifact import (
     RegistryArtifactError,
+    RegistryArtifactLoader,
     RegistryArtifactStore,
     RuntimeBundleCompiler,
 )
-from teoria.registry.artifact_snapshot import RuntimeBundleSnapshotRepository
+from teoria.registry.artifact_snapshot import (
+    RuntimeBundleSnapshotRepository,
+    select_registry_bindings,
+)
 from teoria.registry.composition import create_registry_validator
 from teoria.registry.loader import RegistryLoader, RegistryLoadError
 from teoria.registry.release import publish_registry
@@ -36,17 +40,20 @@ async def run_compile_runtime_bundle(
         ontologies, bindings = await RuntimeBundleSnapshotRepository(
             args.database_url
         ).snapshot(ontology_namespaces=set(args.ontology_namespaces or ["teoria"]))
+        catalog = RegistryArtifactLoader(args.registry_artifact).load()
+        selected_bindings = select_registry_bindings(catalog, bindings)
         manifest = RuntimeBundleCompiler().compile(
             args.registry_artifact,
             ontologies=ontologies,
-            bindings=bindings,
+            bindings=selected_bindings,
             output=args.output,
             version=args.version,
         )
     except (OSError, ValueError, RegistryArtifactError, psycopg.Error) as exc:
         print(f"ERROR runtime_bundle_compile_failed: {exc}")
         return 1
-    print(f"Compiled Runtime bundle {manifest.version} ({manifest.bundle_checksum}).")
+    print(f"Compiled Runtime bundle {manifest.version} ({manifest.bundle_checksum}); "
+          f"excluded {len(bindings) - len(selected_bindings)} bindings to retired targets.")
     return 0
 
 

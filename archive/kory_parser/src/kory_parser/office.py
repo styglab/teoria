@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import posixpath
 import re
+from bisect import bisect_left
 from dataclasses import replace
 
 from .document_io import DocumentZip, local_name
@@ -263,15 +264,16 @@ def sheet_table(rows: int, cols: int, values: dict[tuple[int, int], Cell], optio
     col_axis = sorted({c for (_, c), cell in values.items() if cell.text})
     if not row_axis or not col_axis:
         return None
-    row_ids, col_ids = {r: i for i, r in enumerate(row_axis)}, {c: i for i, c in enumerate(col_axis)}
     addressed = []
     for (r, c), cell in values.items():
-        kept_rows = [rr for rr in row_axis if r <= rr < r + cell.row_span]
-        kept_cols = [cc for cc in col_axis if c <= cc < c + cell.col_span]
-        if not kept_rows or not kept_cols:
+        row_start = bisect_left(row_axis, r)
+        row_end = bisect_left(row_axis, r + cell.row_span)
+        col_start = bisect_left(col_axis, c)
+        col_end = bisect_left(col_axis, c + cell.col_span)
+        if row_start >= row_end or col_start >= col_end:
             continue
-        cell.row_span, cell.col_span = len(kept_rows), len(kept_cols)
-        addressed.append((row_ids[kept_rows[0]], col_ids[kept_cols[0]], cell))
+        cell.row_span, cell.col_span = row_end - row_start, col_end - col_start
+        addressed.append((row_start, col_start, cell))
     return table_from_cells(len(row_axis), len(col_axis), addressed, options)
 
 
@@ -347,11 +349,48 @@ def parse_xlsx(data: bytes, options: ParseOptions) -> ParseResult:
     return result
 
 
+def compact_xls_table(sheet, options: ParseOptions):
+    """Fit sparse oversized BIFF grids while retaining original cell references."""
+    merges = sheet.merged_cells
+    spans = {(r, c): (end_r - r, end_c - c) for r, end_r, c, end_c in merges}
+    values = {}
+    for r in range(sheet.nrows):
+        for c, value in enumerate(sheet.row_values(r)):
+            if value == "" or any(
+                start_r <= r < end_r and start_c <= c < end_c and (r, c) != (start_r, start_c)
+                for start_r, end_r, start_c, end_c in merges
+            ):
+                continue
+            if isinstance(value, float) and value.is_integer():
+                value = int(value)
+            rs, cs = spans.get((r, c), (1, 1))
+            values[(r, c)] = Cell(str(value), rs, cs, source=SourceRef(sheet.name, f"R{r + 1}C{c + 1}"))
+            if len(values) > options.max_cells:
+                raise ParseError("RESOURCE_LIMIT", "Workbook grid exceeds budget")
+    return sheet_table(sheet.nrows, sheet.ncols, values, options)
+
+
 def parse_xls(data: bytes, options: ParseOptions) -> ParseResult:
-    import xlrd
+    from .xls_workbook import open_value_workbook
 
     result = ParseResult(True, "xls", page_mode="sheet")
-    book = xlrd.open_workbook(file_contents=data, formatting_info=True, on_demand=True)
+    book, recovered = open_value_workbook(data)
+    if recovered and book.skipped_defined_names:
+        result.warnings.append(
+            Diagnostic(
+                "XLS_DEFINED_NAMES_SKIPPED",
+                "Defined-name evaluation omitted during external-metadata recovery"
+                if book.skipped_external_names
+                else "Defined-name evaluation failed; reading cached worksheet values without names",
+            )
+        )
+    if recovered and book.skipped_external_names:
+        result.warnings.append(
+            Diagnostic(
+                "XLS_EXTERNAL_NAMES_SKIPPED",
+                "Unreadable external-sheet names skipped; reading cached worksheet values",
+            )
+        )
     try:
         result.page_count = book.nsheets
         for index in range(book.nsheets):
@@ -361,7 +400,15 @@ def parse_xls(data: bytes, options: ParseOptions) -> ParseResult:
             if not sheet.nrows or not sheet.ncols:
                 continue
             if sheet.nrows * sheet.ncols > options.max_cells:
-                raise ParseError("RESOURCE_LIMIT", "Workbook grid exceeds budget")
+                if options.sheet_layout == "source":
+                    raise ParseError("RESOURCE_LIMIT", "Workbook grid exceeds budget")
+                table = compact_xls_table(sheet, options)
+                if table is not None:
+                    result.blocks.extend([Block("heading", sheet.name, level=1), Block("table", table=table)])
+                result.warnings.append(
+                    Diagnostic("XLS_COMPACTED_GRID", "Empty axes compacted to fit the worksheet cell budget")
+                )
+                continue
             merged = {(r, c): (re - r, ce - c) for r, re, c, ce in sheet.merged_cells}
             covered = {
                 (rr, cc)
