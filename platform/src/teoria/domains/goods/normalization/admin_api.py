@@ -4,6 +4,8 @@ import asyncio
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Response
 from pydantic import BaseModel,ConfigDict,Field
+from typing import Annotated
+from fastapi import Path as ApiPath
 import psycopg
 from teoria.admin.auth import AdminAuthorizer,AdminPrincipal
 from teoria_goods_normalization import NormalizationProfile,canonical_bytes
@@ -105,6 +107,17 @@ def create_normalization_profile_router(repository: NormalizationProfileReposito
             return await translate(run_semantic_cycle(repo(),payload.base_revision_id,payload.bundles,
                 model=payload.model,version=payload.version,actor=principal.actor,
                 auto_approve=payload.auto_approve,timeout=payload.timeout))
+    @router.post('/semantic-operations/{operation_id}')
+    async def semantic_operation(operation_id: Annotated[str,ApiPath(pattern=r'^[a-z][a-z0-9_]{0,79}$')],
+            payload: SemanticCycleInput,principal: AdminPrincipal=Depends(principal_dependency)):
+        from .semantic_operations import SemanticOperations
+        async with meaning_slots:
+            return await translate(SemanticOperations(repo()).execute(operation_id,payload.model_dump(mode='json'),actor=principal.actor))
+    @router.get('/semantic-operations/{operation_id}')
+    async def get_semantic_operation(operation_id: Annotated[str,ApiPath(pattern=r'^[a-z][a-z0-9_]{0,79}$')],
+            principal: AdminPrincipal=Depends(principal_dependency)):
+        from .semantic_operations import SemanticOperations
+        return await translate(SemanticOperations(repo()).get(operation_id,actor=principal.actor))
     @router.get('/{revision_id}')
     async def get(revision_id: UUID,principal: AdminPrincipal=Depends(principal_dependency)):
         return await translate(repo().get(revision_id))

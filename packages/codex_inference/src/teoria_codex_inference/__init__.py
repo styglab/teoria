@@ -62,10 +62,14 @@ class CodexRunner:
                     schema_path=Path(temp)/'schema.json'
                     schema_path.write_text(json.dumps(output_schema))
                     argv[2:2]=['--output-schema',str(schema_path)]
+                inference_env=dict(os.environ)
+                for name in ('TEORIA_SPECIFICATION_AUTHORING_API_TOKEN','TEORIA_ADMIN_API_TOKEN'):
+                    inference_env.pop(name,None)
                 process = await asyncio.create_subprocess_exec(
                     *argv, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     start_new_session=True,
+                    env=inference_env,
                 )
                 try:
                     stdout, _ = await asyncio.wait_for(process.communicate(prompt.encode()), self.timeout)

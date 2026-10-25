@@ -1,8 +1,9 @@
 # 물품 정규화 프로파일과 실행 패키지
 
 공통 의미는 Platform의 Published Ontology가 소유한다. 프로파일은 그 Stable Concept ID에
-원문 표현·추출 속성 키·역할·적용 범위·단위 정책을 연결한다. Pipeline은 내보낸 패키지만 읽으며
-Platform Runtime이나 authoring DB를 호출하지 않는다. Semantic Binding을 문서별 관찰 저장소로 사용하지 않는다.
+원문 표현·추출 속성 키·역할·적용 범위·단위 정책을 연결한다. 표준 적용 모듈은 내보낸 패키지만 읽으며
+Platform Runtime이나 authoring DB를 호출하지 않는다. 상위 Workflow는 작성 API로 제안·승인 상태를 연결한다.
+Semantic Binding을 문서별 관찰 저장소로 사용하지 않는다.
 
 ## 소유권
 
@@ -207,3 +208,94 @@ uv run --locked --all-packages pytest tests/integration/test_goods_normalization
 프로젝트별 검사와 프로젝트 간 계약 검사는 각각 실행한다. 실제 SQL 검사는
 `platform/tests/integration/test_goods_normalization.py`이며 운영과 분리된
 `TEORIA_TEST_APP_DATABASE_URL`만 사용한다. 통제된 사례 검증은 실제 규격서의 LLM 추출 정확도 평가가 아니다.
+
+## 전체 표준관리 Flow 실행
+
+유지되는 진입점은 `standard_workflow.py:standard_workflow_flow`이며 Prefect deployment는
+`specification-standard-workflow`다. 실행 순서는 다음과 같다.
+
+```text
+승인 기준 프로파일의 패키지 확보
+ → 원본·파싱·공통 추출(extracted.json)
+ → 엔티티 후보 → Platform 의미 판정·작성·승인
+ → 새 패키지 확보
+ → 관계·요구조건 후보 → Platform 의미 판정·작성·승인
+ → 최종 패키지로 같은 추출 결과 재적용 → normalized.json·index.md
+```
+
+초기 표준과 새 개념의 bootstrap을 혼동하지 않는다. 입력에는 이미 승인된 기준 프로파일 revision이
+필요하다. 신규 Ontology 생성 자체는 기존 작성 절차로 수행한다. 문서 분류는 입력 전에 확인한다.
+상위 Flow가 의미를 정의하지 않으며 HTTP 작성 API와 파일/S3 저장소의 참조만 연결한다.
+
+먼저 Application DB migration `019_goods_semantic_operations.sql`과 Data DB migration
+`092_specification_standard_workflows.sql`까지 각각 소유 프로젝트의 migration 절차로 적용한다.
+Worker에 다음 환경변수를 설정한다. token은 manifest·산출물·로그에 넣지 않는다.
+
+```text
+TEORIA_PIPELINE_DATA_DATABASE_URL
+TEORIA_SPECIFICATION_AUTHORING_API_URL
+TEORIA_SPECIFICATION_AUTHORING_API_TOKEN
+```
+
+Compose Worker는 내부 `http://admin-api:8001` 작성 API와 설정된 Admin token을 사용한다.
+다른 배포는 인증 principal에 `ontology_owner` 권한을 부여한 작성 API credential을 별도 설정한다.
+Worker와 Admin이 공유하는 것은 credential과 HTTP 계약이며 Python import나 DB 연결이 아니다.
+규격서 원본과 산출물 저장소 접근 권한, Parser·Codex 인증도 기존처럼 필요하다.
+
+실행 manifest 예시에서 UUID·원본 경로를 실제 값으로 바꾼다.
+
+```json
+{
+  "workflow_id": "server_standard_01",
+  "base_profile_revision_id": "<승인된 기준 프로파일 UUID>",
+  "auto_approve": false,
+  "extraction": {
+    "run_id": "server_input_01",
+    "mode": "standard_management",
+    "classification_code": "4321150102",
+    "model": "gpt-6.1-sol",
+    "artifact_root": "file:///app/specification_artifacts",
+    "documents": [
+      {
+        "document_id": "server_01",
+        "source_uri": "file:///app/specification_inputs/server.hwpx",
+        "filename": "server.hwpx"
+      }
+    ]
+  }
+}
+```
+
+```bash
+uv run --locked --package teoria-pipelines teoria-pipelines specification standard-workflow --manifest /data/workflow.json
+```
+
+Prefect에 제출할 때는 같은 JSON을 `manifest` parameter로 제공한다. 이 명령은 실제 Prefect Flow를
+실행한다. 자동 스케줄이나 첨부파일 수집은 추가하지 않는다. 평가용 자동 승인은 별도 임시 DB의
+`goods_eval_` 기준 프로파일을 선택하고 `auto_approve: true`로 명시한다.
+
+일반 실행은 승인 대기 시 `status: awaiting_approval`, `phase`, `operation_id`와 Draft ID를 반환하고
+실행 lease를 해제한다. 기존 작성 API로 검토·승인·게시한 후 **같은 manifest와 workflow_id**로
+다시 실행하면 이어간다. 승인 대기는 오류나 완료로 기록하지 않는다.
+
+### 저장·중단·재시도
+
+- 원문·추출·후보·고정 패키지·최종 결과 본문은 기존 파일/S3에 저장한다. 패키지는
+  `packages/<revision>/<전체 바이트 SHA-256>.json`으로 저장하고 원본 응답 바이트를 변경하지 않는다.
+- 상위 실행 상태·산출물 참조·두 의미 판정 operation ID·최종 실행 참조는 Data DB가 소유한다.
+  모델·프롬프트 원문과 추출 본문을 이 체크포인트에 복제하지 않는다.
+- Platform `goods.semantic_operations`에는 입력 checksum·인증 actor·AI 의미 제안·작성 단계 checkpoint를
+  보관한다. 원본 문서 bundle은 복제하지 않으며 재요청한 입력 checksum을 대조한다.
+- `POST /semantic-operations/{operation_id}`는 같은 입력·principal에서 재개한다. 같은 ID에 다른 입력은
+  거절한다. `GET`은 상태 조회다. 프로세스 간 advisory lock으로 같은 operation의 작성을 직렬화하며,
+  생성 직후 응답이 유실되어도 기존 version·Stable Key·프로파일 내용과 대조해 중복 작성하지 않는다.
+- Data DB lease와 heartbeat가 상위 실행의 동시 수행을 막는다. 작업자가 종료되면 lease 만료 후
+  이어갈 수 있고 이전 lease의 쓰기는 거절한다. 재시도는 이미 저장한 추출 결과를 재사용한다.
+- 최종 문서 처리의 기존 Data DB 완료 transaction은 모든 최종 산출물 저장 성공 후에만 기록한다.
+  같은 workflow_id의 완료 재실행은 저장된 결과를 반환한다. 입력·처리 코드·작성 API 경로가 바뀌면
+  새 workflow_id를 사용한다. 다른 표준의 결과로 같은 immutable 경로를 덮어쓰지 않는다.
+
+선택적 SQL 회귀는 운영과 분리한 `TEORIA_TEST_APP_DATABASE_URL`과
+`TEORIA_TEST_PIPELINE_DATABASE_URL`을 사용한다. 프로젝트 간 HTTP 계약 검사는 루트
+`tests/integration/test_goods_normalization_contract.py`가 소유한다. 통제된 모델 응답·체크포인트를
+사용하는 통합 테스트와 실제 문서의 Codex 품질 평가·운영 배포 성공은 구분한다.

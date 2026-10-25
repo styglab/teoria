@@ -170,3 +170,36 @@ async def test_semantic_workflow_creates_and_auto_approves_new_concepts_in_isola
     cloned=await authoring.create_draft(namespace,version='3',actor='test:owner')
     detail=await authoring.get_version(UUID(cloned['ontology_version_id']))
     assert detail['relationships'][0]['description']=='Physical specification target containment'
+    # Durable operations recover missing checkpoint acknowledgements without duplicate authoring.
+    from teoria.domains.goods.normalization.semantic_operations import SemanticOperations
+    from teoria.persistence.postgres import connect
+    operations=SemanticOperations(profiles)
+    operation_id='semantic_op_'+uuid4().hex
+    payload={'base_revision_id':str(rid),'bundles':[bundle.model_dump(mode='json')],
+        'model':'synthetic_model','version':'4','auto_approve':True,'timeout':300}
+    first=await operations.execute(operation_id,payload,actor='test:authenticated_principal')
+    assert first['status']=='approved'
+    async with connect(DATABASE_URL) as conn:
+        await conn.execute("""UPDATE goods.semantic_operations SET status='failed',
+            checkpoint=checkpoint-'ontology_draft_id'-'profile_revision_id' WHERE operation_id=%s""",(operation_id,))
+    resumed=await operations.execute(operation_id,payload,actor='test:authenticated_principal')
+    assert resumed['status']=='approved' and resumed['profile_revision_id']==first['profile_revision_id']
+    assert len([v for v in await authoring.list_versions(namespace) if v['version']=='4'])==1
+    assert [e['action'] for e in await profiles.audit(UUID(first['profile_revision_id']))]==['created','submit','approve']
+    with pytest.raises(ValueError,match='different inputs'):
+        await operations.execute(operation_id,{**payload,'model':'changed'},actor='test:authenticated_principal')
+    # Manual approval releases the caller; the same operation resumes both authoring boundaries.
+    manual_id='semantic_manual_'+uuid4().hex
+    manual={**payload,'version':'5','auto_approve':False}
+    waiting=await operations.execute(manual_id,manual,actor='test:authenticated_principal')
+    assert waiting['status']=='awaiting_approval' and waiting['profile_revision_id'] is None
+    pending_ontology=UUID(waiting['ontology_draft_id'])
+    await authoring.transition(pending_ontology,action='submit',actor='test:reviewer')
+    await authoring.transition(pending_ontology,action='approve',actor='test:reviewer')
+    await authoring.publish(pending_ontology,actor='test:reviewer')
+    waiting=await operations.execute(manual_id,manual,actor='test:authenticated_principal')
+    assert waiting['status']=='awaiting_approval' and waiting['profile_revision_id']
+    pending_profile=UUID(waiting['profile_revision_id'])
+    await profiles.transition(pending_profile,action='submit',actor='test:reviewer')
+    await profiles.transition(pending_profile,action='approve',actor='test:reviewer')
+    assert (await operations.execute(manual_id,manual,actor='test:authenticated_principal'))['status']=='approved'

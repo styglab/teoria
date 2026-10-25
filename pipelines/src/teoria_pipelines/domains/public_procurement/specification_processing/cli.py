@@ -4,6 +4,13 @@ import json
 from .models import SpecificationRun
 
 def run_command(args):
+    if args.specification_command=='standard-workflow':
+        from .standard_workflow import standard_workflow_flow
+        from .models import StandardWorkflow
+        request=StandardWorkflow.model_validate(json.loads(args.manifest.read_text()))
+        result=asyncio.run(standard_workflow_flow(request.model_dump(mode='json')))
+        print(json.dumps(result,ensure_ascii=False,indent=2))
+        return 1 if result['status']=='failed' else 0
     if args.specification_command=='evaluate':
         from .evaluation import prepare_cycle,run_variant,finish_cycle,abort_cycle
         step=args.evaluation_step

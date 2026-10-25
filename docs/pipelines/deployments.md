@@ -77,3 +77,16 @@ Teoria Data PostgreSQL metadata를 격리된 OpenMetadata ingestion container로
 | Cron | Timezone | 예약 상태 |
 |---|---|---|
 | — | — | 수동 실행 |
+
+## `specification-standard-workflow`
+
+추출·Platform 의미 판정·승인 상태 확인·고정 표준 저장·재적용을 연결하고 체크포인트에서 재개한다.
+
+- 선언: `pipelines/prefect.yaml`
+- Flow: `teoria_pipelines.domains.public_procurement.specification_processing.standard_workflow.standard_workflow_flow`
+- Work pool: `teoria-specification`
+- Work queue: `documents`
+
+| Cron | Timezone | 예약 상태 |
+|---|---|---|
+| — | — | 수동 실행 |

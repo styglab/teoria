@@ -75,6 +75,8 @@ Application DB를 구성한 뒤 실행하고, [Ontology 검토·승인·게시](
 기본 검색은 문자열 유사도와 대상·자료형 필터 기반이다. 별도 Codex 의미 판정과
 기존 개념 매핑·신규 Ontology Draft·프로파일 Draft 경로도 제공한다.
 자동 승인 평가는 격리 DB의 `goods_eval_` Ontology에서만 실행한다.
+전체 표준관리는 `teoria-pipelines specification standard-workflow --manifest ...`로 실행한다.
+상위 Prefect Flow가 추출·작성 API·패키지 저장·재적용을 연결하며 승인 대기와 실패에서 같은 실행 ID로 재개한다.
 Semantic Binding 및 Runtime Mapping 연결은 아직 구현하지 않았다.
 물품 검색·비교 Capability와 AI 질의 handler도 별도 구현 대상이다.
 현재 활성 Registry는 공통 타입만 제공하므로 Capability discovery는 빈 목록을 반환한다.

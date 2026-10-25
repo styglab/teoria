@@ -38,14 +38,20 @@ def concept_key(namespace, group, proposed):
     return namespace + '.' + proposed.code
 
 
-async def create_ontology_draft(repository, base_revision_id, bundles, semantic_report, *, version, actor):
+async def create_ontology_draft(repository, base_revision_id, bundles, semantic_report, *, version, actor,resume=False):
     profile, ontology, report, batch = await checked_proposals(repository, base_revision_id, bundles, semantic_report)
     new = [d for d in batch.decisions if d.action == 'new']
     if not new:
         return {'ontology_draft_id': None, 'new_concepts': 0}
     authoring = OntologyAuthoringRepository(repository.database_url)
-    draft = await authoring.create_draft(profile.ontology.namespace, version=version, actor=actor,
-        based_on_version_id=profile.ontology.version_id)
+    draft=None
+    if resume:
+        draft=next((v for v in await authoring.list_versions(profile.ontology.namespace) if v['version']==version),None)
+        if draft and (draft['based_on_version_id']!=str(profile.ontology.version_id) or draft['created_by']!=actor):
+            raise ValueError('existing ontology version has a different base or creator')
+    if draft is None:
+        draft = await authoring.create_draft(profile.ontology.namespace, version=version, actor=actor,
+            based_on_version_id=profile.ontology.version_id)
     vid = UUID(draft['ontology_version_id'])
     groups = {g['group_id']: g for g in report['groups']}
     created = {}
@@ -69,19 +75,21 @@ async def create_ontology_draft(repository, base_revision_id, bundles, semantic_
             if created[stable_key] != (kind, payload):
                 raise ValueError('conflicting new concept definitions; Draft remains unpublished')
             continue
-        item = await authoring.add_item(vid, kind=kind, payload=payload, actor=actor)
+        item = await ensure_item(authoring,vid,kind,payload,actor) if resume else await authoring.add_item(vid, kind=kind, payload=payload, actor=actor)
         created[stable_key] = (kind, payload)
         if kind == 'object':
-            await authoring.add_item(vid, kind='property', payload={'code': 'observation_id',
+            identity={'code': 'observation_id',
                 'name': '문서별 관찰 식별자', 'description': '문서별 추출 관찰 식별자. 실물 자산 식별자가 아니다.',
                 'stable_key': stable_key + '.observation_id', 'object_concept_id': item['concept_id'],
-                'value_type': 'string', 'cardinality': 'one'}, actor=actor)
+                'value_type': 'string', 'cardinality': 'one'}
+            if resume:await ensure_item(authoring,vid,'property',identity,actor)
+            else:await authoring.add_item(vid,kind='property',payload=identity,actor=actor)
     return {'ontology_draft_id': str(vid), 'new_concepts': len(created),
             'semantic_report_checksum': semantic_report['checksum']}
 
 
 async def materialize_profile(repository, base_revision_id, bundles, semantic_report, *,
-                              published_version_id, version, actor):
+                              published_version_id, version, actor,resume=False):
     import json
     from psycopg.rows import dict_row
     from teoria.persistence.postgres import connect
@@ -140,4 +148,32 @@ async def materialize_profile(repository, base_revision_id, bundles, semantic_re
     comment = json.dumps({'source': 'codex_semantic_proposals', 'base_revision_id': str(base_revision_id),
         'semantic_report_checksum': semantic_report['checksum'], 'model': semantic_report['model'],
         'input_checksums': semantic_report['input_checksums'], 'group_ids': accepted}, sort_keys=True)
+    if resume:
+        async with connect(repository.database_url,row_factory=dict_row) as conn:
+            previous=await (await conn.execute('''SELECT * FROM goods.normalization_profile_revisions
+                WHERE profile_key=%s AND version=%s''',(draft.profile_key,draft.version))).fetchone()
+        if previous:
+            if previous['content_checksum']!=checksum(draft) or previous['created_by']!=actor:
+                raise ValueError('existing profile version belongs to a different plan or creator')
+            return repository._result(previous)
     return await repository.create(draft, actor=actor, provenance_comment=comment)
+
+
+async def ensure_item(authoring,version_id,kind,payload,actor):
+    """Recover a crash between a committed authoring write and its operation checkpoint."""
+    detail=await authoring.get_version(version_id)
+    objects={o['business_object_id']:o['concept_id'] for o in detail['objects']}
+    candidates=[]
+    if kind=='object':candidates=detail['objects']
+    elif kind=='property':
+        candidates=[{**p,'object_concept_id':o['concept_id']} for o in detail['objects'] for p in o['properties']]
+    else:
+        candidates=[{**r,'source_object_concept_id':objects[r['source_object_id']],
+            'target_object_concept_id':objects[r['target_object_id']]} for r in detail['relationships']]
+    previous=next((r for r in candidates if r['stable_key']==payload['stable_key']),None)
+    if previous:
+        if any(previous.get(k)!=v for k,v in payload.items()):
+            raise ValueError('partially created concept differs from semantic plan')
+        return previous
+    if detail['status']!='draft':raise ValueError('cannot append missing concepts after review')
+    return await authoring.add_item(version_id,kind=kind,payload=payload,actor=actor)

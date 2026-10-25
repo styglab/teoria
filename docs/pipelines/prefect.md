@@ -9,6 +9,7 @@
 | Deployment | 입력 | 실행 방식 |
 |---|---|---|
 | `specification-standard-management` | `mode=standard_management`의 manifest | 수동 |
+| `specification-standard-workflow` | 기준 프로파일 revision과 추출 입력의 workflow manifest | 수동 |
 | `specification-document-processing` | `mode=document_processing`과 고정 표준을 포함한 manifest | 수동 |
 | `openmetadata-postgres-metadata-sync` | 허용된 ingestion image | 매일 05:00 Asia/Seoul |
 

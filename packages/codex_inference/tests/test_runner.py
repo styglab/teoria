@@ -84,3 +84,14 @@ def test_provider_schema_requires_all_fields_and_preserves_local_validation_cont
     assert 'pattern' not in result['properties']['value']
     assert 'default' not in result['properties']['value']
     assert original['properties']['value']['pattern']==r'^(?!x)\d+$'
+
+
+async def test_authoring_control_credentials_are_not_inherited_by_inference(monkeypatch,tmp_path):
+    monkeypatch.setenv('TEORIA_SPECIFICATION_AUTHORING_API_TOKEN','test-authoring-token')
+    monkeypatch.setenv('TEORIA_ADMIN_API_TOKEN','test-admin-token')
+    async def spawn(*argv,**kwargs):
+        assert kwargs['env'].get('TEORIA_SPECIFICATION_AUTHORING_API_TOKEN') is None
+        assert kwargs['env'].get('TEORIA_ADMIN_API_TOKEN') is None
+        return Process(Path(argv[argv.index('-o')+1]),[])
+    monkeypatch.setattr(asyncio,'create_subprocess_exec',spawn)
+    assert await CodexRunner().generate('instruction',{},tmp_path/'answer.json')=={'ready':True}

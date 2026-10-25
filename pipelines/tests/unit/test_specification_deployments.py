@@ -16,6 +16,7 @@ def test_only_explicit_specification_and_metadata_jobs_are_active():
     deployments = load_deployments(ROOT)
     assert {d["name"] for _, d in deployments} == {
         "specification-standard-management", "specification-document-processing",
+        "specification-standard-workflow",
         "openmetadata-postgres-metadata-sync",
         "moleg-law-daily", "moleg-law-weekly-reconciliation",
     }

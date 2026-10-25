@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from typing import Literal
+from uuid import UUID
 from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -88,6 +89,20 @@ class RunResult(Record):
     document_results: list[dict]
     standard: StandardReference | None = None
     summary: dict
+
+
+class StandardWorkflow(Record):
+    workflow_id: str = Field(pattern=r'^[a-z][a-z0-9_]{0,79}$')
+    extraction: SpecificationRun
+    base_profile_revision_id: UUID
+    auto_approve: bool = False
+
+    @model_validator(mode='after')
+    def explicit_standard_workflow(self):
+        if self.extraction.mode!='standard_management' or self.extraction.standard is not None:
+            raise ValueError('workflow extraction must use standard_management without a separately selected standard')
+        if not self.extraction.model:raise ValueError('pin the Codex model for standard authoring')
+        return self
 
 class PropertyBinding(Record):
     property_id: str = Field(pattern=r'^[a-z][a-z0-9_]*$')

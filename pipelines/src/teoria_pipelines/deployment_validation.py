@@ -23,10 +23,11 @@ def validate_deployment_contracts(
             )
         names.add(name)
         module = deployment["entrypoint"].rsplit(".", 1)[0]
-        if module == "teoria_pipelines.domains.public_procurement.specification_processing.flows":
+        if module in {"teoria_pipelines.domains.public_procurement.specification_processing.flows",
+                      "teoria_pipelines.domains.public_procurement.specification_processing.standard_workflow"}:
             if (
                 deployment["entrypoint"].rsplit(".", 1)[-1]
-                not in {"standard_management_flow", "document_processing_flow"}
+                not in {"standard_management_flow", "document_processing_flow", "standard_workflow_flow"}
                 or "feature:specification_processing" not in deployment.get("tags", [])
                 or deployment.get("schedules")
             ):

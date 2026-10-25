@@ -196,6 +196,8 @@ def main() -> int:
     specification_subparsers = specification_parser.add_subparsers(dest="specification_command", required=True)
     specification_run = specification_subparsers.add_parser("run", help="execute a specification Prefect flow")
     specification_run.add_argument("--manifest", required=True, type=Path)
+    specification_workflow = specification_subparsers.add_parser("standard-workflow",help="orchestrate extraction, semantic authoring and standard application")
+    specification_workflow.add_argument("--manifest",required=True,type=Path)
     specification_evaluate = specification_subparsers.add_parser("evaluate", help="freeze, run and clean an extraction improvement cycle")
     evaluation_steps = specification_evaluate.add_subparsers(dest="evaluation_step", required=True)
     evaluation_steps.add_parser("schema", help="print the evaluation manifest JSON Schema")

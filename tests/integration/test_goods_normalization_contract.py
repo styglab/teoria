@@ -280,3 +280,95 @@ def test_same_relation_label_can_map_to_distinct_published_endpoint_types():
         'relationship_concept_id':uid(5),'reverse':True})
     with pytest.raises(ValueError,match='overlapping relation'):
         _check_rule_overlap(NormalizationProfile.model_validate(data),ontology)
+
+
+async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(tmp_path,monkeypatch):
+    """Real contracts, HTTP routes and task bodies; model/DB lifecycle are controlled doubles."""
+    import httpx
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from teoria.admin.auth import AdminAuthorizer
+    from teoria.settings import Settings
+    from teoria.domains.goods.normalization.admin_api import create_normalization_profile_router
+    from teoria_pipelines.domains.public_procurement.specification_processing import standard_workflow as workflow
+    from teoria_pipelines.domains.public_procurement.specification_processing.authoring_client import GoodsAuthoringClient
+    profile,ontology,corpus=example()
+    corpus['documents'][0]['attributes'][0]['property_key']='capacity_bytes'
+    seed_data=profile.model_dump(mode='json');seed_data['entities'][0]['aliases']=['메모리']
+    seed=NormalizationProfile.model_validate(seed_data)
+    intermediate=profile
+    final_data=profile.model_dump(mode='json');final_data['requirements'][0]['source_property_keys'].append('capacity_bytes')
+    final_profile=NormalizationProfile.model_validate(final_data)
+    packages={uid(200+i):compile_package(p,ontology,revision_id=UUID(int=200+i),approval_actor='principal:test')
+        for i,p in enumerate([seed,intermediate,final_profile])}
+    repo=AsyncMock();repo.export.side_effect=lambda revision_id:packages[str(revision_id)]
+    approved=False;lost=False;operations={};generations=[];posts=[]
+    class Operations:
+        def __init__(self,repository):pass
+        async def execute(self,operation_id,payload,*,actor):
+            nonlocal lost
+            assert actor=='principal:test'
+            posts.append(operation_id)
+            digest=checksum(payload)
+            if operation_id not in operations:
+                generations.append(operation_id)
+                operations[operation_id]=digest
+            assert operations[operation_id]==digest
+            if operation_id.endswith('_entities'):
+                if not approved:return {'operation_id':operation_id,'status':'awaiting_approval','ontology_draft_id':uid(800),'profile_revision_id':None}
+                return {'operation_id':operation_id,'status':'approved','profile_revision_id':uid(201)}
+            if not lost:
+                lost=True
+                raise RuntimeError('response lost after authoring commit')
+            return {'operation_id':operation_id,'status':'approved','profile_revision_id':uid(202)}
+    monkeypatch.setattr('teoria.domains.goods.normalization.semantic_operations.SemanticOperations',Operations)
+    app=FastAPI();settings=Settings(admin_auth_mode='bearer',admin_api_token='test-token',admin_api_actor='principal:test',admin_api_roles='ontology_owner')
+    app.include_router(create_normalization_profile_router(repo,AdminAuthorizer(settings)))
+    monkeypatch.setattr(workflow,'GoodsAuthoringClient',lambda:GoodsAuthoringClient(base_url='http://authoring',token='test-token',transport=httpx.ASGITransport(app=app)))
+    class Checkpoints:
+        def __init__(self):self.state={};self.digest=None;self.status='failed';self.lease=None
+        async def claim(self,key,digest):
+            if self.digest is not None:assert self.digest==digest
+            self.digest=digest
+            if self.status=='completed':return deepcopy(self.state),None
+            assert self.lease is None
+            self.lease=UUID(int=900);self.status='running';return deepcopy(self.state),self.lease
+        async def save(self,key,lease,state,*,status='running',error=None):
+            assert lease==self.lease
+            self.state=deepcopy(state);self.status=status
+            if status!='running':self.lease=None
+        async def renew(self,*args):pass
+    checkpoints=Checkpoints()
+    monkeypatch.setattr(workflow.StandardWorkflowRepository,'from_environment',lambda:checkpoints)
+    for name in ['export_package','collect_candidates','author_candidates']:
+        monkeypatch.setattr(workflow,name,getattr(workflow,name).fn)
+    for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','select_and_map_standard','persist_report']:
+        monkeypatch.setattr(tasks,name,getattr(tasks,name).fn)
+    monkeypatch.setattr(flows,'document_processing_flow',flows.document_processing_flow.fn)
+    monkeypatch.setattr(flows,'start_execution',AsyncMock(return_value=None))
+    monkeypatch.setattr(flows,'complete_execution',AsyncMock())
+    monkeypatch.setattr(flows,'fail_execution',AsyncMock())
+    source=tmp_path/'source.hwpx';source.write_bytes(b'controlled source')
+    checkpoint=tmp_path/'checkpoint.json';checkpoint.write_text(json.dumps(corpus))
+    manifest={'workflow_id':'integration_standard_workflow','base_profile_revision_id':uid(200),
+        'extraction':{'run_id':'input','mode':'standard_management','model':'controlled_model','classification_code':'4321150102',
+        'artifact_root':(tmp_path/'artifacts').as_uri(),
+        'documents':[{'document_id':'doc','source_uri':source.as_uri(),'filename':source.name,'sha256':corpus['documents'][0]['source']['sha256']}],
+        'extraction_checkpoint':{'uri':checkpoint.as_uri(),'sha256':hashlib.sha256(checkpoint.read_bytes()).hexdigest()}}}
+    result=await workflow.standard_workflow_flow.fn(manifest)
+    assert result['status']=='awaiting_approval' and checkpoints.status=='awaiting_approval'
+    approved=True
+    with pytest.raises(RuntimeError,match='HTTP 503'):
+        await workflow.standard_workflow_flow.fn(manifest)
+    assert checkpoints.status=='failed'
+    result=await workflow.standard_workflow_flow.fn(manifest)
+    assert result['status']=='partial' # procurement-scope relation remains safely unresolved
+    assert result['profile_revision_id']==uid(202)
+    assert result['final_run']['summary']['applied']==4
+    assert result['final_run']['summary']['reused_extraction'] is True
+    assert len(generations)==2 # one authoring plan per phase despite waits and a lost response
+    count=len(posts)
+    replay=await workflow.standard_workflow_flow.fn(manifest)
+    assert replay==result and len(posts)==count
+    for artifact in result['final_run']['artifacts']:
+        assert hashlib.sha256(Path(artifact['uri'].removeprefix('file://')).read_bytes()).hexdigest()==artifact['sha256']

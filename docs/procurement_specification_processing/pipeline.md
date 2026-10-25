@@ -13,10 +13,12 @@ Ontology를 참조하는 schema v2 표준의 작성·승인·내보내기와 적
 |---|---|---|
 | 표준 관리 | `procurement-standard-management` | v2 승인 프로파일 적용·근거와 문맥을 보존한 후보 묶기. 비교·Draft 생성은 Platform Admin API에서 수행. v1 호환 경로는 로컬 draft 자동 채택·보류 |
 | 문서 처리 | `procurement-document-processing` | URI와 SHA-256으로 고정한 기존 표준 적용. 표준을 수정하지 않음 |
+| 상위 표준관리 실행 | `procurement-standard-workflow` | 추출→후보→Platform 작성 API→승인 패키지 저장→동일 추출 결과에 재적용. 두 의미 판정 단계와 실패·승인 대기에서 재개 |
 
 두 흐름은 같은 추출 단계를 호출한다. 사람이 개별 검토하지 않아도 끝까지 진행하지만,
-불명확한 의미·단위·귀속은 보류한다. 결과는 `pipeline_selected_draft`, `published: false`이며
-Platform Ontology 승인·게시나 Runtime 호출에 연결하지 않는다.
+불명확한 의미·단위·귀속은 보류한다. v1 로컬 표준은 `pipeline_selected_draft`다.
+v2는 승인 패키지를 적용하며 문서 관찰은 게시 Ontology가 아니다.
+상위 실행만 별도 Platform 작성 API의 승인 상태와 연결하고 Runtime은 호출하지 않는다.
 
 ```text
 명시적으로 제공한 원본
@@ -40,7 +42,10 @@ Platform Ontology 승인·게시나 Runtime 호출에 연결하지 않는다.
 ```text
 specification_processing/
   cli.py                         CLI 진입점
-  flows.py                       두 Flow의 실행 순서
+  flows.py                       추출·적용 Flow의 실행 순서
+  standard_workflow.py            상위 표준관리 Flow·전달 Task
+  authoring_client.py             Platform 작성 API HTTP client
+  standard_workflow_repository.py 실행 lease·산출물 참조·재개 체크포인트
   tasks.py                       단계별 Prefect Task
   models.py                      실행 입력·결과·표준 계약
   # 모델 실행은 packages/codex_inference/의 설치형 라이브러리 사용

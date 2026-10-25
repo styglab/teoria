@@ -52,6 +52,7 @@ HTTP·DB I/O는 native async이며 승인·transaction·체크포인트 순서�
 
 Compose는 Data DB와 Control/Application PostgreSQL을 분리하고,
 후자는 Application·Prefect·OpenMetadata database와 role을 나눈다.
-두 규격서 Flow는 수동 manifest로 제출하며 metadata ingestion은 Prefect가 관리한다.
+추출·적용 Flow와 이를 작성 API에 연결하는 상위 표준관리 Flow는 수동 manifest로 제출한다.
+metadata ingestion은 Prefect가 관리한다.
 OpenMetadata ingestion dependency는 전용 ephemeral Job에 둔다.
 현재 구성과 완료 조건은 [시작 안내](../platform-guide.md)와 [로드맵](../roadmap.md)을 따른다.

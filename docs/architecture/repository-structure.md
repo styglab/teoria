@@ -36,6 +36,8 @@ platform  ──import────▶ teoria-provider-api ◀──import── 
 ```
 
 Pipeline 실행 코드는 Platform Capability나 Mapping Runtime을 호출하지 않는다.
+규격서의 상위 표준관리 Flow는 인증된 Platform 작성 API로 의미 판정·Draft·승인 상태를 요청할 수 있다.
+의미 정의·검토 이력은 Platform이 소유하며 Pipeline이 Application DB를 직접 읽거나 쓰지 않는다.
 MCP는 Runtime HTTP API만 호출하고 Source 키·DB 권한·embedded Runtime을 갖지 않는다.
 Pipeline의 별도 통합 검증 진입점만 Platform Registry를 지연 import할 수 있다.
 
