@@ -46,7 +46,7 @@ GET /v1/admin/legal-information/documents/{snapshot_id}?path=...
 
 ## 구현과 데이터 준비
 
-`platform/src/teoria/domains/legal_information/search.py`가 Data DB read view를 조회하고
+`backend/src/teoria/features/legal_information/search.py`가 Data DB read view를 조회하고
 `admin_api.py`가 HTTP API를 제공한다. Admin 서비스 조립은 `admin/composition.py`가
 담당하며 `TEORIA_ADMIN_DATA_DATABASE_URL`의 read-only 계정을 사용한다.
 

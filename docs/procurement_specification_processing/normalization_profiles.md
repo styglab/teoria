@@ -9,8 +9,8 @@ Semantic Binding을 문서별 관찰 저장소로 사용하지 않는다.
 
 | 위치 | 책임 |
 |---|---|
-| `platform/src/teoria/domains/goods/normalization/` | 프로파일 작성·검토·승인 이력과 패키지 발행 |
-| `packages/goods_normalization/` | 두 프로젝트가 사용하는 계약·checksum·지원 단위 정책 |
+| `backend/src/teoria/features/goods_normalization/` | 프로파일 작성·검토·승인 이력과 패키지 발행 |
+| `backend/src/teoria/features/goods_normalization/contracts/` | 발행과 적용이 공유하는 계약·checksum·지원 단위 정책 |
 | `pipelines/.../specification_processing/standardization/profile_application.py` | 원문 대조와 고정 패키지 적용 |
 | Application DB `goods.normalization_profile_revisions`, `normalization_profile_events` | revision과 변경·승인 기록 |
 
@@ -38,13 +38,13 @@ API를 실행하기 전에 `TEORIA_APP_DATABASE_URL`을 설정한 배포 절차�
 보존하도록 추가한다. 기존 게시 JSON artifact는 변경하지 않는다.
 
 ```bash
-uv run --locked --package teoria-platform teoria migrate-app
+uv run --locked --project backend --extra api teoria migrate-app
 ```
 
 1. 적용할 Published Ontology version을 선택한다. 초기 `goods.yaml`은 Draft 모델이다.
    `goods_requirement_enrichment.yaml`은 기존 Published goods에서 `0.2.0` Draft를 만들고 요구조건의
    개념 참조·수치·단위·역할·범위 속성을 추가한다. 이어서 `goods_memory_extension.yaml`을 같은 Draft에
-   적용한다. 두 파일은 `platform/ontology_blueprints/`에 있다. 기존 작성 API/CLI로 적용하고
+   적용한다. 두 파일은 `backend/ontology_blueprints/`에 있다. 기존 작성 API/CLI로 적용하고
    검토·승인·게시는 별도로 수행한다. 이미 게시한 `0.2.0`이 있으면 새 Draft version을 사용한다.
    기존 게시 버전은 수정하지 않는다. 이 구현 작업은 실제 goods 게시를 실행하지 않는다.
 2. [서버 메모리 템플릿](examples/server_memory_profile.json)을 준비한다. 템플릿의 `concept_id` 필드는
@@ -61,7 +61,7 @@ uv run --locked --package teoria-platform teoria migrate-app
 6. 기존 명령으로 실행한다.
 
    ```bash
-   uv run --locked --package teoria-pipelines teoria-pipelines specification run --manifest /data/run.json
+   uv run --locked --project backend teoria-pipelines specification run --manifest /data/run.json
    ```
 
 `standard_management`는 같은 고정 패키지를 적용하고 `meaning_candidates.json`에 미해결 관찰을 모은다.
@@ -146,7 +146,7 @@ Codex에 제공한다. 기본 문자열 검색의 점수 문턱으로 의미 판
 생략하지 않고 순서대로 실행한다. actor는 인증 principal이며 자동 승인 사실을 감사 이력에 남긴다.
 자동 승인으로 의미 품질이 검증되는 것은 아니다. 운영의 승인 정책을 자동 승인으로 바꾸지 않는다.
 
-Codex 실행은 Platform과 Pipelines가 함께 사용하는 `packages/codex_inference/`에서 수행한다.
+Codex 실행은 의미 판정과 규격서 추출이 함께 사용하는 `backend/src/teoria/integrations/codex/`에서 수행한다.
 모델을 고정하고 동시 실행·시간 제한을 두며 실패 시 다른 모델로 대체하지 않는다.
 [OpenAI Docs의 비대화형 실행](https://learn.chatgpt.com/docs/non-interactive-mode)에 따라
 `codex exec --output-schema`를 사용한다. Provider가 지원하지 않는 Decimal 스키마 표현은
@@ -199,14 +199,14 @@ checksum은 내용 일치를 검사한다. 승인 권위는 인증된 Admin과 �
 확보하며 임의 파일의 `approval_actor` 문자열만으로 권위를 증명하지 않는다.
 
 ```bash
-uv run --locked --package teoria-goods-normalization pytest packages/goods_normalization/tests
-uv run --locked --package teoria-platform pytest platform/tests
-uv run --locked --package teoria-pipelines pytest pipelines/tests
-uv run --locked --all-packages pytest tests/integration/test_goods_normalization_contract.py
+uv run --locked --project backend pytest backend/tests/features/goods_normalization/contracts
+uv run --locked --project backend --all-extras --all-groups pytest backend/tests
+uv run --locked --project backend --all-extras --all-groups pytest backend/tests
+uv run --project backend --locked --all-extras pytest tests/integration/test_goods_normalization_contract.py
 ```
 
 프로젝트별 검사와 프로젝트 간 계약 검사는 각각 실행한다. 실제 SQL 검사는
-`platform/tests/integration/test_goods_normalization.py`이며 운영과 분리된
+`backend/tests/integration/application/test_goods_normalization.py`이며 운영과 분리된
 `TEORIA_TEST_APP_DATABASE_URL`만 사용한다. 통제된 사례 검증은 실제 규격서의 LLM 추출 정확도 평가가 아니다.
 
 ## 전체 표준관리 Flow 실행
@@ -267,7 +267,7 @@ Worker와 Admin이 공유하는 것은 credential과 HTTP 계약이며 Python im
 ```
 
 ```bash
-uv run --locked --package teoria-pipelines teoria-pipelines specification standard-workflow --manifest /data/workflow.json
+uv run --locked --project backend teoria-pipelines specification standard-workflow --manifest /data/workflow.json
 ```
 
 Prefect에 제출할 때는 같은 JSON을 `manifest` parameter로 제공한다. 이 명령은 실제 Prefect Flow를

@@ -3,7 +3,7 @@
 
 법제처 공식 API를 직접 호출하는 독립 수집 기능이다. `korean-law-mcp`는
 요청·연혁 처리의 참고 자료이며 실행 의존성이 아니다. 수집·파싱·Data DB는
-`pipelines/src/teoria_pipelines/domains/legal_information/laws/`가 소유한다. 이번 단계는 법령 근거
+`backend/src/teoria/features/legal_information/collection/`가 소유한다. 이번 단계는 법령 근거
 저장소이며 개인정보 위험등급, 적법성 판정, Ontology와 OpenMetadata 쓰기는
 구현 범위에 포함하지 않는다.
 
@@ -19,12 +19,12 @@ Docker 배포는 `deploy/compose/.env`, 로컬 실행은 `.env` 또는 아래처
 export TEORIA_ENV_FILE=deploy/compose/.env
 # 로컬 DB 주소 또는 격리된 테스트 DB 주소를 설정한다.
 export TEORIA_PIPELINE_DATA_DATABASE_URL='postgresql://.../teoria_data'
-uv run --locked --package teoria-pipelines teoria-pipelines migrate
-uv run --locked --package teoria-pipelines --group orchestration \
+uv run --locked --project backend teoria-pipelines migrate
+uv run --locked --project backend --group orchestration \
   teoria-pipelines law sync --pipelines pipelines
 ```
 
-`pipelines/config/law_targets.yaml`은 수집 범위다. 초기 범위는 개인정보 보호법,
+`backend/config/law_targets.yaml`은 수집 범위다. 초기 범위는 개인정보 보호법,
 공공데이터법, 정보공개법과 각 시행령 6개다. 이름은 공식 명칭을 쓰고, 필요하면
 `law_id`를 명시한다. 최초 이름 검색은 현행 목록의 정확한 이름과 유일한 ID만
 허용한다. 최초 등록 이후에는 DB에 고정한 ID로 추적하므로 제명 변경에 영향을
@@ -32,23 +32,23 @@ uv run --locked --package teoria-pipelines --group orchestration \
 
 ```bash
 # 한 대상만 수집: 전체 수집과 별도 checkpoint를 사용한다.
-uv run --locked --package teoria-pipelines --group orchestration \
+uv run --locked --project backend --group orchestration \
   teoria-pipelines law sync --pipelines pipelines \
   --target personal_information_protection_act
 
 # 모든 연혁 본문을 재확인한다.
-uv run --locked --package teoria-pipelines --group orchestration \
+uv run --locked --project backend --group orchestration \
   teoria-pipelines law sync --pipelines pipelines --reconcile-all
 
 # 저장된 원문을 재가공한다. 법제처 호출이나 API 인증값이 필요하지 않다.
-uv run --locked --package teoria-pipelines --group orchestration \
+uv run --locked --project backend --group orchestration \
   teoria-pipelines law reparse --all
 
-uv run --locked --package teoria-pipelines teoria-pipelines law versions \
+uv run --locked --project backend teoria-pipelines law versions \
   --target personal_information_protection_act
 
 # versions 결과의 정확한 식별자·시행일을 사용한다.
-uv run --locked --package teoria-pipelines teoria-pipelines law show \
+uv run --locked --project backend teoria-pipelines law show \
   --law-id 11357 --mst 283839 --effective-date 2026-09-11 --article 24의2
 ```
 
@@ -133,8 +133,8 @@ Suggestion→Review→Application 절차를 거쳐 OpenMetadata에 적용해야 
 - [공식 시행일 목록 가이드](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=lsEfYdListGuide)
 - [공식 시행일 본문 가이드](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=lsEfYdInfoGuide)
 - [참고한 korean-law-mcp 계보 조회](https://github.com/chrisryugj/korean-law-mcp/blob/c6feff0cbd10cc5b907cdd4f4b3fcf8c59dcc7f7/src/lib/law-lineage.ts)
-- [Connector](../../../pipelines/connectors/moleg_law_api.yaml)
-- [Provider Reference](../../../pipelines/references/providers/moleg/moleg_law_api/metadata.yaml)
+- [Connector](../../../backend/connectors/moleg_law_api.yaml)
+- [Provider Reference](../../../backend/references/providers/moleg/moleg_law_api/metadata.yaml)
 
 ## 조회 기능과의 연결
 
@@ -144,7 +144,7 @@ Suggestion→Review→Application 절차를 거쳐 OpenMetadata에 적용해야 
 
 ## 현재 전용 배포
 
-법령 작업은 `pipelines/prefect.legal_information.yaml`에 정의한다.
+법령 작업은 `backend/prefect.legal_information.yaml`에 정의한다.
 Compose `prefect-law-deploy`가 `teoria-legal-information` pool과 `laws` queue에 등록하고,
 `prefect-law-worker`가 동시 실행 1개·CPU 1·메모리 2GiB 상한으로 실행한다.
 기존 조달 수집 pool을 재개하지 않는다. 월~토 04:15 변경 동기화,

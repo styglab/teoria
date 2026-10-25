@@ -4,8 +4,8 @@
 새 주문뿐 아니라 과거 주문의 금액 수정, 취소, 삭제 표시도 반영한다.
 원천과 DW는 이미 있다고 가정하며 DB나 테이블을 만드는 코드는 포함하지 않는다.
 
-예제 파일은 [flows.py](../../pipelines/examples/db_sales/flows.py)와
-[prefect.yaml](../../pipelines/examples/db_sales/prefect.yaml) 두 개다.
+예제 파일은 [flows.py](../../backend/examples/db_sales/flows.py)와
+[prefect.yaml](../../backend/examples/db_sales/prefect.yaml) 두 개다.
 
 ```text
 처리 날짜 확정 → Extract         → Transform    → Validate     → Load
@@ -87,7 +87,7 @@ export ETL_SOURCE_DATABASE_URL='postgresql://reader:password@source-host:5432/so
 export ETL_TARGET_DATABASE_URL='postgresql://writer:password@warehouse-host:5432/warehouse_db'
 export ETL_EXAMPLE_DIRECTORY="$PWD/pipelines/examples/db_sales"
 
-uv sync --locked --package teoria-pipelines --group orchestration --group etl-example
+uv sync --locked --project backend --group orchestration --group etl-example
 ```
 
 원천 계정에는 조회 권한, DW 계정에는 조회·추가·갱신 권한이 필요하다.
@@ -169,7 +169,7 @@ DW에 더 최신 값이 있으면 과거 데이터로 덮어쓰지 않는다. �
 
 ## 5. prefect.yaml에서 실행 정책 정하기
 
-[예제 YAML](../../pipelines/examples/db_sales/prefect.yaml)의 주요 부분이다.
+[예제 YAML](../../backend/examples/db_sales/prefect.yaml)의 주요 부분이다.
 
 ```yaml
 parameters:
@@ -210,11 +210,11 @@ DB Task는 native async 연결을 사용한다. Prefect timeout 외에도 DB 자
 같은 이름의 pool이 이미 있다면 생성 명령은 생략한다.
 
 ```bash
-uv run --locked --package teoria-pipelines --group orchestration --group etl-example \
+uv run --locked --project backend --group orchestration --group etl-example \
   prefect work-pool create --type process example-etl
 
-cd pipelines/examples/db_sales
-uv run --locked --package teoria-pipelines --group orchestration --group etl-example \
+cd backend/examples/db_sales
+uv run --locked --project backend --group orchestration --group etl-example \
   prefect deploy --all --prefect-file prefect.yaml
 cd ../../..
 ```
@@ -226,7 +226,7 @@ YAML의 `pull`은 Worker가 실행 전에 `ETL_EXAMPLE_DIRECTORY`로 이동하�
 같은 터미널에서 Worker를 시작한다. 앞서 설정한 DB·Prefect 환경변수를 이 Worker가 상속한다.
 
 ```bash
-uv run --locked --package teoria-pipelines --group orchestration --group etl-example \
+uv run --locked --project backend --group orchestration --group etl-example \
   prefect worker start --pool example-etl
 ```
 
@@ -235,7 +235,7 @@ Worker를 켜 둔 채 Prefect UI의 Deployments → `orders-daily` → Run에서
 API 접속 설정을 한 별도 터미널에서 실행해도 된다.
 
 ```bash
-uv run --locked --package teoria-pipelines --group orchestration --group etl-example \
+uv run --locked --project backend --group orchestration --group etl-example \
   prefect deployment run 'orders-etl/orders-daily' --param business_date=2026-10-15
 ```
 

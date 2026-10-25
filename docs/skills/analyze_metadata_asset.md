@@ -57,7 +57,7 @@ export TEORIA_ADMIN_BASE_URL=http://localhost:8081/admin-api
 python3 .agents/skills/enrich-metadata-asset/scripts/fetch_context.py \
   --table-fqn '<service.database.schema.table>' \
   --output /tmp/teoria_metadata_context.json
-uv run --locked --package teoria-platform python \
+uv run --locked --project backend python \
   .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py proposal_bundle.json
 ```
 
@@ -93,9 +93,9 @@ OpenMetadata entity 상태나 원본 샘플을 Teoria DB에 복제하지 않는�
 두 제안 Skill의 bundle 형식은
 [proposal schema](../../.agents/skills/enrich-metadata-asset/references/proposal_bundle.schema.json)를 따른다.
 
-Bundle schema는 `platform/src/teoria/intelligence/suggestions/contracts.py`의
+Bundle schema는 `backend/src/teoria/features/metadata_management/intelligence/suggestions/contracts.py`의
 `metadata_proposal_bundle_schema()`에서 생성한다. 변경 시 reference JSON을 재생성하고
-`platform/tests/unit/intelligence/test_proposal_contract.py`로 일치 여부와 검증 동작을 확인한다.
+`backend/tests/features/metadata_management/intelligence/test_proposal_contract.py`로 일치 여부와 검증 동작을 확인한다.
 Skill 검증은 같은 schema를 사용하며 제출 시 `warnings`를 API payload에서 제외한다.
 
 승인·적용·재시도와 결과 확인은 [공통 제안 처리](../platform/metadata/suggestions.md)를 따른다.

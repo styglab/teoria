@@ -12,40 +12,36 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: python3 -m unittest discover -s tests/documentation
       - run: python3 tests/documentation/check_docs.py
-      - run: uv run --locked --package teoria-pipelines teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
-
-  provider:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv run --locked --package teoria-provider-api pytest packages/provider_api/tests
+      - run: uv run --project backend --locked --all-extras --group orchestration teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
 
   admin-ui:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: platform/admin_ui
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: platform/admin_ui/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm test
       - run: npm run build
 
-  platform:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv run --locked --package teoria-platform pytest platform/tests
-      - run: uv run --locked --package teoria-platform teoria validate platform/registries
+      - run: uv run --project backend --locked --all-extras --all-groups pytest backend/tests --ignore=backend/tests/integration
+      - run: uv run --project backend --locked --extra api teoria validate backend/registries
+      - run: uv run --project backend --locked teoria-pipelines validate backend
+      - run: uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/registries
+      - run: uv run --project backend --locked --all-extras pytest backend/tests/integration/test_provider_reference_ownership.py
 
-  platform-app-integration:
+  application-db-integration:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -66,15 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv run --locked --package teoria-platform pytest platform/tests/integration
-
-  pipelines:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv run --locked --package teoria-pipelines --group etl-example pytest pipelines/tests
-      - run: uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
+      - run: uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/integration/application
 
   integration:
     runs-on: ubuntu-latest
@@ -99,7 +87,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Initialize database roles
         run: |
-          uv run --locked --package teoria-pipelines python - <<'PY'
+          uv run --project backend --locked --all-extras --group orchestration python - <<'PY'
           import os
           import psycopg
 
@@ -108,10 +96,10 @@ jobs:
               connection.execute("CREATE ROLE teoria_runtime")
           PY
       - name: Test Pipeline database integration
-        run: uv run --locked --package teoria-pipelines pytest pipelines/tests/integration
+        run: uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/integration/data_operations
       - name: Test Pipeline and Platform contracts
-        run: uv run --locked --package teoria-pipelines --group validation pytest tests/integration
-      - run: uv run --locked --package teoria-pipelines --group validation teoria-pipelines validate-integration pipelines --platform-registries platform/registries
+        run: uv run --project backend --locked --all-extras --group orchestration pytest tests/integration
+      - run: uv run --project backend --locked --all-extras --group orchestration teoria-pipelines validate-integration backend --platform-registries backend/registries
 
   deployment:
     runs-on: ubuntu-latest
@@ -119,7 +107,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - name: Test shared Prefect execution policies
-        run: uv run --locked --package teoria-pipelines --group kubernetes-orchestration pytest pipelines/tests/unit/test_deployment_registration.py pipelines/tests/integration/test_prefect_scheduling.py
+        run: uv run --project backend --locked --all-extras --group orchestration --group kubernetes-orchestration pytest backend/tests/integrations/data_operations/test_deployment_registration.py backend/tests/integration/data_operations/test_prefect_scheduling.py
       - name: Validate Docker Compose
         env:
           TEORIA_ADMIN_API_TOKEN: validation
@@ -174,10 +162,3 @@ jobs:
           -f deploy/compose/compose.yaml
           --profile metadata
           config --quiet
-
-  mcp:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv run --locked --package teoria-mcp pytest mcp/tests

@@ -229,14 +229,14 @@ __marimo__/
 /backups/
 
 # Official law connector reference snapshots are part of its wire contract.
-!pipelines/references/
-pipelines/references/*
-!pipelines/references/providers/
-pipelines/references/providers/*
-!pipelines/references/providers/moleg/
-pipelines/references/providers/moleg/*
-!pipelines/references/providers/moleg/moleg_law_api/
-!pipelines/references/providers/moleg/moleg_law_api/**
+!backend/references/
+backend/references/*
+!backend/references/providers/
+backend/references/providers/*
+!backend/references/providers/moleg/
+backend/references/providers/moleg/*
+!backend/references/providers/moleg/moleg_law_api/
+!backend/references/providers/moleg/moleg_law_api/**
 
 # Version the evidence policy and proposal contract used by metadata skills.
 !.agents/skills/enrich-metadata-asset/references/
@@ -276,10 +276,10 @@ archive/procurement_services/platform/references/**
 !archive/procurement_services/platform/references/providers/mss/venture_company_disclosure/벤처확인기업_공시_웹조회_계약.md
 !archive/procurement_services/platform/references/providers/nts/business_registration/metadata.yaml
 !archive/procurement_services/platform/references/providers/nts/business_registration/국세청_사업자등록정보 진위확인 및 상태조회 서비스.md
-!platform/references/
-platform/references/**
-!platform/references/providers/
-!platform/references/providers/.gitkeep
+!backend/references/
+backend/references/**
+!backend/references/providers/
+!backend/references/providers/.gitkeep
 !archive/procurement_services/pipelines/references/
 archive/procurement_services/pipelines/references/**
 !archive/procurement_services/pipelines/references/providers/
@@ -292,14 +292,14 @@ archive/procurement_services/pipelines/references/**
 !archive/procurement_services/pipelines/references/providers/moleg/moleg_law_api/metadata.yaml
 !archive/procurement_services/pipelines/references/providers/pps/pps_contract_api/metadata.yaml
 !archive/procurement_services/pipelines/references/providers/pps/pps_contract_api/조달청_OpenAPI참고자료_나라장터_계약정보서비스_1.0_extracted.docx
-!pipelines/references/
-pipelines/references/**
-!pipelines/references/providers/
-!pipelines/references/providers/.gitkeep
+!backend/references/
+backend/references/**
+!backend/references/providers/
+!backend/references/providers/.gitkeep
 
-!pipelines/references/providers/moleg/
-!pipelines/references/providers/moleg/moleg_law_api/
-!pipelines/references/providers/moleg/moleg_law_api/**
+!backend/references/providers/moleg/
+!backend/references/providers/moleg/moleg_law_api/
+!backend/references/providers/moleg/moleg_law_api/**
 
 # Keep retired procurement services only in the local workspace.
 /archive/procurement_services/

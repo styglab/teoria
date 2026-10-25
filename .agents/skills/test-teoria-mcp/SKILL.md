@@ -13,7 +13,7 @@ Validate the MCP boundary independently from direct Platform calls. Report separ
 2. Run the MCP unit tests:
 
    ```bash
-   uv run --locked --package teoria-mcp pytest mcp/tests
+   uv run --locked --project backend pytest backend/tests/integrations/runtime_http
    ```
 
 3. Confirm `.codex/config.toml` contains the `teoria` MCP server. Do not print credentials or complete database URLs.
@@ -21,14 +21,14 @@ Validate the MCP boundary independently from direct Platform calls. Report separ
 5. Run the bundled protocol smoke test:
 
    ```bash
-   uv run --locked --package teoria-mcp python \
+   uv run --locked --project backend python \
      .agents/skills/test-teoria-mcp/scripts/smoke_test.py
    ```
 
    Override the default date range only when the requested scenario requires it:
 
    ```bash
-   uv run --locked --package teoria-mcp python \
+   uv run --locked --project backend python \
      .agents/skills/test-teoria-mcp/scripts/smoke_test.py \
      --date-from 2026-01-01 --date-to 2026-08-03
    ```

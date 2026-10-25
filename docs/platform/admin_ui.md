@@ -63,7 +63,7 @@ sessionStorage에만 보관하고 로그아웃하면 제거한다. 입력은 기
 
 ## 프론트엔드 개발
 
-UI는 `platform/admin_ui/`, Admin API는 `platform/src/teoria/admin/`가 소유한다.
+UI는 `frontend/`, Admin API는 `backend/src/teoria/entrypoints/admin/`가 소유한다.
 
 ```text
 Admin UI → Admin API → OpenMetadata / Application DB / Data DB read view
@@ -73,11 +73,11 @@ MCP → Runtime API → Capability Runner
 저장소 루트에서 Admin API를 실행하고 별도 터미널에서 UI를 시작한다.
 
 ```bash
-uv run --locked --package teoria-platform teoria-admin-api
+uv run --locked --project backend --extra api teoria-admin-api
 ```
 
 ```bash
-cd platform/admin_ui
+cd frontend
 npm ci
 npm run dev
 ```

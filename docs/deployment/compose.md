@@ -5,7 +5,7 @@
 이전 조달·기업 분석과 조달 API 수집은 배포 대상이 아니다.
 법령 수집·조회는 별도 pool·Worker로 복구했다.
 환경변수는 [설정 안내](configuration.md), 규격서 실행은 [Prefect](../pipelines/prefect.md),
-실제 전환 결과는 [배포 검증 기록](../verification/goods_focus_deployment_2026_10_25.md)을 따른다.
+현재 통합 백엔드 전환 결과는 [재배포 검증 기록](../verification/backend_consolidation_deployment_2026_10_25.md)을 따른다.
 EC2 K3s는 [별도 배포](k3s.md)이며 Compose 성공을 K3s 운영 성공으로 기록하지 않는다.
 
 ## Docker Compose
@@ -68,7 +68,8 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run --rm --no-deps prefect-deploy
 ```
 
-migration은 새 순번만 적용한다. 규격서 상태·참조 테이블은 `090`, schema 권한은 `091`에 있다.
+migration은 새 순번만 적용한다. 규격서 상태·참조 테이블은 `090`, schema 권한은 `091`, 상위 표준관리 workflow는 `092`에 있다.
+Application DB에는 `017` 물품 프로파일·`018` 관계 설명·`019` 의미 판정 operation을 적용했다.
 기존 수집 pool과 배포는 일시정지를 유지하고 과거 실행·checkpoint를 지우지 않는다.
 규격서 배포는 cron 없이 manifest를 받는다. [배포 목록](../pipelines/deployments.md)을 확인한다.
 

@@ -18,10 +18,10 @@ Provider의 wire field와 code는 원문 표기를 유지한다. 변경 가능�
 
 ## Source와 Connector 선택
 
-- Capability가 요청 시 직접 호출하는 API는 `platform/registries/sources/`에 둔다.
+- Capability가 요청 시 직접 호출하는 API는 `backend/registries/sources/`에 둔다.
 - `capability.exposure: public`인 계약만 Runtime discovery와 MCP Tool에 노출한다.
   다른 Capability가 조합 실행에 사용하는 지원 계약은 `internal`로 유지한다.
-- Prefect만 지속 수집하는 API는 `pipelines/connectors/`에 둔다.
+- Prefect만 지속 수집하는 API는 `backend/connectors/`에 둔다.
 - 수집 DB를 Runtime이 읽으면 Database Source와 DB-to-Ontology Mapping을 만든다.
 - 같은 API를 Source와 Connector 양쪽에 등록하지 않는다.
 
@@ -34,7 +34,7 @@ Source의 세부 작성 절차와 verification case 규칙은
 Runtime 계약 namespace는 YAML의 `runtime_contract.id`로 식별한다. 하나의
 업무 Domain이 여러 Runtime 계약을 소유할 수 있다.
 
-아래 트리는 `platform/registries/` 기준이다.
+아래 트리는 `backend/registries/` 기준이다.
 
 ```text
 domains/
@@ -65,13 +65,13 @@ Registry checksum에는 파일 경로도 포함되므로 위치만 바꿔도 che
 Breaking change는 새 Registry version으로 발행한다. Runtime은 검증된 immutable
 bundle과 checksum을 사용하며 Git 작업 파일을 운영 중에 임의로 읽어 바꾸지 않는다.
 
-원본 `platform/registries/`는 사람이 작성하는 draft 계약만 보관하며 release 상태나
+원본 `backend/registries/`는 사람이 작성하는 draft 계약만 보관하며 release 상태나
 `.release.json`을 저장하지 않는다. 발행 명령은 커밋된 원본을 변경하지 않고 지정한
 Artifact Store에 version 디렉터리와 `manifest.json`을 생성한다.
 
 ```bash
-uv run --locked --package teoria-platform teoria publish \
-  platform/registries \
+uv run --locked --project backend --extra api teoria publish \
+  backend/registries \
   --version YYYY.MM.DD.REVISION \
   --output /path/to/registry_artifacts \
   --git-commit "$(git rev-parse HEAD)"
@@ -84,14 +84,14 @@ uv run --locked --package teoria-platform teoria publish \
 ## 검증
 
 ```bash
-uv run --locked --package teoria-platform pytest platform/tests
-uv run --locked --package teoria-platform teoria validate platform/registries
+uv run --locked --project backend --all-extras --all-groups pytest backend/tests
+uv run --locked --project backend --extra api teoria validate backend/registries
 
-uv run --locked --package teoria-pipelines pytest pipelines/tests
-uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
-uv run --locked --package teoria-pipelines --group validation \
-  teoria-pipelines validate-integration pipelines \
-  --platform-registries platform/registries
+uv run --locked --project backend --all-extras --all-groups pytest backend/tests
+uv run --locked --project backend teoria-pipelines validate backend
+uv run --locked --project backend --extra api \
+  teoria-pipelines validate-integration backend \
+  --platform-registries backend/registries
 ```
 
 검증기는 schema, 참조, Mapping 타입, Capability graph, Source request/response와

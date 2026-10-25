@@ -1,0 +1,53 @@
+import asyncio
+import inspect
+
+from teoria.entrypoints.commands.binding import (
+    run_bind_capabilities,
+    run_bind_openmetadata,
+    run_plan_openmetadata_bindings,
+)
+from teoria.entrypoints.commands.database import (
+    run_migrate_app,
+)
+from teoria.entrypoints.commands.ontology import (
+    run_apply_business_rules,
+    run_apply_ontology_blueprint,
+    run_apply_ontology_extension,
+    run_enrich_business_ontology,
+    run_ontology_migration_report,
+    run_promote_business_concepts,
+)
+from teoria.entrypoints.commands.parser import create_parser
+from teoria.entrypoints.commands.registry import (
+    run_activate_artifact,
+    run_compile_runtime_bundle,
+    run_validate_or_publish,
+)
+from teoria.entrypoints.commands.source_verification import run_verify_source
+from teoria.settings import bootstrap_settings
+
+
+def main() -> int:
+    settings = bootstrap_settings()
+    args = create_parser(settings).parse_args()
+    handlers = {
+        "migrate-app": run_migrate_app,
+        "bind-openmetadata": run_bind_openmetadata,
+        "ontology-migration-report": run_ontology_migration_report,
+        "promote-business-concepts": run_promote_business_concepts,
+        "bind-capabilities": run_bind_capabilities,
+        "enrich-business-ontology": run_enrich_business_ontology,
+        "apply-ontology-blueprint": run_apply_ontology_blueprint,
+        "plan-openmetadata-bindings": run_plan_openmetadata_bindings,
+        "apply-business-rules": run_apply_business_rules,
+        "apply-ontology-extension": run_apply_ontology_extension,
+        "activate-artifact": run_activate_artifact,
+        "compile-runtime-bundle": run_compile_runtime_bundle,
+        "verify": run_verify_source,
+    }
+    result = handlers.get(args.command, run_validate_or_publish)(args, settings)
+    return asyncio.run(result) if inspect.isawaitable(result) else result
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

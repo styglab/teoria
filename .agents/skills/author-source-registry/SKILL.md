@@ -1,6 +1,6 @@
 ---
 name: author-source-registry
-description: Create or revise a Teoria Source Registry and operation verification cases from provider API reference documents, then run static, build, regression, and actual API live validation by default when credentials are available, diagnose failures, and iteratively correct source-contract defects. Use for requests that turn files under platform/references/providers into a final platform/registries/sources YAML, audit an existing Source against its original documentation, or complete the reference-to-registry verification workflow.
+description: Create or revise a Teoria Source Registry and operation verification cases from provider API reference documents, then run static, build, regression, and actual API live validation by default when credentials are available, diagnose failures, and iteratively correct source-contract defects. Use for requests that turn files under backend/references/providers into a final backend/registries/sources YAML, audit an existing Source against its original documentation, or complete the reference-to-registry verification workflow.
 ---
 
 # Author Source Registry
@@ -25,20 +25,20 @@ description: Create or revise a Teoria Source Registry and operation verificatio
 
 파일을 만들기 전에 실행 경계를 먼저 확정한다.
 
-- Semantic Runtime이 API를 직접 호출하면 `platform/registries/sources/{source_id}.yaml`을 만든다.
-- Prefect 등 Ingestion Worker만 API를 호출하면 `pipelines/connectors/{connector_id}.yaml`을 만들고 verification case는 `pipelines/verification_cases/{connector_id}/`에 둔다.
+- Semantic Runtime이 API를 직접 호출하면 `backend/registries/sources/{source_id}.yaml`을 만든다.
+- Prefect 등 Ingestion Worker만 API를 호출하면 `backend/connectors/{connector_id}.yaml`을 만들고 verification case는 `backend/verification_cases/{connector_id}/`에 둔다.
 - API 데이터를 정규화한 DB를 Runtime이 조회하는 구조에서는 API Connector를 Source Registry에 중복 등록하지 않는다.
 
-Source는 `platform/references/providers/{provider}/{source}/metadata.yaml`, Connector는 `pipelines/references/providers/{provider}/{connector}/metadata.yaml`과 `files`에 등록된 모든 문서를 확인한다. ID가 명확하면 `{provider}_{service}` 형태의 짧고 안정적인 `snake_case`를 사용한다.
+Source는 `backend/references/providers/{provider}/{source}/metadata.yaml`, Connector는 `backend/references/providers/{provider}/{connector}/metadata.yaml`과 `files`에 등록된 모든 문서를 확인한다. ID가 명확하면 `{provider}_{service}` 형태의 짧고 안정적인 `snake_case`를 사용한다.
 
 DOCX 또는 텍스트 문서는 먼저 다음 명령으로 구조화해 전체 표를 누락 없이 검토한다.
 
 ```bash
 python3 .agents/skills/author-source-registry/scripts/extract_reference.py \
-  platform/references/providers/{provider}/{source}/{document} > /tmp/{source}-reference.json
+  backend/references/providers/{provider}/{source}/{document} > /tmp/{source}-reference.json
 ```
 
-Connector 원문이면 입력 경로로 `pipelines/references/providers/{provider}/{connector}/{document}`를 사용한다.
+Connector 원문이면 입력 경로로 `backend/references/providers/{provider}/{connector}/{document}`를 사용한다.
 
 여러 파일이나 디렉터리를 한 번에 넘겨도 된다. PDF는 `pdftotext`가 설치된 경우 지원한다. 스캔 이미지처럼 텍스트를 얻을 수 없으면 사용할 수 있는 문서/OCR 도구로 직접 확인하고, 확인할 수 없는 범위를 결과에 명시한다.
 
@@ -60,17 +60,17 @@ Connector 원문이면 입력 경로로 `pipelines/references/providers/{provide
 `docs/platform/registry/templates/source.yaml`을 기준으로 다음을 함께 작성한다.
 
 ```text
-platform/registries/sources/{source_id}.yaml
-platform/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
-platform/references/providers/{provider}/{source}/metadata.yaml
+backend/registries/sources/{source_id}.yaml
+backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+backend/references/providers/{provider}/{source}/metadata.yaml
 ```
 
 Ingestion Connector로 확정된 경우 대응 위치는 다음과 같다.
 
 ```text
-pipelines/connectors/{connector_id}.yaml
-pipelines/verification_cases/{connector_id}/{operation_id}.yaml
-pipelines/references/providers/{provider}/{connector}/metadata.yaml
+backend/connectors/{connector_id}.yaml
+backend/verification_cases/{connector_id}/{operation_id}.yaml
+backend/references/providers/{provider}/{connector}/metadata.yaml
 ```
 
 Connector 문서는 최상위 `connector:`를 사용하고 Reference metadata에는 `target: connector`와 Connector 경로를 기록한다.
@@ -96,17 +96,17 @@ Connector 문서는 최상위 `connector:`를 사용하고 Reference metadata에
 먼저 대상 Source를 정적으로 검증한다.
 
 ```bash
-uv run --locked --package teoria-platform teoria validate platform/registries --source {source_id}
+uv run --locked --project backend --extra api teoria validate backend/registries --source {source_id}
 ```
 
 그 다음 모든 Operation에 대해 요청 생성 검증을 실행한다.
 
 ```bash
-uv run --locked --package teoria-platform teoria verify source \
+uv run --locked --project backend --extra api teoria verify source \
   --profile build \
   --source {source_id} \
   --operation {operation_id} \
-  --input platform/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+  --input backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
 ```
 
 응답 형식 실행 기본값을 선언했다면 Build 결과에서 case가 값을 제공하지 않았는데도 해당 파라미터가 주입됐는지 추가로 확인한다.
@@ -114,8 +114,8 @@ uv run --locked --package teoria-platform teoria verify source \
 마지막으로 회귀 검증을 실행한다.
 
 ```bash
-uv run --locked --package teoria-platform pytest platform/tests
-uv run --locked --package teoria-platform teoria validate platform/registries
+uv run --locked --project backend --all-extras --all-groups pytest backend/tests
+uv run --locked --project backend --extra api teoria validate backend/registries
 ```
 
 Source 작성 또는 검증 요청은 실제 API 검증까지 포함하는 것으로 처리한다. 필요한 credential이 환경에 존재하면 모든 Operation을 `--profile live`로 실행한다.
@@ -123,28 +123,28 @@ Source 작성 또는 검증 요청은 실제 API 검증까지 포함하는 것�
 Connector는 동일한 profile 의미를 가지는 전용 명령을 사용한다.
 
 ```bash
-uv run --locked --package teoria-pipelines teoria-pipelines verify connector \
+uv run --locked --project backend teoria-pipelines verify connector \
   --profile build \
   --connector {connector_id} \
   --operation {operation_id} \
-  --input pipelines/verification_cases/{connector_id}/{operation_id}.yaml
+  --input backend/verification_cases/{connector_id}/{operation_id}.yaml
 ```
 
 Connector 변경의 회귀 검증은 다음을 실행한다.
 
 ```bash
-uv run --locked --package teoria-pipelines pytest pipelines/tests
-uv run --locked --package teoria-pipelines \
-  teoria-pipelines validate pipelines \
-  --platform-registries platform/registries
+uv run --locked --project backend --all-extras --all-groups pytest backend/tests
+uv run --locked --project backend \
+  teoria-pipelines validate backend \
+  --platform-registries backend/registries
 ```
 
 ```bash
-uv run --locked --package teoria-platform teoria verify source \
+uv run --locked --project backend --extra api teoria verify source \
   --profile live \
   --source {source_id} \
   --operation {operation_id} \
-  --input platform/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+  --input backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
 ```
 
 사용자가 명시적으로 Live 호출을 제외한 경우에만 생략한다. 인증정보, 민감한 입력, 원본 전체 응답을 출력하거나 커밋하지 않는다. credential이 없으면 Live 검증만 `BLOCKED`로 표시하며 Build나 전체 검증을 Live 성공으로 표현하지 않는다. 일부 Operation에만 안전한 공개 검증 입력이 있으면 실행 가능한 Operation은 Live로 검증하고 나머지는 각각의 차단 이유를 남긴다.

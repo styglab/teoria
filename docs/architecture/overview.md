@@ -3,7 +3,8 @@
 Teoria는 AI-Native Metadata & Ontology Platform이다. 현재 활성 업무는 명시 입력 규격서의
 파싱·물품 정보 추출·표준 후보 관리다. 법령 수집·조회는 메타데이터 진단의 근거 저장소로 별도 운영한다. 기존 조달 이력·기업 분석과 조달 API 수집은
 `archive/procurement_services/`로 이동했으며 운영 실행 경로에서 import하지 않는다.
-소유 프로젝트는 [저장소 구조](repository-structure.md)를 따른다.
+소스는 `backend/`의 기능별 모듈과 `frontend/`로 통합한다. API·MCP·규격서·법령·메타데이터
+Worker는 별도 프로세스·이미지·권한을 유지한다. 기능 소유권은 [저장소 구조](repository-structure.md)를 따른다.
 
 ```text
 Platform Ontology 작성·검토·게시

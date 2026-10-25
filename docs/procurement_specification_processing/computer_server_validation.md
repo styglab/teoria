@@ -135,8 +135,8 @@ MD5 정렬 상위 2건을 규칙 작성 후 선택했다. 계약 유형·첨부 
 - `hwpx_structure_comparison.json`: 원본 XML과 반환 IR의 표·셀 집계 비교
 
 ```bash
-uv run --locked --package teoria-pipelines pytest \
-  pipelines/tests/unit/domains/public_procurement/specification_intelligence
+uv run --locked --project backend pytest \
+  backend/tests/integrations/data_operations/domains/public_procurement/specification_intelligence
 
 node .artifacts/procurement_specifications/server_validation/parser_probe/probe.mjs
 ```

@@ -2,10 +2,11 @@
 
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-uv sync --locked --all-packages --all-groups
+uv sync --project backend --locked --all-extras --all-groups
 ```
 
-의존성은 사용하는 프로젝트의 `pyproject.toml`에만 추가한다. 루트 `uv.lock`은 개발·CI 재현성을 위해 공유한다.
+Python 의존성은 `backend/pyproject.toml`, 잠금은 `backend/uv.lock`에 둔다.
+API·MCP extra와 Worker별 dependency group으로 실행 환경을 구분한다.
 
 현재 조달·기업 API credential은 활성 Compose 서비스에 주입하지 않는다.
 법령 전용 Worker에는 `TEORIA_CONNECTOR_MOLEG_LAW_API_KEY`를 주입한다.
@@ -17,10 +18,10 @@ uv sync --locked --all-packages --all-groups
 
 | 대상 | 기준 코드·설정 |
 |---|---|
-| Platform·Runtime·Admin | `platform/src/teoria/settings.py` |
-| Pipelines | `pipelines/src/teoria_pipelines/settings.py` |
+| Platform·Runtime·Admin | `backend/src/teoria/settings.py` |
+| Pipelines | `backend/src/teoria/integrations/data_operations/settings.py` |
 | DB 연결 상한 | Platform `persistence/postgres.py`, Pipelines `persistence/connection.py`의 환경변수 |
-| MCP | `mcp/src/teoria_mcp/settings.py` |
+| MCP | `backend/src/teoria/integrations/runtime_http/settings.py` |
 | Compose 서비스·포트·이미지·필수 인증 | `deploy/compose/compose.yaml`, `.env.example` |
 | EC2 K3s·GitHub CD | `deploy/k3s/`, `.github/workflows/deploy_k3s.yaml` |
 
@@ -56,7 +57,7 @@ Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할
 |---|---|---|
 | `TEORIA_ENVIRONMENT` | `development` | 개발·테스트·운영 구분: `development`, `test`, `production` |
 | `TEORIA_ENV_FILE` | 개발 시 작업 디렉터리 `.env` | 로컬 프로세스가 읽을 환경 파일 경로 |
-| `TEORIA_REGISTRY_PATH` | `platform/registries` | Platform Registry |
+| `TEORIA_REGISTRY_PATH` | `backend/registries` | Platform Registry |
 
 ### Runtime·Context·정책
 
@@ -110,7 +111,7 @@ Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할
 | `TEORIA_PIPELINE_CONCURRENCY` | `2` | 규격서 pool 전체 동시 실행 상한. Compose Worker 자체 실행 상한에도 적용 |
 | `TEORIA_PIPELINE_WORKER_CPUS` | `4` | Compose 규격서 Worker 전체 CPU 상한 |
 | `TEORIA_PIPELINE_WORKER_MEMORY` | `8g` | Compose 규격서 Worker 전체 메모리 상한 |
-| `TEORIA_PLATFORM_REGISTRY_PATH` | `platform/registries` | Pipeline 통합 검증 대상 |
+| `TEORIA_PLATFORM_REGISTRY_PATH` | `backend/registries` | Pipeline 통합 검증 대상 |
 | `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
 | `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `5` | Connector의 멱등 요청 최대 시도 횟수 |
 | `TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS` | `60` | Connector 재시도 지수 backoff의 최초 대기시간 |
@@ -163,7 +164,7 @@ Compose 입력 파일을 재사용하면 컨테이너 전용 주소를 호스트
 TEORIA_ENV_FILE=deploy/compose/.env \
 TEORIA_ADMIN_AUTH_MODE=bearer \
 TEORIA_OPENMETADATA_BASE_URL=http://localhost:8585/api \
-  uv run --locked --package teoria-platform teoria-admin-api
+  uv run --locked --project backend --extra api teoria-admin-api
 ```
 
 이 예시는 주소·인증 차이를 보여준다. DB를 사용하는 호스트 실행은 별도 접근 경로와

@@ -25,7 +25,7 @@ spec:
         - name: TEORIA_ENVIRONMENT
           value: production
         - name: TEORIA_PIPELINE_PATH
-          value: /app/pipelines
+          value: /app/backend
         - name: PREFECT_API_URL
           value: http://prefect-server:4200/api
         - name: TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE

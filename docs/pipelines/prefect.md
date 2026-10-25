@@ -34,7 +34,7 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run
 ```
 
 등록 명령의 `--kind ingestion`은 기존 CLI 호환 이름이다. 현재는 규격서 작업만 등록한다.
-등록 설정은 `pipelines/prefect.yaml`, Metadata는 `pipelines/prefect.metadata.yaml`이다.
+등록 설정은 `backend/prefect.yaml`, Metadata는 `backend/prefect.metadata.yaml`이다.
 자동화 등록은 과거 수집 pool을 재개하지 않는다.
 
 Prefect UI의 규격서 Deployment에서 `manifest` 객체를 입력해 실행하거나,
@@ -63,7 +63,7 @@ Worker 교체 → heartbeat·기동 검사 → 원래 pool 상태 복원 순서�
 
 ```bash
 docker compose -f deploy/compose/compose.yaml logs --tail 100 prefect-worker
-uv run --locked --package teoria-pipelines teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
+uv run --locked --project backend teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
 ```
 
 운영 절차와 볼륨·인증은 [Compose](../deployment/compose.md), Metadata 격리는

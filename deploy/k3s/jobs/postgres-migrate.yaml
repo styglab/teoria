@@ -33,7 +33,7 @@ spec:
         - teoria-pipelines
         - migrate
         - --migrations
-        - /app/pipelines/database/migrations
+        - /app/backend/migrations/data
       imagePullSecrets:
       - name: teoria-registry
       automountServiceAccountToken: false

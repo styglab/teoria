@@ -13,13 +13,13 @@ Read `AGENTS.md`, `docs/architecture/repository-structure.md` and
 
 1. Read current descriptions, schema, tags and glossary with
    `../enrich-metadata-asset/scripts/fetch_context.py`. Profile and sample access
-   contracts are in `platform/src/teoria/admin/metadata_api.py`. Use bounded
+   contracts are in `backend/src/teoria/features/metadata_management/catalog/admin_api.py`. Use bounded
    authorized observations; do not persist raw sample values or send raw personal
    identifiers to an external model. Pattern matches are detection candidates.
 2. Generate search keywords from observed information types. Use the collected
    law database via `POST /v1/admin/legal-information/search` with the assessment
    date and `version_scope: as_of`. Read the actual request contract in
-   `platform/src/teoria/domains/legal_information/search.py`.
+   `backend/src/teoria/features/legal_information/search.py`.
 3. Fetch relevant text with
    `GET /v1/admin/legal-information/documents/{snapshot_id}?path=...`.
    Inspect applicable conditions, exceptions and referenced provisions. If the

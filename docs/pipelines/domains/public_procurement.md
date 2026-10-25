@@ -4,7 +4,7 @@
 > 아래 명령·연동·건수는 현재 활성 서비스의 실행 기준이 아니다. 현재 안내는 `docs/index.md`를 따른다.
 
 공고·계약·낙찰 목록과 업종 사전을 수집한다.
-수집 실행은 `pipelines/src/teoria_pipelines/domains/public_procurement/`가 소유한다.
+수집 실행은 `backend/src/teoria/integrations/data_operations/domains/public_procurement/`가 소유한다.
 집계 의미와 조회 기능은 Platform이 담당한다.
 
 ## 수집 기능과 저장 흐름

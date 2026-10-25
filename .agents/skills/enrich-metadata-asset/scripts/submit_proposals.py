@@ -11,7 +11,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 SCHEMA_PATH = (
-    Path(__file__).resolve().parents[1] / "references/proposal_bundle.schema.json"
+    (Path(__file__).resolve().parents[4] / '.agents/skills/enrich-metadata-asset') / "references/proposal_bundle.schema.json"
 )
 
 

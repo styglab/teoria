@@ -1,0 +1,281 @@
+from __future__ import annotations
+
+import re
+from datetime import date
+from typing import Any, Literal
+from uuid import UUID
+
+from pydantic import Field, field_validator, model_validator
+
+from teoria.features.semantic_modeling.registry.schema.common import IdentifiedModel, RegistryMetadata, RegistryModel, SNAKE_CASE_PATTERN
+
+
+REFERENCE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
+SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$")
+
+
+class SemanticRequirement(RegistryModel):
+    stable_key: str
+    semantic_id: UUID | None = None
+    required: bool = True
+
+
+class CapabilitySemanticRequirements(RegistryModel):
+    concepts: list[SemanticRequirement] = Field(default_factory=list)
+    properties: list[SemanticRequirement] = Field(default_factory=list)
+    relationships: list[SemanticRequirement] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def requirements_are_unique(self) -> "CapabilitySemanticRequirements":
+        requirements = self.concepts + self.properties + self.relationships
+        keys = [item.stable_key for item in requirements]
+        if len(keys) != len(set(keys)):
+            raise ValueError("semantic requirement stable keys must be unique")
+        return self
+
+
+class CapabilityImplementation(RegistryModel):
+    handler: str | None = None
+    code_version: str | None = None
+    source_revision: str | None = None
+    image_digest: str | None = None
+
+
+class CapabilityPolicy(RegistryModel):
+    permissions: list[str] = Field(default_factory=list)
+    timeout_seconds: float | None = Field(default=None, gt=0)
+
+
+class CapabilityLifecycle(RegistryModel):
+    status: Literal["draft", "validated", "active", "deprecated", "retired"] = "active"
+    deprecated_at: date | None = None
+    replacement_ids: list[str] = Field(default_factory=list)
+    sunset_at: date | None = None
+    reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_deprecation(self) -> "CapabilityLifecycle":
+        if self.status in {"draft", "validated", "active"} and any((
+            self.deprecated_at, self.replacement_ids, self.sunset_at, self.reason,
+        )):
+            raise ValueError("active capability cannot declare deprecation metadata")
+        if self.status == "deprecated" and self.deprecated_at is None:
+            raise ValueError("deprecated capability must declare deprecated_at")
+        for capability_id in self.replacement_ids:
+            if not SNAKE_CASE_PATTERN.fullmatch(capability_id):
+                raise ValueError("replacement capability ids must be snake_case")
+        return self
+
+
+class CapabilityInput(RegistryModel):
+    property: str | None = None
+    data_type: str | None = None
+    field: str | None = None
+    operator: Literal["eq", "in", "contains", "gte", "lte"] = "eq"
+    fields: dict[str, "CapabilityInput"] = Field(default_factory=dict)
+    collection: Literal["scalar", "list"] = "scalar"
+    required: bool = False
+    default: Any = None
+    enum: list[Any] | None = None
+    minimum: int | float | None = None
+    maximum: int | float | None = None
+
+    @model_validator(mode="after")
+    def validate_input_shape(self) -> "CapabilityInput":
+        declared_shapes = sum((self.property is not None, self.data_type is not None, bool(self.fields)))
+        if declared_shapes != 1:
+            raise ValueError("input must declare exactly one of property, data_type, or fields")
+        if self.field and self.data_type is None:
+            raise ValueError("direct field binding is only valid for a data_type input")
+        if self.operator != "eq" and not (self.field or self.property):
+            raise ValueError("non-equality operator requires a field or property binding")
+        if self.operator == "in" and self.collection != "list":
+            raise ValueError("in operator requires a list input")
+        if self.required and self.default is not None:
+            raise ValueError("required input cannot declare a default")
+        if self.minimum is not None and self.maximum is not None and self.minimum > self.maximum:
+            raise ValueError("input minimum cannot exceed maximum")
+        if self.enum is not None and not self.enum:
+            raise ValueError("input enum cannot be empty")
+        if self.default is not None and self.enum is not None and self.default not in self.enum:
+            raise ValueError("input default must be one of enum")
+        for field_id in self.fields:
+            if not SNAKE_CASE_PATTERN.fullmatch(field_id):
+                raise ValueError(f"input field id '{field_id}' must be snake_case")
+        return self
+
+
+class DatabaseSearchDefinition(RegistryModel):
+    input: str
+    fields: list[str] = Field(min_length=1)
+
+
+class DatabaseSortField(RegistryModel):
+    field: str
+    direction: Literal["asc", "desc"]
+    nulls: Literal["first", "last"] | None = None
+
+
+class DatabaseSortDefinition(RegistryModel):
+    input: str
+    choices: dict[str, list[DatabaseSortField]]
+
+
+class DatabasePaginationDefinition(RegistryModel):
+    page_input: str
+    page_size_input: str
+    root_field: str
+    count_distinct: bool = True
+
+
+class DatabaseQueryDefinition(RegistryModel):
+    search: DatabaseSearchDefinition | None = None
+    sort: DatabaseSortDefinition | None = None
+    pagination: DatabasePaginationDefinition | None = None
+
+
+class CapabilityStep(RegistryModel):
+    id: str | None = None
+    call: str
+    database_query: DatabaseQueryDefinition | None = None
+
+    @field_validator("id")
+    @classmethod
+    def id_must_be_snake_case(cls, value: str | None) -> str | None:
+        if value is not None and not SNAKE_CASE_PATTERN.fullmatch(value):
+            raise ValueError("step id must be snake_case")
+        return value
+
+    @field_validator("call")
+    @classmethod
+    def call_must_reference_operation(cls, value: str) -> str:
+        if not REFERENCE_PATTERN.fullmatch(value) or len(value.split(".")) != 2:
+            raise ValueError("call must use '<source>.<operation>'")
+        return value
+
+
+class CapabilityOutcome(RegistryModel):
+    type: Literal["exact_match_presence", "active_period_presence"]
+    input: str
+    response_field: str | None = None
+    period_field: str | None = None
+    matched_status: str
+    unmatched_status: str
+
+    @field_validator("input", "matched_status", "unmatched_status")
+    @classmethod
+    def values_must_be_snake_case(cls, value: str) -> str:
+        if not SNAKE_CASE_PATTERN.fullmatch(value):
+            raise ValueError("outcome values must be snake_case")
+        return value
+
+    @field_validator("response_field", "period_field")
+    @classmethod
+    def response_field_must_be_a_reference(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parts = value.split(".")
+        if len(parts) != 4 or parts[2] != "response" or not REFERENCE_PATTERN.fullmatch(value):
+            raise ValueError("response_field must use '<source>.<operation>.response.<field>'")
+        return value
+
+    @model_validator(mode="after")
+    def validate_field_for_type(self) -> "CapabilityOutcome":
+        if self.type == "exact_match_presence" and not self.response_field:
+            raise ValueError("exact_match_presence requires response_field")
+        if self.type == "active_period_presence" and not self.period_field:
+            raise ValueError("active_period_presence requires period_field")
+        return self
+
+
+class CapabilityEffects(RegistryModel):
+    reads: list[str] = Field(default_factory=list)
+    produces: list[str] = Field(default_factory=list)
+    creates: list[str] = Field(default_factory=list)
+    updates: list[str] = Field(default_factory=list)
+
+    @field_validator("reads", "produces", "creates", "updates")
+    @classmethod
+    def references_must_be_unique_and_qualified(cls, values: list[str]) -> list[str]:
+        if len(values) != len(set(values)):
+            raise ValueError("effect references must be unique")
+        for value in values:
+            if not REFERENCE_PATTERN.fullmatch(value) or len(value.split(".")) not in {2, 3}:
+                raise ValueError("effect reference must use '<ontology>.<object>' or '<ontology>.<object>.<property>'")
+        return values
+
+
+class CapabilityDefinition(IdentifiedModel):
+    description: str
+    version: str = "0.0.0"
+    kind: Literal["query", "compute", "decision", "action"] = "query"
+    exposure: Literal["public", "internal"] = "internal"
+    processor: str | None = None
+    semantic_requirements: CapabilitySemanticRequirements = Field(
+        default_factory=CapabilitySemanticRequirements
+    )
+    implementation: CapabilityImplementation = Field(default_factory=CapabilityImplementation)
+    policy: CapabilityPolicy = Field(default_factory=CapabilityPolicy)
+    effects: CapabilityEffects = Field(default_factory=CapabilityEffects)
+    inputs: dict[str, CapabilityInput] = Field(default_factory=dict)
+    steps: list[CapabilityStep] = Field(default_factory=list)
+    returns: list[str] = Field(min_length=1)
+    outcome: CapabilityOutcome | None = None
+    lifecycle: CapabilityLifecycle = Field(default_factory=CapabilityLifecycle)
+
+    @model_validator(mode="after")
+    def validate_local_references(self) -> "CapabilityDefinition":
+        if not SEMVER_PATTERN.fullmatch(self.version):
+            raise ValueError("capability version must use semantic versioning")
+        for input_id in self.inputs:
+            if not SNAKE_CASE_PATTERN.fullmatch(input_id):
+                raise ValueError(f"input id '{input_id}' must be snake_case")
+        step_ids = [step.id for step in self.steps if step.id]
+        if len(step_ids) != len(set(step_ids)):
+            raise ValueError("step ids must be unique")
+        calls = [step.call for step in self.steps]
+        if len(calls) != len(set(calls)):
+            raise ValueError("step calls must be unique")
+        if len(self.returns) != len(set(self.returns)):
+            raise ValueError("returns must be unique")
+        if self.outcome and self.outcome.input not in self.inputs:
+            raise ValueError(f"outcome input '{self.outcome.input}' is not declared")
+        for step in self.steps:
+            query = step.database_query
+            if query is None:
+                continue
+            referenced_inputs = []
+            if query.search:
+                referenced_inputs.append(query.search.input)
+            if query.sort:
+                referenced_inputs.append(query.sort.input)
+            if query.pagination:
+                referenced_inputs.extend([
+                    query.pagination.page_input,
+                    query.pagination.page_size_input,
+                ])
+            unknown_inputs = set(referenced_inputs) - set(self.inputs)
+            if unknown_inputs:
+                raise ValueError(
+                    f"database query references unknown inputs: {sorted(unknown_inputs)}"
+                )
+        if self.kind != "action" and (self.effects.creates or self.effects.updates):
+            raise ValueError("only an action capability may declare creates or updates effects")
+        if self.kind == "query":
+            if self.processor is not None:
+                raise ValueError("query capability cannot declare a processor")
+            if not self.steps:
+                raise ValueError("query capability must declare at least one step")
+        else:
+            if self.processor is None:
+                raise ValueError("compute, decision, and action capabilities must declare a processor")
+            if not REFERENCE_PATTERN.fullmatch(self.processor) or len(self.processor.split(".")) != 2:
+                raise ValueError("processor must use '<namespace>.<processor>'")
+        if self.implementation.handler and self.implementation.handler != self.processor:
+            raise ValueError("implementation handler must match processor")
+        return self
+
+
+class CapabilityRegistry(RegistryModel):
+    registry: RegistryMetadata
+    capability: CapabilityDefinition

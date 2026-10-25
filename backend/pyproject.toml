@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "teoria-backend"
+version = "0.1.0"
+description = "Teoria metadata and ontology backend, document processing and workflow execution"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "httpx>=0.28,<1",
+  "jsonschema>=4.23,<5",
+  "pydantic>=2.7,<3",
+  "pydantic-settings>=2.10,<3",
+  "psycopg[binary]>=3.2,<4",
+  "python-dotenv>=1.0,<2",
+  "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+api = ["fastapi>=0.115,<1", "langgraph>=1.0,<2", "redis>=6,<7", "uvicorn>=0.34,<1"]
+mcp = ["mcp>=1.27,<2"]
+
+[dependency-groups]
+dev = ["pytest>=8,<9", "pytest-asyncio>=0.24,<2"]
+orchestration = ["prefect>=3,<4"]
+kubernetes-orchestration = ["prefect-kubernetes>=0.7,<0.8"]
+metadata-orchestration = ["docker>=7,<8", "kubernetes>=34,<36", "prefect>=3,<4"]
+etl-example = ["great-expectations>=1.8,<2", "pandas>=2.1,<3"]
+
+[project.scripts]
+teoria = "teoria.entrypoints.cli:main"
+teoria-runtime-api = "teoria.entrypoints.runtime_api:main"
+teoria-admin-api = "teoria.entrypoints.admin_api:main"
+teoria-metadata-assessment-worker = "teoria.entrypoints.asset_assessment_worker:main"
+teoria-policy-control-plane = "teoria.entrypoints.policy_control_plane:main"
+teoria-pipelines = "teoria.entrypoints.pipeline_cli:main"
+teoria-mcp = "teoria.entrypoints.mcp:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/teoria"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+addopts = "--import-mode=importlib"
+pythonpath = ["src", ".."]
+testpaths = ["tests"]
+norecursedirs = [".git", ".venv", "node_modules", "archive"]

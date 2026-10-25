@@ -8,7 +8,7 @@ Codex를 이 저장소 루트에서 시작하고 프롬프트에 Skill 이름과
 
 ```text
 $author-source-registry
-pipelines/references/providers/pps/pps_contract_api의 모든 문서를 근거로
+backend/references/providers/pps/pps_contract_api의 모든 문서를 근거로
 Ingestion Connector와 verification cases를 만들고 검증해줘.
 모든 Operation에 대해 정적 검증, Build 검증과 실제 API Live 검증을 실행하고,
 검증 실패가 Source 계약 문제면 수정한 뒤 전부 다시 실행해줘.
@@ -19,8 +19,8 @@ Ingestion Connector와 verification cases를 만들고 검증해줘.
 
 ```text
 $author-source-registry
-pipelines/references/providers/pps/pps_contract_api 원문을 기준으로
-pipelines/connectors/pps_contract_api.yaml의 모든 Operation과 필드를 감사하고,
+backend/references/providers/pps/pps_contract_api 원문을 기준으로
+backend/connectors/pps_contract_api.yaml의 모든 Operation과 필드를 감사하고,
 누락이나 오류를 수정한 뒤 실제 API Live 검증까지 실행하고 전체 결과를 보고해줘.
 ```
 
@@ -28,8 +28,8 @@ Skill 이름을 생략해도 요청 내용이 설명과 일치하면 Codex가 �
 
 ## 준비 사항
 
-- Source 원문은 `platform/references/providers/{provider}/{source}/`, Connector 원문은 `pipelines/references/providers/{provider}/{connector}/`에 둔다.
-- 의존성은 `uv sync --locked --all-packages --all-groups`로 설치한다.
+- Source 원문은 `backend/references/providers/{provider}/{source}/`, Connector 원문은 `backend/references/providers/{provider}/{connector}/`에 둔다.
+- 의존성은 `uv sync --project backend --locked --all-extras --all-groups`로 설치한다.
 - `.env` 또는 실행 환경에 Source나 Connector의 `credential_env` 값을 설정한다. 키는 프롬프트, YAML, verification case에 넣지 않는다.
 - credential이 없더라도 정적 검증, 모든 Build 검증과 전체 테스트는 실행된다. Live만 `BLOCKED`로 보고된다.
 
@@ -46,17 +46,17 @@ Skill을 사용한 Source 작성·검증 요청은 기본적으로 실제 API �
 기본 산출물은 다음과 같다.
 
 ```text
-platform/registries/sources/{source_id}.yaml
-platform/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
-platform/references/providers/{provider}/{source}/metadata.yaml
+backend/registries/sources/{source_id}.yaml
+backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+backend/references/providers/{provider}/{source}/metadata.yaml
 ```
 
 Ingestion 전용 API라면 다음 위치를 사용한다.
 
 ```text
-pipelines/connectors/{connector_id}.yaml
-pipelines/verification_cases/{connector_id}/{operation_id}.yaml
-pipelines/references/providers/{provider}/{connector}/metadata.yaml
+backend/connectors/{connector_id}.yaml
+backend/verification_cases/{connector_id}/{operation_id}.yaml
+backend/references/providers/{provider}/{connector}/metadata.yaml
 ```
 
 최종 보고에는 원문과 Registry의 Operation·필드 대조 결과, 실행한 검증 명령별 상태, 수정한 문제, 모든 Operation의 Live `PASS`·`FAIL`·`BLOCKED` 상태와 남은 제한이 포함된다. 결과 파일을 `archive/`에 보관하려면 프롬프트에서 별도로 요구한다.

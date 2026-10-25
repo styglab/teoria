@@ -25,23 +25,23 @@ Require an OpenMetadata table FQN and, when applicable, one or more column names
    Set `TEORIA_ADMIN_BASE_URL` or `--admin-base-url` for the reachable Admin API. The default Compose entrypoint is `http://localhost:8081/admin-api`; a container on its network can use `http://admin-api:8001`. Bearer reads use `TEORIA_ADMIN_API_TOKEN`. This step is read-only. If OpenMetadata is unavailable, report that limitation and continue only when repository or user-provided evidence is sufficient.
 3. Inspect only relevant evidence:
    - the selected table and column metadata;
-   - existing ontology concepts and semantic bindings under `platform/`;
+   - existing ontology concepts and semantic bindings under `backend/src/teoria/features/semantic_modeling/`;
    - active Source Registry contracts and mappings when they establish field meaning;
    - user-provided or repository source documents;
    - bounded, read-only data samples only when the user authorized them and the registered Database Source supplies the query path.
 4. Separate observations from inference. Do not infer authoritative meaning from a similar name alone. Propose descriptions, existing Glossary assignments, or new Glossary terms supported by governed definitions. Route Ontology bindings to `$align-metadata-semantics` and disclosure diagnosis to `$assess-data-disclosure`.
-5. Produce a bundle conforming to `references/proposal_bundle.schema.json`, generated from `platform/src/teoria/intelligence/suggestions/contracts.py`. Use one suggestion per independently reviewable change. Record the OpenMetadata version in evidence provenance and add content hashes for local documents when available.
+5. Produce a bundle conforming to `references/proposal_bundle.schema.json`, generated from `backend/src/teoria/features/metadata_management/intelligence/suggestions/contracts.py`. Use one suggestion per independently reviewable change. Record the OpenMetadata version in evidence provenance and add content hashes for local documents when available.
 6. Validate locally without submitting:
 
    ```bash
-   uv run --locked --package teoria-platform python \
+   uv run --locked --project backend python \
      .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py proposal_bundle.json
    ```
 
 7. Show the user the proposed changes, evidence, confidence, warnings, and unsupported gaps. Submit only when the user asked to place proposals in the Review Queue:
 
    ```bash
-   uv run --locked --package teoria-platform python \
+   uv run --locked --project backend python \
      .agents/skills/enrich-metadata-asset/scripts/submit_proposals.py \
      proposal_bundle.json --submit
    ```

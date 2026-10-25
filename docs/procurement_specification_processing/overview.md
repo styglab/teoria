@@ -434,7 +434,7 @@ MVP의 complete 판정은 manifest·파싱 진단·참조 해소와 사람의 �
 | Artifact Store | 버전형 속성·단위·비교 프로파일 | 게시된 의미의 checksum 검증 가능한 실행 계약 |
 
 Workspace migration의 제안 위치는
-`platform/database/procurement_workspace_migrations/`이며 App DB migration runner와
+`backend/database/procurement_workspace_migrations/`이며 App DB migration runner와
 명시적으로 분리한다. 도메인 저장 구현·async connection 경계는 Platform이 소유한다.
 같은 PostgreSQL 인스턴스여도 Runtime Data DB role에 쓰기 권한을 주지 않는다.
 
@@ -674,24 +674,22 @@ MLflow 사용 여부와 관계없이 실행 provenance의 필수 필드는 도�
 
 ## 16 구현 위치
 
-다음은 구현 단계에서 만들 위치이며 빈 패키지를 먼저 생성하지 않는다.
+현재 코드 배치는 단일 백엔드의 기능 소유권을 따른다. 아래 기능에서 실제 구현을 추가하며
+후속 조회·비교를 위해 빈 패키지나 별도 프로젝트를 먼저 만들지 않는다.
 
 ```text
-pipelines/src/teoria_pipelines/domains/public_procurement/specification_intelligence/
-  flows.py, tasks.py, documents.py, parsing.py, extraction.py,
-  attribute_mapping.py, validation.py, repository.py
-pipelines/tests/unit/domains/public_procurement/specification_intelligence/
-pipelines/database/migrations/<next>_specification_observations.sql
-
-platform/src/teoria/domains/public_procurement/specification_intelligence/
-  models.py, service.py, repository.py, search.py, comparison.py,
-  assessment.py, attribute_authoring.py, review.py, api.py
-platform/tests/unit/domains/public_procurement/specification_intelligence/
-platform/database/migrations/<next>_procurement_attribute_authoring.sql
-platform/database/procurement_workspace_migrations/<next>_specification_workspace.sql
-platform/registries/domains/public_procurement/
-
-tests/integration/<project_contract_case>.py
+backend/src/teoria/features/specification_processing/
+  flows.py, tasks.py, parsing/, extraction/, normalization/, storage/
+backend/src/teoria/features/goods_normalization/
+  candidates/, profiles/, contracts/
+backend/src/teoria/features/semantic_modeling/
+  ontology/, binding/, authoring/, registry/
+backend/tests/features/specification_processing/
+backend/tests/features/goods_normalization/
+backend/migrations/data/<next>_specification_observations.sql
+backend/migrations/application/<next>_goods_authoring.sql
+backend/registries/domains/<domain>/
+tests/integration/<feature_contract_case>.py
 ```
 
 파일은 책임이 생길 때 추가하고 공통 `utils`나 `shared`를 만들지 않는다. 위 이름은

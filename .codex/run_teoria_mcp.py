@@ -9,7 +9,7 @@ from dotenv import dotenv_values
 
 def main() -> None:
     environment = os.environ.copy()
-    repository_root = Path(__file__).resolve().parents[1]
+    repository_root = (Path(__file__).resolve().parents[1])
     env_files = []
     if configured_env_file := environment.get("TEORIA_ENV_FILE"):
         env_files.append(Path(configured_env_file).expanduser())

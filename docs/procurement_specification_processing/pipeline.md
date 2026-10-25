@@ -1,6 +1,6 @@
 # 규격 정보 추출과 표준 관리 파이프라인
 
-현재 실행 코드는 `pipelines/src/teoria_pipelines/domains/public_procurement/specification_processing/`가 소유한다.
+현재 실행 코드는 `backend/src/teoria/features/specification_processing/`가 소유한다.
 `.artifacts`의 중복 실행 코드와 이전 `semantic_batch`·`semantic_ir`·`semantic_evaluation`은 삭제했다.
 과거 원본·JSON·Markdown 결과는 보존한다. 이전 코드 스냅샷을 실행 의존성으로 사용하지 않는다.
 
@@ -48,7 +48,7 @@ specification_processing/
   standard_workflow_repository.py 실행 lease·산출물 참조·재개 체크포인트
   tasks.py                       단계별 Prefect Task
   models.py                      실행 입력·결과·표준 계약
-  # 모델 실행은 packages/codex_inference/의 설치형 라이브러리 사용
+  # 모델 실행은 backend/src/teoria/integrations/codex/의 내부 추론 모듈 사용
   reporting.py                   Markdown 결과 생성
   evaluation.py                  평가 사이클 CLI·격리 실행·정리
   evaluation_cases.py            고정 사례·분류 검증·그룹 샘플링
@@ -77,7 +77,7 @@ specification_processing/
 
 Parsing은 문서 구조를 읽고, IE(`extraction/`)는 엔티티·관계·속성·요구조건을 추출한다.
 `standardization/`은 공통 의미 연결과 draft 표준 버전을 소유한다.
-테스트는 `pipelines/tests/unit/domains/public_procurement/specification_processing/`에서
+테스트는 `backend/tests/features/specification_processing/`에서
 같은 책임별 구조를 따른다. 단계 번호는 파일명 대신 Task 이름과 Flow 실행 순서에 표시한다.
 
 ## 엔티티·속성·관계 계약
@@ -166,7 +166,7 @@ Data DB에는 아래 세 테이블의 실행 메타데이터만 저장한다. �
 ```
 
 ```bash
-uv run --locked --package teoria-pipelines teoria-pipelines specification run --manifest /data/specification_run.json
+uv run --locked --project backend teoria-pipelines specification run --manifest /data/specification_run.json
 ```
 
 `mode: document_processing`은 `standard`에 실제 표준 파일의 URI와 SHA-256을 지정해야 한다.

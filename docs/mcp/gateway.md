@@ -5,13 +5,13 @@
 Runtime bundle 변경 뒤 MCP 프로세스와 클라이언트 연결을 재시작한다.
 [배포 검증](../verification/goods_focus_deployment_2026_10_25.md)에서 실제 STDIO 초기화와 빈 Tool 목록을 확인했다.
 
-`mcp/`는 Runtime API의 공개 Capability discovery를 MCP Tool로 노출한다.
+MCP는 Runtime API의 공개 Capability discovery를 MCP Tool로 노출한다.
 Tool 이름은 Capability ID이며 입력 schema는 배포된 Runtime discovery 응답에서 받는다.
 MCP 프로세스가 Registry 원본이나 DB를 직접 읽지 않는다.
 
 ## 코드 위치
 
-구현은 `mcp/src/teoria_mcp/`에 있다. `stdio.py`는 실행 진입점, `tools.py`는 Tool 등록,
+구현은 `backend/src/teoria/integrations/runtime_http/`에 있다. `backend/src/teoria/entrypoints/mcp.py`는 실행 진입점, `tools.py`는 Tool 등록,
 `schema.py`는 MCP 입력 schema 처리, `runtime_client.py`는 Runtime HTTP 호출,
 `settings.py`는 환경변수를 소유한다. Capability별 실행 로직은 Platform에 둔다.
 
@@ -25,8 +25,8 @@ token을 준비한다. 호스트에서 Compose Runtime에 접속하면 URL은
 MCP는 Runtime HTTP API를 호출하며 DB 권한과 Source 인증정보를 갖지 않는다.
 
 ```bash
-uv run --locked --package teoria-platform teoria validate platform/registries
-uv run --locked --package teoria-mcp teoria-mcp
+uv run --project backend --locked --extra api teoria validate backend/registries
+uv run --project backend --locked --extra mcp teoria-mcp
 ```
 
 Codex 설정:
@@ -34,7 +34,7 @@ Codex 설정:
 ```toml
 [mcp_servers.teoria]
 command = "uv"
-args = ["run", "--locked", "--package", "teoria-mcp", "teoria-mcp"]
+args = ["run", "--project", "backend", "--locked", "--extra", "mcp", "teoria-mcp"]
 cwd = "/absolute/path/to/teoria"
 
 [mcp_servers.teoria.env]
@@ -81,7 +81,7 @@ docker compose -f deploy/compose/compose.yaml --profile mcp run --rm mcp
 ## 검증
 
 ```bash
-uv run --locked --package teoria-mcp pytest mcp/tests
+uv run --locked --project backend pytest backend/tests/integrations/runtime_http
 ```
 
 MCP는 STDIO protocol을 사용하므로 애플리케이션 로그를 표준 출력에 추가하지 않는다.

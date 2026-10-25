@@ -51,7 +51,7 @@
 
 ## Worker와 결과 검증
 
-Worker의 내부 진입점은 `platform/src/teoria/entrypoints/asset_assessment_worker.py`이며
+Worker의 내부 진입점은 `backend/src/teoria/entrypoints/asset_assessment_worker.py`이며
 `intelligence/asset_assessment/`의 실행 서비스를 구성한다. 입력 구성·법령 근거·지시문·
 결과 검증·제안 변환·응답 변환은 각각 이름 있는 모듈로 분리한다.
 Prefect는 데이터·메타데이터 수집을 계속 담당한다.
@@ -119,7 +119,7 @@ Admin API는 `asset_assessment_not_configured`를 반환하며 Worker도 시작�
 
 ## 구현 위치와 관련 문서
 
-`platform/src/teoria/intelligence/asset_assessment/`에서 `service.py`는 실행,
+`backend/src/teoria/features/metadata_management/intelligence/asset_assessment/`에서 `service.py`는 실행,
 `context_builder.py`는 자산·Concept 후보, `law_evidence.py`는 근거,
 `prompts.py`는 모델 지시문, `validation.py`는 검증, `proposals.py`는 제안 변환,
 `presentation.py`는 조회 응답을 소유한다.

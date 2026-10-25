@@ -208,10 +208,10 @@ sum(stage_counts[scheduled, open, closed, award, contract, failed, cancelled])
 
 ## 수정과 검증 위치
 
-활동 조회는 `platform/src/teoria/domains/public_procurement/market_analysis/activity/`,
+활동 조회는 `archive/procurement_services/platform/src/teoria/domains/public_procurement/market_analysis/activity/`,
 프로필의 참여 분석은 `profiles/participation_analysis.py`, 관측 참여 조회는
 `participation/`에서 찾는다. 각 기능의 테스트는
-`platform/tests/unit/domains/public_procurement/market_analysis/`의 같은 기능 아래에 있다.
+`backend/tests/entrypoints/domains/public_procurement/market_analysis/`의 같은 기능 아래에 있다.
 
 정책 변경 시 계약 집계와 활동 조회의 사건 수·기간 기준을 함께 검증한다.
 수집 완료·부분 수집의 의미는 [Pipelines 공공조달 수집](../../../pipelines/domains/public_procurement.md)을 따른다.

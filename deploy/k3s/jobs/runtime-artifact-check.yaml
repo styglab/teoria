@@ -25,7 +25,7 @@ spec:
         command:
         - python
         - -c
-        - from teoria.registry.artifact import RegistryArtifactStore; b=RegistryArtifactStore('/app/runtime_artifacts').load_active();
+        - from teoria.features.semantic_modeling.registry.artifact import RegistryArtifactStore; b=RegistryArtifactStore('/app/runtime_artifacts').load_active();
           print('Runtime artifact verified:', b.manifest.version)
         volumeMounts:
         - name: runtime-artifacts

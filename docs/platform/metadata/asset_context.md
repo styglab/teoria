@@ -87,10 +87,10 @@ Worker는 현재 원문 샘플을 모델 입력으로 사용하지 않는다. �
 
 ## 구현 위치
 
-통합 조회는 `platform/src/teoria/metadata/asset_context.py`, OpenMetadata 연계는
+통합 조회는 `backend/src/teoria/features/metadata_management/catalog/asset_context.py`, OpenMetadata 연계는
 `metadata/openmetadata/`, HTTP는 `admin/metadata_api.py`가 소유한다. 공공조달의 운영
 조회는 `domains/public_procurement/metadata_operations.py`, output 계약과 read view는
-Pipelines가 소유한다. 화면은 `platform/admin_ui/src/features/metadata/`에서 찾는다.
+Pipelines가 소유한다. 화면은 `frontend/src/features/metadata/`에서 찾는다.
 
 스키마 메타데이터를 수집하려면 [OpenMetadata Job](../../pipelines/openmetadata.md),
 조회 결과로 진단하려면 [자산 진단](asset_assessment.md)을 참고한다.

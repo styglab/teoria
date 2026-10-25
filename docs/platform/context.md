@@ -33,7 +33,7 @@ plan·execute는 Admin bearer 인증을 사용한다. OPA는 계획과 실행을
 
 ## 새 handler 연결
 
-`platform/src/teoria/context/query.py`의 계약을 구현하고 `context/composition.py`에서 등록한다.
+`backend/src/teoria/features/runtime/context/query.py`의 계약을 구현하고 `context/composition.py`에서 등록한다.
 공통 Engine은 의미 조회·정책 검증을, 업무 handler는 질문 해석·입력 구성·결과 처리를 담당한다.
 필요한 Capability·Semantic Binding·Mapping을 실제 데이터로 검증한 뒤 [새 Runtime bundle](runtime.md)에 고정한다.
 범용 AI planner나 자유로운 객체 편집의 완료로 간주하지 않는다.

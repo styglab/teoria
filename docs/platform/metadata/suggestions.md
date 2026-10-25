@@ -62,7 +62,7 @@ Admin OpenAPI를 따른다. 목록·단건·비교·이력 조회에는 관리�
 
 ## 구현 위치
 
-제안 기능은 `platform/src/teoria/intelligence/suggestions/`에 둔다. `generation.py`는 생성,
+제안 기능은 `backend/src/teoria/features/metadata_management/intelligence/suggestions/`에 둔다. `generation.py`는 생성,
 `application.py`는 승인·재시도·복구, `execution.py`는 실행권과 효과 기록,
 `appliers/openmetadata.py`·`appliers/drafts.py`는 대상별 쓰기를 담당한다.
 `contracts.py`에서 생성한 schema를 Skill bundle에도 사용한다.

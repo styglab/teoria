@@ -1,6 +1,7 @@
 # Teoria Provider API
 
-`teoria-provider-api`는 Platform Source와 Pipeline Connector가 공유하는 작은 Python 라이브러리다. 서비스가 아니므로 포트, 데이터베이스, 독립 Docker 배포를 갖지 않는다.
+Provider API는 Runtime Source와 수집 Connector가 함께 사용하는 백엔드 내부 연결 모듈이다.
+구현은 `backend/src/teoria/integrations/provider_api/`에 두며 별도 배포·Python 프로젝트로 관리하지 않는다.
 
 ## 책임
 
@@ -19,8 +20,8 @@
 
 ## 코드와 설정 위치
 
-구현은 `packages/provider_api/src/`, 테스트는 `packages/provider_api/tests/`,
-패키지 계약은 `packages/provider_api/pyproject.toml`에 둔다.
+테스트는 `backend/tests/integrations/provider_api/`, 의존성은 `backend/pyproject.toml`이 소유한다.
+이 문서의 `docs/packages/` URL은 기존 링크 호환을 위해 유지한다.
 
 ## 요청이 처리되는 순서
 
@@ -30,12 +31,12 @@
 인증정보 경계는 `secrets.py`, 오류와 진단은 `errors.py`·`diagnostics.py`에서 찾는다.
 
 Platform과 Pipelines가 각자의 실행·적재 정책을 유지하면서 같은 Provider wire 처리만
-공유한다. 소유 프로젝트의 Registry, Flow, Runtime을 라이브러리에서 import하지 않는다.
+공유한다. 기능의 Registry·Flow·Runtime 구현을 이 연결 모듈에서 역으로 import하지 않는다.
 
 ## 검증
 
 ```bash
-uv run --locked --package teoria-provider-api pytest packages/provider_api/tests
+uv run --locked --project backend pytest backend/tests/integrations/provider_api
 ```
 
 ## 상세 문서

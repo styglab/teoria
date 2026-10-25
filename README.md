@@ -28,19 +28,18 @@ AI Client → MCP / Runtime API → Capability·Context ← Ontology
 
 | 위치 | 책임 | 안내 |
 |---|---|---|
-| `platform/` | Ontology·Binding·Metadata Intelligence·Registry·Runtime·Admin UI | [개발](docs/platform/development.md) |
-| `pipelines/` | Connector·Prefect·수집·정규화·Data DB | [개발](docs/pipelines/development.md) |
-| `mcp/` | Runtime HTTP API를 사용하는 MCP Gateway | [실행·연결](docs/mcp/gateway.md) |
-| `packages/provider_api/` | Provider wire 계약과 HTTP 실행 라이브러리 | [패키지](docs/packages/provider_api.md) |
+| `backend/` | 기능별 Python 백엔드·API·MCP·Prefect 실행 | [구조와 소유권](docs/architecture/repository-structure.md) |
+| `frontend/` | React 관리 UI | [UI 개발](docs/platform/admin_ui.md) |
 | `deploy/` | 로컬 Compose·EC2 K3s·GitHub 자동 배포 | [K3s 배포](docs/deployment/k3s.md) |
 | `docs/` | 사용·개발·운영 안내와 검증 기록 | [목차](docs/index.md) |
 
-프로젝트는 각자의 `pyproject.toml`을 사용하고 루트 `uv.lock`을 공유한다.
+Python 의존성의 기준은 `backend/pyproject.toml`과 `backend/uv.lock`이다.
+API·MCP·규격서·법령·메타데이터 Worker는 역할별 이미지와 권한으로 분리한다.
 OpenMetadata entity를 Teoria DB에 복제하지 않으며 MCP는 Runtime API만 호출한다.
 운영 Runtime은 게시된 Ontology·승인된 Binding·Registry를 고정한 checksum 검증 bundle을
 사용한다. 자세한 개발 규칙은 [저장소 구조](docs/architecture/repository-structure.md)를 따른다.
 
-실제 Compose 전환과 남은 기능은 [물품 Ontology 배포 검증](docs/verification/goods_focus_deployment_2026_10_25.md)을 따른다.
+현재 Compose 전환 상태는 [통합 백엔드 운영 재배포](docs/verification/backend_consolidation_deployment_2026_10_25.md), 남은 기능은 [로드맵](docs/roadmap.md)을 따른다.
 
 ## 자주 찾는 문서
 

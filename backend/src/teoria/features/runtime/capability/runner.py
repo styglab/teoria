@@ -1,0 +1,352 @@
+from __future__ import annotations
+
+import asyncio
+from copy import deepcopy
+from datetime import date, datetime, timezone
+from typing import Any
+
+from teoria.features.runtime.capability.contracts import (
+    CapabilityExecutionError,
+    CapabilityResult,
+)
+from teoria.features.runtime.capability.handlers import CapabilityHandlers
+
+from teoria.features.runtime.capability.binder import CapabilityBinder
+from teoria.features.runtime.mapping.decoder import MappedFragment, MappingDecoder
+from teoria.features.runtime.mapping.materializer import OntologyMaterializer
+from teoria.integrations.provider_api.errors import ProviderExecutionError
+from teoria.integrations.provider_api.executor import ProviderExecutor
+from teoria.integrations.provider_api.models import ExecutionResponse
+from teoria.features.runtime.source.request_builder import SourceRequestBuilder
+from teoria.features.runtime.source.response_validator import SourceResponseValidator
+from teoria.features.runtime.source.database import (
+    DatabaseQueryResult,
+    DatabaseSourceExecutionError,
+    DatabaseSourceExecutor,
+)
+from teoria.features.semantic_modeling.registry.loader import RegistryCatalog
+
+
+class CapabilityRunner:
+    def __init__(
+        self,
+        executor: Any | None = None,
+        *,
+        timeout_seconds: float = 120.0,
+        max_pages: int = 100,
+        database_executor: DatabaseSourceExecutor | None = None,
+        cache: Any | None = None,
+        handlers: CapabilityHandlers | None = None,
+    ) -> None:
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be greater than zero")
+        if max_pages < 1:
+            raise ValueError("max_pages must be at least one")
+        self.binder = CapabilityBinder()
+        self.request_builder = SourceRequestBuilder()
+        self.executor = executor or ProviderExecutor()
+        self.response_validator = SourceResponseValidator()
+        self.decoder = MappingDecoder()
+        self.materializer = OntologyMaterializer()
+        self.timeout_seconds = timeout_seconds
+        self.max_pages = max_pages
+        self.database_executor = database_executor or DatabaseSourceExecutor()
+        if cache is None:
+            from teoria.features.runtime.cache import MemoryRuntimeCache
+
+            cache = MemoryRuntimeCache()
+        self.cache = cache
+        if handlers is None:
+            from teoria.features.runtime.composition import create_capability_handlers
+
+            handlers = create_capability_handlers()
+        self.handlers = handlers
+
+    async def run(
+        self,
+        catalog: RegistryCatalog,
+        capability_id: str,
+        inputs: dict[str, Any],
+        *,
+        include_raw_responses: bool = False,
+    ) -> CapabilityResult:
+        capability = catalog.capabilities.get(capability_id)
+        if capability is None:
+            raise CapabilityExecutionError(
+                "unknown_capability",
+                f"unknown capability '{capability_id}'",
+                capability_id=capability_id,
+            )
+        if capability.lifecycle.status == "deprecated":
+            raise CapabilityExecutionError(
+                "deprecated_capability",
+                f"capability '{capability_id}' is deprecated; replacements: "
+                f"{', '.join(capability.lifecycle.replacement_ids) or 'none'}",
+                capability_id=capability_id,
+            )
+        try:
+            async with asyncio.timeout(self.timeout_seconds):
+                return await self._run(
+                    catalog,
+                    capability_id,
+                    inputs,
+                    include_raw_responses=include_raw_responses,
+                )
+        except TimeoutError as exc:
+            raise CapabilityExecutionError(
+                "capability_timeout",
+                f"capability exceeded its {self.timeout_seconds:g} second deadline",
+                capability_id=capability_id,
+                retryable=True,
+            ) from exc
+
+    async def _run(
+        self,
+        catalog: RegistryCatalog,
+        capability_id: str,
+        inputs: dict[str, Any],
+        *,
+        include_raw_responses: bool,
+    ) -> CapabilityResult:
+        capability = catalog.capabilities[capability_id]
+        if capability.kind != "query":
+            handler = self.handlers.processor(capability.processor)
+            if handler is None:
+                raise CapabilityExecutionError(
+                    "unknown_capability_processor",
+                    f"unknown capability processor '{capability.processor}'",
+                    capability_id=capability_id,
+                )
+            return await handler(self, catalog, capability_id, inputs)
+        allowed_objects = {
+            item.split(".", 1)[1]
+            for item in capability.returns
+            if self._is_object(catalog, item)
+        }
+        allowed_links = {
+            item.split(".", 1)[1]
+            for item in capability.returns
+            if not self._is_object(catalog, item)
+        }
+        fragments: list[MappedFragment] = []
+        raw_responses: list[ExecutionResponse] = []
+        observed_at = datetime.now(timezone.utc)
+        outcome_matched = False
+        result_pagination = None
+        pagination_by_step: dict[str, dict[str, int]] = {}
+
+        for step in capability.steps:
+            source_id, operation_id = step.call.split(".", 1)
+            source = catalog.sources[source_id]
+            if source.source.type == "database":
+                query = self.binder.bind(catalog, capability, step, inputs)
+                try:
+                    database_result = await self.database_executor.execute(
+                        catalog, source_id, operation_id, query
+                    )
+                except DatabaseSourceExecutionError as exc:
+                    raise CapabilityExecutionError(
+                        "database_source_error",
+                        str(exc),
+                        capability_id=capability_id,
+                        source_id=source_id,
+                        operation_id=operation_id,
+                    ) from exc
+                if isinstance(database_result, DatabaseQueryResult):
+                    rows = database_result.rows
+                    if database_result.pagination is not None:
+                        result_pagination = database_result.pagination
+                        pagination_by_step[step.id or operation_id] = (
+                            database_result.pagination
+                        )
+                else:
+                    rows = database_result
+                fragments.extend(
+                    self.decoder.decode_database_rows(
+                        catalog, source_id, operation_id, rows
+                    )
+                )
+                continue
+            operation = next(
+                item for item in source.source.operations if item.id == operation_id
+            )
+            base_input = self.binder.bind(catalog, capability, step, inputs)
+            page = 1
+            while True:
+                if page > self.max_pages:
+                    raise CapabilityExecutionError(
+                        "source_page_limit_exceeded",
+                        f"source pagination exceeded the configured {self.max_pages} page limit",
+                        capability_id=capability_id,
+                        source_id=source_id,
+                        operation_id=operation_id,
+                        page=page,
+                    )
+                input_data = deepcopy(base_input)
+                if operation.pagination:
+                    self._set_request_value(
+                        input_data, operation.pagination.page.request, page
+                    )
+                request = self.request_builder.build(
+                    catalog, source_id, operation_id, input_data
+                )
+                try:
+                    response = await self.executor.execute(request)
+                except ProviderExecutionError as exc:
+                    raise CapabilityExecutionError(
+                        exc.code,
+                        str(exc),
+                        capability_id=capability_id,
+                        source_id=source_id,
+                        operation_id=operation_id,
+                        page=page,
+                        attempts=exc.attempts,
+                        retryable=exc.retryable,
+                    ) from exc
+                diagnostics = self.response_validator.validate(
+                    catalog, source_id, operation_id, response
+                )
+                if diagnostics:
+                    raise CapabilityExecutionError(
+                        "source_response_invalid",
+                        "\n".join(map(str, diagnostics)),
+                        capability_id=capability_id,
+                        source_id=source_id,
+                        operation_id=operation_id,
+                        page=page,
+                    )
+                if include_raw_responses:
+                    raw_responses.append(response)
+                if self.response_validator.is_no_data(
+                    catalog,
+                    source_id,
+                    operation_id,
+                    response,
+                ):
+                    break
+                outcome = capability.outcome
+                outcome_field = (
+                    outcome.response_field
+                    if outcome and outcome.type == "exact_match_presence"
+                    else (
+                        outcome.period_field
+                        if outcome and outcome.type == "active_period_presence"
+                        else None
+                    )
+                )
+                if (
+                    outcome
+                    and outcome_field
+                    and outcome_field.startswith(
+                        f"{source_id}.{operation_id}.response."
+                    )
+                ):
+                    field = outcome_field.split(".", 3)[3]
+                    records = self.decoder._resolve_path(
+                        response.body, operation.response.data.record_path
+                    )
+                    if not isinstance(records, list):
+                        records = [records]
+                    if outcome.type == "exact_match_presence":
+                        expected = str(inputs[outcome.input])
+                        outcome_matched = outcome_matched or any(
+                            str(self.decoder._resolve_path(record, field, missing=""))
+                            == expected
+                            for record in records
+                        )
+                    else:
+                        outcome_matched = outcome_matched or any(
+                            self._period_contains(
+                                self.decoder._resolve_path(record, field, missing=""),
+                                observed_at.date(),
+                            )
+                            for record in records
+                        )
+                fragments.extend(
+                    self.decoder.decode(
+                        catalog,
+                        source_id,
+                        operation_id,
+                        response,
+                        request=request,
+                        record_key_prefix=str(page),
+                    )
+                )
+                if not operation.pagination or not self._has_next_page(
+                    operation, request, response, page
+                ):
+                    break
+                page += 1
+
+        objects, links = self.materializer.materialize(
+            catalog, fragments, observed_at, allowed_objects, allowed_links
+        )
+        outcome_result = None
+        if capability.outcome:
+            outcome_result = {
+                "type": capability.outcome.type,
+                "status": (
+                    capability.outcome.matched_status
+                    if outcome_matched
+                    else capability.outcome.unmatched_status
+                ),
+                "matched": outcome_matched,
+                "observed_at": observed_at.isoformat(),
+                "input": {capability.outcome.input: inputs[capability.outcome.input]},
+            }
+        result = CapabilityResult(
+            capability_id=capability_id,
+            objects=objects,
+            links=links,
+            responses=raw_responses if include_raw_responses else None,
+            outcome=outcome_result,
+            pagination=result_pagination if len(pagination_by_step) <= 1 else None,
+            pagination_by_step=pagination_by_step
+            if len(pagination_by_step) > 1
+            else None,
+        )
+        hook = self.handlers.query_hook(capability_id)
+        if hook is not None:
+            result = await hook(self, catalog, result, observed_at)
+        return result
+
+    @staticmethod
+    def _period_contains(value: Any, reference_date: date) -> bool:
+        if not isinstance(value, str):
+            return False
+        parts = [part.strip() for part in value.split("~", 1)]
+        if len(parts) != 2:
+            return False
+        try:
+            start, end = (date.fromisoformat(part) for part in parts)
+        except ValueError:
+            return False
+        return start <= reference_date <= end
+
+    def _has_next_page(
+        self, operation: Any, request: Any, response: ExecutionResponse, page: int
+    ) -> bool:
+        pagination = operation.pagination
+        total = int(self.decoder._resolve_path(response.body, pagination.total_count))
+        if total == 0:
+            return False
+        section, field = pagination.page_size.request.split(".", 1)
+        page_size = int(getattr(request, section).get(field, 0))
+        records = self.decoder._resolve_path(
+            response.body, operation.response.data.record_path
+        )
+        returned = len(records) if isinstance(records, list) else 1
+        return returned > 0 and page_size > 0 and page * page_size < total
+
+    @staticmethod
+    def _set_request_value(
+        input_data: dict[str, Any], reference: str, value: Any
+    ) -> None:
+        section, field = reference.split(".", 1)
+        input_data.setdefault(section, {})[field] = value
+
+    @staticmethod
+    def _is_object(catalog: RegistryCatalog, reference: str) -> bool:
+        ontology_id, item_id = reference.split(".", 1)
+        ontology = catalog.runtime_contracts[ontology_id]
+        return item_id in {item.id for item in ontology.object_types}

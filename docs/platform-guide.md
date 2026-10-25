@@ -6,13 +6,16 @@ Ontology·Binding·Source·Mapping·Capability·Runtime·Context·OPA와 OpenMet
 메타데이터 진단용 법령 수집·조회는 전용 Worker에서 재개했다.
 이전 구현·계약·전용 테스트는 `archive/procurement_services/`에 보관하며 실행 의존성으로 사용하지 않는다.
 
+통합 구조의 API·MCP·Worker·프런트엔드 이미지를 Compose 운영에 반영했다.
+[재배포 검증](verification/backend_consolidation_deployment_2026_10_25.md)에서 현재 전환 결과를 확인한다.
+
 ## 시작
 
 환경변수와 인증은 [환경 설정](deployment/configuration.md), 서비스 조립은
 [Compose](deployment/compose.md)를 따른다. 기존 DB·볼륨·체크포인트와 게시 이력은 삭제하지 않는다.
 
 ```bash
-uv sync --locked --all-packages --all-groups
+uv sync --project backend --locked --all-extras --all-groups
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml up --build -d
 ```
 
@@ -26,7 +29,7 @@ Admin UI는 `http://localhost:8081/`, Prefect는 `/prefect/`, API 문서는
 문서 URI·checksum·분류·산출물 위치를 명시한다. 문서 처리에는 고정한 표준 URI와 checksum도 필요하다.
 
 ```bash
-uv run --locked --package teoria-pipelines teoria-pipelines specification run --manifest /path/to/manifest.json
+uv run --project backend --locked --group orchestration teoria-pipelines specification run --manifest /path/to/manifest.json
 ```
 
 두 작업은 Prefect Deployment로도 등록한다. 자동 cron은 없으며 `manifest`를 입력해 제출한다.
@@ -59,11 +62,11 @@ AI 자산 진단도 기준일에 해당하는 법령 snapshot 근거를 사용�
 개선 평가 CLI는 각 실행 전후 Parser 소스·설치 패키지 지문을 검사하며, 실행 중 변경되면 비교를 중단한다.
 
 물품·구성품·규격 요구조건을 위한 초기 blueprint는
-`platform/ontology_blueprints/goods.yaml`이다. 현재 운영에는 인증된 Admin API로 `goods 0.1.0` Draft를 등록했다.
+`backend/ontology_blueprints/goods.yaml`이다. 현재 운영에는 인증된 Admin API로 `goods 0.1.0` Draft를 등록했다.
 새 환경에서는 다음 명령으로 Draft만 생성할 수 있다.
 
 ```bash
-uv run --locked --package teoria-platform teoria apply-ontology-blueprint --manifest platform/ontology_blueprints/goods.yaml
+uv run --project backend --locked --extra api teoria apply-ontology-blueprint --manifest backend/ontology_blueprints/goods.yaml
 ```
 
 Application DB를 구성한 뒤 실행하고, [Ontology 검토·승인·게시](platform/ontology.md)를 따른다.
@@ -89,11 +92,10 @@ Semantic Binding 및 Runtime Mapping 연결은 아직 구현하지 않았다.
 ## 검증
 
 ```bash
-uv run --locked --package teoria-platform pytest platform/tests
-uv run --locked --package teoria-platform teoria validate platform/registries
-uv run --locked --package teoria-pipelines pytest pipelines/tests
-uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
-uv run --locked --package teoria-pipelines --group validation teoria-pipelines validate-integration pipelines --platform-registries platform/registries
+uv run --project backend --locked --all-extras --all-groups pytest backend/tests tests/integration
+uv run --project backend --locked --extra api teoria validate backend/registries
+uv run --project backend --locked teoria-pipelines validate backend
+uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/registries
 ```
 
 프로젝트 소유권은 [저장소 구조](architecture/repository-structure.md), 남은 제품 결과는

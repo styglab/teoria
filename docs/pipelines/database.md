@@ -8,9 +8,9 @@ Teoria Data Pipelines가 수집 DB의 물리 schema와 migration을 소유한다
 파일명은 적용 순서를 포함한 `<3자리 번호>_<설명>.sql`을 사용한다. 적용된 파일명은 `ingestion.schema_migrations`에 기록되므로 이미 적용한 migration 파일을 수정하지 않고 새 파일을 추가한다.
 
 ```bash
-uv run --locked --package teoria-pipelines \
+uv run --locked --project backend \
   teoria-pipelines migrate \
-  --migrations pipelines/database/migrations
+  --migrations backend/migrations/data
 ```
 
 실행에는 `TEORIA_PIPELINE_DATA_DATABASE_URL`이 필요하다. 로컬 Compose에서는 `postgres-migrate` 일회성 서비스가 같은 명령을 실행한다.

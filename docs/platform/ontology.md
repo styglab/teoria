@@ -24,7 +24,7 @@ Business Object로 추가하지 않는다. 검토·승인·게시된 새 version
 
 ## 모델 경계
 
-현재 물품 Ontology의 초기 모델은 `platform/ontology_blueprints/goods.yaml`이다.
+현재 물품 Ontology의 초기 모델은 `backend/ontology_blueprints/goods.yaml`이다.
 
 | 개념 | 의미 |
 |---|---|
@@ -85,13 +85,13 @@ Published version에서 새 Draft를 만들고 필요한 개념·속성·관계�
 의미 식별자로 유지하고 version별 revision ID를 Binding의 의미 식별자로 사용하지 않는다.
 
 구형 YAML Object를 추가하거나 제거하는 이관에는
-`platform/ontology_migrations/pending/<migration>/ontology_v2.yaml` 분류를 함께 작성한다.
+`backend/ontology_migrations/pending/<migration>/ontology_v2.yaml` 분류를 함께 작성한다.
 이관 묶음 이름은 `YYYY_MM_<purpose>`를 사용한다. manifest를 명시해 보고서를 실행한다.
 
 ```bash
-uv run --locked --package teoria-platform teoria ontology-migration-report \
-  --manifest platform/ontology_migrations/pending/2026_10_runtime_contract_classification/ontology_v2.yaml
-uv run --locked --package teoria-platform pytest platform/tests
+uv run --locked --project backend --extra api teoria ontology-migration-report \
+  --manifest backend/ontology_migrations/pending/2026_10_runtime_contract_classification/ontology_v2.yaml
+uv run --locked --project backend --all-extras --all-groups pytest backend/tests
 ```
 
 위 경로는 현재 보관된 분류 manifest의 예다. 새 변경에는 그 변경의 manifest를 지정한다.
@@ -103,5 +103,5 @@ uv run --locked --package teoria-platform pytest platform/tests
 `applied/2026_10_bid_notice_context/`, `applied/2026_10_bid_notice_stable_key_correction/`에
 보존되어 있다. 시점별 수치와 중간 입력은 이력으로 읽고 현재 계약으로 복제하지 않는다.
 
-Ontology 작성 코드는 `platform/src/teoria/ontology/`, Binding은 `binding/`, 관리 API는
+Ontology 작성 코드는 `backend/src/teoria/features/semantic_modeling/ontology/`, Binding은 `binding/`, 관리 API는
 `admin/ontology_authoring_api.py`와 `admin/binding_api.py`에서 찾는다.

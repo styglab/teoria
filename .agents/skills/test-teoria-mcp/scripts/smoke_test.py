@@ -20,7 +20,7 @@ REQUIRED_TOOLS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Smoke-test the Teoria MCP STDIO server")
-    parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[4])
+    parser.add_argument("--repo", type=Path, default=(Path(__file__).resolve().parents[4]))
     parser.add_argument("--date-from", default="2026-01-01")
     parser.add_argument("--date-to", default="2026-08-03")
     return parser.parse_args()

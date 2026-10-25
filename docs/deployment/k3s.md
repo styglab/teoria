@@ -162,7 +162,7 @@ Kubernetes Job이다. Docker socket·Docker daemon·Airflow를 요구하지 않�
 
 ## 정해진 자원 안에서 파이프라인 병렬 실행
 
-수집 Flow·Task와 `pipelines/prefect.yaml`은 Compose와 K3s가 함께 사용한다.
+수집 Flow·Task와 `backend/prefect.yaml`은 Compose와 K3s가 함께 사용한다.
 Compose는 기존 `teoria-ingestion` Process Worker 내부에서 실행한다. K3s는 등록 시
 work pool만 `teoria-ingestion-k3s`로 바꾸고, Kubernetes Worker가 실행마다 별도 Job을 만든다.
 Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.
@@ -179,7 +179,7 @@ Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.
 | Backfill·보정 동시 실행 상한 | 1 | 등록 Job의 `TEORIA_PIPELINE_BACKFILL_CONCURRENCY` |
 
 공통 등록 명령은 `teoria-pipelines register --backend kubernetes --kind all`이다.
-작업당 기본값은 `pipelines/src/teoria_pipelines/deployment.py`, 운영 override는
+작업당 기본값은 `backend/src/teoria/integrations/prefect/deployment.py`, 운영 override는
 `deploy/k3s/jobs/prefect-register.yaml`의 환경변수로 관리한다. Prefect work pool의
 base job template에 등록되며, Deployment의 `work_pool.job_variables`로 작업별 CPU·메모리를
 다르게 지정할 수도 있다. 등록 Job이 원본 YAML을 임시 사본으로 변환하므로

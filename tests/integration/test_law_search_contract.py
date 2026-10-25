@@ -9,28 +9,28 @@ from uuid import uuid4
 import psycopg
 import pytest
 
-from teoria_pipelines.domains.legal_information.laws.models import (
+from teoria.features.legal_information.collection.models import (
     LawTarget,
     LawVersion,
     LawResponse,
     LawCatalog,
 )
-from teoria_pipelines.domains.legal_information.laws.parsing import parse_law
-from teoria_pipelines.domains.legal_information.laws.repository import LawRepository
-from teoria_pipelines.models import CollectionWindow
-from teoria_pipelines.persistence import PostgresStore
+from teoria.features.legal_information.collection.parsing import parse_law
+from teoria.features.legal_information.collection.repository import LawRepository
+from teoria.integrations.data_operations.models import CollectionWindow
+from teoria.integrations.data_operations.persistence import PostgresStore
 
 DATABASE_URL = os.environ.get("TEORIA_TEST_DATA_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
     not DATABASE_URL, reason="TEORIA_TEST_DATA_DATABASE_URL is not set"
 )
-ROOT = Path(__file__).parents[2]
+ROOT = (Path(__file__).resolve().parents[2])
 
 
 @pytest.fixture
 async def law_setup():
     store = PostgresStore(DATABASE_URL or "")
-    await store.apply_migrations(ROOT / "pipelines/database/migrations")
+    await store.apply_migrations(ROOT / "backend/migrations/data")
     run_id = uuid4()
     await store.start_run(
         run_id, "law_test", CollectionWindow(date(2026, 7, 1), date(2026, 7, 1))
@@ -48,7 +48,7 @@ async def law_setup():
         {"현행연혁코드": "현행"},
     )
     raw = (
-        (ROOT / "pipelines/tests/fixtures/legal_information/law_body.xml")
+        (ROOT / "backend/tests/fixtures/legal_information/law_body.xml")
         .read_bytes()
         .replace(b"000001", law_id.encode())
     )
@@ -87,7 +87,7 @@ def test_runtime_has_no_law_archive_access(law_setup):
 
 
 async def test_keyword_search_finds_descendants_and_pins_old_snapshot(law_setup):
-    from teoria.domains.legal_information.search import (
+    from teoria.features.legal_information.search import (
         LawSearchReader,
         LawSearchRequest,
     )
@@ -132,7 +132,7 @@ async def test_keyword_search_finds_descendants_and_pins_old_snapshot(law_setup)
 async def test_keyword_search_does_not_mix_future_versions_or_treat_wildcards_as_query(
     law_setup,
 ):
-    from teoria.domains.legal_information.search import (
+    from teoria.features.legal_information.search import (
         LawSearchReader,
         LawSearchRequest,
     )
@@ -179,7 +179,7 @@ async def test_keyword_search_does_not_mix_future_versions_or_treat_wildcards_as
 
 
 async def test_repeal_does_not_resurrect_earlier_version(law_setup):
-    from teoria.domains.legal_information.search import (
+    from teoria.features.legal_information.search import (
         LawSearchReader,
         LawSearchRequest,
     )
@@ -226,7 +226,7 @@ async def test_repeal_does_not_resurrect_earlier_version(law_setup):
 async def test_keyword_search_reports_missing_new_version_instead_of_falling_back(
     law_setup,
 ):
-    from teoria.domains.legal_information.search import (
+    from teoria.features.legal_information.search import (
         LawSearchReader,
         LawSearchRequest,
     )

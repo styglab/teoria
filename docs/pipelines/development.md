@@ -1,65 +1,61 @@
-# Pipelines 개발 안내
+# 수집·문서 처리 개발 안내
 
-현재 활성 업무는 `public_procurement/specification_processing/`의 규격서 파싱·추출·
-표준 후보 관리·고정 표준 적용이다. Prefect는 실행과 재시도, Pipeline은 산출물과 Data DB 상태를 소유한다.
-Platform Capability나 Mapping Runtime을 Pipeline 안에서 직접 호출하지 않는다.
+수집과 문서 처리는 `backend/`의 기능 모듈이며 Prefect Worker에서 별도로 실행한다.
+Python 프로젝트는 하나지만 실행 권한과 데이터 책임은 [저장소 구조](../architecture/repository-structure.md)를 따른다.
 
-## 코드와 설정을 찾는 순서
+## 코드와 설정
 
-1. [규격서 파이프라인](../procurement_specification_processing/pipeline.md)에서 manifest와 산출물 계약을 확인한다.
-2. `pipelines/prefect.yaml`과 [배포 목록](deployments.md)에서 Flow 진입점을 찾는다.
-3. `flows.py`·`tasks.py`에서 실행 순서와 I/O 경계를 읽는다.
-4. `parsing/`, `extraction/`, `standardization/`, `storage/`에서 해당 책임을 수정한다.
+아래 경로는 `backend/` 기준이다.
 
-| 경로 | 책임 |
+| 위치 | 책임 |
 |---|---|
-| `src/teoria_pipelines/domains/public_procurement/specification_processing/` | 규격서 업무 구현과 평가 CLI |
-| `src/teoria_pipelines/deployment.py` | Process·Kubernetes 배포 등록과 동시 실행 상한 |
-| `src/teoria_pipelines/metadata/` | 격리된 OpenMetadata ingestion Job |
-| `src/teoria_pipelines/persistence/` | 소유 프로젝트의 async DB 연결·migration |
-| `database/migrations/` | Data DB schema와 적용 이력 |
-| `prefect.yaml`, `prefect.metadata.yaml` | 규격서·Metadata 배포 선언 |
+| `src/teoria/features/specification_processing/` | 규격서 파싱·정보 추출·고정 표준 적용·평가·Flow |
+| `src/teoria/features/legal_information/collection/` | 법령 수집·구조화·적재·Flow |
+| `src/teoria/features/metadata_management/ingestion/` | 격리된 OpenMetadata ingestion Job |
+| `src/teoria/integrations/prefect/` | Process·Kubernetes 배포·pool·queue·동시 실행 상한 |
+| `src/teoria/integrations/data_operations/` | Connector 계약·실행·checkpoint·Data DB 기반 |
+| `src/teoria/integrations/provider_api/` | Provider wire 계약과 HTTP 실행 |
+| `migrations/data/` | Data DB schema와 적용 이력 |
+| `connectors/`, `definitions/`, `config/` | 수집 계약·대상·업무 입력 |
+| `prefect.yaml`, `prefect.metadata.yaml`, `prefect.legal_information.yaml` | 기능별 배포 선언 |
 
-법령 수집은 `src/teoria_pipelines/domains/legal_information/laws/`에서 활성 운영한다.
-전용 Connector·수집 정의·`prefect.legal_information.yaml`을 사용한다.
-이전 기업·조달 수집은 `archive/procurement_services/`의 비활성 이력이다.
-활성 Flow·Registry·이미지에서 import하거나 등록하지 않는다.
-Connector 기반 수집 엔진과 Provider wire 라이브러리는 기반으로 유지하되 현재 활성 Connector는 `moleg_law_api`다.
+규격서는 [파이프라인 계약](../procurement_specification_processing/pipeline.md)과 manifest를 먼저 읽고
+`flows.py`·`tasks.py`에서 순서를 확인한다. 세부 변경 위치는 `parsing/`, `extraction/`,
+`normalization/`, `storage/`다. 표준 적용은 이 기능에서 수행하고 후보 제안·프로파일 승인은
+`features/goods_normalization/`이 소유한다.
 
-## 기능 구현 규칙
+공고·계약·기업 분석과 구형 첨부 자동 수집은 `archive/`에 보관한다. 활성 Flow·Registry·이미지로
+다시 연결하지 않는다. 현재 활성 Connector는 법령 수집용 `moleg_law_api`다.
 
-Flow는 순서를 보여주고 주요 단계는 Prefect Task로 표현한다. 원문·JSON·Markdown·표준 본문은
-파일/S3에 저장하고 Data DB에는 실행·문서별 상태·산출물 URI·checksum만 둔다.
-완료 체크포인트는 모든 산출물 저장에 성공한 뒤 기록한다.
-추출 결과는 authoritative Ontology가 아니며 새 표준은 `pipeline_selected_draft`다.
+## 실행과 권한
 
-파서는 별도 실행 환경으로 호출한다. Worker 이미지는 독립된 Kory Parser Python 환경과
-고정한 모델 CLI를 포함한다. 모델 인증은 별도 volume/Secret으로 제공하고 이미지·저장소·로그에 넣지 않는다.
+Flow는 주요 단계를 Prefect Task로 표현한다. 원문·추출 JSON·Markdown·표준 본문은 파일/S3,
+실행 상태·문서별 요약·산출물 URI·checksum은 Data DB에 둔다. 모든 산출물 저장과 적재가
+성공한 뒤 완료 checkpoint를 갱신한다. DB 연결은 `integrations/data_operations/persistence/connection.py`를 사용한다.
 
-## I/O와 동시 실행
+규격서 Worker에는 별도 환경의 parser 실행 파일과 Codex CLI·인증이 필요하다.
+법령 Worker는 parser·Codex 실행 파일 없이 전용 pool에서 실행한다. OpenMetadata ingestion은
+전용 Worker가 공식 ingestion image를 ephemeral Job으로 실행한다. 일반 Worker에 ingestion SDK를 설치하지 않는다.
 
-HTTP·DB I/O는 native async와 `await`로 연결하고 계산·검증은 일반 함수로 유지한다.
-DB 연결은 `persistence/connection.py`의 `connect()`를 사용한다.
-같은 transaction의 순서와 rollback을 보존하며 연결을 Task·event loop 사이에 공유하지 않는다.
-`TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT`는 event loop별·접속 URL별 상한이다.
-parser·모델 호출에는 별도 동시 실행·timeout 제한을 둔다.
+문서 처리에서 Runtime·의미 작성 저장소를 직접 호출하지 않는다. 상위 표준관리 Flow는 인증된
+Admin HTTP API를 사용한다. 추출 결과와 추출 표준 자동 채택은 Published Ontology가 아니다.
 
-## 개발과 검증
+## 검증
 
 ```bash
-uv run --locked --package teoria-pipelines pytest pipelines/tests
-uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
-uv run --locked --package teoria-pipelines --group validation teoria-pipelines validate-integration pipelines --platform-registries platform/registries
-uv run --locked --package teoria-pipelines teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
+uv sync --project backend --locked --all-extras --all-groups
+uv run --project backend --locked --all-extras --all-groups pytest backend/tests tests/integration
+uv run --project backend --locked teoria-pipelines validate backend
+uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/registries
+uv run --project backend --locked teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
 docker compose -f deploy/compose/compose.yaml config --quiet
 ```
 
-규격서 단위 테스트는 `tests/unit/domains/public_procurement/specification_processing/`에
-코드와 대응하는 구조로 둔다. 실제 저장 통합 검사는 `tests/integration/test_specification_persistence.py`,
-평가 계약은 `tests/integration/test_specification_evaluation.py`가 담당한다.
-실제 DB 검사는 운영과 분리한 `TEORIA_TEST_DATA_DATABASE_URL`을 사용하며 미설정 시 건너뛴다.
-파서·모델 품질 개선은 [고정 평가 절차](../procurement_specification_processing/evaluation.md)를 따른다.
+규격서 단위 테스트는 `backend/tests/features/specification_processing/`, 법령은
+`backend/tests/features/legal_information/collection/`, Data DB 통합은
+`backend/tests/integration/data_operations/`에 둔다. 운영과 분리된
+`TEORIA_TEST_DATA_DATABASE_URL`로 검사하며 미설정 시 DB 테스트는 건너뛴다.
+새 migration은 `backend/migrations/data/`에 순번 파일로 추가하고 적용된 SQL은 수정하지 않는다.
 
-새 migration은 순번 파일로 추가한다. 적용한 SQL은 수정하지 않는다.
-실행·재개는 [Prefect](prefect.md), 저장·권한은 [Data DB](database.md),
-Metadata Job은 [OpenMetadata](openmetadata.md), 향후 Connector 계약은 [Connector 안내](connectors.md)를 따른다.
+[Prefect 운영](prefect.md), [Data DB](database.md), [Metadata Job](openmetadata.md),
+[Connector 작성](connectors.md), [고정 평가 절차](../procurement_specification_processing/evaluation.md)를 함께 따른다.

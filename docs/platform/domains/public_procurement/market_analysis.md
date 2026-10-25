@@ -3,7 +3,7 @@
 > 과거 구현 자료: 이 기능은 2026-10-25 물품 규격서 중심 전환으로 비활성 보관했다.
 > 아래 명령·연동·건수는 현재 활성 서비스의 실행 기준이 아니다. 현재 안내는 `docs/index.md`를 따른다.
 
-`platform/src/teoria/domains/public_procurement/market_analysis/`는 조달 원천을 읽어 기관·업체·공고 관계를 계산한다. DB 접근과
+`archive/procurement_services/platform/src/teoria/domains/public_procurement/market_analysis/`는 조달 원천을 읽어 기관·업체·공고 관계를 계산한다. DB 접근과
 판정 정책을 섞지 않는 것을 기본 원칙으로 한다.
 
 ## 모듈과 위치
@@ -30,7 +30,7 @@ Capability 등록은 상위 `public_procurement/processors.py`가 기능 모듈�
 기능 모듈은 순환 import하지 않는다.
 각 기능의 메모리 cache는 해당 실행 모듈에 두고, 순수 정책은 Registry·DB
 connection·Runtime cache와 분리한다. 기능 테스트는
-`platform/tests/unit/domains/public_procurement/market_analysis/`에 둔다.
+`backend/tests/entrypoints/domains/public_procurement/market_analysis/`에 둔다.
 
 ## 변하지 않아야 하는 기준
 

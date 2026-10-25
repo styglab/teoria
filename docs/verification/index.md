@@ -1,5 +1,9 @@
 # 검증 기록
 
+- [통합 백엔드 운영 재배포](backend_consolidation_deployment_2026_10_25.md): 새 이미지 9개 서비스 전환·DB migration·법령/metadata 실실행·기존 artifact 보존
+
+- [백엔드 기능 모듈 통합](backend_consolidation_2026_10_25.md): 단일 Python 프로젝트·프런트엔드 이동·격리 DB/S3·역할별 이미지·기존 artifact 호환 검증
+
 - [법령 수집·조회 복구](law_recovery_2026_10_25.md): 전용 Worker·정기 수집·인증 조회·AI 근거 연결 재개
 
 - [규격서·물품 Ontology 운영 배포](goods_focus_deployment_2026_10_25.md): 새 bundle·migration·Worker·인증·초안과 실제 기동 검증

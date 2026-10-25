@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-COMPOSE_ROOT = Path(__file__).resolve().parents[1]
+COMPOSE_ROOT = (Path(__file__).resolve().parents[3] / 'deploy/compose')
 
 
 class ComposeConfigurationTests(unittest.TestCase):

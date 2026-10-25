@@ -39,7 +39,7 @@ v3의 처리 순서는 공고 구매 목적·통합 범위 이해 → 재귀 구
 - 새 실행: `.artifacts/procurement_specifications/sample_composition_v3_r2_2026_10_22/`
 - 새 실행은 동시 문서 4개, 호출 제한 900초, 계약 오류 수정 1회, 별도 모델 대체 없음이다.
 
-단위 검사: `uv run --locked --package teoria-pipelines pytest pipelines/tests` 결과
+단위 검사: `uv run --locked --project backend pytest backend/tests` 결과
 **213 passed, 19 skipped**다. 기존 Prefect 그래프 생성 경고가 있다. 새 feedback 테스트에서 나타난 직렬화 경고는
 테스트 입력을 Finding으로 명시해 수정했고 해당 테스트를 다시 실행해 통과했다. 이 수치는
 추출 정확도가 아니다. 로컬 문서 링크 검사는 439개 링크·91개 문서에서 오류 0건이었다.

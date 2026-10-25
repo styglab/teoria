@@ -40,11 +40,11 @@ Never restore automatic notice attachment collection or retired experiments.
    bytes. Do not describe synthetic/mocked tests as real-model evaluation or partial labels as full recall.
 
 ```bash
-uv run --locked --package teoria-pipelines teoria-pipelines specification evaluate prepare --manifest /data/evaluation.json
-uv run --locked --package teoria-pipelines teoria-pipelines specification evaluate baseline --cycle-id server_cycle_01
+uv run --locked --project backend teoria-pipelines specification evaluate prepare --manifest /data/evaluation.json
+uv run --locked --project backend teoria-pipelines specification evaluate baseline --cycle-id server_cycle_01
 # Inspect development results and repair the responsible code here.
-uv run --locked --package teoria-pipelines teoria-pipelines specification evaluate candidate --cycle-id server_cycle_01
-uv run --locked --package teoria-pipelines teoria-pipelines specification evaluate finish --cycle-id server_cycle_01
+uv run --locked --project backend teoria-pipelines specification evaluate candidate --cycle-id server_cycle_01
+uv run --locked --project backend teoria-pipelines specification evaluate finish --cycle-id server_cycle_01
 ```
 
 Use `evaluate --state-dir PATH` before the step name when a separate summary location is needed.

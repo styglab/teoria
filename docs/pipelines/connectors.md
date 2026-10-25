@@ -37,10 +37,10 @@ pps_contract_api → pps_contract_ingestion
   `prefect*.yaml`에 둔다. 선언된 운영 값은 [Deployment 목록](deployments.md)에서 확인한다.
 - Flow는 Task 조합만 담당한다.
 - API·DB side effect는 Task, 순수 정규화는 일반 함수로 구현한다.
-- API→DB 변환은 `src/teoria_pipelines/domains/<domain>/<feature>/normalization.py`,
+- API→DB 변환은 `backend/src/teoria/features/<feature>/normalization/`,
   DB→Runtime Object 변환은 Platform Mapping에 둔다.
   Ontology Concept와 자산의 업무 의미 연결은 별도 Semantic Binding으로 관리한다.
-- Python Flow·Task·API client는 기능 패키지에 함께 둔다. `pipelines/connectors/`는
+- Python Flow·Task·API client는 기능 패키지에 함께 둔다. `backend/connectors/`는
   YAML 계약이며 Python 호출 코드는 해당 기능의 `client.py`다.
 - DB SQL과 transaction은 기능별 `repository.py`가 소유한다. Task는 repository를
   호출해 실행·재시도 경계를 표현한다. 조달 전체 저장소를 합치는 facade는 두지 않는다.
@@ -54,7 +54,7 @@ pps_contract_api → pps_contract_ingestion
 Connector의 근거 원문과 metadata를 다음 경로에 함께 보존한다.
 
 ```text
-pipelines/references/providers/{provider}/{connector}/
+backend/references/providers/{provider}/{connector}/
 ├── metadata.yaml
 └── 문서 파일
 ```
@@ -67,16 +67,16 @@ Metadata는 `target: connector`와 Connector ID를 사용하고 `registry`는 `p
 credential이 있으면 안전한 데이터로 `--profile live`까지 실행한다.
 
 ```bash
-uv run --locked --package teoria-pipelines teoria-pipelines validate pipelines
-uv run --locked --package teoria-pipelines --group validation \
-  teoria-pipelines validate-integration pipelines \
-  --platform-registries platform/registries
+uv run --locked --project backend teoria-pipelines validate backend
+uv run --locked --project backend --extra api \
+  teoria-pipelines validate-integration backend \
+  --platform-registries backend/registries
 
-uv run --locked --package teoria-pipelines teoria-pipelines verify connector \
+uv run --locked --project backend teoria-pipelines verify connector \
   --profile build \
   --connector {connector_id} \
   --operation {operation_id} \
-  --input pipelines/verification_cases/{connector_id}/{operation_id}.yaml
+  --input backend/verification_cases/{connector_id}/{operation_id}.yaml
 ```
 
 실제 응답 검증은 `--profile live`를 사용한다. Reference `registry` 경로는 `pipelines/` 기준으로 기록한다.

@@ -30,12 +30,12 @@ $improve-specification-processing 한 사이클 돌려줘.
 ### 명령과 실행 순서
 
 ```bash
-uv run --locked --package teoria-pipelines teoria-pipelines specification evaluate schema
-uv run --locked --package teoria-pipelines teoria-pipelines specification evaluate prepare --manifest /data/evaluation.json
-uv run --locked --package teoria-pipelines teoria-pipelines specification evaluate baseline --cycle-id server_cycle_01
+uv run --locked --project backend teoria-pipelines specification evaluate schema
+uv run --locked --project backend teoria-pipelines specification evaluate prepare --manifest /data/evaluation.json
+uv run --locked --project backend teoria-pipelines specification evaluate baseline --cycle-id server_cycle_01
 # 개발 문서·baseline을 확인하고 소유 코드와 회귀 테스트를 수정한다.
-uv run --locked --package teoria-pipelines teoria-pipelines specification evaluate candidate --cycle-id server_cycle_01
-uv run --locked --package teoria-pipelines teoria-pipelines specification evaluate finish --cycle-id server_cycle_01
+uv run --locked --project backend teoria-pipelines specification evaluate candidate --cycle-id server_cycle_01
+uv run --locked --project backend teoria-pipelines specification evaluate finish --cycle-id server_cycle_01
 ```
 
 별도 요약 위치는 `evaluate --state-dir PATH prepare ...`처럼 단계 이름 앞에 지정한다.

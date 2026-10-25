@@ -16,7 +16,7 @@
 
 ## 코드 검증
 
-`uv run --locked --package teoria-pipelines pytest pipelines/tests` 결과는
+`uv run --locked --project backend pytest backend/tests` 결과는
 **206 passed, 19 skipped**다. 환경 조건에 따른 DB·외부 서비스 등 검사는 건너뛰었고,
 기존 Prefect graph 실행 안내 경고 1개가 있다. 실제 운영 배포 검증이 아니다.
 

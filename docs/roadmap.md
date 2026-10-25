@@ -4,6 +4,13 @@
 기존 기업·공고·계약·낙찰 분석과 조달 API 수집은 비활성 보관했다.
 법령 수집·조회와 AI 메타데이터 진단의 법령 근거 연결은 별도 활성 기능이다.
 
+## 코드와 배포 구조
+
+Python 코드는 `backend/src/teoria/`의 기능별 모듈, 관리 UI는 `frontend/`로 통합했다.
+의존성은 `backend/pyproject.toml`과 `backend/uv.lock`에서 관리하며 Worker별 이미지와 권한은 유지한다.
+폴더 통합은 기존 서비스의 운영 이미지 교체나 물품 Runtime 기능 완성을 의미하지 않는다.
+[구조와 소유권](architecture/repository-structure.md)을 따른다.
+
 ## 유지하는 기반
 
 - Pipelines: 규격서 파싱·정보 추출·표준 후보 관리·고정 표준 적용과 평가 CLI
@@ -12,7 +19,7 @@
 - Platform: Ontology 작성·검토·게시, Stable Concept와 Semantic Binding
 - 실행: Source·Mapping·Capability, Context 주입, immutable Runtime artifact, OPA와 MCP
 - OpenMetadata: 기술·거버넌스 metadata의 authoritative source
-- 물품 Ontology 초기 Draft blueprint: `platform/ontology_blueprints/goods.yaml`
+- 물품 Ontology 초기 Draft blueprint: `backend/ontology_blueprints/goods.yaml`
 
 현재 활성 Registry에는 기존 업무 Capability가 없다. 물품 실행 기능의 연결을 완료한 상태로 간주하지 않는다.
 

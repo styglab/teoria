@@ -8,10 +8,10 @@ Pipeline이 적재한 relation을 read-only로 조회하고 DB→Runtime 값은 
 ## 산출물
 
 ```text
-platform/registries/sources/{source_id}.yaml
-platform/references/providers/{provider}/{source}/metadata.yaml
-platform/references/providers/{provider}/{source}/{document}
-platform/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+backend/registries/sources/{source_id}.yaml
+backend/references/providers/{provider}/{source}/metadata.yaml
+backend/references/providers/{provider}/{source}/{document}
+backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
 ```
 
 Reference만 등록한 단계는 `metadata.yaml`에 `status: draft`, Source까지 완성되면 `active`를 사용한다.
@@ -46,7 +46,7 @@ registry: registries/sources/provider_service.yaml
 
 `registry`는 `platform/` 기준 상대 경로다. Reference에는 API 키, 개인정보와 비공개 응답을 저장하지 않는다.
 
-원문 경로는 `platform/references/providers/{provider}/{source}/`다. metadata에는
+원문 경로는 `backend/references/providers/{provider}/{source}/`다. metadata에는
 `target: source`, Source ID, 수집일과 원문 파일을 기록한다. 허용 형식은 `pdf`,
 `docx`, `xlsx`, `csv`, `json`, `xml`, `yaml`, `html`, `markdown`, `text`다.
 원본은 수정하지 않고 변환본이 필요하면 별도 파일로 함께 등록한다.
@@ -79,7 +79,7 @@ response:
     ref: record
 ```
 
-Verification case는 `platform/registries/sources/verification_cases/{source_id}/{operation_id}.yaml`에 둔다.
+Verification case는 `backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml`에 둔다.
 내용은 Operation별 요청 section만 포함한다.
 
 ```yaml
@@ -94,13 +94,13 @@ query:
 검증하고, credential이 있으면 안전한 입력으로 Live까지 실행한다.
 
 ```bash
-uv run --locked --package teoria-platform teoria validate platform/registries
+uv run --locked --project backend --extra api teoria validate backend/registries
 
-uv run --locked --package teoria-platform teoria verify source \
+uv run --locked --project backend --extra api teoria verify source \
   --profile build \
   --source {source_id} \
   --operation {operation_id} \
-  --input platform/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+  --input backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
 ```
 
 credential을 주입한 실제 검증은 `--profile live`를 사용한다. 원본 전체 응답 대신 필요한 필드 단위의 안전한 fixture만 남긴다.

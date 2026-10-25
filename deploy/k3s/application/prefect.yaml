@@ -168,7 +168,7 @@ spec:
         - name: TEORIA_ENVIRONMENT
           value: production
         - name: TEORIA_PIPELINE_PATH
-          value: /app/pipelines
+          value: /app/backend
         - name: PREFECT_API_URL
           value: http://prefect-server:4200/api
         - name: PREFECT_API_AUTH_STRING
@@ -221,7 +221,7 @@ spec:
         - name: TEORIA_ENVIRONMENT
           value: production
         - name: TEORIA_PIPELINE_PATH
-          value: /app/pipelines
+          value: /app/backend
         - name: PREFECT_API_URL
           value: http://prefect-server:4200/api
         - name: TEORIA_OPENMETADATA_INGESTION_BACKEND
@@ -315,7 +315,7 @@ spec:
         - name: TEORIA_ENVIRONMENT
           value: production
         - name: TEORIA_PIPELINE_PATH
-          value: /app/pipelines
+          value: /app/backend
         - name: PREFECT_API_URL
           value: http://prefect-server:4200/api
         - name: PREFECT_API_AUTH_STRING

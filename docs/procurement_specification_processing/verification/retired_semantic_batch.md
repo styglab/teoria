@@ -215,16 +215,16 @@ exclude한다. 같은 대상으로 연결한 별칭 관찰은 서로 다른 개�
 ```
 
 ```bash
-uv run --locked --package teoria-pipelines python -m \
-  teoria_pipelines.domains.public_procurement.specification_intelligence.semantic_batch \
+uv run --locked --project backend python -m \
+  teoria.integrations.data_operations.domains.public_procurement.specification_intelligence.semantic_batch \
   prepare --manifest /path/to/request.json --output-dir /path/to/new_batch
 
-uv run --locked --package teoria-pipelines python -m \
-  teoria_pipelines.domains.public_procurement.specification_intelligence.semantic_batch \
+uv run --locked --project backend python -m \
+  teoria.integrations.data_operations.domains.public_procurement.specification_intelligence.semantic_batch \
   run --batch /path/to/new_batch --stage all --concurrency 2 --timeout 240
 
-uv run --locked --package teoria-pipelines python -m \
-  teoria_pipelines.domains.public_procurement.specification_intelligence.semantic_batch \
+uv run --locked --project backend python -m \
+  teoria.integrations.data_operations.domains.public_procurement.specification_intelligence.semantic_batch \
   finalize --batch /path/to/new_batch --output-dir /path/to/new_result
 ```
 
@@ -256,7 +256,7 @@ receipt가 일치할 때만 재사용한다. 입력·프롬프트·해석을 바
 | 표 헤더·병합 셀·이미지 미확인 | 구조 근거와 확인 한계 보존 |
 
 ```bash
-uv run --locked --package teoria-pipelines pytest pipelines/tests
+uv run --locked --project backend pytest backend/tests
 ```
 
 과거 v1/v2 실행 기록은 당시 결과이며 v3 정확도·시간으로 재사용하지 않는다.
