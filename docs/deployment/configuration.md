@@ -21,7 +21,7 @@ API·MCP extra와 Worker별 dependency group으로 실행 환경을 구분한다
 | Platform·Runtime·Admin | `backend/src/teoria/settings.py` |
 | Pipelines | `backend/src/teoria/integrations/data_operations/settings.py` |
 | DB 연결 상한 | Platform `persistence/postgres.py`, Pipelines `persistence/connection.py`의 환경변수 |
-| MCP | `backend/src/teoria/integrations/runtime_http/settings.py` |
+| MCP | `backend/src/teoria/entrypoints/mcp/settings.py` |
 | Compose 서비스·포트·이미지·필수 인증 | `deploy/compose/compose.yaml`, `.env.example` |
 | EC2 K3s·GitHub CD | `deploy/k3s/`, `.github/workflows/deploy_k3s.yaml` |
 
@@ -57,7 +57,7 @@ Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할
 |---|---|---|
 | `TEORIA_ENVIRONMENT` | `development` | 개발·테스트·운영 구분: `development`, `test`, `production` |
 | `TEORIA_ENV_FILE` | 개발 시 작업 디렉터리 `.env` | 로컬 프로세스가 읽을 환경 파일 경로 |
-| `TEORIA_REGISTRY_PATH` | `backend/registries` | Platform Registry |
+| `TEORIA_REGISTRY_PATH` | `backend/contracts/runtime` | Platform Registry |
 
 ### Runtime·Context·정책
 
@@ -107,15 +107,14 @@ Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할
 
 | 변수 | 기본값 | 의미 |
 |---|---|---|
-| `TEORIA_PIPELINE_PATH` | `pipelines` | Pipeline 루트 |
+| `TEORIA_PIPELINE_PATH` | `backend` | 수집 계약·설정·migration의 백엔드 루트 |
 | `TEORIA_PIPELINE_CONCURRENCY` | `2` | 규격서 pool 전체 동시 실행 상한. Compose Worker 자체 실행 상한에도 적용 |
 | `TEORIA_PIPELINE_WORKER_CPUS` | `4` | Compose 규격서 Worker 전체 CPU 상한 |
 | `TEORIA_PIPELINE_WORKER_MEMORY` | `8g` | Compose 규격서 Worker 전체 메모리 상한 |
-| `TEORIA_PLATFORM_REGISTRY_PATH` | `backend/registries` | Pipeline 통합 검증 대상 |
+| `TEORIA_PLATFORM_REGISTRY_PATH` | `backend/contracts/runtime` | Pipeline 통합 검증 대상 |
 | `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
 | `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `5` | Connector의 멱등 요청 최대 시도 횟수 |
 | `TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS` | `60` | Connector 재시도 지수 backoff의 최초 대기시간 |
-| `TEORIA_PIPELINE_BID_NOTICE_ENRICHMENT_REQUESTS_PER_SECOND` | `1` | 공고별 면허·지역 보강 요청의 프로세스당 초당 최대 시작 횟수 |
 | `TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT` | `10` | Pipeline event loop별·DB별 활성 연결 상한. 여러 Worker·프로세스는 상한 합산 |
 | `TEORIA_PIPELINE_DATA_DATABASE_URL` | 없음 | Pipeline migration·적재용 writer DB URL |
 
@@ -201,3 +200,19 @@ DB URL도 설정해야 한다. Compose 내부 DB 포트를 기본 공개하지 �
 
 K3s는 Compose `.env`를 자동으로 읽지 않는다. 역할별 Secret 참조와 GitHub Environment 설정은
 [EC2 K3s 배포](k3s.md)를 따른다.
+
+
+## 실행 자원 제한
+
+Compose의 CPU·메모리 상한은 `deploy/compose/compose.yaml`이 기준이다.
+설명과 적용 주의점은 [자원 예산](compose.md#cpu메모리-예산)을 따른다.
+
+| 입력 | 기본값 | 적용 대상 |
+|---|---|---|
+| `TEORIA_OPENMETADATA_INGESTION_CPUS` | `1` | Docker ingestion Job과 수동 ingestion 서비스 |
+| `TEORIA_OPENMETADATA_INGESTION_MEMORY` | `2g` | 위 Job의 컨테이너 메모리 상한 |
+| `TEORIA_MCP_CONTAINER_CPUS` | `0.5` | Codex bridge 프로세스 환경에서 지정하는 MCP 세션 상한 |
+| `TEORIA_MCP_CONTAINER_MEMORY` | `256m` | 위 MCP 세션의 메모리 상한 |
+
+MCP bridge의 자원 변수는 실행 프로세스 환경에서 읽는다. `.env`에서 자동으로 읽는 값은
+기존 Runtime token이며, 자원 변수는 필요한 경우 Codex server env나 실행 환경으로 전달한다.

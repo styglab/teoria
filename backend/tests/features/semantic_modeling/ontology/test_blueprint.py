@@ -9,7 +9,7 @@ ROOT = (Path(__file__).resolve().parents[5] / 'backend')
 def test_teoria_business_ontology_blueprint_has_shared_publication_boundary() -> None:
     blueprint = OntologyBlueprint.load(
         ROOT
-        / "ontology_migrations"
+        / "authoring" / "ontology_migrations"
         / "applied"
         / "2026_10_initial_unification"
         / "teoria_business_ontology_v1.yaml"
@@ -47,7 +47,7 @@ class _ExistingOntologyRepository:
 async def test_blueprint_does_not_clone_into_an_existing_ontology() -> None:
     blueprint = OntologyBlueprint.load(
         ROOT
-        / "ontology_migrations"
+        / "authoring" / "ontology_migrations"
         / "applied"
         / "2026_10_initial_unification"
         / "teoria_business_ontology_v1.yaml"

@@ -33,8 +33,8 @@ Ontology·Binding·Mapping·Capability·Runtime·OpenMetadata·Prefect 기반은
 
 새 Source·Connector를 실제로 추가할 때만 [Source 작성](platform/registry/source_authoring.md),
 [Source Skill](skills/source-registry-author.md), [Connector 작성](pipelines/connectors.md)을 사용한다.
-현재 Runtime Provider Source는 없고 Pipeline Connector는 법령용 `moleg_law_api` 하나다. [PostgreSQL ETL 예제](pipelines/writing_pipelines.md)는
-일반 작성 예이며 현재 규격서 작업의 운영 진입점이 아니다.
+현재 Runtime Provider Source는 없고 Pipeline Connector는 법령용 `moleg_law_api` 하나다. [파이프라인 작성 안내](pipelines/writing_pipelines.md)에서 현재 기능의 작성 위치를 확인한다.
+일반 주문 ETL 예제는 `archive/examples/db_sales/`로 보관하며 운영에 등록하지 않는다.
 
 ## 과거 업무 구현과 검증 기록
 

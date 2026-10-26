@@ -31,18 +31,25 @@ async def extract_requirements(sid,source,out,runner,source_root,verified_parse_
     parse=Path(document['parse_path'])
     if sha(parse)!=document['native_sha256'] or json.loads(parse.read_text())['sha256']!=document['source_sha256']:raise ValueError('saved parse/source identity changed')
     previous=json.loads((out/'summary.json').read_text()) if (out/'summary.json').exists() else {}
+    from teoria.features.specification_processing.extraction.document_context import DocumentContext,pack_fragments
+    context=DocumentContext(document)
     chunks=make_chunks(graph,document);save(out/'chunks.json',chunks)
     save(out/'input_manifest.json',{'source_graph_path':str((source/'graph.json').resolve()),'source_document_path':str((source/'document.json').resolve()),
          'source_graph_sha256':sha(source/'graph.json'),'source_document_sha256':sha(source/'document.json'),
          'source_verified_path':str(original) if original_available else None,'source_sha256':document['source_sha256'],'original_file_reverified':original_available,'saved_parse_hash_verified':True,'chunks':len(chunks),'graph_entities_changed':False,
-         'source_code_sha256':{p.name:sha(p) for p in [ROOT/'attribute_extraction.py',ROOT/'attribute_chunking.py',ROOT/'value_normalization.py',Path(__file__)]},'retries':0,'human_reviewed':False})
+         'source_code_sha256':{p.name:sha(p) for p in [ROOT/'attribute_extraction.py',ROOT/'attribute_chunking.py',ROOT/'document_context.py',ROOT/'value_normalization.py',Path(__file__)]},'retries':0,'human_reviewed':False})
     entities=[[e['id'],e['name'],e['kind']] for e in graph['entities']]
     async def one(index,chunk,recovery=False):
         path=out/('recovery' if recovery else 'inference')/f'chunk_{index:02}.json';before=time.monotonic();cache_hit=path.exists()
         try:
             from teoria.features.specification_processing.extraction.attribute_validation import fragment_context
+            contexts={f['id']:fragment_context(document,f,context=context) for f in chunk}
+            context_texts={row[0]:row[3] for rows in contexts.values() for row in rows}
             request={'document_id':sid,'entities':entities,'fragments':[[f['id'],f['node_id'],f['suggested_subject_ids'],f['text']] for f in chunk],
-                     'node_context':{f['id']:fragment_context(document,f) for f in chunk},
+                     'fragment_groups':{f['id']:f['context_group'] for f in chunk},
+                     'node_context':{key:[row[0] for row in rows] for key,rows in contexts.items()},
+                     'context_nodes':[[n['node_id'],n['kind'],n.get('parent_id'),n.get('source_table_id'),n.get('row'),n.get('column'),n.get('row_span'),n.get('column_span'),context_texts[n['node_id']]]
+                                      for n in document['nodes'] if n['node_id'] in context_texts],
                      'relation_context':[[r['source_id'],r['kind'],r['target_id']] for r in graph['relations']],
                      'attempt':'missing_fragment_recovery' if recovery else 'initial',
                      'output_schema':AttributeBatch.model_json_schema()}
@@ -59,11 +66,7 @@ async def extract_requirements(sid,source,out,runner,source_root,verified_parse_
     from teoria.features.specification_processing.extraction.attribute_validation import uncovered,deduplicate_inventory
     initial_attributes=[a for b in batches for a in b['attributes']]
     gaps=uncovered(chunks,initial_attributes)
-    recovery_chunks=[];current=[];size=0
-    for fragment in gaps:
-        if current and size+len(fragment['text'])>2200:recovery_chunks.append(current);current=[];size=0
-        current.append(fragment);size+=len(fragment['text'])
-    if current:recovery_chunks.append(current)
+    recovery_chunks=pack_fragments(gaps,context)
     recovered=await asyncio.gather(*(one(len(chunks)+i,chunk,True) for i,chunk in enumerate(recovery_chunks)))
     batches+=recovered
     extracted=[a for b in batches for a in b['attributes']]

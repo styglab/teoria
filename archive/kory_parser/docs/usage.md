@@ -50,6 +50,30 @@ for block in result.blocks:
 Task/별도 프로세스에 넣고 동시 실행 수와 실행 시간을 제한한다. 비동기 API에서
 직접 실행하거나 `async def`만 붙이지 않는다. 현재 운영 연결은 하지 않았다.
 
+## HWPX 수동 번호 계층 복원
+
+0.9.14부터 직접 입력한 로마 숫자 구획과 원문의 앞쪽 공백이 함께 확인되는 HWPX에서
+번호 계층을 복원할 수 있다. 0.9.15부터 기본으로 켜져 있어 별도 옵션 없이 사용한다.
+
+```python
+result = parse("document.hwpx")
+# 기존의 번호 복원 없는 출력이 필요한 경우
+legacy = parse("document.hwpx", ParseOptions(recover_numbered_structure=False))
+```
+
+```bash
+kory-parser document.hwpx -o parsed.json
+kory-parser document.hwpx -o legacy.json --no-numbered-structure
+```
+
+평평한 `blocks`의 `type="list"`, `level`로 깊이를 표현한다. 원문 텍스트·span·source는
+보존하며 본체·CPU 같은 단어로 포함 관계를 추정하지 않는다. 목차의 쪽 번호, 멀리 떨어진
+문단, 기존 제목·목록 속성과 표 셀 사이에 문맥을 이어 붙이지 않는다. 한 문단에 여러 줄이
+있으면 첫 줄의 번호 깊이만 표시하며 내부 하위 번호를 별도 블록으로 분리하지 않는다.
+원문 들여쓰기 증거가 부족한 문서와 HWP·PDF·DOCX 등 다른 형식은 이번 옵션의 대상이 아니다.
+
+검증 범위와 수치는 [0.9.14 번호 계층 복원 기록](numbered_structure_2026_10_26.md)에 있다.
+
 ## 구현 범위와 호환성
 
 전체 **문서 읽기 형식**을 대상으로 구현했지만, 원본의 모든 기능과 동등한 이식이

@@ -23,6 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo", type=Path, default=(Path(__file__).resolve().parents[4]))
     parser.add_argument("--date-from", default="2026-01-01")
     parser.add_argument("--date-to", default="2026-08-03")
+    parser.add_argument("--discovery-only", action="store_true", help="Verify initialization and Tool discovery without requiring retired procurement tools")
     return parser.parse_args()
 
 
@@ -42,6 +43,12 @@ async def smoke_test(args: argparse.Namespace) -> None:
             await session.initialize()
             listed = await session.list_tools()
             names = {tool.name for tool in listed.tools}
+            if args.discovery_only:
+                print("initialize=passed")
+                print("tools_list=passed")
+                print(f"tool_count={len(names)}")
+                print("tool_execution=not_requested")
+                return
             missing = REQUIRED_TOOLS - names
             if missing:
                 raise RuntimeError(f"missing required MCP tools: {', '.join(sorted(missing))}")

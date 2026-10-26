@@ -3,7 +3,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from teoria.entrypoints.admin.composition import create_admin_services, install_admin_routers
+from teoria.entrypoints.composition.admin import (
+    create_admin_services,
+    install_admin_routers,
+)
 from teoria.features.semantic_modeling.registry.loader import RegistryLoader
 from teoria.settings import Settings
 
@@ -33,11 +36,16 @@ def test_router_installation_reuses_injected_services_without_constructing_depen
     # A second construction here would bypass the injected dependency or its configuration.
     with (
         patch(
-            "teoria.entrypoints.admin.composition.AssessmentRepository", side_effect=AssertionError
+            "teoria.entrypoints.composition.admin.AssessmentRepository",
+            side_effect=AssertionError,
         ),
-        patch("teoria.entrypoints.admin.composition.SuggestionService", side_effect=AssertionError),
         patch(
-            "teoria.entrypoints.admin.composition.AssetContextService", side_effect=AssertionError
+            "teoria.entrypoints.composition.admin.SuggestionService",
+            side_effect=AssertionError,
+        ),
+        patch(
+            "teoria.entrypoints.composition.admin.AssetContextService",
+            side_effect=AssertionError,
         ),
     ):
         install_admin_routers(app, services)

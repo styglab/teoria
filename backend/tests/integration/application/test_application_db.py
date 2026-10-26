@@ -10,11 +10,20 @@ from psycopg.rows import dict_row
 import pytest
 
 from teoria.features.semantic_modeling.binding.repository import BindingRepository
-from teoria.features.metadata_management.intelligence.suggestions.execution import ApplicationStateError
-from teoria.features.metadata_management.intelligence.suggestions.repository import SuggestionRepository
-from teoria.features.metadata_management.intelligence.suggestions.execution import SuggestionApplicationError
-from teoria.features.metadata_management.intelligence.suggestions.service import SuggestionService
-from teoria.features.semantic_modeling.ontology.authoring import OntologyAuthoringRepository
+from teoria.features.metadata_management.intelligence.suggestions.execution import (
+    ApplicationStateError,
+)
+from teoria.features.metadata_management.intelligence.suggestions.repository import (
+    SuggestionRepository,
+)
+from teoria.features.metadata_management.intelligence.suggestions.execution import (
+    SuggestionApplicationError,
+)
+from teoria.features.metadata_management.intelligence.suggestions.service import (
+    SuggestionService,
+)
+from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
+from teoria.features.semantic_modeling.ontology.repository import OntologyRepository
 from teoria.integrations.application_database import apply_migrations
 
 DATABASE_URL = os.environ.get("TEORIA_TEST_APP_DATABASE_URL")
@@ -26,12 +35,13 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(scope="module", autouse=True)
 async def migrated_database():
     await apply_migrations(
-        DATABASE_URL, (Path(__file__).resolve().parents[4] / 'backend') / "migrations/application"
+        DATABASE_URL,
+        (Path(__file__).resolve().parents[4] / "backend") / "migrations/application",
     )
 
 
 async def ontology():
-    repo = OntologyAuthoringRepository(DATABASE_URL)
+    repo = OntologyAuthoringService(DATABASE_URL)
     namespace = "test_" + uuid4().hex
     version = await repo.create_ontology(
         namespace=namespace,
@@ -178,7 +188,9 @@ async def test_retry_api_reuses_approval_and_records_authenticated_actor():
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from teoria.features.access_control.auth import AdminAuthorizer
-    from teoria.features.metadata_management.intelligence.admin_api import create_intelligence_router
+    from teoria.features.metadata_management.intelligence.admin_router import (
+        create_intelligence_router,
+    )
     from teoria.integrations.openmetadata import OpenMetadataError
     from teoria.settings import Settings
 
@@ -307,16 +319,18 @@ async def test_failed_publication_rolls_back_status_artifact_and_audit():
     await repo.publish(base_id, actor="publisher")
     version_id = await approved_draft(repo, namespace, "2.0")
 
-    class FailingAuditRepository(OntologyAuthoringRepository):
-        async def _audit(self, conn, version_id, concept_id, event_type, *args):
+    class FailingAuditRepository(OntologyRepository):
+        async def record_event(self, conn, version_id, concept_id, event_type, *args):
             if event_type == "published":
                 raise RuntimeError("synthetic audit failure")
-            return await super()._audit(conn, version_id, concept_id, event_type, *args)
+            return await super().record_event(
+                conn, version_id, concept_id, event_type, *args
+            )
 
     with pytest.raises(RuntimeError, match="synthetic audit"):
-        await FailingAuditRepository(DATABASE_URL).publish(
-            version_id, actor="publisher"
-        )
+        await OntologyAuthoringService(
+            repository=FailingAuditRepository(DATABASE_URL)
+        ).publish(version_id, actor="publisher")
     assert (await repo.get_version(base_id))["status"] == "published"
     assert (await repo.get_version(version_id))["status"] == "approved"
     with psycopg.connect(DATABASE_URL) as c:
@@ -587,7 +601,9 @@ async def test_recovery_api_requires_authentication_and_records_principal():
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from teoria.features.access_control.auth import AdminAuthorizer
-    from teoria.features.metadata_management.intelligence.admin_api import create_intelligence_router
+    from teoria.features.metadata_management.intelligence.admin_router import (
+        create_intelligence_router,
+    )
     from teoria.settings import Settings
 
     repo, suggestion_id = await suggestion()

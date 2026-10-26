@@ -10,6 +10,7 @@
 - 일반 문서 처리·표준 관리: [pipeline.md](pipeline.md)
 - Ontology 기반 프로파일 작성·승인·적용: [normalization_profiles.md](normalization_profiles.md)
 - 스킬을 통한 추출 개선·평가: [evaluation.md](evaluation.md)
+- IE 라이브러리 비교 검토: [ie_library_comparison.md](ie_library_comparison.md)
 - 실행 스킬: [improve-specification-processing](../../.agents/skills/improve_specification_processing/SKILL.md)
 
 스킬은 원문 분석·오류 진단·코드 수정을 담당하고, 평가 CLI는 샘플링·실행·채점·비교·정리를 담당한다.

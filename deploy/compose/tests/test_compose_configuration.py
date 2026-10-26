@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-COMPOSE_ROOT = (Path(__file__).resolve().parents[3] / 'deploy/compose')
+COMPOSE_ROOT = Path(__file__).resolve().parents[3] / "deploy/compose"
 
 
 class ComposeConfigurationTests(unittest.TestCase):
@@ -42,6 +42,8 @@ class ComposeConfigurationTests(unittest.TestCase):
                 str(COMPOSE_ROOT / "compose.yaml"),
                 "-p",
                 project,
+                "--profile",
+                "*",
                 "config",
                 "--format",
                 "json",
@@ -56,6 +58,34 @@ class ComposeConfigurationTests(unittest.TestCase):
         result = self.config(project)
         self.assertEqual(result.returncode, 0, "Compose configuration must resolve")
         return json.loads(result.stdout)
+
+    def test_gateway_serves_ui_without_a_separate_ui_service(self):
+        services = self.resolved("teoria-test-gateway")["services"]
+        self.assertNotIn("admin-ui", services)
+        gateway = services["nginx"]
+        self.assertEqual(gateway["build"]["target"], "gateway")
+        self.assertTrue(gateway["build"]["dockerfile"].endswith("frontend/Dockerfile"))
+        self.assertNotIn("admin-ui", gateway["depends_on"])
+
+    def test_every_service_has_explicit_cpu_and_memory_limits(self):
+        services = self.resolved("teoria-test-budgets")["services"]
+        for name, service in services.items():
+            with self.subTest(service=name):
+                self.assertGreater(float(service.get("cpus", 0)), 0)
+                self.assertGreater(int(service.get("mem_limit", 0)), 0)
+
+    def test_redis_data_budgets_leave_headroom_for_persistence(self):
+        services = self.resolved("teoria-test-redis-budgets")["services"]
+        for name in ("runtime-redis", "prefect-redis"):
+            service = services[name]
+            command = service["command"]
+            data_limit = (
+                int(command[command.index("--maxmemory") + 1].removesuffix("mb"))
+                * 1024**2
+            )
+            self.assertGreaterEqual(int(service["mem_limit"]), data_limit * 2)
+        command = services["prefect-redis"]["command"]
+        self.assertEqual(command[command.index("--maxmemory-policy") + 1], "noeviction")
 
     def test_default_project_preserves_existing_persistent_volume_names(self):
         config = self.resolved("teoria")
@@ -100,24 +130,48 @@ class ComposeConfigurationTests(unittest.TestCase):
         services = self.resolved("teoria-test-limits")["services"]
         worker = services["prefect-worker"]
         self.assertEqual(worker["cpus"], 4)
-        self.assertEqual(int(worker["mem_limit"]), 8 * 1024 ** 3)
+        self.assertEqual(int(worker["mem_limit"]), 8 * 1024**3)
         self.assertEqual(worker["environment"]["TEORIA_PIPELINE_CONCURRENCY"], "2")
         registration = services["prefect-deploy"]
-        self.assertEqual(registration["command"], [
-            "teoria-pipelines", "register", "--backend", "process", "--kind", "ingestion",
-        ])
-        self.assertNotIn("TEORIA_PIPELINE_BACKFILL_CONCURRENCY", registration["environment"])
-        self.assertEqual(worker["command"], ["teoria-pipelines", "worker", "--pool", "teoria-specification"])
-        self.assertFalse(any(name.startswith("TEORIA_CONNECTOR_") for name in worker["environment"]))
-        self.assertEqual(worker["environment"]["TEORIA_SPECIFICATION_PARSER_PYTHON"], "/opt/kory_parser/bin/python")
+        self.assertEqual(
+            registration["command"],
+            [
+                "teoria-pipelines",
+                "register",
+                "--backend",
+                "process",
+                "--kind",
+                "ingestion",
+            ],
+        )
+        self.assertNotIn(
+            "TEORIA_PIPELINE_BACKFILL_CONCURRENCY", registration["environment"]
+        )
+        self.assertEqual(
+            worker["command"],
+            ["teoria-pipelines", "worker", "--pool", "teoria-specification"],
+        )
+        self.assertFalse(
+            any(name.startswith("TEORIA_CONNECTOR_") for name in worker["environment"])
+        )
+        self.assertEqual(
+            worker["environment"]["TEORIA_SPECIFICATION_PARSER_PYTHON"],
+            "/opt/kory_parser/bin/python",
+        )
 
     def test_law_credentials_are_isolated_from_document_worker(self):
         services = self.resolved("teoria-test-law")["services"]
         law = services["prefect-law-worker"]
-        self.assertEqual(law["command"], ["teoria-pipelines", "worker", "--pool", "teoria-legal-information"])
+        self.assertEqual(
+            law["command"],
+            ["teoria-pipelines", "worker", "--pool", "teoria-legal-information"],
+        )
         self.assertEqual(law["environment"]["TEORIA_PIPELINE_CONCURRENCY"], "1")
         self.assertIn("TEORIA_CONNECTOR_MOLEG_LAW_API_KEY", law["environment"])
-        self.assertNotIn("TEORIA_CONNECTOR_MOLEG_LAW_API_KEY", services["prefect-worker"]["environment"])
+        self.assertNotIn(
+            "TEORIA_CONNECTOR_MOLEG_LAW_API_KEY",
+            services["prefect-worker"]["environment"],
+        )
 
 
 if __name__ == "__main__":

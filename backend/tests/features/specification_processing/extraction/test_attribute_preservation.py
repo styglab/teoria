@@ -101,3 +101,86 @@ async def test_distinct_requirements_are_never_merged(tmp_path,difference):
             return result
     await resolve_attribute_semantics(document,graph,attributes,DifferentResolution(),tmp_path)
     assert len(attributes)==2
+
+
+class ScriptedResolutions:
+    def __init__(self, answers):
+        self.answers=iter(answers)
+        self.requests=[]
+
+    async def generate(self,prompt,request,out):
+        self.requests.append(deepcopy(request))
+        answer=next(self.answers)
+        if isinstance(answer,Exception):
+            raise answer
+        return answer
+
+
+def resolution(attribute_id,subject):
+    return {'attribute_id':attribute_id,'subject_ids':[subject],
+            'role':'requirement_candidate','scope':'per_component','evidence_node_ids':['n']}
+
+
+@pytest.mark.parametrize('failure',['missing','subject','evidence','schema','duplicate','malformed_duplicate'])
+async def test_only_invalid_attribute_is_retried_without_losing_valid_result(tmp_path,failure):
+    document,graph,attributes=duplicate_inputs()
+    originals=deepcopy(attributes)
+    first=resolution('a1','torch');second=resolution('a2','tf')
+    rows=[first,second]
+    if failure=='missing':rows.pop()
+    if failure=='subject':second['subject_ids']=['nonexistent']
+    if failure=='evidence':second['evidence_node_ids']=['nonexistent']
+    if failure=='schema':second['scope']='invented_scope'
+    if failure=='duplicate':rows.append(resolution('a2','server'))
+    if failure=='malformed_duplicate':rows.append({'attribute_id':'a2'})
+    runner=ScriptedResolutions([{'resolutions':rows},{'resolutions':[resolution('a2','tf')]}])
+
+    summary=await resolve_attribute_semantics(document,graph,attributes,runner,tmp_path)
+
+    assert [[a['id'] for a in r['attributes']] for r in runner.requests]==[['a1','a2'],['a2']]
+    assert [a['subject_ids'] for a in attributes]==[['torch'],['tf']]
+    assert summary['resolved']==2 and summary['unresolved']==0
+    assert summary['retried_attributes']==1 and summary['recovered_attributes']==1
+    for original,actual in zip(originals,attributes):
+        for field in ('value_raw','unit_raw','operator_raw','qualifiers_raw','evidence','property_key'):
+            assert actual[field]==original[field]
+
+
+async def test_failed_retry_cannot_replace_an_already_valid_judgment(tmp_path):
+    document,graph,attributes=duplicate_inputs()
+    runner=ScriptedResolutions([
+        {'resolutions':[resolution('a1','torch')]},
+        {'resolutions':[resolution('a1','server'),resolution('a2','nonexistent')]},
+    ])
+
+    summary=await resolve_attribute_semantics(document,graph,attributes,runner,tmp_path)
+
+    assert len(runner.requests)==2
+    assert attributes[0]['subject_ids']==['torch']
+    assert attributes[1]['subject_ids']==[] and attributes[1]['semantic_role']=='unknown'
+    assert attributes[1]['extraction_subject_ids']==['tf']
+    assert summary['resolved']==1 and summary['unresolved']==1
+    assert summary['retried_attributes']==1 and summary['recovered_attributes']==0
+
+
+async def test_valid_unknown_judgments_do_not_trigger_retry(tmp_path):
+    document,graph,attributes=duplicate_inputs()
+    unknown=resolution('a2','tf');unknown.update(subject_ids=[],role='unknown',scope='unknown')
+    runner=ScriptedResolutions([{'resolutions':[resolution('a1','torch'),unknown]}])
+
+    summary=await resolve_attribute_semantics(document,graph,attributes,runner,tmp_path)
+
+    assert len(runner.requests)==1
+    assert summary['retried_attributes']==0 and summary['unresolved']==1
+
+
+@pytest.mark.parametrize('first_answer',[TimeoutError(),{'resolutions':'malformed'}])
+async def test_unusable_batch_gets_one_bounded_retry(tmp_path,first_answer):
+    document,graph,attributes=duplicate_inputs()
+    runner=ScriptedResolutions([first_answer,{'resolutions':[resolution('a1','torch'),resolution('a2','tf')]}])
+
+    summary=await resolve_attribute_semantics(document,graph,attributes,runner,tmp_path)
+
+    assert len(runner.requests)==2
+    assert summary['retried_attributes']==2 and summary['recovered_attributes']==2
+    assert summary['resolved']==2

@@ -21,7 +21,9 @@ from kory_parser import parse,ParseOptions
 from kory_parser.version import __version__
 c=json.load(sys.stdin)
 data=Path(c['source']).read_bytes()
-options=ParseOptions(ocr=c.get('ocr',False),images=False)
+supported='recover_numbered_structure' in getattr(ParseOptions,'__dataclass_fields__',{})
+extra={'recover_numbered_structure':c.get('numbered_structure',False)} if supported else {}
+options=ParseOptions(ocr=c.get('ocr',False),images=False,**extra)
 parse(data,options)
 seconds=[]
 for _ in range(c['repetitions']):
@@ -29,12 +31,12 @@ for _ in range(c['repetitions']):
  result=parse(data,options)
  seconds.append(time.perf_counter()-start)
 Path(c['output']).write_text(json.dumps(result.to_dict(),ensure_ascii=False))
-Path(c['measurement']).write_text(json.dumps({'seconds':seconds,'version':__version__,'options':{'ocr':options.ocr,'images':False}}))
+Path(c['measurement']).write_text(json.dumps({'seconds':seconds,'version':__version__,'options':{'ocr':options.ocr,'images':False,'numbered_structure_requested':c.get('numbered_structure',False),'numbered_structure_supported':supported}}))
 """
 
 
 def benchmark(
-    manifest_path, baseline, reference, output, *, repetitions=3, timeout=90, candidate=PROJECT, ocr=False
+    manifest_path, baseline, reference, output, *, repetitions=3, timeout=90, candidate=PROJECT, ocr=False, numbered_structure=False
 ):
     if repetitions < 1 or timeout <= 0:
         raise ValueError("Positive repetitions and timeout required")
@@ -71,6 +73,7 @@ def benchmark(
                 "format": item["format"],
                 "repetitions": repetitions,
                 "ocr": ocr,
+                "numbered_structure": numbered_structure,
                 "reference_package": str(reference.resolve()),
                 "reference_version": reference_version,
             }
@@ -142,6 +145,7 @@ def benchmark(
         "warmups": 1,
         "ocr": ocr,
         "images": False,
+        "numbered_structure": numbered_structure,
         "results": rows,
         "interpretation": "Warm in-memory parsing; worker startup and file reading excluded. Quality requires independent source checks.",
     }
@@ -159,6 +163,7 @@ def main():
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=90)
     parser.add_argument("--ocr", action="store_true", help="Enable OCR explicitly for both engines")
+    parser.add_argument("--numbered-structure", action="store_true")
     args = parser.parse_args()
     benchmark(
         args.manifest.resolve(),
@@ -169,6 +174,7 @@ def main():
         timeout=args.timeout,
         candidate=args.candidate.resolve(),
         ocr=args.ocr,
+        numbered_structure=args.numbered_structure,
     )
     return 0
 

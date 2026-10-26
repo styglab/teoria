@@ -162,7 +162,7 @@ Kubernetes Job이다. Docker socket·Docker daemon·Airflow를 요구하지 않�
 
 ## 정해진 자원 안에서 파이프라인 병렬 실행
 
-수집 Flow·Task와 `backend/prefect.yaml`은 Compose와 K3s가 함께 사용한다.
+수집 Flow·Task와 `deploy/prefect/specification_processing.yaml`은 Compose와 K3s가 함께 사용한다.
 Compose는 기존 `teoria-ingestion` Process Worker 내부에서 실행한다. K3s는 등록 시
 work pool만 `teoria-ingestion-k3s`로 바꾸고, Kubernetes Worker가 실행마다 별도 Job을 만든다.
 Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.
@@ -226,3 +226,24 @@ Control Plane HA는 CPU·GPU agent 추가와 별개의 datastore·server 구성 
 [GHCR 인증](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
 기존 [scaffold 안내 주소](experimental_k3s.md)는 문서 링크 호환을 위해 새 안내를 가리킨다.
+
+
+## HTTP 진입점
+
+Traefik Ingress가 Admin·Runtime API, Prefect와 Admin UI Service로 직접 연결한다.
+Teoria 전용 진입점 nginx Deployment·Service는 사용하지 않는다. UI 이미지는
+`frontend/Dockerfile`의 `standalone` target이며 정적 파일만 제공한다.
+
+`application/ingress.yaml`은 다음 두 Ingress와 `api-prefix` Middleware를 정의한다.
+
+- `teoria`: `/`는 UI, `/prefect`는 접두어를 유지해 Prefect UI에 전달한다.
+- `teoria-api`: `/admin-api`, `/runtime-api`, `/prefect/api`는 해당 서비스로 전달하며
+  Middleware가 `/admin-api`, `/runtime-api`, `/prefect`를 제거한다.
+- TLS host와 인증서는 두 Ingress에 동일하게 적용한다. Prefect API의 WebSocket은 Traefik이 전달한다.
+
+K3s의 Traefik CRD provider와 `middlewares.traefik.io` CRD가 필요하다. `deploy.sh`는
+두 Ingress의 host를 함께 치환하며, 공개 HTTPS·인증 API·게시 artifact 확인 후 구형
+`Deployment/nginx`와 `Service/nginx`를 제거한다. Traefik 자체는 클러스터의 공용 진입점으로 유지한다.
+
+CI의 API-only K3s 검증은 Traefik을 실행하지 않으므로 공식 Traefik v3.7.16 CRD를 별도 설치한다.
+이 검증과 실제 EC2 클러스터 배포 성공은 구분한다.

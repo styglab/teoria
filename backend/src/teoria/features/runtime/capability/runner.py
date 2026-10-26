@@ -17,8 +17,12 @@ from teoria.features.runtime.mapping.materializer import OntologyMaterializer
 from teoria.integrations.provider_api.errors import ProviderExecutionError
 from teoria.integrations.provider_api.executor import ProviderExecutor
 from teoria.integrations.provider_api.models import ExecutionResponse
-from teoria.features.runtime.source.request_builder import SourceRequestBuilder
-from teoria.features.runtime.source.response_validator import SourceResponseValidator
+from teoria.features.semantic_modeling.registry.source_request_builder import (
+    SourceRequestBuilder,
+)
+from teoria.features.semantic_modeling.registry.source_response_validator import (
+    SourceResponseValidator,
+)
 from teoria.features.runtime.source.database import (
     DatabaseQueryResult,
     DatabaseSourceExecutionError,

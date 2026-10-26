@@ -7,10 +7,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.metadata_management.intelligence.admin_api import create_intelligence_router
-from teoria.features.metadata_management.intelligence.suggestions.execution import SuggestionApplicationError
+from teoria.features.metadata_management.intelligence.admin_router import (
+    create_intelligence_router,
+)
+from teoria.features.metadata_management.intelligence.suggestions.execution import (
+    SuggestionApplicationError,
+)
 from teoria.settings import Settings
-from teoria.features.metadata_management.intelligence.suggestions.service import SuggestionService
+from teoria.features.metadata_management.intelligence.suggestions.service import (
+    SuggestionService,
+)
 
 IDENTIFIER = UUID("00000000-0000-4000-8000-000000000001")
 HEADERS = {"Authorization": "Bearer synthetic-test-token"}

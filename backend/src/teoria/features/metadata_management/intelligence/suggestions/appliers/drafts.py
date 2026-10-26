@@ -14,17 +14,17 @@ class DraftApplier:
         repository,
         metadata_client,
         binding_repository,
-        ontology_repository,
+        ontology_service,
         effects: ApplicationEffects,
     ):
         self.repository = repository
         self.metadata_client = metadata_client
         self.binding_repository = binding_repository
-        self.ontology_repository = ontology_repository
+        self.ontology_service = ontology_service
         self.effects = effects
 
     async def apply_ontology_change(self, suggestion: dict, *, reviewer: str) -> dict:
-        if self.ontology_repository is None:
+        if self.ontology_service is None:
             raise SuggestionApplicationError("Ontology authoring service is required")
         proposed = suggestion["proposed_value"]
         namespace = proposed.get("namespace")
@@ -46,7 +46,7 @@ class DraftApplier:
         try:
             base_id = proposed.get("based_on_version_id")
             await self.effects.mark_started()
-            draft = await self.ontology_repository.create_draft(
+            draft = await self.ontology_service.create_draft(
                 namespace,
                 version=version,
                 actor=reviewer,
@@ -54,14 +54,14 @@ class DraftApplier:
             )
             draft_id = UUID(str(draft["ontology_version_id"]))
             if operation == "add":
-                change = await self.ontology_repository.add_item(
+                change = await self.ontology_service.add_item(
                     draft_id,
                     kind=kind,
                     payload=proposed.get("item") or {},
                     actor=reviewer,
                 )
             elif operation == "update":
-                change = await self.ontology_repository.update_item(
+                change = await self.ontology_service.update_item(
                     draft_id,
                     kind=kind,
                     concept_id=UUID(str(proposed["concept_id"])),

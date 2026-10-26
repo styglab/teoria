@@ -6,8 +6,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.semantic_modeling.ontology.admin_api import create_ontology_authoring_router
-from teoria.features.semantic_modeling.ontology.authoring import OntologyAuthoringRepository
+from teoria.features.semantic_modeling.ontology.admin_router import (
+    create_ontology_authoring_router,
+)
+from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
 from teoria.settings import Settings
 
 
@@ -23,7 +25,7 @@ from teoria.settings import Settings
     ],
 )
 def test_async_authoring_errors_keep_http_contract(error, status, code):
-    repository = Mock(spec=OntologyAuthoringRepository)
+    repository = Mock(spec=OntologyAuthoringService)
     repository.get_version.side_effect = error
     identifier = uuid4()
     app = FastAPI()
@@ -39,7 +41,7 @@ def test_async_authoring_errors_keep_http_contract(error, status, code):
 
 
 def test_draft_creation_waits_for_repository_and_uses_authenticated_actor():
-    repository = Mock(spec=OntologyAuthoringRepository)
+    repository = Mock(spec=OntologyAuthoringService)
     repository.create_draft.return_value = {"status": "draft", "version": "2.0"}
     app = FastAPI()
     app.include_router(

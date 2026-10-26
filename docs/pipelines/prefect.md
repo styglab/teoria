@@ -34,7 +34,7 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run
 ```
 
 등록 명령의 `--kind ingestion`은 기존 CLI 호환 이름이다. 현재는 규격서 작업만 등록한다.
-등록 설정은 `backend/prefect.yaml`, Metadata는 `backend/prefect.metadata.yaml`이다.
+등록 설정은 `deploy/prefect/specification_processing.yaml`, Metadata는 `deploy/prefect/metadata_management.yaml`이다.
 자동화 등록은 과거 수집 pool을 재개하지 않는다.
 
 Prefect UI의 규격서 Deployment에서 `manifest` 객체를 입력해 실행하거나,

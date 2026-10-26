@@ -36,7 +36,7 @@ postal_address.full_address:
 - `encode`: Runtime 입력을 Source 요청 값으로 변환
 - `role`: 같은 레코드의 동일 Object Type 역할 구분
 
-Codec은 `backend/src/teoria/features/runtime/mapping/transforms/`의 실제 함수이며 Registry에서는 `company.function_name`처럼 짧게 참조한다.
+Codec은 `backend/src/teoria/features/semantic_modeling/registry/codecs/`의 실제 함수이며 Registry에서는 `company.function_name`처럼 짧게 참조한다.
 
 `materializations`는 binding 결과로 객체 identity와 Link endpoint를 만든다. 내부 ID, 고정값, 수집시각과 링크 생성 규칙은 binding에 넣지 않는다.
 

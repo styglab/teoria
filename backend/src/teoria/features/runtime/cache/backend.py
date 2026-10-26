@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -22,8 +21,19 @@ class RuntimeCache(ABC):
     def __init__(self, *, prefix: str = "teoria:runtime") -> None:
         self.prefix = prefix.rstrip(":")
 
-    def key(self, registry_version: str, capability_id: str, inputs: dict[str, Any]) -> str:
-        normalized = json.dumps(inputs, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    async def aclose(self) -> None:
+        """Release resources owned by this cache, if any."""
+
+    def key(
+        self, registry_version: str, capability_id: str, inputs: dict[str, Any]
+    ) -> str:
+        normalized = json.dumps(
+            inputs,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
         digest = hashlib.sha256(normalized.encode()).hexdigest()
         return f"{self.prefix}:{registry_version}:{capability_id}:{digest}"
 
@@ -31,7 +41,9 @@ class RuntimeCache(ABC):
     async def get(self, key: str) -> CapabilityResult | None: ...
 
     @abstractmethod
-    async def set(self, key: str, value: CapabilityResult, ttl_seconds: int) -> None: ...
+    async def set(
+        self, key: str, value: CapabilityResult, ttl_seconds: int
+    ) -> None: ...
 
     @abstractmethod
     async def acquire_lock(self, key: str, ttl_seconds: int) -> str | None: ...
@@ -55,7 +67,9 @@ class NullRuntimeCache(RuntimeCache):
 
 
 class MemoryRuntimeCache(RuntimeCache):
-    def __init__(self, *, prefix: str = "teoria:runtime", max_entries: int = 2048) -> None:
+    def __init__(
+        self, *, prefix: str = "teoria:runtime", max_entries: int = 2048
+    ) -> None:
         super().__init__(prefix=prefix)
         self.max_entries = max_entries
         self.values: OrderedDict[str, tuple[float, CapabilityResult]] = OrderedDict()
@@ -103,6 +117,9 @@ class RedisRuntimeCache(RuntimeCache):
         super().__init__(prefix=prefix)
         self.client = Redis.from_url(url, decode_responses=True)
 
+    async def aclose(self) -> None:
+        await self.client.aclose()
+
     async def get(self, key: str) -> CapabilityResult | None:
         try:
             payload = await self.client.get(key)
@@ -120,7 +137,9 @@ class RedisRuntimeCache(RuntimeCache):
     async def acquire_lock(self, key: str, ttl_seconds: int) -> str | None:
         token = uuid.uuid4().hex
         try:
-            acquired = await self.client.set(f"{key}:lock", token, nx=True, ex=ttl_seconds)
+            acquired = await self.client.set(
+                f"{key}:lock", token, nx=True, ex=ttl_seconds
+            )
             return token if acquired else None
         except Exception as exc:
             logger.warning("runtime cache lock failed key=%s error=%s", key, exc)

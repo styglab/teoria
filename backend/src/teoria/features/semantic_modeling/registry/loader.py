@@ -84,11 +84,12 @@ class RegistryLoadError(Exception):
 class RegistryLoader:
     def __init__(
         self,
-        root: Path | str = "registries",
+        root: Path | str = "backend/contracts/runtime",
         reference_root: Path | str | None = None,
     ) -> None:
         self.root = Path(root)
-        self.reference_root = Path(reference_root) if reference_root is not None else self.root.parent / "references" / "providers"
+        project_root = self.root.parent.parent if self.root.parent.name == "contracts" else self.root.parent
+        self.reference_root = Path(reference_root) if reference_root is not None else project_root / "references" / "providers"
 
     def load(self) -> RegistryCatalog:
         diagnostics: list[Diagnostic] = []

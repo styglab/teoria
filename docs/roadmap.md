@@ -10,6 +10,8 @@ Python 코드는 `backend/src/teoria/`의 기능별 모듈, 관리 UI는 `fronte
 의존성은 `backend/pyproject.toml`과 `backend/uv.lock`에서 관리하며 Worker별 이미지와 권한은 유지한다.
 폴더 통합은 기존 서비스의 운영 이미지 교체나 물품 Runtime 기능 완성을 의미하지 않는다.
 [구조와 소유권](architecture/repository-structure.md)을 따른다.
+FastAPI 앱·라우터·서비스/저장소와 HTTP client lifespan을 정리하고 기능 간 의존성 검사를 추가했다.
+[검증과 운영 반영](verification/backend_cleanup_2026_10_26.md)을 확인한다.
 
 ## 유지하는 기반
 
@@ -19,11 +21,34 @@ Python 코드는 `backend/src/teoria/`의 기능별 모듈, 관리 UI는 `fronte
 - Platform: Ontology 작성·검토·게시, Stable Concept와 Semantic Binding
 - 실행: Source·Mapping·Capability, Context 주입, immutable Runtime artifact, OPA와 MCP
 - OpenMetadata: 기술·거버넌스 metadata의 authoritative source
-- 물품 Ontology 초기 Draft blueprint: `backend/ontology_blueprints/goods.yaml`
+- 물품 Ontology 초기 Draft blueprint: `backend/authoring/ontology_blueprints/goods.yaml`
 
 현재 활성 Registry에는 기존 업무 Capability가 없다. 물품 실행 기능의 연결을 완료한 상태로 간주하지 않는다.
 
-## 다음 결과
+## 우선 실행 순서
+
+구조 정리와 임시 검토 보고서 확장보다, 대표 물품군 하나의 추출 결과가 실제 조회까지
+이어지는 경로를 우선 완성한다. 아래 순서는 구현 우선순위이며 각 항목의 완료를 뜻하지 않는다.
+
+| 순서 | 작업 | 완료 기준 |
+|---|---|---|
+| 1 | 회귀 테스트 독립화 | 보관 Registry 경로 의존을 없애고 필요한 최소 계약을 테스트 fixture로 유지한다. 은퇴 기능만 검증하는 테스트를 정리하고 전체 검사를 정상화한다. |
+| 2 | 추출·의미 매핑 품질 측정 | 사람이 확인한 원문 사례로 엔티티 누락·관계·속성 귀속·단위·개념 연결을 나눠 측정한다. 시간 초과와 비용은 의미 정확도와 구분한다. |
+| 3 | 대표 물품 Ontology 게시·관찰 데이터 연결 | 컴퓨터 서버를 첫 대상으로, 검토·승인된 개념과 프로파일로 정규화한 관찰을 조회용 Data DB에 적재하고 read-only Source·Mapping을 연결한다. |
+| 4 | 첫 물품 Capability | 조건 검색·두 규격서 요구조건 비교·원문 근거 조회를 구현하고 실제 요청에서 근거와 적용 버전을 반환한다. |
+| 5 | 게시 전 변경 영향 확인 | 개념·프로파일 변경의 영향 문서·매핑·재처리 범위와 이전 버전 대비 결과 차이를 확인한다. |
+
+3·4번은 컴퓨터 서버 한 물품군의 데이터 적재부터 조회까지 하나의 경로로 검증한다.
+Ontology에는 지속 가능한 물품·구성·속성의 의미를 두고, 개별 규격서의 값·연산·조건은
+원문 근거와 버전이 있는 관찰 데이터로 관리한다. 실행 상태·파일 URI 저장만으로 검색 데이터
+적재를 완료했다고 표시하지 않는다. Pipeline은 Platform Runtime을 직접 호출하지 않는다.
+
+첫 검색 질문은 “메모리 64GB 이상을 요구하는 서버 규격서”다. 실제 납품 요구와 최대 지원 용량,
+기보유 사양을 구분하고 모듈당·시스템 전체 범위 및 GB·GiB의 차이를 보존해야 한다.
+응답에는 값·단위·연산·적용 범위·원문 근거·프로파일과 Ontology 버전을 함께 제공한다.
+그다음 두 규격서의 같은 범위·같은 의미에 연결된 요구조건을 비교한다.
+
+## 현재 구현과 남은 결과
 
 ### 1. 물품 Ontology 검토
 
@@ -70,3 +95,6 @@ Compose의 migration·Worker·모델 인증·합성 추론·새 bundle 배포는
 추출 누락·계층·속성 귀속과 물품 비교 결과를 원문 기반 사례로 평가한다.
 AI 검토 결과를 사람 정답이나 독립 정확도 측정으로 사용하지 않는다.
 현재 절차는 [규격서 평가](procurement_specification_processing/index.md)를 따른다.
+
+계약·운영 입력·작성 자료·Prefect 배포 선언의 현재 위치는
+[저장소 구조](architecture/repository-structure.md)를 따른다. Python 기능 모듈과 역할별 실행 프로세스는 유지한다.

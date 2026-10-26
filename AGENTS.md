@@ -13,9 +13,11 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - Ontology·Binding·작성·Registry는 `features/semantic_modeling/`, Runtime·Context는 `features/runtime/`에 둔다.
 - 규격서 처리와 Prefect Flow는 `features/specification_processing/`, 물품 후보·프로파일 승인은 `features/goods_normalization/`에 둔다.
 - 법령 수집·조회는 `features/legal_information/`, 메타데이터 진단·ingestion은 `features/metadata_management/`에 둔다.
-- MCP protocol 진입점은 `entrypoints/mcp.py`, Runtime HTTP client는 `integrations/runtime_http/`에 둔다. MCP는 Runtime API만 호출하며 직접 DB 접근과 embedded mode는 지원하지 않는다.
+- MCP protocol 진입점은 `entrypoints/mcp/`, Runtime HTTP client는 `integrations/runtime_http/`에 둔다. MCP는 Runtime API만 호출하며 직접 DB 접근과 embedded mode는 지원하지 않는다.
 - Pipeline 실행 코드에서 Capability 또는 Mapping Runtime을 직접 호출하지 않는다. 표준관리 Flow의 의미 작성 요청은 인증된 Admin HTTP API를 사용한다.
 - Provider wire 계약·요청·응답·HTTP 실행은 `integrations/provider_api/`, Codex subprocess 추론은 `integrations/codex/`, Prefect 배포·pool·queue 정책은 `integrations/prefect/`가 소유한다.
+- 실행 계약은 `backend/contracts/runtime/`, 수집 계약은 `backend/contracts/ingestion/`, 운영 입력은 `backend/config/`, 작성 입력·이관은 `backend/authoring/`에 둔다.
+- Prefect Flow·Task는 소유 기능에 두고 schedule·pool·배포 선언은 `deploy/prefect/`에 둔다.
 - Python 의존성은 `backend/pyproject.toml`, 잠금은 `backend/uv.lock` 한곳에서 관리한다. API·MCP·각 Worker는 별도 이미지와 역할별 의존성·권한을 유지한다.
 - 별도 설치형 `packages/`는 둘 이상의 독립 프로젝트가 실제 소비할 때만 추가한다. 현재 통합한 내부 코드를 다시 패키지로 분리하거나 `common`, `shared`, `utils` 묶음을 만들지 않는다.
 - 프런트엔드는 `frontend/src/`에 두며 앱 조립은 `app/`, 업무 화면은 `features/`에 둔다.
@@ -93,8 +95,8 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - Ontology Binding은 version별 revision ID가 아니라 Stable Concept ID를 의미 식별자로 사용한다.
 - Published Ontology revision은 직접 수정하지 않는다. 변경은 Published version에서 새 Draft를 생성해 검토·승인·게시한다.
 - Authoring DB 모델을 Runtime contract로 직접 사용하지 않는다. Runtime은 Published version에서 생성된 immutable artifact를 사용한다.
-- Production Runtime이 `backend/registries/`나 authoring DB를 직접 읽는 경로를 추가하지 않는다. `TEORIA_RUNTIME_ARTIFACT_PATH` 또는 `TEORIA_RUNTIME_ARTIFACT_STORE`로 checksum 검증된 versioned artifact만 적재한다.
-- 기존 YAML Ontology Object를 추가·제거하는 새 이관은 `backend/ontology_migrations/pending/<migration>/ontology_v2.yaml` 분류를 함께 작성하고 명시적인 `--manifest`로 `teoria ontology-migration-report`를 실행한다. `applied/` 이력은 수정하지 않는다.
+- Production Runtime이 `backend/contracts/runtime/`나 authoring DB를 직접 읽는 경로를 추가하지 않는다. `TEORIA_RUNTIME_ARTIFACT_PATH` 또는 `TEORIA_RUNTIME_ARTIFACT_STORE`로 checksum 검증된 versioned artifact만 적재한다.
+- 기존 YAML Ontology Object를 추가·제거하는 새 이관은 `backend/authoring/ontology_migrations/pending/<migration>/ontology_v2.yaml` 분류를 함께 작성하고 명시적인 `--manifest`로 `teoria ontology-migration-report`를 실행한다. `applied/` 이력은 수정하지 않는다.
 - 운영 환경에서는 `TEORIA_ADMIN_AUTH_MODE=bearer`와 별도 Admin token을 사용한다. 개발용 disabled mode를 외부에 노출하지 않는다.
 
 Application DB migration을 변경하면 새 순번 migration만 추가하고 이미 적용된 SQL을 변경하지 않는다. 다음을 함께 검증한다.
@@ -108,9 +110,9 @@ docker compose -f deploy/compose/compose.yaml config --quiet
 
 Source Registry를 생성하거나 수정하기 전에 `docs/platform/registry/source_authoring.md`를 끝까지 읽고 그 절차와 체크리스트를 따른다.
 
-- Semantic Runtime이 직접 호출하는 API만 `backend/registries/sources/`에 둔다.
-- Prefect 등 Pipeline Worker만 호출하는 API는 `backend/connectors/`에 두고 `docs/pipelines/connectors.md`를 따른다.
-- 수집·정규화된 DB를 Runtime이 직접 조회하면 `backend/registries/sources/`에 Database Source와 DB-to-Ontology Mapping을 만든다.
+- Semantic Runtime이 직접 호출하는 API만 `backend/contracts/runtime/sources/`에 둔다.
+- Prefect 등 Pipeline Worker만 호출하는 API는 `backend/contracts/ingestion/connectors/`에 두고 `docs/pipelines/connectors.md`를 따른다.
+- 수집·정규화된 DB를 Runtime이 직접 조회하면 `backend/contracts/runtime/sources/`에 Database Source와 DB-to-Ontology Mapping을 만든다.
 
 Provider Reference 문서에서 신규 Source와 verification case를 생성·검증하거나 기존 Source를 원문 대조할 때는 저장소 Skill `$author-source-registry`를 사용한다. 사용법은 `docs/skills/source-registry-author.md`에 있다.
 
@@ -127,7 +129,7 @@ Source 관련 변경 후 다음 명령을 실행한다.
 
 ```bash
 uv run --project backend --locked --all-extras --group orchestration pytest backend/tests
-uv run --project backend --locked --extra api teoria validate backend/registries
+uv run --project backend --locked --extra api teoria validate backend/contracts/runtime
 ```
 
 Connector 관련 변경 후 다음 명령을 실행한다.
@@ -138,7 +140,7 @@ uv run --project backend --locked --extra api \
   teoria-pipelines validate backend
 uv run --locked --project backend --extra api \
   teoria-pipelines validate-integration backend \
-  --platform-registries backend/registries
+  --platform-registries backend/contracts/runtime
 ```
 
 모든 Connector Operation에 대해 `teoria-pipelines verify connector --profile build`를 실행하고 credential이 있으면 Live까지 실행한다. 실제 API 호출에는 안전한 검증 데이터만 사용하고 출력과 보관 파일에 인증정보나 민감한 입력값이 포함되지 않았는지 확인한다.
@@ -160,3 +162,11 @@ MCP 변경 후 다음 명령을 실행한다.
 ```bash
 uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/integrations/runtime_http
 ```
+
+## Backend HTTP and module boundaries
+
+- FastAPI 앱 생성·lifespan은 `backend/src/teoria/entrypoints/`, 객체 조립은 `entrypoints/composition/`, 기능별 HTTP 처리는 소유 기능의 `*_router.py`에 둔다.
+- `features/`와 `integrations/`는 `entrypoints/`를 역으로 import하지 않는다. 기능 간 의존성은 순환하지 않아야 한다.
+- API가 생성한 HTTP client는 lifespan에서 재사용·종료하고 주입받은 client는 호출자의 소유권을 유지한다.
+- Ontology와 프로파일 Service의 승인·게시 정책 및 Repository의 SQL·감사를 분리하되 connection·transaction·잠금 순서를 유지한다.
+- Mapping codec의 외부 ID는 게시 artifact 호환을 보존한다. 기업·과세 codec은 명시적인 `registry/codecs/legacy/` 호환 영역이며 업무 Source·Capability 재활성화 근거가 아니다.

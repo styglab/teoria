@@ -9,7 +9,7 @@ Prefect가 일정·재시도·timeout을 관리하고, 공식 ingestion image �
 
 | 위치 | 역할 |
 |---|---|
-| `backend/prefect.metadata.yaml` | 배포 이름·이미지·network·timeout·스케줄 |
+| `deploy/prefect/metadata_management.yaml` | 배포 이름·이미지·network·timeout·스케줄 |
 | `backend/src/teoria/features/metadata_management/ingestion/openmetadata.py` | Flow와 Job 실행 Task |
 | `deploy/compose/openmetadata/Dockerfile` | 공식 ingestion image에 설정을 넣는 이미지 |
 | `deploy/compose/openmetadata/ingestion/teoria-postgres.yaml.example` | PostgreSQL connector와 REST sink 설정 |

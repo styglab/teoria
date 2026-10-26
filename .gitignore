@@ -279,7 +279,6 @@ archive/procurement_services/platform/references/**
 !backend/references/
 backend/references/**
 !backend/references/providers/
-!backend/references/providers/.gitkeep
 !archive/procurement_services/pipelines/references/
 archive/procurement_services/pipelines/references/**
 !archive/procurement_services/pipelines/references/providers/
@@ -295,7 +294,6 @@ archive/procurement_services/pipelines/references/**
 !backend/references/
 backend/references/**
 !backend/references/providers/
-!backend/references/providers/.gitkeep
 
 !backend/references/providers/moleg/
 !backend/references/providers/moleg/moleg_law_api/

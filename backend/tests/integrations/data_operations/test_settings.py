@@ -3,7 +3,7 @@ from pathlib import Path
 from teoria.integrations.data_operations.settings import bootstrap_pipeline_settings
 
 
-def test_pipeline_retry_defaults_make_one_retry_after_sixty_seconds(
+def test_pipeline_retry_defaults_allow_five_attempts_with_sixty_second_backoff(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.setenv("TEORIA_ENVIRONMENT", "production")
@@ -14,7 +14,6 @@ def test_pipeline_retry_defaults_make_one_retry_after_sixty_seconds(
 
     assert settings.source_max_attempts == 5
     assert settings.source_retry_backoff_seconds == 60
-    assert settings.bid_notice_enrichment_requests_per_second == 1
 
 
 def test_pipeline_settings_use_pipeline_prefix(tmp_path: Path, monkeypatch) -> None:

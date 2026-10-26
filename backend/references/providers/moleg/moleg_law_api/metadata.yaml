@@ -10,4 +10,4 @@ files:
   format: html
 - path: effective_law_body.html
   format: html
-registry: connectors/moleg_law_api.yaml
+registry: contracts/ingestion/connectors/moleg_law_api.yaml

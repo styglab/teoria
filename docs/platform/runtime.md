@@ -29,7 +29,7 @@ Source timeout, 재시도, 최대 페이지와 Capability deadline을 적용한�
 
 ## Registry release와 Runtime bundle
 
-`backend/registries/`는 사람이 작성하는 계약 원본이다. Registry 발행은 그 내용을
+`backend/contracts/runtime/`는 사람이 작성하는 계약 원본이다. Registry 발행은 그 내용을
 검증해 version별 release로 고정한다. Runtime bundle 구성은 이 release와 Application
 DB의 Published Ontology, Approved Binding snapshot, CapabilityVersion을 함께 고정한다.
 운영 Runtime은 checksum 검증을 통과한 bundle만 읽는다.
@@ -38,8 +38,8 @@ DB의 Published Ontology, Approved Binding snapshot, CapabilityVersion을 함께
 아래 version은 예시이며 새 배포마다 고유한 version을 사용한다.
 
 ```bash
-uv run --locked --project backend --extra api teoria validate backend/registries
-uv run --locked --project backend --extra api teoria publish backend/registries \
+uv run --locked --project backend --extra api teoria validate backend/contracts/runtime
+uv run --locked --project backend --extra api teoria publish backend/contracts/runtime \
   --version 2026.10.16.1 --output dist/registry
 uv run --locked --project backend --extra api teoria compile-runtime-bundle \
   dist/registry/2026.10.16.1 --output dist/runtime \
@@ -82,7 +82,7 @@ bundle 선택은 `TEORIA_RUNTIME_ARTIFACT_PATH`로 version 디렉터리를 직�
 
 ## 구현과 검증 위치
 
-HTTP는 `backend/src/teoria/features/runtime/api.py`, 실행 조립은 `runtime/composition.py`,
+HTTP는 `backend/src/teoria/entrypoints/runtime_api.py`, 실행 조립은 `runtime/composition.py`,
 Runner는 `runtime/capability/runner.py`, Source 실행은 `runtime/source/`, 값 변환은
 `runtime/mapping/transforms/`가 소유한다. Domain handler는 공통 Runner에 등록한다.
 

@@ -20,7 +20,7 @@ Ingestion Connector와 verification cases를 만들고 검증해줘.
 ```text
 $author-source-registry
 backend/references/providers/pps/pps_contract_api 원문을 기준으로
-backend/connectors/pps_contract_api.yaml의 모든 Operation과 필드를 감사하고,
+backend/contracts/ingestion/connectors/pps_contract_api.yaml의 모든 Operation과 필드를 감사하고,
 누락이나 오류를 수정한 뒤 실제 API Live 검증까지 실행하고 전체 결과를 보고해줘.
 ```
 
@@ -46,16 +46,16 @@ Skill을 사용한 Source 작성·검증 요청은 기본적으로 실제 API �
 기본 산출물은 다음과 같다.
 
 ```text
-backend/registries/sources/{source_id}.yaml
-backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+backend/contracts/runtime/sources/{source_id}.yaml
+backend/verification_cases/runtime/{source_id}/{operation_id}.yaml
 backend/references/providers/{provider}/{source}/metadata.yaml
 ```
 
 Ingestion 전용 API라면 다음 위치를 사용한다.
 
 ```text
-backend/connectors/{connector_id}.yaml
-backend/verification_cases/{connector_id}/{operation_id}.yaml
+backend/contracts/ingestion/connectors/{connector_id}.yaml
+backend/verification_cases/ingestion/{connector_id}/{operation_id}.yaml
 backend/references/providers/{provider}/{connector}/metadata.yaml
 ```
 

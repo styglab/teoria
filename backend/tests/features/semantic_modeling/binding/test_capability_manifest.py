@@ -19,7 +19,7 @@ def test_capability_binding_manifest_references_real_contract_fields() -> None:
     catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     manifest = CapabilityBindingManifest.load(
         ROOT
-        / "ontology_migrations"
+        / "authoring" / "ontology_migrations"
         / "applied"
         / "2026_10_initial_unification"
         / "capability_bindings_v1.yaml"
@@ -39,7 +39,7 @@ def test_unified_capability_bindings_target_the_teoria_namespace() -> None:
     catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
     manifest = CapabilityBindingManifest.load(
         ROOT
-        / "ontology_migrations"
+        / "authoring" / "ontology_migrations"
         / "applied"
         / "2026_10_initial_unification"
         / "teoria_capability_bindings_v1.yaml"

@@ -58,13 +58,14 @@ specification_processing/
     document_evidence.py         문서 구조·원문 위치 변환
   extraction/
     entity_relation_extraction.py
+    document_context.py          절·표·상위 문맥 선택, 구성품 관계는 생성하지 않음
     requirement_extraction.py    요구조건 추출 조립
     attribute_chunking.py
     attribute_extraction.py
     attribute_resolution.py      대상·역할·범위 해석
     attribute_validation.py      원문·누락·중복 검사
     value_normalization.py       기본 값·단위 표현 정리
-  standardization/
+  normalization/
     candidate_collection.py
     candidate_selection.py
     standard_versioning.py
@@ -76,7 +77,7 @@ specification_processing/
 ```
 
 Parsing은 문서 구조를 읽고, IE(`extraction/`)는 엔티티·관계·속성·요구조건을 추출한다.
-`standardization/`은 공통 의미 연결과 draft 표준 버전을 소유한다.
+`normalization/`은 공통 의미 연결과 draft 표준 버전을 소유한다.
 테스트는 `backend/tests/features/specification_processing/`에서
 같은 책임별 구조를 따른다. 단계 번호는 파일명 대신 Task 이름과 Flow 실행 순서에 표시한다.
 
@@ -98,6 +99,36 @@ CPU·Memory는 요구조건의 대상이 될 수 있으며 별도 납품 품목 
 04 단계의 최종 귀속 후 대상·속성·값·조건·역할·범위와 원문 근거가 모두 같은 관찰만 합친다.
 원문 위치나 조건이 다르면 유지하며, 합친 관찰의 원래 ID와 추출 대상은 `merged_observations`에 보존한다.
 추가 산출물 파일은 만들지 않는다.
+
+04 단계의 응답은 속성별로 검증한다. 정상 판단은 보존하고, 누락·중복 ID·잘못된 대상·근거·스키마가
+있는 속성만 한 차례 재판정한다. 재판정에도 실패한 속성만 미분류로 남긴다. 원문상 불명확하여
+유효하게 `unknown`을 반환한 판단은 재시도하지 않는다. 기존 `semantic_resolution` 요약의
+`retried_attributes`는 재판정 요청 수, `recovered_attributes`는 재판정에서 유효한 응답을 받은 수다.
+후자는 `unknown`도 포함할 수 있으므로 의미 귀속 성공률로 해석하지 않는다.
+
+03 단계의 원문 조각과 누락 재추출은 절·표의 `context_group`을 보존하며, 작은 구간들은 기존
+글자 수 범위 안에서 한 모델 호출로 묶는다. 번호가 있는 절·하위 절은 원문 표현으로 구분한다.
+문단 번호는 문맥 선택용이며 제품·BOM 관계의
+근거로 자동 승격하지 않는다. 표는 `source_table_id`가 없더라도 파서의 셀→표 부모 연결을 사용하고,
+중첩 문단·병합 셀을 따라 같은 행의 항목명과 첫 행의 열 머리글을 보존한다.
+
+03 단계는 `context_nodes`에 선택한 원문 노드를 한 번씩 보내고, `node_context`에는 조각별
+참조 ID만 둔다. 보조 문맥은 가까운 문장·절 제목·같은 표 행과 머리글에서 최대 8개 노드,
+노드당 원문 앞부분 1,000자로 제한한다. 이는 보조 문맥의 상한이며 추출 대상 원문 조각은
+자르거나 버리지 않는다. 공통 머리글·상위 문장을 조각마다 반복 전송하지 않는다.
+
+04 단계는 절·표별로 속성을 모아 정렬한 후 최대 45개씩 호출한다. 작은 절이나 표의 행마다
+별도 호출하지 않으며, 한 호출에 여러 구간이 있어도 속성별 `context_group`을 유지한다.
+해당 절·표 행, 상위 절의 공통 문장,
+엔티티의 상위 관계와 원문 명칭, IE가 대상·상위 대상에 명시적으로 연결한 공통 조건을 전달한다.
+전체 엔티티 ID·관계 골격은 유지하여 최초 귀속이 틀려도 다른 대상으로 수정할 수 있다.
+재판정도 실패한 속성에 필요한 문맥을 다시 선택하며, 응답 근거는 실제 전달한 노드에서만 허용한다.
+절·표·부모 경계가 없는 원문은 전체 문서 문맥을 유지한다. 02 단계의 엔티티·관계 추출은 여전히
+전체 문서를 사용하여 문서 전반의 연결을 찾는다.
+
+`semantic_resolution`의 `batches`는 최초 속성 묶음 수, `input_nodes`·`input_characters`는 재판정을
+포함해 전달한 원문 노드 수·글자 수의 합이다. 프롬프트·엔티티 골격·출력 스키마의 크기나 실제
+토큰 비용·지연시간을 나타내지 않는다. 원문 전달 보존과 문맥 축소 검사는 LLM 추출 정확도 평가와 구분한다.
 
 ## 저장 위치와 최소 산출물
 

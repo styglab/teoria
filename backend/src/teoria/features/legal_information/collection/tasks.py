@@ -27,7 +27,7 @@ def load_targets(
     from teoria.integrations.data_operations.loader import UniqueKeyLoader
 
     document = yaml.load(
-        (Path(pipeline_root) / "config/law_targets.yaml").read_text(),
+        (Path(pipeline_root) / "config/legal_information/collection_targets.yaml").read_text(),
         Loader=UniqueKeyLoader,
     )
     if (

@@ -70,9 +70,8 @@ async def test_job_resources_and_secrets_survive_prefect_render(monkeypatch):
 @pytest.mark.parametrize("kind", ["ingestion", "legal-information", "metadata"])
 def test_registration_preserves_shared_flow_contract(monkeypatch, backend, kind):
     source = ROOT / "backend"
-    filename = ("prefect.yaml" if kind == "ingestion" else
-                "prefect.legal_information.yaml" if kind == "legal-information" else
-                "prefect.metadata.yaml")
+    filename = {"ingestion": "specification_processing.yaml", "legal-information": "legal_information.yaml", "metadata": "metadata_management.yaml"}[kind]
+    source = ROOT / "deploy" / "prefect"
     original = yaml.safe_load((source / filename).read_text())
     monkeypatch.setenv(
         "TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE", "ghcr.io/example/ingestion:test"
@@ -92,7 +91,7 @@ def test_registration_preserves_shared_flow_contract(monkeypatch, backend, kind)
         patch.object(deployment.subprocess, "run", side_effect=capture),
         patch("prefect.client.orchestration.get_client"),
     ):
-        deployment.register_deployments(source, backend=backend, kind=kind)
+        deployment.register_deployments(ROOT / "backend", backend=backend, kind=kind)
     for before, after in zip(
         original["deployments"], registered[0]["deployments"], strict=True
     ):

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from teoria.features.metadata_management.intelligence.suggestions.appliers.drafts import DraftApplier
-from teoria.features.metadata_management.intelligence.suggestions.appliers.openmetadata import OpenMetadataApplier
+from teoria.features.metadata_management.intelligence.suggestions.appliers.drafts import (
+    DraftApplier,
+)
+from teoria.features.metadata_management.intelligence.suggestions.appliers.openmetadata import (
+    OpenMetadataApplier,
+)
 from teoria.features.metadata_management.intelligence.suggestions.execution import (
     ApplicationEffects,
     ApplicationSession,
@@ -19,7 +23,7 @@ class SuggestionApplicationService:
         repository,
         metadata_client,
         binding_repository=None,
-        ontology_repository=None,
+        ontology_service=None,
     ):
         self.repository = repository
         self.metadata_client = metadata_client
@@ -29,7 +33,7 @@ class SuggestionApplicationService:
             repository,
             metadata_client,
             binding_repository,
-            ontology_repository,
+            ontology_service,
             self.effects,
         )
 

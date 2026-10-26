@@ -15,11 +15,6 @@ class PipelineSettings(BaseSettings):
     source_timeout_seconds: float = Field(default=30.0, gt=0)
     source_max_attempts: int = Field(default=5, ge=1, le=10)
     source_retry_backoff_seconds: float = Field(default=60.0, ge=0)
-    bid_notice_enrichment_requests_per_second: float = Field(default=1.0, gt=0, le=10)
-    bid_opening_concurrency: int = Field(default=3, ge=1, le=20)
-    bid_opening_requests_per_second: float = Field(default=1.0, gt=0, le=10)
-    bid_opening_request_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
-    contract_requests_per_second: float = Field(default=0.5, gt=0, le=10)
     data_database_url: str | None = None
 
 
@@ -27,7 +22,11 @@ def bootstrap_pipeline_settings(*, cwd: Path | None = None) -> PipelineSettings:
     working_directory = (cwd or Path.cwd()).resolve()
     configured_env_file = os.environ.get("TEORIA_ENV_FILE")
     environment = os.environ.get("TEORIA_ENVIRONMENT", "development")
-    env_file = Path(configured_env_file).expanduser() if configured_env_file else working_directory / ".env"
+    env_file = (
+        Path(configured_env_file).expanduser()
+        if configured_env_file
+        else working_directory / ".env"
+    )
     if configured_env_file or environment != "production":
         load_dotenv(dotenv_path=env_file, override=False)
     return PipelineSettings()

@@ -1,59 +1,16 @@
-apiVersion: apps/v1
-kind: Deployment
+# API backends listen at /; their public prefixes are carried by FastAPI root_path.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
 metadata:
-  name: nginx
+  name: api-prefix
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: nginx
-  template:
-    metadata:
-      labels:
-        app: nginx
-    spec:
-      containers:
-      - name: nginx
-        image: teoria/nginx:release
-        resources:
-          requests:
-            cpu: 100m
-            memory: 256Mi
-          limits:
-            memory: 1Gi
-            cpu: '1'
-        env: []
-        ports:
-        - containerPort: 80
-        readinessProbe:
-          httpGet: &id001
-            path: /health
-            port: 80
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 30
-        startupProbe:
-          httpGet: *id001
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 90
-      imagePullSecrets:
-      - name: teoria-registry
-      automountServiceAccountToken: false
-  strategy:
-    type: Recreate
+  stripPrefix:
+    prefixes:
+    - /admin-api
+    - /runtime-api
+    - /prefect
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: nginx
-spec:
-  selector:
-    app: nginx
-  ports:
-  - port: 80
-    targetPort: 80
----
+# UI assets and the Prefect UI retain their public paths.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -71,10 +28,58 @@ spec:
   - host: teoria.invalid
     http:
       paths:
+      - path: /prefect
+        pathType: Prefix
+        backend:
+          service:
+            name: prefect-server
+            port:
+              number: 4200
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: nginx
+            name: admin-ui
             port:
               number: 80
+---
+# The longer /prefect/api route wins over the Prefect UI route above.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: teoria-api
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: 'true'
+    traefik.ingress.kubernetes.io/router.middlewares: teoria-api-prefix@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - teoria.invalid
+    secretName: teoria-tls
+  rules:
+  - host: teoria.invalid
+    http:
+      paths:
+      - path: /admin-api
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-api
+            port:
+              number: 8001
+      - path: /runtime-api
+        pathType: Prefix
+        backend:
+          service:
+            name: runtime-api
+            port:
+              number: 8000
+      - path: /prefect/api
+        pathType: Prefix
+        backend:
+          service:
+            name: prefect-server
+            port:
+              number: 4200

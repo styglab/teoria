@@ -7,7 +7,7 @@ from uuid import UUID
 import yaml
 from pydantic import BaseModel, Field
 
-from teoria.features.semantic_modeling.ontology.authoring import OntologyAuthoringRepository
+from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
 
 
 class IdentityProperty(BaseModel):
@@ -49,7 +49,7 @@ class BusinessConceptPromotion(BaseModel):
 
 
 async def apply_business_concept_promotion(
-    repository: OntologyAuthoringRepository,
+    repository: OntologyAuthoringService,
     manifest: BusinessConceptPromotion,
     *,
     actor: str,

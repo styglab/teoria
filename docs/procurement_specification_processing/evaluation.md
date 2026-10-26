@@ -101,6 +101,19 @@ uv run --locked --project backend teoria-pipelines specification evaluate finish
 
 ### 점수와 채택의 한계
 
+분류값이 확인되지 않은 `.artifacts/sample`의 네 문서는 별도의 원문 기반 평가기 판정 테스트에
+사용한다. 작은 고정 원문·위치·해시는 `backend/tests/features/specification_processing/evaluation/fixtures/sample_source_cases.json`,
+실행 코드는 같은 평가 디렉터리의 `test_sample_source_cases.py`에 있다. 기존 `score_extraction()`을
+호출하여 통제된 정상 결과와 대상·값·단위·연산·역할·범위·근거·관계 방향·누락·중복 오류를 검사한다.
+분류나 공고 번호를 만들어 넣지 않으며, 정식 평가 CLI의 분류 근거 검증을 우회하지 않는다.
+이는 이미 알려진 네 문서에 대한 평가기 보정용 silver 사례이며 LLM 추출 실행·신규 무작위 검증·
+독립 정답 정확도 측정이 아니다. 원본이 있는 로컬 환경에서는 원본 바이트의 해시도 검사한다.
+
+```bash
+uv run --project backend --locked --all-extras --group orchestration pytest \
+  backend/tests/features/specification_processing/evaluation/test_sample_source_cases.py -q
+```
+
 사례는 `entities`, `relations`, `requirements`로 제공한다. 관계 방향, 요구조건의 대상·값·단위·연산·한정자와
 선택적으로 속성명 후보·역할·범위·상위 대상(`owner`)을 검사한다. 동명 하위 대상이 여러 개면
 `owner`와 관계 사례로 소속을 구분한다. `source_text`는 원문에서 확인한 작은 구절이다.
@@ -123,6 +136,9 @@ uv run --locked --project backend teoria-pipelines specification evaluate finish
 검증했다는 뜻은 아니다. 계약 버전이 다른 점수를 비교해 추출 개선을 주장할 수 없다.
 
 채점은 표준 의미 추론과 독립된 코드이며, 원문 근거·ID·중복·미귀속·실패/부분 문서와 고정 사례 일치를 센다.
+중복은 대상·속성·값·조건·역할·범위뿐 아니라 원문 노드·문자 범위·필드 근거가 같은 관찰을
+반복 추출했는지 검사한다. 문서의 다른 위치에 실제로 반복 기재된 요구조건은 별도 근거 관찰로
+보존하며 중복 오류로 세지 않는다. 재시도의 임시 fragment ID만 다른 경우는 같은 원문 관찰이다.
 라벨이 없는 문서는 원문 적합성 검사만 가능하다. 일부 사례 점수를 전체 요구조건 재현율이나
 완전한 관계 정확도로 표시하지 않는다. 추출 실패 문서도 사례 분모에서 제외하지 않는다.
 검증 점수는 후보 코드가 고정되어 실행된 뒤 `finish`에서 공개한다.

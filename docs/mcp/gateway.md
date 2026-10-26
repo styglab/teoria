@@ -11,9 +11,10 @@ MCP 프로세스가 Registry 원본이나 DB를 직접 읽지 않는다.
 
 ## 코드 위치
 
-구현은 `backend/src/teoria/integrations/runtime_http/`에 있다. `backend/src/teoria/entrypoints/mcp.py`는 실행 진입점, `tools.py`는 Tool 등록,
-`schema.py`는 MCP 입력 schema 처리, `runtime_client.py`는 Runtime HTTP 호출,
-`settings.py`는 환경변수를 소유한다. Capability별 실행 로직은 Platform에 둔다.
+MCP protocol은 `backend/src/teoria/entrypoints/mcp/`에 둔다. `server.py`는 STDIO 실행,
+`tools.py`는 Tool 변환, `schemas.py`는 MCP schema, `settings.py`는 환경 설정을 소유한다.
+Runtime HTTP 호출과 오류는 `backend/src/teoria/integrations/runtime_http/runtime_client.py`가 담당한다.
+MCP protocol 패키지는 Runtime HTTP client를 사용하며 DB·기능 구현을 import하지 않는다.
 
 ## 실행
 
@@ -25,7 +26,7 @@ token을 준비한다. 호스트에서 Compose Runtime에 접속하면 URL은
 MCP는 Runtime HTTP API를 호출하며 DB 권한과 Source 인증정보를 갖지 않는다.
 
 ```bash
-uv run --project backend --locked --extra api teoria validate backend/registries
+uv run --project backend --locked --extra api teoria validate backend/contracts/runtime
 uv run --project backend --locked --extra mcp teoria-mcp
 ```
 
@@ -72,6 +73,10 @@ Capability 실행은 POST이며 향후 side effect Capability가 추가될 수 �
 시도 횟수와 재시도 가능 여부를 함께 분류한다. 호출자는 `retryable=true`만으로 재실행하지
 말고 해당 Capability의 effect와 실행 결과 수신 여부를 확인해야 한다.
 
+MCP는 클라이언트 연결마다 STDIO 프로세스를 실행한다. 상시 `teoria-mcp-1` 기동은 필요하지 않다.
+Codex bridge는 `teoria-mcp-session-<id>` 이름과 client-session label을 사용하며 종료 후 `--rm`으로 제거한다.
+열린 클라이언트 연결 하나당 세션 컨테이너 하나가 실행될 수 있다.
+
 Docker 실행:
 
 ```bash
@@ -81,8 +86,13 @@ docker compose -f deploy/compose/compose.yaml --profile mcp run --rm mcp
 ## 검증
 
 ```bash
-uv run --locked --project backend pytest backend/tests/integrations/runtime_http
+uv run --locked --project backend --all-extras pytest backend/tests/entrypoints/mcp backend/tests/integrations/runtime_http
+uv run --locked --project backend --extra mcp python .agents/skills/test-teoria-mcp/scripts/smoke_test.py --discovery-only
 ```
+
+저장소의 `.codex/config.toml`은 `--project backend` 환경에서
+`.codex/run_teoria_mcp.py`를 실행하고, 이 bridge가 Compose network에서 현재 MCP 이미지를 시작한다.
+현재 업무 Capability가 없으므로 discovery-only 검증의 정상 Tool 수는 0이다.
 
 MCP는 STDIO protocol을 사용하므로 애플리케이션 로그를 표준 출력에 추가하지 않는다.
 환경변수의 기본값은 [환경 설정](../deployment/configuration.md), 실제 실행 계약은

@@ -30,8 +30,7 @@ jobs:
         include:
           - {name: runtime, dockerfile: backend/Dockerfile, target: runtime}
           - {name: authoring, dockerfile: backend/Dockerfile, target: authoring}
-          - {name: admin-ui, dockerfile: frontend/Dockerfile}
-          - {name: nginx, dockerfile: deploy/compose/nginx/Dockerfile}
+          - {name: admin-ui, dockerfile: frontend/Dockerfile, target: standalone}
           - {name: pipelines, dockerfile: backend/Dockerfile, target: kubernetes-worker}
           - {name: metadata-worker, dockerfile: backend/Dockerfile, target: metadata-worker}
           - {name: opa, dockerfile: deploy/compose/opa/Dockerfile, target: runtime}

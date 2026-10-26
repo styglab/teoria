@@ -12,7 +12,7 @@ from teoria.features.semantic_modeling.registry.schema.capability import (
 REGISTRIES = Path("archive/procurement_services/platform/registries")
 ONTOLOGY_BLUEPRINT = (
     (Path(__file__).resolve().parents[5] / 'backend')
-    / "ontology_migrations"
+    / "authoring" / "ontology_migrations"
     / "applied"
     / "2026_10_initial_unification"
     / "teoria_business_ontology_v1.yaml"

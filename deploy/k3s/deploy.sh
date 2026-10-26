@@ -51,7 +51,7 @@ render() {
   python3 - "$root" "$scratch" "$1" "$image_prefix" "$revision" "$public_host" <<'PY'
 import json,os,sys
 root,out,resource,prefix,revision,host=sys.argv[1:]
-images=['runtime','authoring','admin-ui','nginx','pipelines','metadata-worker','opa','opa-builder','ingestion']
+images=['runtime','authoring','admin-ui','pipelines','metadata-worker','opa','opa-builder','ingestion']
 config={'apiVersion':'kustomize.config.k8s.io/v1beta1','kind':'Kustomization',
         'namespace':'teoria-pipelines' if resource=='execution' else 'teoria',
         'resources':[os.path.relpath(root+'/'+resource,out)],
@@ -59,9 +59,10 @@ config={'apiVersion':'kustomize.config.k8s.io/v1beta1','kind':'Kustomization',
 def patch(kind,name,body):
     config.setdefault('patches',[]).append({'target':{'kind':kind,'name':name},'patch':json.dumps(body)})
 if resource=='application':
-    patch('Ingress','teoria',[
-        {'op':'replace','path':'/spec/rules/0/host','value':host},
-        {'op':'replace','path':'/spec/tls/0/hosts/0','value':host}])
+    for ingress in ('teoria', 'teoria-api'):
+        patch('Ingress',ingress,[
+            {'op':'replace','path':'/spec/rules/0/host','value':host},
+            {'op':'replace','path':'/spec/tls/0/hosts/0','value':host}])
     # Kubernetes image transforms do not touch environment variables.
     patch('Deployment','prefect-metadata-worker',{
         'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'prefect-metadata-worker'},
@@ -106,21 +107,32 @@ render openmetadata | kubectl apply -f -
 kubectl -n teoria rollout status deployment/openmetadata-server --timeout=600s
 # Approval and publication are separate from deploying application code.
 run_job runtime-artifact-check
+kubectl get crd middlewares.traefik.io >/dev/null
 render application | kubectl apply -f -
-for service in policy-control-plane opa runtime-api admin-api admin-ui nginx prefect-server prefect-services; do
+for service in policy-control-plane opa runtime-api admin-api admin-ui prefect-server prefect-services; do
   kubectl -n teoria rollout status "deployment/$service" --timeout=600s
 done
 run_job prefect-register
 for service in prefect-worker prefect-metadata-worker; do
   kubectl -n teoria rollout status "deployment/$service" --timeout=600s
 done
-# Verify public routing on EC2 itself; this also exercises nginx's upstream DNS.
-kubectl -n teoria exec deployment/admin-api -- python -c \
-  'import os,json,urllib.request; r=urllib.request.Request("http://nginx/admin-api/v1/admin/auth/session",headers={"Authorization":"Bearer "+os.environ["TEORIA_ADMIN_API_TOKEN"]}); assert urllib.request.urlopen(r,timeout=20).status==200; print("Admin proxy authentication verified")'
-kubectl -n teoria exec deployment/admin-api -- python -c \
-  'import os,json,urllib.request; r=urllib.request.Request("http://runtime-api:8000/v1/version",headers={"Authorization":"Bearer "+os.environ["TEORIA_CONTEXT_RUNTIME_API_TOKEN"]}); d=json.load(urllib.request.urlopen(r,timeout=20)); assert d["runtime_artifact"]["bundle_checksum"]; print("Published Runtime artifact verified:", d["runtime_artifact"]["version"])'
-kubectl -n teoria exec deployment/admin-api -- python -c \
-  'import os,json,urllib.request; r=urllib.request.Request("http://nginx/admin-api/v1/admin/metadata/status",headers={"Authorization":"Bearer "+os.environ["TEORIA_ADMIN_API_TOKEN"]}); assert json.load(urllib.request.urlopen(r,timeout=20))["available"]; print("OpenMetadata connection verified")'
-kubectl -n teoria exec deployment/admin-api -- python -c \
-  'import sys,urllib.request; assert urllib.request.urlopen("https://"+sys.argv[1]+"/health",timeout=20).status==200; print("Public HTTPS ingress verified")' "$public_host"
+# Verify the public ingress before removing the retired edge proxy.
+kubectl -n teoria exec -i deployment/admin-api -- python - "$public_host" <<'PYTHON'
+import json,os,sys,urllib.request
+base="https://"+sys.argv[1]
+headers={"Authorization":"Bearer "+os.environ["TEORIA_ADMIN_API_TOKEN"]}
+for path in ("/", "/health", "/prefect/"):
+    assert urllib.request.urlopen(base+path,timeout=30).status==200, path
+for path in ("/admin-api/v1/admin/auth/session", "/admin-api/v1/admin/metadata/status"):
+    request=urllib.request.Request(base+path,headers=headers)
+    response=urllib.request.urlopen(request,timeout=30)
+    assert response.status==200, path
+    if path.endswith("/metadata/status"):
+        assert json.load(response)["available"]
+request=urllib.request.Request(base+"/runtime-api/v1/version",headers={"Authorization":"Bearer "+os.environ["TEORIA_CONTEXT_RUNTIME_API_TOKEN"]})
+version=json.load(urllib.request.urlopen(request,timeout=30))
+assert version["runtime_artifact"]["bundle_checksum"]
+print("Public UI, health, Prefect, authenticated APIs and Runtime artifact verified")
+PYTHON
+kubectl -n teoria delete deployment/nginx service/nginx --ignore-not-found=true
 printf 'Deployed commit %s to https://%s\n' "$revision" "$public_host"

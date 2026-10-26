@@ -13,22 +13,22 @@ Validate the MCP boundary independently from direct Platform calls. Report separ
 2. Run the MCP unit tests:
 
    ```bash
-   uv run --locked --project backend pytest backend/tests/integrations/runtime_http
+   uv run --locked --project backend --all-extras pytest backend/tests/entrypoints/mcp backend/tests/integrations/runtime_http
    ```
 
 3. Confirm `.codex/config.toml` contains the `teoria` MCP server. Do not print credentials or complete database URLs.
 4. Confirm the Runtime API is reachable and its Data DB dependency is running. MCP receives only Runtime API credentials. Start or modify services only when the user requested it.
-5. Run the bundled protocol smoke test:
+5. Run the bundled protocol smoke test. The current goods-focused Runtime has zero business Capabilities; use discovery-only mode for deployment readiness:
 
    ```bash
-   uv run --locked --project backend python \
-     .agents/skills/test-teoria-mcp/scripts/smoke_test.py
+   uv run --locked --project backend --extra mcp python \
+     .agents/skills/test-teoria-mcp/scripts/smoke_test.py --discovery-only
    ```
 
-   Override the default date range only when the requested scenario requires it:
+   Only when procurement Capabilities are explicitly active and the user requests their verification, omit `--discovery-only` and optionally override the date range:
 
    ```bash
-   uv run --locked --project backend python \
+   uv run --locked --project backend --extra mcp python \
      .agents/skills/test-teoria-mcp/scripts/smoke_test.py \
      --date-from 2026-01-01 --date-to 2026-08-03
    ```
@@ -43,8 +43,8 @@ Validate the MCP boundary independently from direct Platform calls. Report separ
 
 - MCP unit tests pass.
 - MCP `initialize` and `tools/list` succeed.
-- The configured public Capability tools are exposed, including `search_public_procurement_contracts`.
-- `search_public_procurement_contracts` returns a successful MCP result.
-- For company lookup requests, the expected ontology objects and links are present.
+- The Tool list matches configured public Capabilities. A zero-tool result is expected for the current goods-focused Runtime.
+- When procurement tool execution was requested and its Capability is active, `search_public_procurement_contracts` returns a successful MCP result.
+- For active company lookup requests, the expected ontology objects and links are present. Never reactivate retired procurement Capabilities to satisfy this test.
 
 MCP supports remote mode only and calls the Runtime HTTP API. Do not inject Database credentials, Source keys or Registry execution into the gateway.

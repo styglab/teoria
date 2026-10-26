@@ -6,6 +6,7 @@
 법령 수집·조회는 별도 pool·Worker로 복구했다.
 환경변수는 [설정 안내](configuration.md), 규격서 실행은 [Prefect](../pipelines/prefect.md),
 현재 통합 백엔드 전환 결과는 [재배포 검증 기록](../verification/backend_consolidation_deployment_2026_10_25.md)을 따른다.
+계약 경로 변경 후 현재 운영 결과는 [최신 재배포 기록](../verification/backend_contract_structure_deployment_2026_10_26.md)을 따른다.
 EC2 K3s는 [별도 배포](k3s.md)이며 Compose 성공을 K3s 운영 성공으로 기록하지 않는다.
 
 ## Docker Compose
@@ -22,7 +23,7 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --p
 
 | 구성 | 역할 |
 |---|---|
-| nginx·Admin UI/API | 단일 공개 진입점과 의미 모델·메타데이터 관리 |
+| nginx(UI 포함)·Admin/Runtime API | 단일 공개 진입점과 의미 모델·메타데이터 관리 |
 | Runtime API·Redis | checksum 검증된 bundle의 Capability discovery·실행과 캐시 |
 | OPA·Policy Control Plane | 서명 정책과 결정 로그 |
 | Prefect Server·Services·Redis | workflow 실행·예약·재시도 |
@@ -30,6 +31,9 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --p
 | 규격서 Worker | `teoria-specification` pool의 명시 입력 작업 |
 | PostgreSQL 2개 | Data DB와 Application·Prefect·OpenMetadata DB 분리 |
 | OpenMetadata·검색 엔진·Metadata Worker | 카탈로그와 격리 ingestion Job |
+
+MCP는 클라이언트가 연결할 때 `docker run --rm -i` 또는 `docker compose run --rm mcp`로 실행한다.
+일반 서비스 기동에 상시 `mcp` 컨테이너를 포함하지 않는다.
 
 외부 HTTP는 nginx 기본 포트 `8081`로만 받는다. Admin·Runtime·Prefect·OPA는 내부 네트워크를 사용한다.
 Admin·Runtime·OPA는 별도 token, Prefect는 계정을 사용한다. 토큰 없는 접근과 실제 인증 요청을 모두 검증한다.
@@ -63,7 +67,7 @@ manifest에는 컨테이너 기준 URI를 입력한다. S3를 사용할 때는 [
 Metadata Worker를 지정할 때는 의존 서비스의 `metadata` profile도 활성화한다.
 
 ```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration build runtime-api admin-api admin-ui prefect-worker prefect-metadata-worker
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration build runtime-api admin-api nginx prefect-worker prefect-metadata-worker
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run --rm --no-deps postgres-migrate
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run --rm --no-deps prefect-deploy
 ```
@@ -98,7 +102,7 @@ artifact volume은 운영 API에서 읽기 전용이다. 발행 작업만 별도
 이전 version과 `active.json`의 version·checksum을 보존한다.
 
 ```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration --profile intelligence up -d --no-deps runtime-api admin-api admin-ui prefect-worker prefect-metadata-worker metadata-assessment-worker
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration --profile intelligence up -d --no-deps runtime-api admin-api nginx prefect-worker prefect-metadata-worker metadata-assessment-worker
 ```
 
 pool을 일시정지하고 기존 작업 종료를 확인한 뒤 Worker를 교체한다.
@@ -127,3 +131,36 @@ Data DB가 외부 URL이면 실제 설정된 DB를 백업한다.
 `teoria_app`, `prefect`, `openmetadata_db`는 Control/Application PostgreSQL에서 백업한다.
 완료 파일과 checksum을 확인하고 운영과 분리한 PostgreSQL에 실제 복원해 검증한다.
 WAL·Runtime artifact·모델 인증·파일/S3 산출물은 DB dump와 별도다.
+
+
+## 화면과 진입점
+
+Compose는 `frontend/Dockerfile`의 `gateway` target으로 React 정적 파일과 API·Prefect
+reverse proxy를 하나의 `nginx` 서비스에 포함한다. 별도 `admin-ui` 서비스는 없다.
+프런트엔드를 바꾸면 `docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml build nginx`로
+빌드하고 `up -d --no-deps nginx`로 반영한다. 이전 배포에서 남은 `teoria-admin-ui-1`은
+새 nginx의 화면·API 확인이 끝난 뒤 개별 제거한다. 전체 프로젝트의 orphan 일괄 제거는 하지 않는다.
+
+
+## CPU·메모리 예산
+
+`compose.yaml`의 모든 서비스에 `cpus`와 `mem_limit`을 명시한다. 상시 서비스뿐 아니라
+migration·검증 도구·일회성 Job도 포함한다. 메모리 상한은 그만큼의 RAM을 미리 점유하는 설정이 아니다.
+
+현재 부하를 기준으로 API·제어 서비스에는 128–512MiB, Prefect 서버와 background 서비스에는
+각 1GiB를 설정했다. Data DB 4GiB·Control DB 2GiB·OpenMetadata 2GiB·검색 엔진 6GiB이며,
+규격서 Worker는 큰 문서의 최대 사용량 검증 전까지 기존 4 CPU·8GiB를 유지한다.
+구체적인 현재 값은 Compose 파일이 기준이다.
+
+Redis의 내부 데이터 한도는 컨테이너 상한보다 낮게 둔다. Prefect Redis는 `noeviction`으로
+작업·이벤트 키를 임의로 삭제하지 않고, Runtime 캐시는 `allkeys-lru`를 사용한다.
+DB `shm_size`, JVM heap, Redis `maxmemory`는 컨테이너 전체 메모리 제한과 별도다.
+
+Prefect metadata Worker가 생성하는 Docker ingestion Job도 기본 1 CPU·2GiB로 제한한다.
+`TEORIA_OPENMETADATA_INGESTION_CPUS`·`TEORIA_OPENMETADATA_INGESTION_MEMORY`로 조정하며,
+동일 값이 수동 `openmetadata-ingestion-job` 서비스에도 적용된다. K3s ingestion Job은
+기존 별도 requests·limits를 유지한다. Codex MCP 세션은 기본 0.5 CPU·256MiB로 실행한다.
+
+운영 적용은 실행 중 작업을 확인하고 pool을 잠시 멈춘 상태에서 수행한다. DB의 기존 파일 캐시로
+인해 live 한도 축소가 거부되면 정상 종료·같은 볼륨으로 재기동한 후 실제 적용값을 확인한다.
+측정과 실제 작업 검증 없이 한도를 유휴 사용량까지 낮추지 않는다.

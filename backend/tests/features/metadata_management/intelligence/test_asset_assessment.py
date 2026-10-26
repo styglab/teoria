@@ -15,8 +15,12 @@ from teoria.features.metadata_management.intelligence.asset_assessment.models im
     AssessmentRequest,
     LawQueries,
 )
-from teoria.features.metadata_management.intelligence.asset_assessment.service import AssetAssessmentService
-from teoria.features.metadata_management.intelligence.asset_assessment.law_evidence import law_search_queries
+from teoria.features.metadata_management.intelligence.asset_assessment.service import (
+    AssetAssessmentService,
+)
+from teoria.features.metadata_management.intelligence.asset_assessment.law_evidence import (
+    law_search_queries,
+)
 
 
 def setup(scopes=None):
@@ -302,3 +306,61 @@ async def test_model_gateway_uses_structured_json_and_configured_token(monkeypat
     )
     assert captured[0].headers["Authorization"] == "Bearer synthetic-secret"
     assert json.loads(captured[0].content)["max_tokens"] == 2048
+
+
+@pytest.mark.parametrize("fail", [False, True])
+async def test_model_context_reuses_connections_and_closes_owned_client(
+    monkeypatch, fail
+):
+    from unittest.mock import Mock
+
+    async def handler(request):
+        if fail:
+            raise httpx.ReadTimeout("synthetic timeout", request=request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"changes":[],"findings":[]}'}}]
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    factory = Mock(return_value=client)
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+    model = AssessmentModelClient("http://model.invalid/chat", "synthetic", None)
+    if fail:
+        with pytest.raises(AssessmentError, match="model_timeout"):
+            async with model:
+                await model.generate(
+                    instruction="test", context={}, output_type=AssessmentOutput
+                )
+    else:
+        async with model:
+            for _ in range(2):
+                await model.generate(
+                    instruction="test", context={}, output_type=AssessmentOutput
+                )
+    factory.assert_called_once_with(timeout=90)
+    assert client.is_closed
+
+
+async def test_model_context_keeps_borrowed_client_open():
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {"message": {"content": '{"changes":[],"findings":[]}'}}
+                    ]
+                },
+            )
+        )
+    ) as client:
+        async with AssessmentModelClient(
+            "http://model.invalid/chat", "synthetic", None, client=client
+        ) as model:
+            await model.generate(
+                instruction="test", context={}, output_type=AssessmentOutput
+            )
+        assert not client.is_closed

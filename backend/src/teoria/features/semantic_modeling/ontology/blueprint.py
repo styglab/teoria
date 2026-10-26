@@ -7,7 +7,7 @@ from uuid import UUID
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-from teoria.features.semantic_modeling.ontology.authoring import OntologyAuthoringRepository
+from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
 
 
 class BlueprintProperty(BaseModel):
@@ -80,7 +80,7 @@ class OntologyBlueprint(BaseModel):
 
 
 async def apply_ontology_blueprint(
-    repository: OntologyAuthoringRepository,
+    repository: OntologyAuthoringService,
     blueprint: OntologyBlueprint,
     *,
     actor: str,

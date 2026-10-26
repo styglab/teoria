@@ -109,7 +109,13 @@ def score_extraction(corpus,documents):
         for attribute in actual['attributes']:
             metrics['ungrounded_attributes']+=not attribute_is_grounded(actual,attribute)
             metrics['unassigned_attributes']+=not attribute['subject_ids'] or attribute.get('semantic_role')=='unknown'
-            signature=json.dumps({k:attribute.get(k) for k in ('subject_ids','property_key','value_raw','unit_raw','operator','operator_raw','qualifiers_raw','semantic_role','semantic_scope')},sort_keys=True,ensure_ascii=False)
+            observation={k:attribute.get(k) for k in ('subject_ids','property_key','value_raw','unit_raw','operator','operator_raw','qualifiers_raw','semantic_role','semantic_scope')}
+            evidence=attribute.get('evidence',{})
+            # Repeated declarations at distinct source positions are intentional observations.
+            # Transient fragment/run IDs do not distinguish a retry of the same source claim.
+            observation['source_evidence']={k:evidence.get(k) for k in (
+                'node_id','char_start','char_end','source_node_ids','field_spans','qualifier_spans')}
+            signature=json.dumps(observation,sort_keys=True,ensure_ascii=False)
             metrics['duplicate_attributes']+=signature in seen;seen.add(signature)
         for i,case in enumerate(expected.entities):
             context_present=any(literal(case.source_text) in literal(text) for text in nodes.values())

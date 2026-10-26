@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.runtime.context.admin_api import create_context_router
+from teoria.features.runtime.context.admin_router import create_context_router
 from teoria.settings import Settings
 from teoria.features.access_control.policy import PolicyDecision, PolicyDeniedError
 
@@ -52,11 +52,13 @@ def test_context_api_separates_plan_and_execute_and_keeps_query_alias() -> None:
 def test_context_api_returns_policy_denial_as_forbidden() -> None:
     class DeniedContextEngine(ContextEngineStub):
         async def plan(self, question, *, as_of, actor, roles):
-            raise PolicyDeniedError(PolicyDecision(
-                allow=False,
-                reason="missing_context_permission",
-                decision_id="deny-1",
-            ))
+            raise PolicyDeniedError(
+                PolicyDecision(
+                    allow=False,
+                    reason="missing_context_permission",
+                    decision_id="deny-1",
+                )
+            )
 
     response = _client(DeniedContextEngine()).post(
         "/v1/admin/context/plan", json={"question": "질문"}

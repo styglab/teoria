@@ -5,7 +5,7 @@ import pytest
 from teoria.entrypoints.cli import main
 from teoria.settings import Settings
 
-REGISTRIES = (Path(__file__).resolve().parents[3] / 'backend') / "registries"
+REGISTRIES = (Path(__file__).resolve().parents[3] / "backend") / "contracts" / "runtime"
 
 
 def test_validate_command_executes_registry_validation_and_reports_counts(capsys):
@@ -46,7 +46,7 @@ async def test_ontology_commands_dispatch_to_authoring_operations(
     operation_mock = AsyncMock(return_value={"status": "draft"})
     with (
         patch.object(ontology, operation, operation_mock),
-        patch.object(ontology, "OntologyAuthoringRepository", return_value=repository),
+        patch.object(ontology, "OntologyAuthoringService", return_value=repository),
         patch.object(
             ontology, manifest_name, SimpleNamespace(load=Mock(return_value=manifest))
         ),

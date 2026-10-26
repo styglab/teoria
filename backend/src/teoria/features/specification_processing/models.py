@@ -82,6 +82,7 @@ class SpecificationRun(Record):
     def input_fingerprint(self):
         return hashlib.sha256(json.dumps(self.model_dump(mode='json'),sort_keys=True,ensure_ascii=False).encode()).hexdigest()
 
+
 class RunResult(Record):
     run_id: str
     status: Literal['completed','partial','failed']

@@ -62,3 +62,30 @@ async def test_non_server_pressure_cell_is_recovered_with_original_subject_and_u
     attribute=json.loads((tmp_path/'output/attribute_graph.json').read_text())['attributes'][0]
     assert attribute['subject_ids']==['pump'] and attribute['property_key']=='operating_pressure'
     assert attribute['value_raw']=='40' and attribute['unit_raw']=='MPa'
+
+
+async def test_shared_context_nodes_are_sent_once_in_a_bounded_model_call(saved_parse,tmp_path):
+    document=json.loads((saved_parse/'document.json').read_text())
+    document['nodes']=[
+        {'node_id':'heading','kind':'paragraph','text':'1. 규격'},
+        {'node_id':'n','kind':'paragraph','text':'CPU 16core 이상','native_ref':'/blocks/0'},
+        {'node_id':'n2','kind':'paragraph','text':'CPU 32core 이상','native_ref':'/blocks/1'},
+    ]
+    (saved_parse/'document.json').write_text(json.dumps(document))
+    class Model:
+        def __init__(self):self.calls=0
+        async def generate(self,prompt,request,out):
+            self.calls+=1
+            ids=[n[0] for n in request['context_nodes']]
+            assert len(ids)==len(set(ids))
+            assert 'heading' in ids
+            assert all(set(refs)<=set(ids) for refs in request['node_context'].values())
+            facts=[]
+            for fragment,node,subjects,text in request['fragments']:
+                assert fragment in request['fragment_groups']
+                if node in {'n','n2'}:
+                    facts.append([fragment,['cpu'],'core_count','CPU','number','gte','이상','16' if node=='n' else '32','core',[]])
+            return {'facts':facts,'unresolved':[]}
+    model=Model()
+    summary=await extract_requirements('doc',saved_parse,tmp_path/'output',model,None)
+    assert model.calls==1 and summary['attributes']==2

@@ -7,6 +7,10 @@ Ontology·Binding·Source·Mapping·Capability·Runtime·Context·OPA와 OpenMet
 이전 구현·계약·전용 테스트는 `archive/procurement_services/`에 보관하며 실행 의존성으로 사용하지 않는다.
 
 통합 구조의 API·MCP·Worker·프런트엔드 이미지를 Compose 운영에 반영했다.
+Compose 서비스와 임시 Job의 [자원 상한](verification/compose_resource_limits_2026_10_26.md)을 운영에 적용했다.
+Compose 화면과 API 진입점은 [통합 nginx](verification/http_gateway_consolidation_2026_10_26.md)가 제공한다.
+계약·작성 입력·Prefect 배포 경로 변경도 [운영 재배포](verification/backend_contract_structure_deployment_2026_10_26.md)했다.
+후속 [FastAPI·책임 구조 정리](verification/backend_cleanup_2026_10_26.md)도 API·MCP·Worker 운영에 반영했다.
 [재배포 검증](verification/backend_consolidation_deployment_2026_10_25.md)에서 현재 전환 결과를 확인한다.
 
 ## 시작
@@ -62,11 +66,11 @@ AI 자산 진단도 기준일에 해당하는 법령 snapshot 근거를 사용�
 개선 평가 CLI는 각 실행 전후 Parser 소스·설치 패키지 지문을 검사하며, 실행 중 변경되면 비교를 중단한다.
 
 물품·구성품·규격 요구조건을 위한 초기 blueprint는
-`backend/ontology_blueprints/goods.yaml`이다. 현재 운영에는 인증된 Admin API로 `goods 0.1.0` Draft를 등록했다.
+`backend/authoring/ontology_blueprints/goods.yaml`이다. 현재 운영에는 인증된 Admin API로 `goods 0.1.0` Draft를 등록했다.
 새 환경에서는 다음 명령으로 Draft만 생성할 수 있다.
 
 ```bash
-uv run --project backend --locked --extra api teoria apply-ontology-blueprint --manifest backend/ontology_blueprints/goods.yaml
+uv run --project backend --locked --extra api teoria apply-ontology-blueprint --manifest backend/authoring/ontology_blueprints/goods.yaml
 ```
 
 Application DB를 구성한 뒤 실행하고, [Ontology 검토·승인·게시](platform/ontology.md)를 따른다.
@@ -93,10 +97,13 @@ Semantic Binding 및 Runtime Mapping 연결은 아직 구현하지 않았다.
 
 ```bash
 uv run --project backend --locked --all-extras --all-groups pytest backend/tests tests/integration
-uv run --project backend --locked --extra api teoria validate backend/registries
+uv run --project backend --locked --extra api teoria validate backend/contracts/runtime
 uv run --project backend --locked teoria-pipelines validate backend
-uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/registries
+uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/contracts/runtime
 ```
+
+계약은 `backend/contracts/`, 작성 입력은 `backend/authoring/`, Prefect 배포 선언은
+`deploy/prefect/`가 기준 위치다. 기존 게시 artifact와 DB 이력은 보존한다.
 
 프로젝트 소유권은 [저장소 구조](architecture/repository-structure.md), 남은 제품 결과는
 [로드맵](roadmap.md)을 따른다. 저장소 구성 검사와 실제 서비스 배포·모델 품질 검증은 구분한다.

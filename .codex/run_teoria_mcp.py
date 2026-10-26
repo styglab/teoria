@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from uuid import uuid4
 
 from dotenv import dotenv_values
 
@@ -36,7 +37,17 @@ def main() -> None:
         "docker",
         "run",
         "--rm",
+        "--name",
+        "teoria-mcp-session-" + uuid4().hex[:12],
+        "--label",
+        "io.teoria.role=mcp-stdio",
+        "--label",
+        "io.teoria.lifecycle=client-session",
         "-i",
+        "--cpus",
+        environment.get("TEORIA_MCP_CONTAINER_CPUS", "0.5"),
+        "--memory",
+        environment.get("TEORIA_MCP_CONTAINER_MEMORY", "256m"),
         "--network",
         "teoria_default",
         "-e",

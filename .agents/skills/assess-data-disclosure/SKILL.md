@@ -13,7 +13,7 @@ Read `AGENTS.md`, `docs/architecture/repository-structure.md` and
 
 1. Read current descriptions, schema, tags and glossary with
    `../enrich-metadata-asset/scripts/fetch_context.py`. Profile and sample access
-   contracts are in `backend/src/teoria/features/metadata_management/catalog/admin_api.py`. Use bounded
+   contracts are in `backend/src/teoria/features/metadata_management/catalog/admin_router.py`. Use bounded
    authorized observations; do not persist raw sample values or send raw personal
    identifiers to an external model. Pattern matches are detection candidates.
 2. Generate search keywords from observed information types. Use the collected

@@ -80,11 +80,37 @@ class OpaPolicyEvaluator:
         decision_path: str = "teoria/authz/decision",
         timeout_seconds: float = 3.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        client: httpx.AsyncClient | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.decision_path = decision_path.strip("/")
         self.timeout_seconds = timeout_seconds
         self.transport = transport
+        self._http_client = client
+        self._owns_http_client = False
+
+    async def __aenter__(self):
+        if self._http_client is None:
+            self._http_client = httpx.AsyncClient(
+                timeout=self.timeout_seconds, transport=self.transport
+            )
+            self._owns_http_client = True
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        if self._owns_http_client:
+            client, self._http_client = self._http_client, None
+            self._owns_http_client = False
+            await client.aclose()
+
+    async def _post(self, payload):
+        url = f"{self.base_url}/v1/data/{self.decision_path}"
+        if self._http_client is not None:
+            return await self._http_client.post(url, json=payload)
+        async with httpx.AsyncClient(
+            timeout=self.timeout_seconds, transport=self.transport
+        ) as client:
+            return await client.post(url, json=payload)
 
     async def decide(
         self,
@@ -103,14 +129,7 @@ class OpaPolicyEvaluator:
             }
         }
         try:
-            async with httpx.AsyncClient(
-                timeout=self.timeout_seconds,
-                transport=self.transport,
-            ) as client:
-                response = await client.post(
-                    f"{self.base_url}/v1/data/{self.decision_path}",
-                    json=payload,
-                )
+            response = await self._post(payload)
             response.raise_for_status()
             body = response.json()
         except (httpx.HTTPError, ValueError) as exc:
@@ -126,7 +145,9 @@ class OpaPolicyEvaluator:
                 decision_id=body.get("decision_id"),
             )
         if not isinstance(result, dict) or not isinstance(result.get("allow"), bool):
-            raise PolicyEvaluationError("OPA decision must be a boolean or an object with allow")
+            raise PolicyEvaluationError(
+                "OPA decision must be a boolean or an object with allow"
+            )
         decision = PolicyDecision.model_validate(result)
         if decision.decision_id is None and body.get("decision_id") is not None:
             decision.decision_id = str(body["decision_id"])

@@ -1,0 +1,79 @@
+import pytest
+
+from teoria.entrypoints.mcp.schemas import capability_output_schema
+from teoria.entrypoints.mcp.tools import CapabilityMCPService
+
+
+CAPABILITIES = [
+    {
+        "id": "find_contracts",
+        "version": "1.2.3",
+        "name": "Find contracts",
+        "description": "Find contracts by date",
+        "returns": ["public_procurement.contract"],
+        "input_schema": {
+            "type": "object",
+            "properties": {"date_from": {"type": "string", "format": "date"}},
+            "required": ["date_from"],
+            "additionalProperties": False,
+        },
+    }
+]
+
+
+class CapturingRuntimeClient:
+    def __init__(self) -> None:
+        self.call = None
+
+    async def execute(self, capability_id, inputs, options):
+        self.call = capability_id, inputs, options
+        return {"status": "success", "capability": capability_id}
+
+
+def test_generates_tools_from_runtime_api_metadata() -> None:
+    service = CapabilityMCPService(CAPABILITIES, CapturingRuntimeClient())
+    tool = service.list_tools()[0]
+
+    assert tool.name == "find_contracts"
+    assert tool.title == "Find contracts (1.2.3)"
+    assert tool.description.startswith("CapabilityVersion: find_contracts@1.2.3.")
+    assert tool.inputSchema["properties"]["date_from"]["format"] == "date"
+    assert "_options" in tool.inputSchema["properties"]
+
+
+def test_output_schema_declares_optional_pagination_metadata() -> None:
+    pagination = capability_output_schema()["properties"]["pagination"]
+
+    assert pagination["properties"]["total_items"]["minimum"] == 0
+    assert pagination["required"] == ["page", "page_size", "total_items", "total_pages"]
+
+
+def test_output_schema_accepts_capability_specific_compute_outcomes() -> None:
+    outcome = capability_output_schema()["properties"]["outcome"]
+
+    assert outcome == {"type": "object"}
+
+
+@pytest.mark.asyncio
+async def test_delegates_execution_to_runtime_api() -> None:
+    client = CapturingRuntimeClient()
+    service = CapabilityMCPService(CAPABILITIES, client)
+
+    result = await service.call_tool(
+        "find_contracts",
+        {"date_from": "2026-01-01", "_options": {"max_objects": 10}},
+    )
+
+    assert client.call == (
+        "find_contracts",
+        {"date_from": "2026-01-01"},
+        {"max_objects": 10},
+    )
+    assert result["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_rejects_unknown_capability_before_runtime_call() -> None:
+    service = CapabilityMCPService(CAPABILITIES, CapturingRuntimeClient())
+    with pytest.raises(ValueError, match="unknown capability"):
+        await service.call_tool("unknown", {})

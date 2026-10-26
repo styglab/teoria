@@ -2,10 +2,18 @@ from uuid import uuid4
 
 import pytest
 
-from teoria.features.metadata_management.intelligence.suggestions.execution import ApplicationClaim
-from teoria.features.metadata_management.intelligence.suggestions.execution import SuggestionApplicationError
-from teoria.features.metadata_management.intelligence.suggestions.evidence import require_current_column
-from teoria.features.metadata_management.intelligence.suggestions.service import SuggestionService
+from teoria.features.metadata_management.intelligence.suggestions.execution import (
+    ApplicationClaim,
+)
+from teoria.features.metadata_management.intelligence.suggestions.execution import (
+    SuggestionApplicationError,
+)
+from teoria.features.metadata_management.intelligence.suggestions.evidence import (
+    require_current_column,
+)
+from teoria.features.metadata_management.intelligence.suggestions.service import (
+    SuggestionService,
+)
 
 
 class _Repository:
@@ -494,7 +502,7 @@ async def test_approved_ontology_change_creates_draft_but_does_not_publish() -> 
     )
     ontology = _OntologyRepository()
     result = await SuggestionService(
-        repository, None, ontology_repository=ontology
+        repository, None, ontology_service=ontology
     ).review_and_apply(uuid4(), decision="approve", reviewer="reviewer", comment=None)
     assert result["status"] == "applied"
     assert repository.target_system == "teoria_ontology"

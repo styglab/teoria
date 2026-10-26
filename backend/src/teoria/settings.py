@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TEORIA_", extra="ignore")
 
     environment: Literal["development", "test", "production"] = "development"
-    registry_path: Path = Path("backend/registries")
+    registry_path: Path = Path("backend/contracts/runtime")
     log_level: str = "INFO"
     source_timeout_seconds: float = Field(default=15.0, gt=0)
     source_max_attempts: int = Field(default=3, ge=1, le=10)

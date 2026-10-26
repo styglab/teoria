@@ -688,7 +688,7 @@ backend/tests/features/specification_processing/
 backend/tests/features/goods_normalization/
 backend/migrations/data/<next>_specification_observations.sql
 backend/migrations/application/<next>_goods_authoring.sql
-backend/registries/domains/<domain>/
+backend/contracts/runtime/domains/<domain>/
 tests/integration/<feature_contract_case>.py
 ```
 

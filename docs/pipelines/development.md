@@ -5,7 +5,7 @@ Python 프로젝트는 하나지만 실행 권한과 데이터 책임은 [저장
 
 ## 코드와 설정
 
-아래 경로는 `backend/` 기준이다.
+아래 경로는 `backend/` 기준이다. Prefect 배포 선언은 저장소 루트의 `deploy/prefect/`에 둔다.
 
 | 위치 | 책임 |
 |---|---|
@@ -16,8 +16,8 @@ Python 프로젝트는 하나지만 실행 권한과 데이터 책임은 [저장
 | `src/teoria/integrations/data_operations/` | Connector 계약·실행·checkpoint·Data DB 기반 |
 | `src/teoria/integrations/provider_api/` | Provider wire 계약과 HTTP 실행 |
 | `migrations/data/` | Data DB schema와 적용 이력 |
-| `connectors/`, `definitions/`, `config/` | 수집 계약·대상·업무 입력 |
-| `prefect.yaml`, `prefect.metadata.yaml`, `prefect.legal_information.yaml` | 기능별 배포 선언 |
+| `contracts/ingestion/`, `config/` | 수집 계약·대상·업무 입력 |
+| `../deploy/prefect/*.yaml` | 기능별 배포 선언 |
 
 규격서는 [파이프라인 계약](../procurement_specification_processing/pipeline.md)과 manifest를 먼저 읽고
 `flows.py`·`tasks.py`에서 순서를 확인한다. 세부 변경 위치는 `parsing/`, `extraction/`,
@@ -46,7 +46,7 @@ Admin HTTP API를 사용한다. 추출 결과와 추출 표준 자동 채택은 
 uv sync --project backend --locked --all-extras --all-groups
 uv run --project backend --locked --all-extras --all-groups pytest backend/tests tests/integration
 uv run --project backend --locked teoria-pipelines validate backend
-uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/registries
+uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/contracts/runtime
 uv run --project backend --locked teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
 docker compose -f deploy/compose/compose.yaml config --quiet
 ```

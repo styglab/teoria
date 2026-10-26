@@ -135,6 +135,8 @@ def _report(directory,state):
                 lines.append(f"- {variant}/{split}: {value['metrics']} / {value.get('elapsed_seconds','?')}초")
         for finding in cycle.get('review_findings',[]):
             lines.append(f"- 확인 근거 {finding['document_id']}: {finding['grader_issue']}")
+        if cycle.get('cycle_outcome_note'):
+            lines.extend(['',cycle['cycle_outcome_note']])
         lines.append('')
     Path(directory,'index.md').write_text('\n'.join(lines)+'\n')
 

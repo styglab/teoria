@@ -1,6 +1,7 @@
 """Source handoff, completeness signals and exact inventory quantity deduplication."""
 import re
 import json
+from teoria.features.specification_processing.extraction.document_context import DocumentContext
 
 # Broad recovery signals, never an allowlist of product/component names. All text is forwarded first.
 SPEC = re.compile(r'\d\s*(?:[A-Za-zµμΩ℃℉°%][A-Za-z0-9µμΩ℃℉°%/·²³^_-]*|개|대|회|년|개월|시간|분|초)|(?:이상|이하|초과|미만|필수|요구|하여야|해야|가능|지원|설치|납품|보증|무상|교육)',re.I)
@@ -9,17 +10,28 @@ def is_spec(text):
     return bool(SPEC.search(text))
 
 
-def fragment_context(document,fragment):
-    nodes=document['nodes'];lookup={n['node_id']:n for n in nodes};node=lookup[fragment['node_id']]
-    context=[]
-    if node.get('source_table_id') is not None:
-        for n in nodes:
-            if n['node_id']==node['node_id'] or n.get('source_table_id')!=node['source_table_id']:continue
-            if n.get('row')==node.get('row') or (n.get('column')==node.get('column') and n.get('row') is not None and node.get('row') is not None and n['row']<node['row']):
-                context.append(n)
-    elif node.get('parent_id') in lookup:
-        context.append(lookup[node['parent_id']])
-    return [[n['node_id'],n.get('row'),n.get('column'),n['text'][:1000]] for n in context[-8:]]
+def fragment_context(document,fragment,*,context=None):
+    context=context or DocumentContext(document)
+    node_id=fragment['node_id']
+    ancestors={n['node_id'] for n in context.ancestors(node_id)}
+    headings=set(context.paths[node_id])
+    cell=context.cells.get(node_id)
+    selected=ancestors|headings
+    if cell is not None:
+        table=context.table_key(cell)
+        selected.update(key for key in context.related_ids(node_id)
+                        if key in context.cells and table is not None and context.table_key(context.cells[key])==table)
+    else:
+        # Initial extraction needs local continuation, not every clause in a whole section.
+        siblings=[key for key in context.sections[context.paths[node_id]]
+                  if context.lookup[key].get('parent_id')==context.lookup[node_id].get('parent_id')]
+        position=siblings.index(node_id)
+        selected.update(siblings[max(0,position-1):position+2])
+    selected.discard(node_id)
+    rows=[n for n in document['nodes'] if n['node_id'] in selected and n['text'].strip()]
+    # Retain the previous extraction context limits; full primary fragments stay unchanged.
+    rows=sorted(rows,key=lambda n:n['node_id'] not in headings)[:8]
+    return [[n['node_id'],n.get('row'),n.get('column'),n['text'][:1000]] for n in rows]
 
 
 def uncovered(chunks,attributes,additional_covered=()):

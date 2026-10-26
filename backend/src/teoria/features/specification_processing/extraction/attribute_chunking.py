@@ -1,4 +1,5 @@
 """Build attribute input fragments while preserving source character offsets."""
+from teoria.features.specification_processing.extraction.document_context import DocumentContext,pack_fragments
 
 def make_chunks(graph,document,target_chars=2200,fragment_chars=1100):
     """Split long cells at line boundaries, preserving original character offsets."""
@@ -24,10 +25,5 @@ def make_chunks(graph,document,target_chars=2200,fragment_chars=1100):
         for index,(a,b) in enumerate(parts):
             if text[a:b].strip():fragments.append({'id':f'{node_id}_f{index:02}','node_id':node_id,'start':a,'end':b,'text':text[a:b],
                                                  'suggested_subject_ids':list(dict.fromkeys(owners.get(node_id,[])))})
-    chunks=[];current=[];size=0
-    for fragment in fragments:
-        if current and size+len(fragment['text'])>target_chars:chunks.append(current);current=[];size=0
-        current.append(fragment);size+=len(fragment['text'])
-    if current:chunks.append(current)
-    return chunks
+    return pack_fragments(fragments,DocumentContext(document),target_chars)
 

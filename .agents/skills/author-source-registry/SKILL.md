@@ -1,6 +1,6 @@
 ---
 name: author-source-registry
-description: Create or revise a Teoria Source Registry and operation verification cases from provider API reference documents, then run static, build, regression, and actual API live validation by default when credentials are available, diagnose failures, and iteratively correct source-contract defects. Use for requests that turn files under backend/references/providers into a final backend/registries/sources YAML, audit an existing Source against its original documentation, or complete the reference-to-registry verification workflow.
+description: Create or revise a Teoria Source Registry and operation verification cases from provider API reference documents, then run static, build, regression, and actual API live validation by default when credentials are available, diagnose failures, and iteratively correct source-contract defects. Use for requests that turn files under backend/references/providers into a final backend/contracts/runtime/sources YAML, audit an existing Source against its original documentation, or complete the reference-to-registry verification workflow.
 ---
 
 # Author Source Registry
@@ -25,8 +25,8 @@ description: Create or revise a Teoria Source Registry and operation verificatio
 
 파일을 만들기 전에 실행 경계를 먼저 확정한다.
 
-- Semantic Runtime이 API를 직접 호출하면 `backend/registries/sources/{source_id}.yaml`을 만든다.
-- Prefect 등 Ingestion Worker만 API를 호출하면 `backend/connectors/{connector_id}.yaml`을 만들고 verification case는 `backend/verification_cases/{connector_id}/`에 둔다.
+- Semantic Runtime이 API를 직접 호출하면 `backend/contracts/runtime/sources/{source_id}.yaml`을 만든다.
+- Prefect 등 Ingestion Worker만 API를 호출하면 `backend/contracts/ingestion/connectors/{connector_id}.yaml`을 만들고 verification case는 `backend/verification_cases/ingestion/{connector_id}/`에 둔다.
 - API 데이터를 정규화한 DB를 Runtime이 조회하는 구조에서는 API Connector를 Source Registry에 중복 등록하지 않는다.
 
 Source는 `backend/references/providers/{provider}/{source}/metadata.yaml`, Connector는 `backend/references/providers/{provider}/{connector}/metadata.yaml`과 `files`에 등록된 모든 문서를 확인한다. ID가 명확하면 `{provider}_{service}` 형태의 짧고 안정적인 `snake_case`를 사용한다.
@@ -60,16 +60,16 @@ Connector 원문이면 입력 경로로 `backend/references/providers/{provider}
 `docs/platform/registry/templates/source.yaml`을 기준으로 다음을 함께 작성한다.
 
 ```text
-backend/registries/sources/{source_id}.yaml
-backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+backend/contracts/runtime/sources/{source_id}.yaml
+backend/verification_cases/runtime/{source_id}/{operation_id}.yaml
 backend/references/providers/{provider}/{source}/metadata.yaml
 ```
 
 Ingestion Connector로 확정된 경우 대응 위치는 다음과 같다.
 
 ```text
-backend/connectors/{connector_id}.yaml
-backend/verification_cases/{connector_id}/{operation_id}.yaml
+backend/contracts/ingestion/connectors/{connector_id}.yaml
+backend/verification_cases/ingestion/{connector_id}/{operation_id}.yaml
 backend/references/providers/{provider}/{connector}/metadata.yaml
 ```
 
@@ -96,7 +96,7 @@ Connector 문서는 최상위 `connector:`를 사용하고 Reference metadata에
 먼저 대상 Source를 정적으로 검증한다.
 
 ```bash
-uv run --locked --project backend --extra api teoria validate backend/registries --source {source_id}
+uv run --locked --project backend --extra api teoria validate backend/contracts/runtime --source {source_id}
 ```
 
 그 다음 모든 Operation에 대해 요청 생성 검증을 실행한다.
@@ -106,7 +106,7 @@ uv run --locked --project backend --extra api teoria verify source \
   --profile build \
   --source {source_id} \
   --operation {operation_id} \
-  --input backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+  --input backend/verification_cases/runtime/{source_id}/{operation_id}.yaml
 ```
 
 응답 형식 실행 기본값을 선언했다면 Build 결과에서 case가 값을 제공하지 않았는데도 해당 파라미터가 주입됐는지 추가로 확인한다.
@@ -115,7 +115,7 @@ uv run --locked --project backend --extra api teoria verify source \
 
 ```bash
 uv run --locked --project backend --all-extras --all-groups pytest backend/tests
-uv run --locked --project backend --extra api teoria validate backend/registries
+uv run --locked --project backend --extra api teoria validate backend/contracts/runtime
 ```
 
 Source 작성 또는 검증 요청은 실제 API 검증까지 포함하는 것으로 처리한다. 필요한 credential이 환경에 존재하면 모든 Operation을 `--profile live`로 실행한다.
@@ -127,7 +127,7 @@ uv run --locked --project backend teoria-pipelines verify connector \
   --profile build \
   --connector {connector_id} \
   --operation {operation_id} \
-  --input backend/verification_cases/{connector_id}/{operation_id}.yaml
+  --input backend/verification_cases/ingestion/{connector_id}/{operation_id}.yaml
 ```
 
 Connector 변경의 회귀 검증은 다음을 실행한다.
@@ -136,7 +136,7 @@ Connector 변경의 회귀 검증은 다음을 실행한다.
 uv run --locked --project backend --all-extras --all-groups pytest backend/tests
 uv run --locked --project backend \
   teoria-pipelines validate backend \
-  --platform-registries backend/registries
+  --platform-registries backend/contracts/runtime
 ```
 
 ```bash
@@ -144,7 +144,7 @@ uv run --locked --project backend --extra api teoria verify source \
   --profile live \
   --source {source_id} \
   --operation {operation_id} \
-  --input backend/registries/sources/verification_cases/{source_id}/{operation_id}.yaml
+  --input backend/verification_cases/runtime/{source_id}/{operation_id}.yaml
 ```
 
 사용자가 명시적으로 Live 호출을 제외한 경우에만 생략한다. 인증정보, 민감한 입력, 원본 전체 응답을 출력하거나 커밋하지 않는다. credential이 없으면 Live 검증만 `BLOCKED`로 표시하며 Build나 전체 검증을 Live 성공으로 표현하지 않는다. 일부 Operation에만 안전한 공개 검증 입력이 있으면 실행 가능한 Operation은 Live로 검증하고 나머지는 각각의 차단 이유를 남긴다.

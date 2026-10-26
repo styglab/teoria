@@ -1,5 +1,19 @@
 # 검증 기록
 
+- [Compose 자원 상한 적용](compose_resource_limits_2026_10_26.md): 전체 서비스·임시 Job CPU/RAM 제한과 운영 실실행 검증
+
+- [HTTP 진입점 통합](http_gateway_consolidation_2026_10_26.md): Compose nginx 통합 운영 반영·K3s Traefik 직접 라우팅 검증
+
+- [운영 컨테이너 정리](container_cleanup_2026_10_26.md): 구형 MCP·검증 DB 5개 제거, MCP 연결별 실행과 자동 정리
+
+- [계약 구조 변경 운영 재배포](backend_contract_structure_deployment_2026_10_26.md): 운영 서비스 8개 교체·실제 법령/metadata 완료·MCP 클라이언트 보완
+
+- [계약·작성 입력·Prefect 배포 구조 정리](backend_contract_structure_2026_10_26.md): 경로 이관·Source/Connector 근거·역할별 이미지·기존 artifact 호환
+
+- [백엔드 리소스 정리](backend_resource_cleanup_2026_10_26.md): 예제·과거 manifest 보관, 불필요 의존성 제거, 복구 자료 보존
+
+- [백엔드 책임·FastAPI 구조 정리](backend_cleanup_2026_10_26.md): 앱·라우터·Service/Repository·lifespan·의존 경계·567개 검증과 운영 반영
+
 - [통합 백엔드 운영 재배포](backend_consolidation_deployment_2026_10_25.md): 새 이미지 9개 서비스 전환·DB migration·법령/metadata 실실행·기존 artifact 보존
 
 - [백엔드 기능 모듈 통합](backend_consolidation_2026_10_25.md): 단일 Python 프로젝트·프런트엔드 이동·격리 DB/S3·역할별 이미지·기존 artifact 호환 검증

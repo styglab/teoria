@@ -20,12 +20,15 @@ def main() -> int:
     parser.add_argument(
         "--contents", action="store_true", help="Include experimental structured contents in JSON"
     )
+    parser.add_argument("--numbered-structure", action=argparse.BooleanOptionalAction, default=True,
+                        help="Recover source-indented HWPX manual numbering as list blocks and levels")
     args = parser.parse_args()
     start = time.perf_counter()
     result = parse(
         args.input,
         ParseOptions(
-            ocr=args.ocr, images=args.images, pdf_backend=args.pdf_backend, extract_contents=args.contents
+            ocr=args.ocr, images=args.images, pdf_backend=args.pdf_backend, extract_contents=args.contents,
+            recover_numbered_structure=args.numbered_structure
         ),
     )
     seconds = time.perf_counter() - start

@@ -7,8 +7,11 @@ from uuid import UUID
 import yaml
 from pydantic import BaseModel, Field
 
-from teoria.features.semantic_modeling.ontology.authoring import OntologyAuthoringRepository
-from teoria.features.semantic_modeling.ontology.blueprint import BlueprintObject, BlueprintRelationship
+from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
+from teoria.features.semantic_modeling.ontology.blueprint import (
+    BlueprintObject,
+    BlueprintRelationship,
+)
 
 
 class OntologyExtensionManifest(BaseModel):
@@ -24,7 +27,7 @@ class OntologyExtensionManifest(BaseModel):
 
 
 async def apply_ontology_extension(
-    repository: OntologyAuthoringRepository,
+    repository: OntologyAuthoringService,
     manifest: OntologyExtensionManifest,
     *,
     actor: str,

@@ -4,6 +4,7 @@ import html
 
 def cell(value):return html.escape(str(value)).replace('|','&#124;').replace('\n','<br>').replace('`','&#96;').replace('[','&#91;').replace(']','&#93;')
 
+
 def render_report(corpus,normalized,standard_version,candidates=None):
     authority=('승인된 프로파일의 Published Ontology 참조를 적용한 문서별 관찰이며 Ontology 게시가 아닙니다.'
                if normalized.get('artifact_kind')=='goods_normalized_observations' else

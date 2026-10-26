@@ -7,7 +7,7 @@ from uuid import UUID
 import yaml
 from pydantic import BaseModel, Field
 
-from teoria.features.semantic_modeling.ontology.authoring import OntologyAuthoringRepository
+from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
 
 
 class RuleSpec(BaseModel):
@@ -34,7 +34,7 @@ class BusinessRuleManifest(BaseModel):
 
 
 async def apply_business_rule_manifest(
-    repository: OntologyAuthoringRepository,
+    repository: OntologyAuthoringService,
     manifest: BusinessRuleManifest,
     *,
     actor: str,

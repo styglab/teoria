@@ -18,10 +18,15 @@ x-prefect-services-environment: &prefect-services-environment
 
 services:
   nginx:
+    cpus: 0.5
+    mem_limit: 128m
     image: teoria-nginx:latest
+    environment:
+      NGINX_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE: "1"
     build:
       context: ../..
-      dockerfile: deploy/compose/nginx/Dockerfile
+      dockerfile: frontend/Dockerfile
+      target: gateway
     restart: unless-stopped
     depends_on:
       prefect-server:
@@ -30,8 +35,6 @@ services:
         condition: service_healthy
       admin-api:
         condition: service_healthy
-      admin-ui:
-        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
       interval: 5s
@@ -41,6 +44,9 @@ services:
       - "${TEORIA_HTTP_PORT:-8081}:80"
 
   postgres:
+    stop_grace_period: 60s
+    cpus: 2
+    mem_limit: 4g
     image: postgres:17
     restart: unless-stopped
     # Parallel PostgreSQL queries allocate dynamic shared memory in /dev/shm.
@@ -60,6 +66,8 @@ services:
       - postgres:/var/lib/postgresql/data
 
   postgres-migrate:
+    cpus: 1
+    mem_limit: 512m
     <<: *pipeline-runner
     command: ["teoria-pipelines", "migrate", "--migrations", "/app/backend/migrations/data"]
     environment:
@@ -70,6 +78,8 @@ services:
         condition: service_completed_successfully
 
   postgres-init:
+    cpus: 0.5
+    mem_limit: 256m
     image: postgres:17
     command:
       - sh
@@ -103,6 +113,8 @@ services:
         condition: service_healthy
 
   postgres-metadata-grants:
+    cpus: 0.5
+    mem_limit: 256m
     image: postgres:17
     command:
       - sh
@@ -127,6 +139,9 @@ services:
         condition: service_completed_successfully
 
   platform-postgres:
+    stop_grace_period: 60s
+    cpus: 2
+    mem_limit: 2g
     image: postgres:17
     restart: unless-stopped
     environment:
@@ -147,6 +162,8 @@ services:
       - platform-postgres:/var/lib/postgresql/data
 
   platform-postgres-init:
+    cpus: 0.5
+    mem_limit: 256m
     image: postgres:17
     restart: "no"
     command:
@@ -199,6 +216,8 @@ services:
         condition: service_healthy
 
   app-postgres-migrate:
+    cpus: 1
+    mem_limit: 512m
     image: teoria-platform-authoring:latest
     build:
       context: ../..
@@ -213,9 +232,11 @@ services:
         condition: service_completed_successfully
 
   prefect-redis:
+    cpus: 0.25
+    mem_limit: 256m
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -225,9 +246,11 @@ services:
       - prefect-redis:/data
 
   runtime-redis:
+    cpus: 0.25
+    mem_limit: 256m
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -237,6 +260,8 @@ services:
       - runtime-redis:/data
 
   opa-bundle-build:
+    cpus: 0.5
+    mem_limit: 256m
     image: teoria-opa-bundle-builder:1.21.1
     build:
       context: ../..
@@ -250,6 +275,8 @@ services:
       - opa-bundles:/bundle
 
   policy-control-plane:
+    cpus: 0.5
+    mem_limit: 256m
     image: teoria-platform-authoring:latest
     build:
       context: ../..
@@ -279,6 +306,8 @@ services:
       - "8002"
 
   opa:
+    cpus: 0.5
+    mem_limit: 256m
     image: teoria-opa:1.21.1
     build:
       context: ../..
@@ -310,6 +339,8 @@ services:
       - "8181"
 
   prefect-server:
+    cpus: 1
+    mem_limit: 1g
     image: prefecthq/prefect:3-python3.12
     restart: unless-stopped
     command: ["prefect", "server", "start", "--host", "0.0.0.0", "--no-services"]
@@ -333,6 +364,8 @@ services:
       - "4200"
 
   prefect-services:
+    cpus: 1
+    mem_limit: 1g
     image: prefecthq/prefect:3-python3.12
     restart: unless-stopped
     command: ["prefect", "server", "services", "start"]
@@ -347,6 +380,8 @@ services:
         condition: service_healthy
 
   prefect-deploy:
+    cpus: 0.5
+    mem_limit: 512m
     <<: *pipeline-runner
     command: ["teoria-pipelines", "register", "--backend", "process", "--kind", "ingestion"]
     environment:
@@ -358,6 +393,8 @@ services:
         condition: service_healthy
 
   prefect-law-deploy:
+    cpus: 0.5
+    mem_limit: 512m
     image: teoria-pipelines-law:latest
     build:
       context: ../..
@@ -380,7 +417,7 @@ services:
     restart: unless-stopped
     command: ["teoria-pipelines", "worker", "--pool", "teoria-legal-information"]
     cpus: 1
-    mem_limit: 2g
+    mem_limit: 1g
     environment:
       TEORIA_ENVIRONMENT: production
       TEORIA_PIPELINE_PATH: /app/backend
@@ -397,6 +434,8 @@ services:
         condition: service_completed_successfully
 
   prefect-metadata-deploy:
+    cpus: 0.5
+    mem_limit: 512m
     profiles: ["metadata-orchestration"]
     image: teoria-pipelines-metadata:latest
     build:
@@ -444,6 +483,8 @@ services:
         condition: service_completed_successfully
 
   prefect-metadata-worker:
+    cpus: 0.5
+    mem_limit: 512m
     profiles: ["metadata-orchestration"]
     image: teoria-pipelines-metadata:latest
     build:
@@ -458,6 +499,8 @@ services:
       TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
       OPENMETADATA_INGESTION_BOT_TOKEN: ${OPENMETADATA_INGESTION_BOT_TOKEN:-}
       TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-2.0.5}
+      TEORIA_OPENMETADATA_INGESTION_CPUS: ${TEORIA_OPENMETADATA_INGESTION_CPUS:-1}
+      TEORIA_OPENMETADATA_INGESTION_MEMORY: ${TEORIA_OPENMETADATA_INGESTION_MEMORY:-2g}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
@@ -467,18 +510,22 @@ services:
         condition: service_healthy
 
   platform-check:
+    cpus: 0.5
+    mem_limit: 512m
     profiles: ["tools"]
     image: teoria-platform-authoring:latest
     build:
       context: ../..
       dockerfile: backend/Dockerfile
       target: authoring
-    command: ["teoria", "validate", "/app/backend/registries"]
+    command: ["teoria", "validate", "/app/backend/contracts/runtime"]
     volumes:
-      - ../../backend/registries:/app/backend/registries:ro
+      - ../../backend/contracts/runtime:/app/backend/contracts/runtime:ro
       - ../../backend/references:/app/backend/references:ro
 
   runtime-api:
+    cpus: 1
+    mem_limit: 512m
     image: teoria-platform-runtime:latest
     build:
       context: ../..
@@ -488,7 +535,7 @@ services:
     command: ["teoria-runtime-api"]
     environment:
       TEORIA_ENVIRONMENT: production
-      TEORIA_REGISTRY_PATH: /app/backend/registries
+      TEORIA_REGISTRY_PATH: /app/backend/contracts/runtime
       TEORIA_REGISTRY_REQUIRE_PUBLISHED: "true"
       TEORIA_RUNTIME_ARTIFACT_STORE: /app/runtime_artifacts
       TEORIA_RUNTIME_API_ROOT_PATH: /runtime-api
@@ -519,6 +566,8 @@ services:
       - "8000"
 
   admin-api:
+    cpus: 1
+    mem_limit: 512m
     image: teoria-platform-authoring:latest
     build:
       context: ../..
@@ -528,7 +577,7 @@ services:
     command: ["teoria-admin-api"]
     environment:
       TEORIA_ENVIRONMENT: production
-      TEORIA_REGISTRY_PATH: /app/backend/registries
+      TEORIA_REGISTRY_PATH: /app/backend/contracts/runtime
       TEORIA_ADMIN_API_ROOT_PATH: /admin-api
       TEORIA_ADMIN_AUTH_MODE: bearer
       TEORIA_ADMIN_METADATA_PUBLIC_READ: ${TEORIA_ADMIN_METADATA_PUBLIC_READ:-false}
@@ -570,6 +619,8 @@ services:
         condition: service_healthy
 
   metadata-assessment-worker:
+    cpus: 0.5
+    mem_limit: 512m
     image: teoria-platform-authoring:latest
     build:
       context: ../..
@@ -596,19 +647,9 @@ services:
       app-postgres-migrate:
         condition: service_completed_successfully
 
-  admin-ui:
-    image: teoria-platform-admin-ui:latest
-    build:
-      context: ../..
-      dockerfile: frontend/Dockerfile
-    restart: unless-stopped
-    depends_on:
-      admin-api:
-        condition: service_healthy
-    expose:
-      - "80"
-
   openmetadata-search:
+    cpus: 2
+    mem_limit: 6g
     image: docker.elastic.co/elasticsearch/elasticsearch:9.3.0
     profiles: ["metadata"]
     restart: unless-stopped
@@ -625,6 +666,8 @@ services:
       - openmetadata-search:/usr/share/elasticsearch/data
 
   openmetadata-migrate:
+    cpus: 1
+    mem_limit: 2g
     image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-2.0.5}
     profiles: ["metadata"]
     restart: "no"
@@ -652,6 +695,8 @@ services:
         condition: service_healthy
 
   openmetadata-server:
+    cpus: 2
+    mem_limit: 2g
     image: docker.getcollate.io/openmetadata/server:${OPENMETADATA_VERSION:-2.0.5}
     profiles: ["metadata"]
     restart: unless-stopped
@@ -685,6 +730,8 @@ services:
   # One-shot ingestion runner. Scheduling and retries belong to Prefect; this
   # service deliberately contains no Airflow control plane.
   openmetadata-ingestion-job:
+    cpus: ${TEORIA_OPENMETADATA_INGESTION_CPUS:-1}
+    mem_limit: ${TEORIA_OPENMETADATA_INGESTION_MEMORY:-2g}
     image: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-2.0.5}
     build:
       context: ../..
@@ -703,20 +750,26 @@ services:
         condition: service_healthy
 
   pipelines-check:
+    cpus: 0.5
+    mem_limit: 512m
     profiles: ["tools"]
     build:
       context: ../..
       dockerfile: backend/Dockerfile
       target: check
-    command: ["teoria-pipelines", "validate-integration", "/app/backend", "--platform-registries", "/app/backend/registries"]
+    command: ["teoria-pipelines", "validate-integration", "/app/backend", "--platform-registries", "/app/backend/contracts/runtime"]
     volumes:
-      - ../../backend/connectors:/app/backend/connectors:ro
-      - ../../backend/definitions:/app/backend/definitions:ro
+      - ../../backend/contracts/ingestion/connectors:/app/backend/contracts/ingestion/connectors:ro
+      - ../../backend/contracts/ingestion/pipelines:/app/backend/contracts/ingestion/pipelines:ro
+      - ../prefect:/app/deploy/prefect:ro
       - ../../backend/verification_cases:/app/backend/verification_cases:ro
       - ../../backend/references:/app/backend/references:ro
-      - ../../backend/registries:/app/backend/registries:ro
+      - ../../backend/contracts/runtime:/app/backend/contracts/runtime:ro
 
+  # STDIO sessions are started per client with --rm; ordinary up does not need this service.
   mcp:
+    cpus: 0.5
+    mem_limit: 256m
     profiles: ["mcp"]
     image: teoria-mcp:latest
     build:

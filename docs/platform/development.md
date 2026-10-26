@@ -10,7 +10,7 @@ Ontology·Binding·메타데이터 진단과 Runtime은 통합 Python 백엔드�
 
 | 위치 | 책임 |
 |---|---|
-| `features/semantic_modeling/ontology/`, `authoring/` | Ontology Draft·검토·승인·게시·저장소 |
+| `features/semantic_modeling/ontology/` | Ontology Draft·검토·승인·게시·저장소 |
 | `features/semantic_modeling/binding/` | Stable Concept ID와 의미 대상 연결 |
 | `features/semantic_modeling/registry/` | Source·Mapping·Capability 검증과 immutable bundle |
 | `features/goods_normalization/candidates/` | 근거 기반 후보·AI 의미 판정·Draft 생성 |
@@ -22,9 +22,9 @@ Ontology·Binding·메타데이터 진단과 Runtime은 통합 Python 백엔드�
 | `features/access_control/` | 인증 principal·정책·OPA 제어 |
 | `integrations/openmetadata/` | OpenMetadata client와 변환 |
 | `integrations/application_database/` | Application DB async 연결·migration 실행 |
-| `entrypoints/admin/`, `entrypoints/commands/` | HTTP 서비스 조립과 CLI 명령 |
+| `entrypoints/*_api.py`, `entrypoints/composition/`, `entrypoints/commands/` | HTTP 서비스 조립과 CLI 명령 |
 
-각 기능의 HTTP 라우터와 저장소 구현은 해당 기능 안에 둔다. `entrypoints/admin/`는
+각 기능의 HTTP 라우터와 저장소 구현은 해당 기능 안에 둔다. `entrypoints/composition/`은
 기능을 조립하며 업무 규칙을 모으는 공통 서비스 계층이 아니다. UI는 `frontend/`에 있다.
 
 ## 실행과 확장
@@ -54,9 +54,14 @@ OpenMetadata entity는 참조만 저장한다. 원문·문서별 관찰 본문�
 ```bash
 uv sync --project backend --locked --all-extras --all-groups
 uv run --project backend --locked --all-extras --all-groups pytest backend/tests tests/integration
-uv run --project backend --locked --extra api teoria validate backend/registries
+uv run --project backend --locked --extra api teoria validate backend/contracts/runtime
 docker compose -f deploy/compose/compose.yaml config --quiet
 ```
 
 Application DB migration은 `backend/migrations/application/`에 새 순번으로 추가한다.
 적용한 SQL은 수정하지 않는다. DB 통합 검증은 운영과 분리된 `TEORIA_TEST_APP_DATABASE_URL`을 사용한다.
+
+앱 생성은 Admin·Runtime 모두 진입점이 소유하며 `APIRouter`는 해당 기능의 `*_router.py`에 둔다.
+HTTP client는 lifespan 동안 재사용하고 종료 시 소유한 자원만 닫는다.
+Ontology·물품 프로파일의 업무 정책은 Service, SQL·잠금·감사 저장은 Repository가 담당한다.
+승인·게시·감사는 동일 connection과 transaction을 유지한다.

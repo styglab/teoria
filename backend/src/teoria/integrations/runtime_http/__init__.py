@@ -1,5 +1,8 @@
-"""Teoria MCP Gateway."""
+"""HTTP client boundary for Runtime consumers; MCP protocol lives in entrypoints."""
 
-from teoria.integrations.runtime_http.tools import CapabilityMCPService
+from teoria.integrations.runtime_http.runtime_client import (
+    RuntimeAPIClient,
+    RuntimeAPIError,
+)
 
-__all__ = ["CapabilityMCPService"]
+__all__ = ["RuntimeAPIClient", "RuntimeAPIError"]

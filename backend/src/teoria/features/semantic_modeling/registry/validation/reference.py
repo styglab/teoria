@@ -3,7 +3,9 @@ from teoria.features.semantic_modeling.registry.loader import RegistryCatalog
 
 
 def validate_references(catalog: RegistryCatalog, diagnostics: list[Diagnostic]) -> None:
-    project_root = catalog.root.parent.resolve()
+    project_root = (
+        catalog.root.parent.parent if catalog.root.parent.name == "contracts" else catalog.root.parent
+    ).resolve()
     for source_id, reference in catalog.references.items():
         metadata_path = catalog.reference_paths[source_id]
         for index, item in enumerate(reference.files):

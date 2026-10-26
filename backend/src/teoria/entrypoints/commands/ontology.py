@@ -1,8 +1,11 @@
 import argparse
 import json
 
-from teoria.features.semantic_modeling.ontology.authoring import OntologyAuthoringRepository
-from teoria.features.semantic_modeling.ontology.blueprint import OntologyBlueprint, apply_ontology_blueprint
+from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
+from teoria.features.semantic_modeling.ontology.blueprint import (
+    OntologyBlueprint,
+    apply_ontology_blueprint,
+)
 from teoria.features.semantic_modeling.ontology.enrichment import (
     OntologyEnrichmentManifest,
     apply_ontology_enrichment,
@@ -11,7 +14,10 @@ from teoria.features.semantic_modeling.ontology.extension import (
     OntologyExtensionManifest,
     apply_ontology_extension,
 )
-from teoria.features.semantic_modeling.ontology.migration import OntologyMigrationManifest, build_migration_report
+from teoria.features.semantic_modeling.ontology.migration import (
+    OntologyMigrationManifest,
+    build_migration_report,
+)
 from teoria.features.semantic_modeling.ontology.promotion import (
     BusinessConceptPromotion,
     apply_business_concept_promotion,
@@ -48,7 +54,7 @@ async def run_promote_business_concepts(
         return 1
     try:
         result = await apply_business_concept_promotion(
-            OntologyAuthoringRepository(settings.app_database_url),
+            OntologyAuthoringService(settings.app_database_url),
             BusinessConceptPromotion.load(args.manifest),
             actor=args.actor,
             publish=args.publish,
@@ -68,7 +74,7 @@ async def run_enrich_business_ontology(
         return 1
     try:
         result = await apply_ontology_enrichment(
-            OntologyAuthoringRepository(settings.app_database_url),
+            OntologyAuthoringService(settings.app_database_url),
             OntologyEnrichmentManifest.load(args.manifest),
             actor=args.actor,
             publish=args.publish,
@@ -88,7 +94,7 @@ async def run_apply_ontology_blueprint(
         return 1
     try:
         result = await apply_ontology_blueprint(
-            OntologyAuthoringRepository(settings.app_database_url),
+            OntologyAuthoringService(settings.app_database_url),
             OntologyBlueprint.load(args.manifest),
             actor=args.actor,
         )
@@ -105,7 +111,7 @@ async def run_apply_business_rules(args: argparse.Namespace, settings: Settings)
         return 1
     try:
         result = await apply_business_rule_manifest(
-            OntologyAuthoringRepository(settings.app_database_url),
+            OntologyAuthoringService(settings.app_database_url),
             BusinessRuleManifest.load(args.manifest),
             actor=args.actor,
         )
@@ -124,7 +130,7 @@ async def run_apply_ontology_extension(
         return 1
     try:
         result = await apply_ontology_extension(
-            OntologyAuthoringRepository(settings.app_database_url),
+            OntologyAuthoringService(settings.app_database_url),
             OntologyExtensionManifest.load(args.manifest),
             actor=args.actor,
         )

@@ -30,7 +30,7 @@ def test_only_explicit_specification_and_metadata_jobs_are_active():
 
 def test_document_jobs_cannot_get_automatic_schedules():
     catalog = PipelineLoader(ROOT).load()
-    job = yaml.safe_load((ROOT / "prefect.yaml").read_text())["deployments"][0]
+    job = yaml.safe_load((ROOT.parent / "deploy/prefect/specification_processing.yaml").read_text())["deployments"][0]
     job["schedules"] = [{"cron": "0 * * * *", "timezone": "Asia/Seoul"}]
-    diagnostics = validate_deployment_contracts(catalog, [(ROOT / "prefect.yaml", job)])
+    diagnostics = validate_deployment_contracts(catalog, [(ROOT.parent / "deploy/prefect/specification_processing.yaml", job)])
     assert diagnostics[0].code == "invalid_specification_deployment"

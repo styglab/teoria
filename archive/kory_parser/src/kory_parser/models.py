@@ -23,6 +23,7 @@ class ParseOptions:
     max_cells: int = 100_000
     max_depth: int = 32
     extract_contents: bool = False
+    recover_numbered_structure: bool = True
 
     def __post_init__(self) -> None:
         for name in ("max_input_bytes", "max_expanded_bytes", "max_xml_nodes", "max_cells", "max_depth"):

@@ -6,9 +6,15 @@ import logging
 
 from teoria.features.semantic_modeling.binding.repository import BindingRepository
 from teoria.features.legal_information.search import LawSearchReader
-from teoria.features.metadata_management.intelligence.asset_assessment.model_client import AssessmentModelClient
-from teoria.features.metadata_management.intelligence.asset_assessment.repository import AssessmentRepository
-from teoria.features.metadata_management.intelligence.asset_assessment.service import AssetAssessmentService
+from teoria.features.metadata_management.intelligence.asset_assessment.model_client import (
+    AssessmentModelClient,
+)
+from teoria.features.metadata_management.intelligence.asset_assessment.repository import (
+    AssessmentRepository,
+)
+from teoria.features.metadata_management.intelligence.asset_assessment.service import (
+    AssetAssessmentService,
+)
 from teoria.integrations.openmetadata import OpenMetadataClient
 from teoria.settings import bootstrap_settings
 
@@ -26,36 +32,41 @@ async def run():
             "Configure the assessment model, Application DB and OpenMetadata before starting the Worker"
         )
     repository = AssessmentRepository(settings.app_database_url)
-    service = AssetAssessmentService(
-        repository,
+    async with (
         OpenMetadataClient(
             settings.openmetadata_base_url,
             settings.openmetadata_auth_token,
             timeout_seconds=settings.openmetadata_timeout_seconds,
             verify_ssl=settings.openmetadata_verify_ssl,
-        ),
-        BindingRepository(settings.app_database_url),
+        ) as metadata_client,
         AssessmentModelClient(
             settings.assessment_model_url,
             settings.assessment_model_name,
             settings.assessment_model_token,
             timeout=settings.assessment_model_timeout_seconds,
             max_tokens=settings.assessment_model_max_tokens,
-        ),
-        LawSearchReader(settings.admin_data_database_url)
-        if settings.admin_data_database_url else None,
-    )
-    while True:
-        try:
-            job = await repository.claim()
-            if job:
-                await service.process(job)
-                continue
-        except Exception:
-            logging.error(
-                "Asset assessment worker iteration failed; waiting before retry"
-            )
-        await asyncio.sleep(5)
+        ) as model_client,
+    ):
+        service = AssetAssessmentService(
+            repository,
+            metadata_client,
+            BindingRepository(settings.app_database_url),
+            model_client,
+            LawSearchReader(settings.admin_data_database_url)
+            if settings.admin_data_database_url
+            else None,
+        )
+        while True:
+            try:
+                job = await repository.claim()
+                if job:
+                    await service.process(job)
+                    continue
+            except Exception:
+                logging.error(
+                    "Asset assessment worker iteration failed; waiting before retry"
+                )
+            await asyncio.sleep(5)
 
 
 def main():

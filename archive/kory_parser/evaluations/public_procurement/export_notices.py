@@ -10,8 +10,8 @@ from .history import DEFAULT_HISTORY, load_state, new_seed, used_notices
 QUERY = Path(__file__).with_name("sample_notices.sql")
 WORKER = """
 import asyncio,json,sys
-from teoria_pipelines.settings import bootstrap_pipeline_settings
-from teoria_pipelines.persistence.connection import connect
+from teoria.integrations.data_operations.settings import bootstrap_pipeline_settings
+from teoria.integrations.data_operations.persistence.connection import connect
 async def main():
  request=json.load(sys.stdin)
  async with connect(bootstrap_pipeline_settings().data_database_url,connect_timeout=10) as conn:

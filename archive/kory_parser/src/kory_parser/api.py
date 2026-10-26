@@ -89,6 +89,10 @@ def parse(source: str | Path | bytes, options: ParseOptions | None = None) -> Pa
         module, function = READERS[kind]
         reader = getattr(import_module(f".{module}", __package__), function)
         result = reader(data, options)
+        if options.recover_numbered_structure and kind == "hwpx":
+            from .numbered_structure import recover_numbered_structure
+
+            recover_numbered_structure(result.blocks)
         if (
             options.extract_contents
             and kind in {"hwp", "hwp3", "hwpx", "hwpml", "docx"}

@@ -31,6 +31,7 @@ METRICS = (
     "table_structure",
     "table_cells",
     "contents",
+    "block_structure",
 )
 WORKER = """
 import json, sys, time, statistics
@@ -38,7 +39,11 @@ from pathlib import Path
 from kory_parser import parse, ParseOptions
 request = json.load(sys.stdin)
 data = Path(request['source']).read_bytes()
-options = ParseOptions(**request['options'])
+requested = dict(request['options'])
+supported = 'recover_numbered_structure' in getattr(ParseOptions, '__dataclass_fields__', {})
+if not supported:
+    requested.pop('recover_numbered_structure', None)
+options = ParseOptions(**requested)
 parse(data, options)
 samples = []
 for _ in range(3):
@@ -182,6 +187,12 @@ def score(expected, actual):
         "table_structure": float(comparison["all_table_grids_equal"]),
         "table_cells": float(comparison["all_tables_and_cells_equal"]),
     }
+    if expected.get("require_block_structure"):
+        from .numbered_structure import structure_signature
+
+        metrics["block_structure"] = float(
+            structure_signature(expected["blocks"]) == structure_signature(actual.get("blocks", []))
+        )
     if "contents" in expected:
         metrics["contents"] = float(
             contents_signature(expected["contents"]) == contents_signature(actual.get("contents", []))

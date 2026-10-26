@@ -10,6 +10,8 @@ from pathlib import Path
 
 import yaml
 
+from teoria.integrations.prefect.deployment_manifests import deployment_path
+
 
 def kubernetes_job_template() -> dict:
     from prefect_kubernetes.worker import KubernetesWorker
@@ -157,12 +159,9 @@ def register_deployments(
     pools = asyncio.run(configure())
     with tempfile.TemporaryDirectory(prefix="teoria_prefect_") as directory:
         for item in kinds:
-            filename = (
-                "prefect.yaml" if item == "ingestion" else
-                "prefect.legal_information.yaml" if item == "legal-information" else
-                "prefect.metadata.yaml"
-            )
-            document = yaml.safe_load((pipeline_root / filename).read_text())
+            source = deployment_path(pipeline_root, item)
+            filename = source.name
+            document = yaml.safe_load(source.read_text())
             for deployment in document["deployments"]:
                 deployment["work_pool"]["name"] = pools[item]
                 if item in {"ingestion", "legal-information"}:

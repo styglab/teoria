@@ -4,7 +4,7 @@ import json
 from fastapi.testclient import TestClient
 
 from teoria.settings import Settings
-from teoria.features.access_control.policy.control_plane import create_policy_control_plane_app
+from teoria.entrypoints.policy_control_plane import create_policy_control_plane_app
 
 
 class Repository:

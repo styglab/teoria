@@ -13,7 +13,7 @@ ROOT = (Path(__file__).resolve().parents[5] / 'backend')
 def test_enrichment_manifest_has_unique_concepts_and_valid_endpoints() -> None:
     manifest = OntologyEnrichmentManifest.load(
         ROOT
-        / "ontology_migrations"
+        / "authoring" / "ontology_migrations"
         / "applied"
         / "2026_10_initial_unification"
         / "business_ontology_enrichment_v1.yaml"

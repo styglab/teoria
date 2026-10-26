@@ -7,7 +7,7 @@ from uuid import UUID
 import yaml
 from pydantic import BaseModel, Field
 
-from teoria.features.semantic_modeling.ontology.authoring import OntologyAuthoringRepository
+from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
 
 
 class PropertySpec(BaseModel):
@@ -45,7 +45,7 @@ class OntologyEnrichmentManifest(BaseModel):
 
 
 async def apply_ontology_enrichment(
-    repository: OntologyAuthoringRepository,
+    repository: OntologyAuthoringService,
     manifest: OntologyEnrichmentManifest,
     *,
     actor: str,

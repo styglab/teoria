@@ -4,7 +4,9 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from teoria.features.metadata_management.intelligence.asset_assessment.admin_api import create_asset_assessment_router
+from teoria.features.metadata_management.intelligence.asset_assessment.admin_router import (
+    create_asset_assessment_router,
+)
 from teoria.features.access_control.auth import AdminAuthorizer
 from teoria.settings import Settings
 

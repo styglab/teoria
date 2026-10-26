@@ -4,14 +4,29 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from teoria.integrations.provider_api.errors import ProviderExecutionError
-from teoria.integrations.provider_api.executor import MissingCredentialError, ProviderExecutor
+from teoria.integrations.provider_api.executor import (
+    MissingCredentialError,
+    ProviderExecutor,
+)
 from teoria.integrations.provider_api.models import ExecutionResponse, PreparedRequest
-from teoria.features.runtime.source.request_builder import RequestBuildError, SourceRequestBuilder
-from teoria.features.runtime.source.response_validator import SourceResponseValidator
+from teoria.features.semantic_modeling.registry.source_request_builder import (
+    RequestBuildError,
+    SourceRequestBuilder,
+)
+from teoria.features.semantic_modeling.registry.source_response_validator import (
+    SourceResponseValidator,
+)
 from teoria.features.semantic_modeling.registry.diagnostics import Diagnostic
-from teoria.features.semantic_modeling.registry.loader import RegistryLoadError, RegistryLoader
-from teoria.features.semantic_modeling.registry.composition import create_registry_validator
-from teoria.features.semantic_modeling.registry.verification.source.state import SourceVerificationState
+from teoria.features.semantic_modeling.registry.loader import (
+    RegistryLoadError,
+    RegistryLoader,
+)
+from teoria.features.semantic_modeling.registry.composition import (
+    create_registry_validator,
+)
+from teoria.features.semantic_modeling.registry.verification.source.state import (
+    SourceVerificationState,
+)
 
 
 class SourceVerificationServices:
@@ -30,19 +45,28 @@ def _diagnostics(items: list[Diagnostic]) -> list[dict[str, Any]]:
     return [item.to_dict() for item in items]
 
 
-def create_source_verification_graph(services: SourceVerificationServices | None = None):
+def create_source_verification_graph(
+    services: SourceVerificationServices | None = None,
+):
     services = services or SourceVerificationServices()
 
     async def validate_structure(state: SourceVerificationState) -> dict[str, Any]:
         try:
             catalog = RegistryLoader(state["registry_root"]).load()
-            diagnostics = create_registry_validator().validate(catalog, source_id=state.get("source_id"))
+            diagnostics = create_registry_validator().validate(
+                catalog, source_id=state.get("source_id")
+            )
         except RegistryLoadError as exc:
             diagnostics = exc.diagnostics
         return {
             "diagnostics": _diagnostics(diagnostics),
             "completed_steps": ["validate_structure"],
-            "step_results": [{"name": "validate_structure", "status": "failed" if diagnostics else "passed"}],
+            "step_results": [
+                {
+                    "name": "validate_structure",
+                    "status": "failed" if diagnostics else "passed",
+                }
+            ],
             "status": "failed" if diagnostics else "running",
         }
 
@@ -50,41 +74,98 @@ def create_source_verification_graph(services: SourceVerificationServices | None
         source_id = state.get("source_id")
         operation_id = state.get("operation_id")
         if not source_id or not operation_id:
-            diagnostic = Diagnostic("missing_verification_target", "source_id and operation_id are required for build/live profile", Path(state["registry_root"]))
-            return {"diagnostics": [diagnostic.to_dict()], "completed_steps": ["build_request"], "step_results": [{"name": "build_request", "status": "failed"}], "status": "failed"}
+            diagnostic = Diagnostic(
+                "missing_verification_target",
+                "source_id and operation_id are required for build/live profile",
+                Path(state["registry_root"]),
+            )
+            return {
+                "diagnostics": [diagnostic.to_dict()],
+                "completed_steps": ["build_request"],
+                "step_results": [{"name": "build_request", "status": "failed"}],
+                "status": "failed",
+            }
         try:
             catalog = RegistryLoader(state["registry_root"]).load()
-            request = services.request_builder.build(catalog, source_id, operation_id, state.get("input_data", {}))
+            request = services.request_builder.build(
+                catalog, source_id, operation_id, state.get("input_data", {})
+            )
         except RequestBuildError as exc:
-            return {"diagnostics": _diagnostics(exc.diagnostics), "completed_steps": ["build_request"], "step_results": [{"name": "build_request", "status": "failed"}], "status": "failed"}
-        return {"prepared_request": request.safe_dump(), "completed_steps": ["build_request"], "step_results": [{"name": "build_request", "status": "passed"}], "status": "running"}
+            return {
+                "diagnostics": _diagnostics(exc.diagnostics),
+                "completed_steps": ["build_request"],
+                "step_results": [{"name": "build_request", "status": "failed"}],
+                "status": "failed",
+            }
+        return {
+            "prepared_request": request.safe_dump(),
+            "completed_steps": ["build_request"],
+            "step_results": [{"name": "build_request", "status": "passed"}],
+            "status": "running",
+        }
 
     async def execute_request(state: SourceVerificationState) -> dict[str, Any]:
         request = PreparedRequest.model_validate(state["prepared_request"])
         try:
             response = await services.executor.execute(request)
         except ProviderExecutionError as exc:
-            diagnostic = Diagnostic(exc.code, str(exc), Path(state["registry_root"]), location=request.operation_id)
-            return {"diagnostics": [diagnostic.to_dict()], "completed_steps": ["execute_request"], "step_results": [{"name": "execute_request", "status": "failed"}], "status": "failed"}
-        return {"response": response.model_dump(mode="json"), "completed_steps": ["execute_request"], "step_results": [{"name": "execute_request", "status": "passed"}], "status": "running"}
+            diagnostic = Diagnostic(
+                exc.code,
+                str(exc),
+                Path(state["registry_root"]),
+                location=request.operation_id,
+            )
+            return {
+                "diagnostics": [diagnostic.to_dict()],
+                "completed_steps": ["execute_request"],
+                "step_results": [{"name": "execute_request", "status": "failed"}],
+                "status": "failed",
+            }
+        return {
+            "response": response.model_dump(mode="json"),
+            "completed_steps": ["execute_request"],
+            "step_results": [{"name": "execute_request", "status": "passed"}],
+            "status": "running",
+        }
 
     async def check_credentials(state: SourceVerificationState) -> dict[str, Any]:
         request = PreparedRequest.model_validate(state["prepared_request"])
         try:
             services.executor.credential(request)
         except MissingCredentialError as exc:
-            diagnostic = Diagnostic("missing_credential", str(exc), Path(state["registry_root"]), location=request.source_id)
-            return {"diagnostics": [diagnostic.to_dict()], "completed_steps": ["check_credentials"], "step_results": [{"name": "check_credentials", "status": "blocked"}], "status": "blocked"}
-        return {"completed_steps": ["check_credentials"], "step_results": [{"name": "check_credentials", "status": "passed"}], "status": "running"}
+            diagnostic = Diagnostic(
+                "missing_credential",
+                str(exc),
+                Path(state["registry_root"]),
+                location=request.source_id,
+            )
+            return {
+                "diagnostics": [diagnostic.to_dict()],
+                "completed_steps": ["check_credentials"],
+                "step_results": [{"name": "check_credentials", "status": "blocked"}],
+                "status": "blocked",
+            }
+        return {
+            "completed_steps": ["check_credentials"],
+            "step_results": [{"name": "check_credentials", "status": "passed"}],
+            "status": "running",
+        }
 
     async def validate_response(state: SourceVerificationState) -> dict[str, Any]:
         catalog = RegistryLoader(state["registry_root"]).load()
         response = ExecutionResponse.model_validate(state["response"])
-        diagnostics = services.response_validator.validate(catalog, state["source_id"], state["operation_id"], response)
+        diagnostics = services.response_validator.validate(
+            catalog, state["source_id"], state["operation_id"], response
+        )
         return {
             "diagnostics": _diagnostics(diagnostics),
             "completed_steps": ["validate_response"],
-            "step_results": [{"name": "validate_response", "status": "failed" if diagnostics else "passed"}],
+            "step_results": [
+                {
+                    "name": "validate_response",
+                    "status": "failed" if diagnostics else "passed",
+                }
+            ],
             "status": "failed" if diagnostics else "passed",
         }
 
@@ -96,7 +177,11 @@ def create_source_verification_graph(services: SourceVerificationServices | None
         return "build_request"
 
     async def complete(state: SourceVerificationState) -> dict[str, Any]:
-        return {"completed_steps": ["complete"], "step_results": [{"name": "complete", "status": "passed"}], "status": "passed"}
+        return {
+            "completed_steps": ["complete"],
+            "step_results": [{"name": "complete", "status": "passed"}],
+            "status": "passed",
+        }
 
     def after_build(state: SourceVerificationState) -> str:
         if state.get("status") == "failed":
@@ -119,10 +204,26 @@ def create_source_verification_graph(services: SourceVerificationServices | None
     builder.add_node("validate_response", validate_response)
     builder.add_node("complete", complete)
     builder.add_edge(START, "validate_structure")
-    builder.add_conditional_edges("validate_structure", after_structure, {"end": END, "complete": "complete", "build_request": "build_request"})
-    builder.add_conditional_edges("build_request", after_build, {"end": END, "complete": "complete", "check_credentials": "check_credentials"})
-    builder.add_conditional_edges("check_credentials", after_credentials, {"end": END, "execute_request": "execute_request"})
-    builder.add_conditional_edges("execute_request", after_execute, {"end": END, "validate_response": "validate_response"})
+    builder.add_conditional_edges(
+        "validate_structure",
+        after_structure,
+        {"end": END, "complete": "complete", "build_request": "build_request"},
+    )
+    builder.add_conditional_edges(
+        "build_request",
+        after_build,
+        {"end": END, "complete": "complete", "check_credentials": "check_credentials"},
+    )
+    builder.add_conditional_edges(
+        "check_credentials",
+        after_credentials,
+        {"end": END, "execute_request": "execute_request"},
+    )
+    builder.add_conditional_edges(
+        "execute_request",
+        after_execute,
+        {"end": END, "validate_response": "validate_response"},
+    )
     builder.add_edge("validate_response", END)
     builder.add_edge("complete", END)
     return builder.compile()

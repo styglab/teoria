@@ -26,7 +26,7 @@ class PipelineValidator:
                     Diagnostic(
                         "unknown_connector",
                         f"unknown connector '{connector_id}'",
-                        catalog.root / "connectors",
+                        catalog.root / "contracts" / "ingestion" / "connectors",
                     )
                 ]
             connectors = [(connector_id, connector)]

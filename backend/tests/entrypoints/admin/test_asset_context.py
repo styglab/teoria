@@ -5,8 +5,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.metadata_management.catalog.admin_api import create_metadata_router
-from teoria.features.metadata_management.catalog.asset_context import AssetContextService, asset_targets
+from teoria.features.metadata_management.catalog.admin_router import (
+    create_metadata_router,
+)
+from teoria.features.metadata_management.catalog.asset_context import (
+    AssetContextService,
+    asset_targets,
+)
 from teoria.settings import Settings
 
 TABLE_ID = "13d2a08b-9b29-4310-8d9a-a5d6bdf53f7c"

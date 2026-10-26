@@ -15,3 +15,12 @@ node_modules
 dist
 **/node_modules
 **/dist
+
+# Local recovery data and development state are never build inputs.
+backups/
+.artifacts/
+.codex/
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache

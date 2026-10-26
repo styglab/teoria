@@ -130,6 +130,10 @@ def grade(case, actual):
             "passed": sum(normalized_text(s) in text for s in fragments),
             "total": len(fragments),
         }
+    if "numbered_paragraphs" in case:
+        from ..numbered_structure import grade_numbered_paragraphs
+
+        checks["reviewed_numbered_structure"] = grade_numbered_paragraphs(case["numbered_paragraphs"], actual)
     tables = tables_in_order(actual.get("blocks", []))
     if "table_count" in case:
         checks["xml_table_count"] = {"passed": int(len(tables) == case["table_count"]), "total": 1}

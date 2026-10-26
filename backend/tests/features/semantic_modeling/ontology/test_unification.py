@@ -7,7 +7,7 @@ from teoria.features.semantic_modeling.ontology.unification import OntologyUnifi
 
 
 ROOT = (Path(__file__).resolve().parents[5] / 'backend')
-MIGRATION = ROOT / "ontology_migrations" / "applied" / "2026_10_initial_unification"
+MIGRATION = ROOT / "authoring" / "ontology_migrations" / "applied" / "2026_10_initial_unification"
 
 
 def test_every_legacy_business_concept_has_a_real_unified_target() -> None:

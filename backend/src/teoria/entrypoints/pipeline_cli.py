@@ -24,7 +24,7 @@ def _default_pipeline_root() -> Path:
 
 
 def _default_platform_registry_root() -> Path:
-    return Path(os.environ.get("TEORIA_PLATFORM_REGISTRY_PATH", "backend/registries"))
+    return Path(os.environ.get("TEORIA_PLATFORM_REGISTRY_PATH", "backend/contracts/runtime"))
 
 
 def _load_input(path: Path | None) -> dict:
@@ -57,7 +57,10 @@ async def _verify(args: argparse.Namespace) -> int:
             print(f"ERROR invalid_verification_input: {exc}")
         return 1
     if args.platform_registries:
-        from teoria.features.semantic_modeling.registry.loader import RegistryLoader, RegistryLoadError
+        from teoria.features.semantic_modeling.registry.loader import (
+            RegistryLoader,
+            RegistryLoadError,
+        )
 
         try:
             data_types = RegistryLoader(args.platform_registries).load().data_types
@@ -148,7 +151,9 @@ def main() -> int:
         "--backend", choices=("process", "kubernetes"), required=True
     )
     register_parser.add_argument(
-        "--kind", choices=("ingestion", "legal-information", "metadata", "all"), default="ingestion"
+        "--kind",
+        choices=("ingestion", "legal-information", "metadata", "all"),
+        default="ingestion",
     )
     register_parser.add_argument(
         "--pipelines", type=Path, default=_default_pipeline_root()
@@ -192,25 +197,46 @@ def main() -> int:
     law_show.add_argument("--mst", required=True)
     law_show.add_argument("--effective-date", type=date.fromisoformat, required=True)
     law_show.add_argument("--article", help="article number, e.g. 24의2")
-    specification_parser = subparsers.add_parser("specification", help="process explicit specification documents and standard proposals")
-    specification_subparsers = specification_parser.add_subparsers(dest="specification_command", required=True)
-    specification_run = specification_subparsers.add_parser("run", help="execute a specification Prefect flow")
+    specification_parser = subparsers.add_parser(
+        "specification",
+        help="process explicit specification documents and standard proposals",
+    )
+    specification_subparsers = specification_parser.add_subparsers(
+        dest="specification_command", required=True
+    )
+    specification_run = specification_subparsers.add_parser(
+        "run", help="execute a specification Prefect flow"
+    )
     specification_run.add_argument("--manifest", required=True, type=Path)
-    specification_workflow = specification_subparsers.add_parser("standard-workflow",help="orchestrate extraction, semantic authoring and standard application")
-    specification_workflow.add_argument("--manifest",required=True,type=Path)
-    specification_evaluate = specification_subparsers.add_parser("evaluate", help="freeze, run and clean an extraction improvement cycle")
-    evaluation_steps = specification_evaluate.add_subparsers(dest="evaluation_step", required=True)
-    evaluation_steps.add_parser("schema", help="print the evaluation manifest JSON Schema")
-    evaluation_prepare = evaluation_steps.add_parser("prepare", help="verify classification and freeze a grouped random sample")
+    specification_workflow = specification_subparsers.add_parser(
+        "standard-workflow",
+        help="orchestrate extraction, semantic authoring and standard application",
+    )
+    specification_workflow.add_argument("--manifest", required=True, type=Path)
+    specification_evaluate = specification_subparsers.add_parser(
+        "evaluate", help="freeze, run and clean an extraction improvement cycle"
+    )
+    evaluation_steps = specification_evaluate.add_subparsers(
+        dest="evaluation_step", required=True
+    )
+    evaluation_steps.add_parser(
+        "schema", help="print the evaluation manifest JSON Schema"
+    )
+    evaluation_prepare = evaluation_steps.add_parser(
+        "prepare", help="verify classification and freeze a grouped random sample"
+    )
     evaluation_prepare.add_argument("--manifest", required=True, type=Path)
     for evaluation_step in ("baseline", "candidate", "finish", "abort"):
         step = evaluation_steps.add_parser(evaluation_step)
         step.add_argument("--cycle-id", required=True)
-    specification_evaluate.add_argument("--state-dir", type=Path, default=Path(".artifacts/specification_improvement"))
+    specification_evaluate.add_argument(
+        "--state-dir", type=Path, default=Path(".artifacts/specification_improvement")
+    )
     args = parser.parse_args()
 
     if args.command == "specification":
         from teoria.features.specification_processing.cli import run_command
+
         return run_command(args)
 
     if args.command == "deployment-docs":
@@ -281,8 +307,20 @@ def main() -> int:
         from teoria.integrations.prefect.deployment import positive_setting
 
         limit = positive_setting("TEORIA_PIPELINE_CONCURRENCY", 2)
-        os.execvp("prefect", ["prefect", "worker", "start", "--type", "process",
-                             "--pool", args.pool, "--limit", str(limit)])
+        os.execvp(
+            "prefect",
+            [
+                "prefect",
+                "worker",
+                "start",
+                "--type",
+                "process",
+                "--pool",
+                args.pool,
+                "--limit",
+                str(limit),
+            ],
+        )
 
     if args.command == "register":
         from teoria.integrations.prefect.deployment import register_deployments
@@ -317,9 +355,14 @@ def main() -> int:
         return 1
     if args.command == "validate-integration":
         try:
-            from teoria.features.semantic_modeling.registry.loader import RegistryLoader, RegistryLoadError
+            from teoria.features.semantic_modeling.registry.loader import (
+                RegistryLoader,
+                RegistryLoadError,
+            )
 
-            from teoria.integrations.data_operations.integration import PlatformIntegrationValidator
+            from teoria.integrations.data_operations.integration import (
+                PlatformIntegrationValidator,
+            )
 
             platform_catalog = RegistryLoader(args.platform_registries).load()
         except RegistryLoadError as exc:
@@ -333,17 +376,15 @@ def main() -> int:
         diagnostics = PipelineValidator().validate(
             pipeline_catalog, connector_id=args.connector
         )
-        if not args.connector:
-            from teoria.integrations.prefect.deployment_docs import load_deployments
-            from teoria.integrations.prefect.deployment_validation import (
-                validate_deployment_contracts,
-            )
+    if not getattr(args, "connector", None):
+        from teoria.integrations.prefect.deployment_docs import load_deployments
+        from teoria.integrations.prefect.deployment_validation import (
+            validate_deployment_contracts,
+        )
 
-            diagnostics.extend(
-                validate_deployment_contracts(
-                    pipeline_catalog, load_deployments(args.path)
-                )
-            )
+        diagnostics.extend(
+            validate_deployment_contracts(pipeline_catalog, load_deployments(args.path))
+        )
     for diagnostic in diagnostics:
         print(diagnostic)
     if diagnostics:

@@ -1,0 +1,563 @@
+{
+  "purpose": "Source-backed grader sensitivity controls; no real LLM extraction or independent gold accuracy claim.",
+  "documents": [
+    {
+      "document_id": "sample_01",
+      "source_name": "(구매시방서) 레독스흐름전지 시험인증센터 환경감시 및 제어 모니터링 장치 구매.hwp",
+      "source_sha256": "62a72633c6b767e86a53f23a44a5cf822ba283bd73095bd4916961e1210344c6",
+      "parser_version": "0.9.13",
+      "classification_code": null,
+      "label_status": "silver",
+      "source_nodes": [
+        {
+          "node_id": "n00040",
+          "native_ref": "/blocks/29/table/cells/1/1",
+          "kind": "cell",
+          "text": "센서 및 분석장치 (CO, H2S, O2, EX, SO2, HBR)",
+          "parent_id": "n00034",
+          "page": null,
+          "row": 1,
+          "column": 1,
+          "row_span": 1,
+          "column_span": 1,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00086",
+          "native_ref": "/blocks/53",
+          "kind": "paragraph",
+          "text": "1) 환경가스 측정 장치",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00090",
+          "native_ref": "/blocks/57",
+          "kind": "paragraph",
+          "text": "- 환경 가스 센서는 CO, H2S, O2, EX 조합으로 구성",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00095",
+          "native_ref": "/blocks/62",
+          "kind": "paragraph",
+          "text": "2) 유해가스 측정 장치",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        }
+      ],
+      "focus": "공급 목록의 포괄 항목과 상세 장치 연결; 가스 조합을 수치 요구조건으로 바꾸지 않음",
+      "entities": [
+        {
+          "id": "scope",
+          "name": "센서 및 분석장치",
+          "node_id": "n00040",
+          "owner": null
+        },
+        {
+          "id": "environment",
+          "name": "환경가스 측정 장치",
+          "node_id": "n00086",
+          "owner": "scope"
+        },
+        {
+          "id": "hazardous",
+          "name": "유해가스 측정 장치",
+          "node_id": "n00095",
+          "owner": "scope"
+        }
+      ],
+      "relations": [
+        {
+          "source_id": "environment",
+          "target_id": "scope",
+          "kind": "specification_for",
+          "source_node_ids": [
+            "n00040",
+            "n00086"
+          ],
+          "source_text": "환경가스 측정 장치"
+        },
+        {
+          "source_id": "hazardous",
+          "target_id": "scope",
+          "kind": "specification_for",
+          "source_node_ids": [
+            "n00040",
+            "n00095"
+          ],
+          "source_text": "유해가스 측정 장치"
+        }
+      ],
+      "requirements": [
+        {
+          "subject_id": "environment",
+          "node_id": "n00090",
+          "property_key": "gas_combination",
+          "value_raw": "CO, H2S, O2, EX",
+          "unit_raw": null,
+          "operator": "raw",
+          "operator_raw": null,
+          "source_text": "환경 가스 센서는 CO, H2S, O2, EX 조합으로 구성",
+          "role": "requirement_candidate",
+          "scope": "per_component"
+        }
+      ]
+    },
+    {
+      "document_id": "sample_02",
+      "source_name": "(변환본)규격서_연천스마트팜(주)_액체크로마토그래프.pdf",
+      "source_sha256": "b7e8b9661be430a76de1688fee666004d561d70a0e8b3059367d509a5ce91781",
+      "parser_version": "0.9.13",
+      "classification_code": null,
+      "label_status": "silver",
+      "source_nodes": [
+        {
+          "node_id": "n00012",
+          "native_ref": "/blocks/2/table/cells/1/3",
+          "kind": "cell",
+          "text": "액체크로마토그래프 질량분석기\n(Liquid Chromatograph\nMass Spectrometer)",
+          "parent_id": "n00002",
+          "page": null,
+          "row": 1,
+          "column": 3,
+          "row_span": 1,
+          "column_span": 1,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00020",
+          "native_ref": "/blocks/8",
+          "kind": "list",
+          "text": "나. 장비의 구성(Configurations of Goods)",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00025",
+          "native_ref": "/blocks/13",
+          "kind": "list",
+          "text": "3. 용매 운반용 펌프",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00031",
+          "native_ref": "/blocks/19",
+          "kind": "list",
+          "text": "6. 광다이오드어레이 검출기",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00069",
+          "native_ref": "/blocks/57",
+          "kind": "list",
+          "text": "3) 유량 설정 범위: 0.0001~10 mL/min",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        }
+      ],
+      "focus": "장비의 구성 목록과 펌프 상세 규격 연결; 유량 범위·복합 단위 보존",
+      "entities": [
+        {
+          "id": "scope",
+          "name": "액체크로마토그래프 질량분석기",
+          "node_id": "n00012",
+          "owner": null
+        },
+        {
+          "id": "pump",
+          "name": "용매 운반용 펌프",
+          "node_id": "n00025",
+          "owner": "scope"
+        },
+        {
+          "id": "detector",
+          "name": "광다이오드어레이 검출기",
+          "node_id": "n00031",
+          "owner": "scope"
+        }
+      ],
+      "relations": [
+        {
+          "source_id": "pump",
+          "target_id": "scope",
+          "kind": "component_of",
+          "source_node_ids": [
+            "n00020",
+            "n00025"
+          ],
+          "source_text": "용매 운반용 펌프"
+        },
+        {
+          "source_id": "detector",
+          "target_id": "scope",
+          "kind": "component_of",
+          "source_node_ids": [
+            "n00020",
+            "n00031"
+          ],
+          "source_text": "광다이오드어레이 검출기"
+        }
+      ],
+      "requirements": [
+        {
+          "subject_id": "pump",
+          "node_id": "n00069",
+          "property_key": "flow_range",
+          "value_raw": "0.0001~10",
+          "unit_raw": "mL/min",
+          "operator": "range",
+          "operator_raw": null,
+          "source_text": "유량 설정 범위: 0.0001~10 mL/min",
+          "role": "requirement_candidate",
+          "scope": "per_component"
+        }
+      ]
+    },
+    {
+      "document_id": "sample_03",
+      "source_name": "1. 규격서 (지능형 농기계 정적상태.주행성능 분석시험장치).hwpx",
+      "source_sha256": "2fbb97780e28f5e9868e63f5240862eb4eb8907209510335831f8478ef81f4cd",
+      "parser_version": "0.9.13",
+      "classification_code": null,
+      "label_status": "silver",
+      "source_nodes": [
+        {
+          "node_id": "n00009",
+          "native_ref": "/blocks/9",
+          "kind": "paragraph",
+          "text": "지능형 농기계 정적상태·주행성능 분석시험장치",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00124",
+          "native_ref": "/blocks/106",
+          "kind": "paragraph",
+          "text": "본 시험장치는 아래의 정적 상태진단 및 동적 주행성능 분석을 위한 각 계측장비가 상호 연계되어 하나의 시험장치로 운용되어야 하며, 개별 구성장비는 독립적인 단품 납품이 아니라 전체 시험목적과 장비 간 연계성을 고려하여 통합 구성하여야 한다.",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00125",
+          "native_ref": "/blocks/107",
+          "kind": "paragraph",
+          "text": "가. 고속 레이저 동적위치 계측장치(동적주행성능시험)",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00172",
+          "native_ref": "/blocks/154",
+          "kind": "paragraph",
+          "text": "사. 열화상카메라(정적상태진단시험)",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00175",
+          "native_ref": "/blocks/157",
+          "kind": "paragraph",
+          "text": "3) 시험대상 주요 발열부 측정에 충분한 온도측정범위를 확보하여야 하며 최대 측정온도는 +1,000℃ 이상이어야 한다.",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00177",
+          "native_ref": "/blocks/159",
+          "kind": "paragraph",
+          "text": "5) 구성품 : 열화상카메라 1 EA, 표준 렌즈 1 EA, 기타 부속품 1 SET",
+          "parent_id": null,
+          "page": null,
+          "row": null,
+          "column": null,
+          "row_span": null,
+          "column_span": null,
+          "source_table_id": null
+        }
+      ],
+      "focus": "통합 시험장치→열화상카메라→표준 렌즈; 최대라는 속성명과 이상 연산을 구분",
+      "entities": [
+        {
+          "id": "scope",
+          "name": "지능형 농기계 정적상태·주행성능 분석시험장치",
+          "node_id": "n00009",
+          "owner": null
+        },
+        {
+          "id": "thermal",
+          "name": "열화상카메라",
+          "node_id": "n00172",
+          "owner": "scope"
+        },
+        {
+          "id": "lens",
+          "name": "표준 렌즈",
+          "node_id": "n00177",
+          "owner": "thermal"
+        },
+        {
+          "id": "laser",
+          "name": "고속 레이저 동적위치 계측장치",
+          "node_id": "n00125",
+          "owner": "scope"
+        }
+      ],
+      "relations": [
+        {
+          "source_id": "thermal",
+          "target_id": "scope",
+          "kind": "component_of",
+          "source_node_ids": [
+            "n00124",
+            "n00172"
+          ],
+          "source_text": "열화상카메라"
+        },
+        {
+          "source_id": "lens",
+          "target_id": "thermal",
+          "kind": "component_of",
+          "source_node_ids": [
+            "n00177"
+          ],
+          "source_text": "표준 렌즈 1 EA"
+        },
+        {
+          "source_id": "laser",
+          "target_id": "scope",
+          "kind": "component_of",
+          "source_node_ids": [
+            "n00124",
+            "n00125"
+          ],
+          "source_text": "고속 레이저 동적위치 계측장치"
+        }
+      ],
+      "requirements": [
+        {
+          "subject_id": "thermal",
+          "node_id": "n00175",
+          "property_key": "maximum_measurable_temperature",
+          "value_raw": "+1,000",
+          "unit_raw": "℃",
+          "operator": "gte",
+          "operator_raw": "이상",
+          "source_text": "최대 측정온도는 +1,000℃ 이상이어야 한다.",
+          "role": "requirement_candidate",
+          "scope": "per_component"
+        }
+      ]
+    },
+    {
+      "document_id": "sample_04",
+      "source_name": "동물이송진료용 특수차량 규격서(수정안최종) (2).hwpx",
+      "source_sha256": "40c6d6203877a0bdc50b8cbb4f2f71f3efcd5eb5a1c06bc9ac5756ac3c86289d",
+      "parser_version": "0.9.13",
+      "classification_code": null,
+      "label_status": "silver",
+      "source_nodes": [
+        {
+          "node_id": "n00090",
+          "native_ref": "/blocks/35/table/cells/1/1/blocks/7/table/cells/1/0",
+          "kind": "cell",
+          "text": "동물이송진료차",
+          "parent_id": "n00084",
+          "page": null,
+          "row": 1,
+          "column": 0,
+          "row_span": 1,
+          "column_span": 1,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00112",
+          "native_ref": "/blocks/39/table/cells/1/1",
+          "kind": "cell",
+          "text": "- 공간 구획\n·운전석·조수석 공간과 응급처치·간이수술 공간으로 구분\n·운전공간과 진료공간 사이에 차량용 격벽 및 관찰창을 설치하여 공간을 독립적으로 구획\n·격벽은 하이그로시 패널 또는 금속 프레임을 적용한 견고한 구조로 제작\n·격벽은 차량 차체에 견고하게 고정하여 주행 중 흔들림·유격이 발생하지 않도록 제작·설치\n·격벽과 차량 차체의 접합부는 틈새가 발생하지 않도록 밀폐 처리하고, 실란트 등 적정 마감재를 사용하여 깔끔하게 마감\n·격벽 및 내부 구조물은 날카로운 모서리·돌출부가 없도록 안전하게 마감\n- 관찰창\n·운전석에서 진료공간 내부 확인이 가능한 위치에 설치\n·여닫이형 구조로 제작하여 개방 및 폐쇄가 가능하도록 구성\n·투명 또는 동등 이상의 시야 확보가 가능한 재질 사용\n·운전자의 후방 시야를 가리지 않는 위치 및 구조로 설치\n·관찰창 및 프레임은 차량 진동·충격에 견딜 수 있도록 견고하게 고정\n- 후석 진료공간\n·대형동물 응급처치 및 간이수술이 가능한 구조\n·후면 양문 개방 시 이동형 진료대의 직접 적재가 가능한 구조\n·이동형 진료대는 차량 구성품으로 포함하고, 대형동물 이송 및 응급처치·간이수술에 사용할 수 있는 구조\n·이동형 케이지 체결장치: 우치동물원에서 별도 제작하는 이동형 케이지(800 × 1,800 × 900㎜)의 차량 내 운송을 위하여 차량 바닥 및 측면에 체결용 앵커(고정고리)를 설치하고, 고정벨트·래칫벨트 등으로 케이지를 견고하게 고정할 수 있는 구조로 할 것. 케이지의 전후·좌우 이동 및 전도를 방지할 수 있도록 체결 위치를 적정하게 배치하고, 탈착이 용이하도록 제작할 것.\n·진료공간 내벽 및 접합부는 세척·소독이 용이하도록 마감\n·후석 공조장치는 차량 기본사양을 활용하되, 후석 진료공간 전체에 냉·난방이 원활히 공급되도록 제작\n·냉·난방 송풍구는 진료공간 전체에 공기가 고르게 공급될 수 있도록 배치",
+          "parent_id": "n00108",
+          "page": null,
+          "row": 1,
+          "column": 1,
+          "row_span": 1,
+          "column_span": 1,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00116",
+          "native_ref": "/blocks/39/table/cells/3/1",
+          "kind": "cell",
+          "text": "- 차량에는 대형동물의 구조·이송 및 응급처치와 간이수술이 가능한 이동형 진료대 설치·비치\n- 진료대는 대형동물의 안전한 이송 및 진료가 가능하도록 견고한 구조로 제작\n상하 범위: 600~1,100㎜\n상판 크기: 1,600 × 600㎜\n허용하중: 200kg 이상\n- 진료 및 수술 시 작업 높이에 맞게 상판의 높이를 원활하게 조절할 수 있는 구조 확보\n- 차량 내 적재 후 주행 중 진료대가 움직이지 않도록 차량 고정장치 설치\n- 상판은 혈액·분변·소변 등 오염물의 흡수 및 잔류가 최소화되며 세척·소독이 용이한 재질로 마감\n- 진료대의 모서리 및 돌출부는 동물과 작업자의 부상 방지를 위해 안전하게 마감",
+          "parent_id": "n00108",
+          "page": null,
+          "row": 3,
+          "column": 1,
+          "row_span": 1,
+          "column_span": 1,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00119",
+          "native_ref": "/blocks/39/table/cells/5/0",
+          "kind": "cell",
+          "text": "전력시스템",
+          "parent_id": "n00108",
+          "page": null,
+          "row": 5,
+          "column": 0,
+          "row_span": 1,
+          "column_span": 1,
+          "source_table_id": null
+        },
+        {
+          "node_id": "n00120",
+          "native_ref": "/blocks/39/table/cells/5/1",
+          "kind": "cell",
+          "text": "- 차량 내부에서 이동형 의료장비 및 진료장비의 안정적인 사용이 가능하도록 별도의 전원공급 시스템을 구축\n·인버터는 정격출력 3kW 이상으로 하며, 차량 전원을 의료장비 사용이 가능한 220V AC 전원으로 변환할 수 있어야 함\n·차량 내부에 220V AC 콘센트를 2개소 이상 설치\n·각 콘센트는 의료장비 사용에 적합하도록 안전하게 고정하고, 차량 운행 중 플러그가 쉽게 이탈하지 않는 구조\n·분전함은 장비보관함 측면에 하이박스(High Box) 형태로 견고하게 고정·설치하고, 내부에 누전차단기 및 과전류·과부하 보호장치 등을 구성하여 전원회로를 안전하게 분배·차단할 수 있는 구조 확보\n·인버터 및 전기설비는 차량의 기존 전기계통 및 특장 설비와 적절히 연계하여 설치하고, 배선은 차량 운행 중 진동·마찰 등에 의해 손상되지 않도록 보호\n·인버터 및 전기설비의 설치 위치는 진료공간의 사용성과 유지보수성을 고려하여 발주기관과 협의하여 결정",
+          "parent_id": "n00108",
+          "page": null,
+          "row": 5,
+          "column": 1,
+          "row_span": 1,
+          "column_span": 1,
+          "source_table_id": null
+        }
+      ],
+      "focus": "차량→전력시스템→인버터와 별도 이동형 진료대 구분; 하중 조건의 대상 귀속",
+      "entities": [
+        {
+          "id": "scope",
+          "name": "동물이송진료차",
+          "node_id": "n00090",
+          "owner": null
+        },
+        {
+          "id": "table",
+          "name": "이동형 진료대",
+          "node_id": "n00116",
+          "owner": "scope"
+        },
+        {
+          "id": "power",
+          "name": "전력시스템",
+          "node_id": "n00119",
+          "owner": "scope"
+        },
+        {
+          "id": "inverter",
+          "name": "인버터",
+          "node_id": "n00120",
+          "owner": "power"
+        }
+      ],
+      "relations": [
+        {
+          "source_id": "table",
+          "target_id": "scope",
+          "kind": "component_of",
+          "source_node_ids": [
+            "n00112"
+          ],
+          "source_text": "이동형 진료대는 차량 구성품으로 포함"
+        },
+        {
+          "source_id": "power",
+          "target_id": "scope",
+          "kind": "component_of",
+          "source_node_ids": [
+            "n00119",
+            "n00120"
+          ],
+          "source_text": "별도의 전원공급 시스템을 구축"
+        },
+        {
+          "source_id": "inverter",
+          "target_id": "power",
+          "kind": "component_of",
+          "source_node_ids": [
+            "n00119",
+            "n00120"
+          ],
+          "source_text": "인버터는 정격출력 3kW 이상"
+        }
+      ],
+      "requirements": [
+        {
+          "subject_id": "table",
+          "node_id": "n00116",
+          "property_key": "load_capacity",
+          "value_raw": "200",
+          "unit_raw": "kg",
+          "operator": "gte",
+          "operator_raw": "이상",
+          "source_text": "허용하중: 200kg 이상",
+          "role": "requirement_candidate",
+          "scope": "per_component"
+        }
+      ]
+    }
+  ]
+}

@@ -5,11 +5,13 @@ from typing import Any
 
 import yaml
 
+from teoria.integrations.prefect.deployment_manifests import deployment_directory
+
 
 def load_deployments(pipeline_root: Path) -> list[tuple[Path, dict[str, Any]]]:
     return [
         (path, deployment)
-        for path in sorted(pipeline_root.glob("prefect*.yaml"))
+        for path in sorted(deployment_directory(pipeline_root).glob("*.yaml"))
         for deployment in yaml.safe_load(path.read_text(encoding="utf-8"))[
             "deployments"
         ]
@@ -20,7 +22,7 @@ def render_deployment_docs(pipeline_root: Path) -> str:
     lines = [
         "# Pipeline Deployment 목록",
         "",
-        "이 표는 `backend/prefect*.yaml`에서 생성한다. 수동으로 수정하지 않는다.",
+        "이 표는 `deploy/prefect/*.yaml`에서 생성한다. 수동으로 수정하지 않는다.",
         "저장소에 선언된 설정이며 실행 중인 Prefect Server 상태를 조회한 결과는 아니다.",
         "",
         "```bash",
@@ -37,7 +39,7 @@ def render_deployment_docs(pipeline_root: Path) -> str:
                 "",
                 deployment["description"],
                 "",
-                f"- 선언: `backend/{path.name}`",
+                f"- 선언: `deploy/prefect/{path.name}`",
                 f"- Flow: `{deployment['entrypoint']}`",
                 f"- Work pool: `{deployment['work_pool']['name']}`",
                 f"- Work queue: `{deployment['work_pool']['work_queue_name']}`",

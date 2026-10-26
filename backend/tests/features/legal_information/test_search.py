@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.legal_information.admin_api import create_law_search_router
+from teoria.features.legal_information.admin_router import create_law_search_router
 from teoria.features.legal_information.search import LawSearchRequest, _pattern
 from teoria.settings import Settings
 

@@ -1,4 +1,4 @@
-# Copy this file to backend/registries/sources/{source_id}.yaml and replace every
+# Copy this file to backend/contracts/runtime/sources/{source_id}.yaml and replace every
 # provider-specific example value. Files below docs/ are not loaded as registries.
 registry:
   version: 1.0.0

@@ -12,9 +12,9 @@ RUN useradd --create-home --uid 10001 teoria
 FROM base AS runtime
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --locked --no-dev --extra api --no-editable
-COPY --chown=teoria:teoria backend/registries ./backend/registries
+COPY --chown=teoria:teoria backend/contracts/runtime ./backend/contracts/runtime
 USER teoria
-ENV TEORIA_REGISTRY_PATH=/app/backend/registries
+ENV TEORIA_REGISTRY_PATH=/app/backend/contracts/runtime
 CMD ["teoria-runtime-api"]
 
 FROM runtime AS authoring
@@ -23,21 +23,21 @@ COPY --from=model_cli /usr/local/bin/node /usr/local/bin/node
 COPY --from=model_cli /usr/local/lib/node_modules/@openai /opt/codex/node_modules/@openai
 RUN ln -s /opt/codex/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex && \
     mkdir -p /home/teoria/.codex && chown teoria:teoria /home/teoria/.codex
-COPY --chown=teoria:teoria backend/ontology_migrations ./backend/ontology_migrations
-COPY --chown=teoria:teoria backend/ontology_blueprints ./backend/ontology_blueprints
+COPY --chown=teoria:teoria backend/authoring/ontology_migrations ./backend/authoring/ontology_migrations
+COPY --chown=teoria:teoria backend/authoring/ontology_blueprints ./backend/authoring/ontology_blueprints
 COPY --chown=teoria:teoria backend/references ./backend/references
 COPY --chown=teoria:teoria backend/migrations/application ./backend/migrations/application
 USER teoria
 CMD ["teoria-admin-api"]
 
 FROM base AS data-operations
-COPY --chown=teoria:teoria backend/connectors ./backend/connectors
-COPY --chown=teoria:teoria backend/definitions ./backend/definitions
+COPY --chown=teoria:teoria backend/contracts/ingestion/connectors ./backend/contracts/ingestion/connectors
+COPY --chown=teoria:teoria backend/contracts/ingestion/pipelines ./backend/contracts/ingestion/pipelines
 COPY --chown=teoria:teoria backend/config ./backend/config
 COPY --chown=teoria:teoria backend/references ./backend/references
 COPY --chown=teoria:teoria backend/verification_cases ./backend/verification_cases
 COPY --chown=teoria:teoria backend/migrations/data ./backend/migrations/data
-COPY --chown=teoria:teoria backend/prefect.yaml backend/prefect.metadata.yaml backend/prefect.legal_information.yaml ./backend/
+COPY --chown=teoria:teoria deploy/prefect ./deploy/prefect
 ENV TEORIA_PIPELINE_PATH=/app/backend
 
 FROM data-operations AS law-worker
@@ -85,7 +85,7 @@ CMD ["teoria-mcp"]
 FROM data-operations AS check
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --locked --no-dev --extra api --group orchestration --no-editable
-COPY --chown=teoria:teoria backend/registries ./backend/registries
+COPY --chown=teoria:teoria backend/contracts/runtime ./backend/contracts/runtime
 USER teoria
-ENV TEORIA_PLATFORM_REGISTRY_PATH=/app/backend/registries
-CMD ["teoria-pipelines", "validate-integration", "/app/backend", "--platform-registries", "/app/backend/registries"]
+ENV TEORIA_PLATFORM_REGISTRY_PATH=/app/backend/contracts/runtime
+CMD ["teoria-pipelines", "validate-integration", "/app/backend", "--platform-registries", "/app/backend/contracts/runtime"]

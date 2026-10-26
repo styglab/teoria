@@ -36,9 +36,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv run --project backend --locked --all-extras --all-groups pytest backend/tests --ignore=backend/tests/integration
-      - run: uv run --project backend --locked --extra api teoria validate backend/registries
+      - run: uv run --project backend --locked --extra api teoria validate backend/contracts/runtime
       - run: uv run --project backend --locked teoria-pipelines validate backend
-      - run: uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/registries
+      - run: uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/contracts/runtime
       - run: uv run --project backend --locked --all-extras pytest backend/tests/integration/test_provider_reference_ownership.py
 
   application-db-integration:
@@ -99,7 +99,7 @@ jobs:
         run: uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/integration/data_operations
       - name: Test Pipeline and Platform contracts
         run: uv run --project backend --locked --all-extras --group orchestration pytest tests/integration
-      - run: uv run --project backend --locked --all-extras --group orchestration teoria-pipelines validate-integration backend --platform-registries backend/registries
+      - run: uv run --project backend --locked --all-extras --group orchestration teoria-pipelines validate-integration backend --platform-registries backend/contracts/runtime
 
   deployment:
     runs-on: ubuntu-latest
@@ -131,6 +131,8 @@ jobs:
             sleep 2
           done
           [ "$ready" = true ]
+          # Traefik CRDs are installed separately because this API-only test disables Traefik.
+          docker exec teoria-ci-k3s kubectl apply --server-side -f https://raw.githubusercontent.com/traefik/traefik/v3.7.16/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
           docker exec teoria-ci-k3s kubectl create namespace teoria
           docker exec teoria-ci-k3s kubectl create namespace teoria-pipelines
           for phase in execution infrastructure openmetadata application; do

@@ -22,7 +22,7 @@ async def verify_connector(pipeline_catalog: PipelineCatalog, *, connector_id: s
         return _result("passed", [], steps)
     if not operation_id:
         diagnostic = Diagnostic("missing_verification_target", "operation is required for build/live profile",
-            pipeline_catalog.root / "connectors")
+            pipeline_catalog.root / "contracts" / "ingestion" / "connectors")
         steps.append({"name": "build_request", "status": "failed"})
         return _result("failed", [diagnostic], steps)
     registry = pipeline_catalog.connectors[connector_id]

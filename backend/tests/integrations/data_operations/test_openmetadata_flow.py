@@ -35,7 +35,9 @@ def test_ingestion_task_runs_and_removes_ephemeral_container(
 
     with (
         patch.dict("sys.modules", {"docker": docker_module}),
-        patch("teoria.features.metadata_management.ingestion.openmetadata.get_run_logger") as logger,
+        patch(
+            "teoria.features.metadata_management.ingestion.openmetadata.get_run_logger"
+        ) as logger,
     ):
         result = run_openmetadata_ingestion_container.fn(
             image="teoria-openmetadata-ingestion:2.0.5",
@@ -51,6 +53,8 @@ def test_ingestion_task_runs_and_removes_ephemeral_container(
     client.containers.run.assert_called_once()
     call = client.containers.run.call_args
     assert call.kwargs["auto_remove"] is False
+    assert call.kwargs["nano_cpus"] == 1_000_000_000
+    assert call.kwargs["mem_limit"] == "2g"
     assert call.kwargs["environment"] == {
         "TEORIA_METADATA_DB_PASSWORD": "database-secret",
         "OPENMETADATA_INGESTION_BOT_TOKEN": "jwt-secret",
@@ -78,7 +82,9 @@ def test_ingestion_task_fails_on_nonzero_exit_and_removes_container(
 
     with (
         patch.dict("sys.modules", {"docker": docker_module}),
-        patch("teoria.features.metadata_management.ingestion.openmetadata.get_run_logger"),
+        patch(
+            "teoria.features.metadata_management.ingestion.openmetadata.get_run_logger"
+        ),
         pytest.raises(RuntimeError, match="status 7"),
     ):
         run_openmetadata_ingestion_container.fn(
@@ -104,7 +110,9 @@ def test_ingestion_task_rejects_non_allowlisted_image(
 
     with (
         patch.dict("sys.modules", {"docker": docker_module}),
-        patch("teoria.features.metadata_management.ingestion.openmetadata.get_run_logger"),
+        patch(
+            "teoria.features.metadata_management.ingestion.openmetadata.get_run_logger"
+        ),
         pytest.raises(RuntimeError, match="not allowlisted"),
     ):
         run_openmetadata_ingestion_container.fn(
@@ -139,7 +147,9 @@ def test_kubernetes_backend_keeps_allowlist_and_does_not_require_docker_credenti
 def test_kubernetes_ingestion_job_scopes_credentials_and_cleans_up(
     monkeypatch, succeeded, failed, raises
 ):
-    from teoria.features.metadata_management.ingestion.kubernetes_job import run_ingestion_job
+    from teoria.features.metadata_management.ingestion.kubernetes_job import (
+        run_ingestion_job,
+    )
 
     api = MagicMock()
     api.read_namespaced_job_status.return_value = SimpleNamespace(
@@ -176,3 +186,72 @@ def test_kubernetes_ingestion_job_scopes_credentials_and_cleans_up(
     api.delete_namespaced_job.assert_called_once_with(
         body["metadata"]["name"], "teoria-test", propagation_policy="Background"
     )
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "1e-12"])
+def test_ingestion_rejects_invalid_cpu_budget_before_creating_a_job(monkeypatch, value):
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE", "approved/image")
+    monkeypatch.setenv("TEORIA_METADATA_DB_PASSWORD", "synthetic")
+    monkeypatch.setenv("OPENMETADATA_INGESTION_BOT_TOKEN", "synthetic")
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_CPUS", value)
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_BACKEND", "docker")
+    factory = MagicMock()
+    with patch.dict("sys.modules", {"docker": SimpleNamespace(from_env=factory)}):
+        with pytest.raises(ValueError, match="finite and positive"):
+            run_openmetadata_ingestion_container.fn(
+                image="approved/image", network="test", timeout_seconds=1
+            )
+    factory.assert_not_called()
+
+
+@pytest.mark.parametrize("value", ["0", "-1g", "invalid"])
+def test_ingestion_rejects_unbounded_or_invalid_memory(monkeypatch, value):
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE", "approved/image")
+    monkeypatch.setenv("TEORIA_METADATA_DB_PASSWORD", "synthetic")
+    monkeypatch.setenv("OPENMETADATA_INGESTION_BOT_TOKEN", "synthetic")
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_MEMORY", value)
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_BACKEND", "docker")
+    factory = MagicMock()
+    with patch.dict("sys.modules", {"docker": SimpleNamespace(from_env=factory)}):
+        with pytest.raises(ValueError, match="positive Docker memory size"):
+            run_openmetadata_ingestion_container.fn(
+                image="approved/image", network="test", timeout_seconds=1
+            )
+    factory.assert_not_called()
+
+
+@pytest.mark.parametrize("failure_stage", ["create", "wait", "logs", "remove"])
+def test_ingestion_closes_docker_client_when_job_operations_fail(
+    monkeypatch, failure_stage
+):
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_BACKEND", "docker")
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE", "approved/image")
+    monkeypatch.setenv("TEORIA_METADATA_DB_PASSWORD", "synthetic")
+    monkeypatch.setenv("OPENMETADATA_INGESTION_BOT_TOKEN", "synthetic")
+    container = MagicMock()
+    container.wait.return_value = {"StatusCode": 0}
+    container.logs.return_value = []
+    client = MagicMock()
+    client.containers.run.return_value = container
+    operation = {
+        "create": client.containers.run,
+        "wait": container.wait,
+        "logs": container.logs,
+        "remove": container.remove,
+    }[failure_stage]
+    operation.side_effect = RuntimeError(f"synthetic {failure_stage} failure")
+    with (
+        patch.dict("sys.modules", {"docker": SimpleNamespace(from_env=lambda: client)}),
+        patch(
+            "teoria.features.metadata_management.ingestion.openmetadata.get_run_logger"
+        ),
+        pytest.raises(RuntimeError, match=f"synthetic {failure_stage} failure"),
+    ):
+        run_openmetadata_ingestion_container.fn(
+            image="approved/image", network="test", timeout_seconds=1
+        )
+    client.close.assert_called_once_with()
+    if failure_stage == "create":
+        container.remove.assert_not_called()
+    else:
+        container.remove.assert_called_once_with(force=True)

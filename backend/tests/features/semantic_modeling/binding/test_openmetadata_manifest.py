@@ -8,7 +8,7 @@ ROOT = (Path(__file__).resolve().parents[5] / 'backend')
 
 def test_openmetadata_binding_plan_covers_physical_and_term_references() -> None:
     manifest = OpenMetadataBindingManifest.load(
-        ROOT / "ontology_migrations" / "applied" / "2026_10_initial_unification" / "teoria_openmetadata_bindings_v1.yaml"
+        ROOT / "authoring" / "ontology_migrations" / "applied" / "2026_10_initial_unification" / "teoria_openmetadata_bindings_v1.yaml"
     )
 
     assert manifest.ontology_namespace == "teoria"

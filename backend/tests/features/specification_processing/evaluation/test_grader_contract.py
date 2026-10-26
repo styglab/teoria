@@ -135,3 +135,31 @@ def test_different_grading_contracts_cannot_establish_an_extraction_improvement(
         {s:summary for s in ('development','validation','regression')},True)
     assert verdict['decision']=='inconclusive'
     assert any(reason.endswith(':changed_case_contract') for reason in verdict['reasons'])
+
+
+def test_repeated_source_requirements_at_different_locations_are_not_extraction_duplicates():
+    # R26BK01779325 repeats CPU core/thread requirements in its overview and specification table.
+    expected,actual=example('CPU 16코어/32스레드','CPU','16','코어','eq')
+    actual['attributes'][0]['property_key']='core_count'
+    second=deepcopy(actual['attributes'][0]);second['id']='a2';second['evidence']={'node_id':'detail'}
+    actual['attributes'].append(second)
+    actual['parsed_document']['nodes'].append({'node_id':'detail','text':'CPU 16코어/32스레드'})
+    metrics=score_extraction({'documents':[actual]},[expected])['metrics']
+    assert metrics['duplicate_attributes']==0
+    assert metrics['requirement_cases_found']==1
+
+
+def test_same_source_observation_extracted_twice_is_still_a_duplicate():
+    expected,actual=example()
+    second=deepcopy(actual['attributes'][0]);second['id']='a2'
+    second['evidence']['fragment_id']='retry_fragment'
+    actual['attributes'].append(second)
+    assert score_extraction({'documents':[actual]},[expected])['metrics']['duplicate_attributes']==1
+
+
+def test_distinct_source_spans_within_the_same_node_are_preserved():
+    expected,actual=example('GPU 24GB, GPU 24GB')
+    first=actual['attributes'][0];first['evidence'].update(char_start=0,char_end=8)
+    second=deepcopy(first);second['id']='a2';second['evidence'].update(char_start=10,char_end=18)
+    actual['attributes'].append(second)
+    assert score_extraction({'documents':[actual]},[expected])['metrics']['duplicate_attributes']==0

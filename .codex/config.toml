@@ -1,6 +1,6 @@
 [mcp_servers.teoria]
   command = "uv"
-  args = ["run", "--locked", "--package", "teoria-mcp", "python", ".codex/run_teoria_mcp.py"]
+  args = ["run", "--project", "backend", "--locked", "--extra", "mcp", "python", ".codex/run_teoria_mcp.py"]
   cwd = "/workspace"
   startup_timeout_sec = 30
   tool_timeout_sec = 150

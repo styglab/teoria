@@ -4,14 +4,25 @@ from uuid import UUID
 
 
 from teoria.features.semantic_modeling.binding.repository import BindingRepository
-from teoria.features.metadata_management.intelligence.suggestions.application import SuggestionApplicationService
-from teoria.features.metadata_management.intelligence.suggestions.contracts import SuggestionInput
-from teoria.features.metadata_management.intelligence.suggestions.generation import ProposalService
-from teoria.features.metadata_management.intelligence.suggestions.repository import SuggestionRepository
-from teoria.features.metadata_management.catalog.asset_context import asset_targets, suggestion_target_refs
+from teoria.features.metadata_management.intelligence.suggestions.application import (
+    SuggestionApplicationService,
+)
+from teoria.features.metadata_management.intelligence.suggestions.contracts import (
+    SuggestionInput,
+)
+from teoria.features.metadata_management.intelligence.suggestions.generation import (
+    ProposalService,
+)
+from teoria.features.metadata_management.intelligence.suggestions.repository import (
+    SuggestionRepository,
+)
+from teoria.features.metadata_management.catalog.asset_context import (
+    asset_targets,
+    suggestion_target_refs,
+)
 from teoria.integrations.openmetadata import OpenMetadataClient, OpenMetadataError
 from teoria.integrations.openmetadata.mapper import table_detail
-from teoria.features.semantic_modeling.ontology.authoring import OntologyAuthoringRepository
+from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
 
 
 class SuggestionService:
@@ -22,18 +33,18 @@ class SuggestionService:
         repository: SuggestionRepository,
         metadata_client: OpenMetadataClient | None,
         binding_repository: BindingRepository | None = None,
-        ontology_repository: OntologyAuthoringRepository | None = None,
+        ontology_service: OntologyAuthoringService | None = None,
     ) -> None:
         self.repository = repository
         self.metadata_client = metadata_client
         self.binding_repository = binding_repository
-        self.ontology_repository = ontology_repository
+        self.ontology_service = ontology_service
 
         self.proposals = ProposalService(
             repository, metadata_client, binding_repository
         )
         self.applications = SuggestionApplicationService(
-            repository, metadata_client, binding_repository, ontology_repository
+            repository, metadata_client, binding_repository, ontology_service
         )
 
     async def suggest_column_binding(

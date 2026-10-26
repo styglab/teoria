@@ -20,6 +20,7 @@ def generate(
     sample_name="sample",
     benchmark_name="benchmark",
     quality_name="quality.json",
+    labels_name="source_labels.json",
     cleanup_intermediates=True,
 ):
     output.mkdir(parents=True, exist_ok=False)
@@ -29,7 +30,7 @@ def generate(
     acceptance = json.loads((root / "acceptance/acceptance.json").read_text())
     if quality["benchmark_manifest_sha256"] != benchmark["manifest_sha256"]:
         raise ValueError("Quality/benchmark manifest identity mismatch")
-    if sha((root / "source_labels.json").read_bytes()) != quality["labels_sha256"]:
+    if sha((root / labels_name).read_bytes()) != quality["labels_sha256"]:
         raise ValueError("Source labels changed after grading")
     common = [row for row in benchmark["results"] if all(row["engines"][e]["success"] for e in ENGINES)]
     total = {e: sum(row["engines"][e]["median_seconds"] for row in common) for e in ENGINES}
@@ -59,6 +60,7 @@ def generate(
     report = {
         "schema_version": 1,
         "sampled_documents": sample["sampled_count"],
+        "compared_documents": len(benchmark["results"]),
         "formats": sample["formats"],
         "splits": sample["splits"],
         "success": success,
@@ -78,7 +80,7 @@ def generate(
         "source_labels_sha256": quality["labels_sha256"],
         "limitations": [
             "Partial source checks, not full-document accuracy.",
-            "Rendered PDF review was performed by Codex; no independent human review is claimed.",
+            "Source checks rely on original XML or explicitly recorded review evidence; no independent human review is implied.",
             "Warm timing from this sample and host, not a universal performance ranking.",
             "Memory and OCR accuracy were not measured.",
             "Inspected validation documents are future regression data, not a fresh blind test.",
@@ -88,13 +90,13 @@ def generate(
     lines = [
         "# Kory Parser public-document improvement cycle",
         "",
-        f"Sample: {sample['sampled_count']} documents from {sample['notice_frame_count']} notices; formats: {sample['formats']}.",
+        f"Fresh sample: {sample['sampled_count']} documents from {sample['notice_frame_count']} notices; formats: {sample['formats']}. Compared documents including replays: {len(benchmark['results'])}.",
         f"Kory baseline {', '.join(versions['baseline'])}; candidate {', '.join(versions['candidate'])}; kordoc {benchmark['reference_version']}. OCR/images disabled.",
         "",
         "| Check | Kory before | Kory after | kordoc |",
         "|---|---:|---:|---:|",
         "| Execution success | "
-        + " | ".join(f"{success[e]}/{sample['sampled_count']}" for e in ENGINES)
+        + " | ".join(f"{success[e]}/{len(benchmark['results'])}" for e in ENGINES)
         + " |",
         "| Common-success warm median sum (seconds) | "
         + " | ".join(f"{total[e]:.6f}" for e in ENGINES)
@@ -149,6 +151,7 @@ def main():
     parser.add_argument("--sample", default="sample")
     parser.add_argument("--benchmark", default="benchmark")
     parser.add_argument("--quality", default="quality.json")
+    parser.add_argument("--labels", default="source_labels.json", help="Frozen labels filename within the cycle")
     parser.add_argument("--keep-intermediates", action="store_true")
     args = parser.parse_args()
     generate(
@@ -157,6 +160,7 @@ def main():
         sample_name=args.sample,
         benchmark_name=args.benchmark,
         quality_name=args.quality,
+        labels_name=args.labels,
         cleanup_intermediates=not args.keep_intermediates,
     )
     return 0

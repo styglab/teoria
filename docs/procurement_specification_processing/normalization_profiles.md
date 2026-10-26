@@ -11,7 +11,7 @@ Semantic Binding을 문서별 관찰 저장소로 사용하지 않는다.
 |---|---|
 | `backend/src/teoria/features/goods_normalization/` | 프로파일 작성·검토·승인 이력과 패키지 발행 |
 | `backend/src/teoria/features/goods_normalization/contracts/` | 발행과 적용이 공유하는 계약·checksum·지원 단위 정책 |
-| `pipelines/.../specification_processing/standardization/profile_application.py` | 원문 대조와 고정 패키지 적용 |
+| `backend/src/teoria/features/specification_processing/normalization/profile_application.py` | 원문 대조와 고정 패키지 적용 |
 | Application DB `goods.normalization_profile_revisions`, `normalization_profile_events` | revision과 변경·승인 기록 |
 
 ```text
@@ -44,7 +44,7 @@ uv run --locked --project backend --extra api teoria migrate-app
 1. 적용할 Published Ontology version을 선택한다. 초기 `goods.yaml`은 Draft 모델이다.
    `goods_requirement_enrichment.yaml`은 기존 Published goods에서 `0.2.0` Draft를 만들고 요구조건의
    개념 참조·수치·단위·역할·범위 속성을 추가한다. 이어서 `goods_memory_extension.yaml`을 같은 Draft에
-   적용한다. 두 파일은 `backend/ontology_blueprints/`에 있다. 기존 작성 API/CLI로 적용하고
+   적용한다. 두 파일은 `backend/authoring/ontology_blueprints/`에 있다. 기존 작성 API/CLI로 적용하고
    검토·승인·게시는 별도로 수행한다. 이미 게시한 `0.2.0`이 있으면 새 Draft version을 사용한다.
    기존 게시 버전은 수정하지 않는다. 이 구현 작업은 실제 goods 게시를 실행하지 않는다.
 2. [서버 메모리 템플릿](examples/server_memory_profile.json)을 준비한다. 템플릿의 `concept_id` 필드는
@@ -202,7 +202,7 @@ checksum은 내용 일치를 검사한다. 승인 권위는 인증된 Admin과 �
 uv run --locked --project backend pytest backend/tests/features/goods_normalization/contracts
 uv run --locked --project backend --all-extras --all-groups pytest backend/tests
 uv run --locked --project backend --all-extras --all-groups pytest backend/tests
-uv run --project backend --locked --all-extras pytest tests/integration/test_goods_normalization_contract.py
+uv run --project backend --locked --all-extras pytest backend/tests/integration/test_goods_normalization_contract.py
 ```
 
 프로젝트별 검사와 프로젝트 간 계약 검사는 각각 실행한다. 실제 SQL 검사는
@@ -297,5 +297,9 @@ Prefect에 제출할 때는 같은 JSON을 `manifest` parameter로 제공한다.
 
 선택적 SQL 회귀는 운영과 분리한 `TEORIA_TEST_APP_DATABASE_URL`과
 `TEORIA_TEST_PIPELINE_DATABASE_URL`을 사용한다. 프로젝트 간 HTTP 계약 검사는 루트
-`tests/integration/test_goods_normalization_contract.py`가 소유한다. 통제된 모델 응답·체크포인트를
+`backend/tests/integration/test_goods_normalization_contract.py`가 소유한다. 통제된 모델 응답·체크포인트를
 사용하는 통합 테스트와 실제 문서의 Codex 품질 평가·운영 배포 성공은 구분한다.
+
+프로파일의 공개 작성 경계는 `NormalizationProfileService`, 의미 판정의 내구성 실행은
+`SemanticOperationService`다. 저장소의 내부 context·DB URL에 의존하는 대신 공개 서비스 메서드를 사용한다.
+승인 시 Ontology 서비스의 게시 artifact 조회와 version 잠금을 같은 transaction에 연결한다.

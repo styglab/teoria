@@ -24,7 +24,7 @@ uv run --locked --project backend --group orchestration \
   teoria-pipelines law sync --pipelines pipelines
 ```
 
-`backend/config/law_targets.yaml`은 수집 범위다. 초기 범위는 개인정보 보호법,
+`backend/config/legal_information/collection_targets.yaml`은 수집 범위다. 초기 범위는 개인정보 보호법,
 공공데이터법, 정보공개법과 각 시행령 6개다. 이름은 공식 명칭을 쓰고, 필요하면
 `law_id`를 명시한다. 최초 이름 검색은 현행 목록의 정확한 이름과 유일한 ID만
 허용한다. 최초 등록 이후에는 DB에 고정한 ID로 추적하므로 제명 변경에 영향을
@@ -133,7 +133,7 @@ Suggestion→Review→Application 절차를 거쳐 OpenMetadata에 적용해야 
 - [공식 시행일 목록 가이드](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=lsEfYdListGuide)
 - [공식 시행일 본문 가이드](https://open.law.go.kr/LSO/openApi/guideResult.do?htmlName=lsEfYdInfoGuide)
 - [참고한 korean-law-mcp 계보 조회](https://github.com/chrisryugj/korean-law-mcp/blob/c6feff0cbd10cc5b907cdd4f4b3fcf8c59dcc7f7/src/lib/law-lineage.ts)
-- [Connector](../../../backend/connectors/moleg_law_api.yaml)
+- [Connector](../../../backend/contracts/ingestion/connectors/moleg_law_api.yaml)
 - [Provider Reference](../../../backend/references/providers/moleg/moleg_law_api/metadata.yaml)
 
 ## 조회 기능과의 연결
@@ -144,7 +144,7 @@ Suggestion→Review→Application 절차를 거쳐 OpenMetadata에 적용해야 
 
 ## 현재 전용 배포
 
-법령 작업은 `backend/prefect.legal_information.yaml`에 정의한다.
+법령 작업은 `deploy/prefect/legal_information.yaml`에 정의한다.
 Compose `prefect-law-deploy`가 `teoria-legal-information` pool과 `laws` queue에 등록하고,
 `prefect-law-worker`가 동시 실행 1개·CPU 1·메모리 2GiB 상한으로 실행한다.
 기존 조달 수집 pool을 재개하지 않는다. 월~토 04:15 변경 동기화,
