@@ -59,12 +59,18 @@ def create_runtime_services(
         or resolved_catalog.release.status != "published"
     ):
         raise RuntimeError("a published, checksum-valid Registry release is required")
+    from teoria.features.goods_querying.capabilities import register_server_capabilities
+    from teoria.features.runtime.composition import create_capability_handlers
+
+    handlers = create_capability_handlers()
+    register_server_capabilities(handlers)
     resolved_runner = runner or CapabilityRunner(
         ProviderExecutor(
             timeout_seconds=resolved_settings.source_timeout_seconds,
             max_attempts=resolved_settings.source_max_attempts,
             secret_provider=EnvironmentSecretProvider(),
         ),
+        handlers=handlers,
         timeout_seconds=resolved_settings.capability_timeout_seconds,
         max_pages=resolved_settings.source_max_pages,
         cache=create_runtime_cache(

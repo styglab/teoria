@@ -1,0 +1,43 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+capability:
+  id: get_server_requirements
+  name: 서버 규격서 요구조건 조회
+  description: 불변 snapshot 하나의 요구조건과 원문·의미 버전 참조를 조회한다.
+  version: 1.0.0
+  exposure: internal
+  returns:
+  - server_specifications.requirement_observation
+  semantic_requirements:
+    concepts:
+    - stable_key: computer_server.server
+    - stable_key: computer_server.memory
+    properties:
+    - stable_key: computer_server.server.memory_capacity
+    - stable_key: computer_server.memory.capacity
+    relationships:
+    - stable_key: computer_server.has_memory
+  kind: query
+  inputs:
+    snapshot_id:
+      data_type: string
+      field: specification_observations.server_requirements.snapshot_id
+      required: true
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
+  steps:
+  - call: specification_observations.server_requirements
+    database_query:
+      pagination:
+        page_input: page
+        page_size_input: page_size
+        root_field: observation_id
+        count_distinct: false

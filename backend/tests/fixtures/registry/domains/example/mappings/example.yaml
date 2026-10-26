@@ -1,0 +1,31 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+mapping:
+  id: example
+  description: Synthetic mapping
+  ontology: example
+  bindings:
+    record.record_id:
+    - field: example_data.records.record_id
+    record.name:
+    - field: example_data.records.name
+    record.created_date:
+    - field: example_data.records.created_date
+    group.group_id:
+    - field: example_data.records.group_id
+  materializations:
+    example_data.records:
+      objects:
+        record:
+          type: record
+          identity:
+          - record_id
+        group:
+          type: group
+          identity:
+          - group_id
+      links:
+      - type: belongs_to
+        source: record
+        target: group

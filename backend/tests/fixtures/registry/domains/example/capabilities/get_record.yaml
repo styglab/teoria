@@ -1,0 +1,23 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+capability:
+  id: get_record
+  name: get_record
+  description: Synthetic test query
+  version: 1.0.0
+  kind: query
+  exposure: internal
+  inputs:
+    record_id:
+      property: example.record.record_id
+      required: true
+  steps:
+  - call: example_data.records
+  returns:
+  - example.record
+  - example.group
+  - example.belongs_to
+  semantic_requirements:
+    concepts:
+    - stable_key: example.record

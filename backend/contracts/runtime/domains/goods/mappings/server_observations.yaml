@@ -1,0 +1,92 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+mapping:
+  id: server_observations
+  description: 조회용 Data DB의 관찰을 Runtime projection으로 변환
+  ontology: server_specifications
+  bindings:
+    requirement_observation.observation_id:
+    - field: specification_observations.server_requirements.observation_id
+    requirement_observation.snapshot_id:
+    - field: specification_observations.server_requirements.snapshot_id
+    requirement_observation.run_id:
+    - field: specification_observations.server_requirements.run_id
+    requirement_observation.document_id:
+    - field: specification_observations.server_requirements.document_id
+    requirement_observation.source_sha256:
+    - field: specification_observations.server_requirements.source_sha256
+    requirement_observation.subject_observation_id:
+    - field: specification_observations.server_requirements.subject_observation_id
+    requirement_observation.subject_name:
+    - field: specification_observations.server_requirements.subject_name
+    requirement_observation.subject_concept_id:
+    - field: specification_observations.server_requirements.subject_concept_id
+    requirement_observation.subject_concept_key:
+    - field: specification_observations.server_requirements.subject_concept_key
+    requirement_observation.property_concept_id:
+    - field: specification_observations.server_requirements.property_concept_id
+    requirement_observation.property_stable_key:
+    - field: specification_observations.server_requirements.property_stable_key
+    requirement_observation.operator:
+    - field: specification_observations.server_requirements.operator
+    requirement_observation.unit:
+    - field: specification_observations.server_requirements.unit
+    requirement_observation.role:
+    - field: specification_observations.server_requirements.role
+    requirement_observation.semantic_scope:
+    - field: specification_observations.server_requirements.semantic_scope
+    requirement_observation.value_raw:
+    - field: specification_observations.server_requirements.value_raw
+    requirement_observation.unit_raw:
+    - field: specification_observations.server_requirements.unit_raw
+    requirement_observation.profile_revision_id:
+    - field: specification_observations.server_requirements.profile_revision_id
+    requirement_observation.profile_key:
+    - field: specification_observations.server_requirements.profile_key
+    requirement_observation.profile_version:
+    - field: specification_observations.server_requirements.profile_version
+    requirement_observation.package_checksum:
+    - field: specification_observations.server_requirements.package_checksum
+    requirement_observation.ontology_version_id:
+    - field: specification_observations.server_requirements.ontology_version_id
+    requirement_observation.ontology_namespace:
+    - field: specification_observations.server_requirements.ontology_namespace
+    requirement_observation.ontology_version:
+    - field: specification_observations.server_requirements.ontology_version
+    requirement_observation.ontology_checksum:
+    - field: specification_observations.server_requirements.ontology_checksum
+    requirement_observation.extraction_uri:
+    - field: specification_observations.server_requirements.extraction_uri
+    requirement_observation.extraction_sha256:
+    - field: specification_observations.server_requirements.extraction_sha256
+    requirement_observation.normalized_uri:
+    - field: specification_observations.server_requirements.normalized_uri
+    requirement_observation.normalized_sha256:
+    - field: specification_observations.server_requirements.normalized_sha256
+    requirement_observation.evidence_ref:
+    - field: specification_observations.server_requirements.evidence_ref
+    requirement_observation.value_decimal:
+    - field: specification_observations.server_requirements.value_decimal
+    requirement_observation.evidence_node_ids:
+    - field: specification_observations.server_requirements.evidence_node_ids
+    requirement_observation.qualifiers_raw:
+    - field: specification_observations.server_requirements.qualifiers_raw
+    requirement_observation.owner_observation_id:
+    - field: specification_observations.server_requirements.owner_observation_id
+    requirement_observation.owner_name:
+    - field: specification_observations.server_requirements.owner_name
+    requirement_observation.owner_concept_key:
+    - field: specification_observations.server_requirements.owner_concept_key
+    requirement_observation.document_status:
+    - field: specification_observations.server_requirements.document_status
+    requirement_observation.run_status:
+    - field: specification_observations.server_requirements.run_status
+  materializations:
+    specification_observations.server_requirements:
+      objects:
+        requirement_observation:
+          type: requirement_observation
+          identity:
+          - observation_id
+          - subject_observation_id

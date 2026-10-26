@@ -1,0 +1,137 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+source:
+  id: specification_observations
+  name: 물품 규격 관찰 저장소
+  description: 고정 프로파일로 정규화한 완료 실행의 관찰을 읽기 전용으로 조회한다. 본문은 객체 저장소에 유지한다.
+  type: database
+  access:
+    engine: postgresql
+    connection_env: TEORIA_RUNTIME_DATA_DATABASE_URL
+  relations:
+  - id: server_requirements
+    name: 컴퓨터 서버 요구조건 관찰
+    relation: public_procurement.server_requirement_observations
+    primary_key:
+    - observation_id
+    - subject_observation_id
+    fields:
+    - id: observation_id
+      name: observation_id
+      data_type: string
+    - id: snapshot_id
+      name: snapshot_id
+      data_type: string
+    - id: run_id
+      name: run_id
+      data_type: string
+    - id: document_id
+      name: document_id
+      data_type: string
+    - id: source_sha256
+      name: source_sha256
+      data_type: string
+    - id: subject_observation_id
+      name: subject_observation_id
+      data_type: string
+    - id: subject_name
+      name: subject_name
+      data_type: string
+    - id: subject_concept_id
+      name: subject_concept_id
+      data_type: string
+    - id: subject_concept_key
+      name: subject_concept_key
+      data_type: string
+    - id: property_concept_id
+      name: property_concept_id
+      data_type: string
+    - id: property_stable_key
+      name: property_stable_key
+      data_type: string
+    - id: operator
+      name: operator
+      data_type: string
+    - id: unit
+      name: unit
+      data_type: string
+    - id: role
+      name: role
+      data_type: string
+    - id: semantic_scope
+      name: semantic_scope
+      data_type: string
+    - id: value_raw
+      name: value_raw
+      data_type: string
+    - id: unit_raw
+      name: unit_raw
+      data_type: string
+    - id: profile_revision_id
+      name: profile_revision_id
+      data_type: string
+    - id: profile_key
+      name: profile_key
+      data_type: string
+    - id: profile_version
+      name: profile_version
+      data_type: string
+    - id: package_checksum
+      name: package_checksum
+      data_type: string
+    - id: ontology_version_id
+      name: ontology_version_id
+      data_type: string
+    - id: ontology_namespace
+      name: ontology_namespace
+      data_type: string
+    - id: ontology_version
+      name: ontology_version
+      data_type: string
+    - id: ontology_checksum
+      name: ontology_checksum
+      data_type: string
+    - id: extraction_uri
+      name: extraction_uri
+      data_type: string
+    - id: extraction_sha256
+      name: extraction_sha256
+      data_type: string
+    - id: normalized_uri
+      name: normalized_uri
+      data_type: string
+    - id: normalized_sha256
+      name: normalized_sha256
+      data_type: string
+    - id: evidence_ref
+      name: evidence_ref
+      data_type: string
+    - id: value_decimal
+      name: value_decimal
+      data_type: number
+    - id: evidence_node_ids
+      name: evidence_node_ids
+      type: array
+      items:
+        data_type: string
+    - id: qualifiers_raw
+      name: qualifiers_raw
+      type: array
+      items:
+        data_type: string
+    - id: owner_observation_id
+      name: owner_observation_id
+      data_type: string
+    - id: owner_name
+      name: owner_name
+      data_type: string
+    - id: owner_concept_key
+      name: owner_concept_key
+      data_type: string
+    - id: document_status
+      name: document_status
+      data_type: string
+    - id: run_status
+      name: run_status
+      data_type: string

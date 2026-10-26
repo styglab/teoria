@@ -1,0 +1,39 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+capability:
+  id: search_records
+  name: search_records
+  description: Synthetic test query
+  version: 1.0.0
+  kind: query
+  exposure: public
+  inputs:
+    from_date:
+      data_type: date
+      field: example_data.records.created_date
+      operator: gte
+      required: true
+    page:
+      data_type: integer
+      default: 1
+      minimum: 1
+    page_size:
+      data_type: integer
+      default: 20
+      minimum: 1
+      maximum: 100
+  steps:
+  - call: example_data.records
+    database_query:
+      pagination:
+        page_input: page
+        page_size_input: page_size
+        root_field: record_id
+  returns:
+  - example.record
+  - example.group
+  - example.belongs_to
+  semantic_requirements:
+    concepts:
+    - stable_key: example.record

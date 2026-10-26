@@ -21,9 +21,16 @@ FastAPI 앱·라우터·서비스/저장소와 HTTP client lifespan을 정리하
 - Platform: Ontology 작성·검토·게시, Stable Concept와 Semantic Binding
 - 실행: Source·Mapping·Capability, Context 주입, immutable Runtime artifact, OPA와 MCP
 - OpenMetadata: 기술·거버넌스 metadata의 authoritative source
-- 물품 Ontology 초기 Draft blueprint: `backend/authoring/ontology_blueprints/goods.yaml`
+- 서버 Ontology 작성 입력: `backend/authoring/ontology_blueprints/computer_server.yaml`
+- 서버 프로파일 작성 입력: `backend/authoring/normalization_profiles/computer_server_memory.yaml`
 
-현재 활성 Registry에는 기존 업무 Capability가 없다. 물품 실행 기능의 연결을 완료한 상태로 간주하지 않는다.
+작성 Registry에는 서버 검색·비교·원문 근거 조회와 내부 요구조건 조회를 추가했다.
+고정 프로파일 관찰의 Data DB 적재부터 OPA·불변 bundle을 통한 Runtime HTTP까지 격리 환경에서
+검증한다. 운영은 기존 bundle을 유지하며 새 의미 게시와 전환은 아직 수행하지 않았다.
+[서버 Capability](procurement_specification_processing/server_capabilities.md)를 따른다.
+
+과거 조달 운영 데이터와 미사용 goods Draft·실험 산출물은 [정리했다](verification/retired_data_cleanup_2026_10_26.md).
+법령·게시 Ontology·승인 이력과 현재 bundle은 유지한다. 새 서버 문서의 추출·검토·게시부터 재개한다.
 
 ## 우선 실행 순서
 
@@ -37,6 +44,11 @@ FastAPI 앱·라우터·서비스/저장소와 HTTP client lifespan을 정리하
 | 3 | 대표 물품 Ontology 게시·관찰 데이터 연결 | 컴퓨터 서버를 첫 대상으로, 검토·승인된 개념과 프로파일로 정규화한 관찰을 조회용 Data DB에 적재하고 read-only Source·Mapping을 연결한다. |
 | 4 | 첫 물품 Capability | 조건 검색·두 규격서 요구조건 비교·원문 근거 조회를 구현하고 실제 요청에서 근거와 적용 버전을 반환한다. |
 | 5 | 게시 전 변경 영향 확인 | 개념·프로파일 변경의 영향 문서·매핑·재처리 범위와 이전 버전 대비 결과 차이를 확인한다. |
+
+1번은 합성 API·DB fixture로 회귀 검사를 독립화하고 은퇴 기능 전용 검사를 정리했다.
+3·4번은 서버·메모리 의미 작성 입력, 승인 프로파일 적용, 조회용 관찰 적재와 Capability를
+구현하여 격리 환경에서 검증한다. 운영 게시·배포와 2번의 독립 모델 정확도 평가는 남아 있다.
+[구현과 검증 기록](verification/server_capabilities_2026_10_26.md)을 확인한다.
 
 3·4번은 컴퓨터 서버 한 물품군의 데이터 적재부터 조회까지 하나의 경로로 검증한다.
 Ontology에는 지속 가능한 물품·구성·속성의 의미를 두고, 개별 규격서의 값·연산·조건은
@@ -65,7 +77,7 @@ Pipeline의 엔티티·관계·요구조건 적용 경로를 구현했다.
 선택한 제안의 새 프로파일 Draft 생성과 입력 checksum 감사 기록도 구현했다.
 Codex 의미 판정·신규 개념 초안 작성·프로파일 연결과 평가용 자동 승인 cycle을 추가했다.
 상위 Prefect Flow와 작성 operation 체크포인트·실행 lease를 연결하여 전달·승인 대기·재시도를 자동화했다.
-의미 판정의 독립 정확도 평가, 실제 goods 게시와 물품 Runtime 조회 연결은 후속 범위다.
+의미 판정의 독립 정확도 평가와 운영 goods 게시·bundle 전환은 후속 범위다. 서버 관찰의 Runtime 조회 경로는 격리 검증을 추가했다.
 
 Platform이 저장된 추출 산출물의 checksum과 원문 근거를 확인해 기존 개념 연결 또는 신규 개념을
 Suggestion으로 제안한다. Pipeline이 Platform Runtime을 직접 호출하지 않는다.
@@ -74,8 +86,8 @@ OpenMetadata 연결은 entity 본문 복제 없이 MetadataTargetRef를 사용�
 
 ### 3. 물품 검색·비교 Capability
 
-대표 물품군의 데이터 materialization과 read-only Source·Mapping을 구현한다.
-조건 검색·규격 비교 결과에 문서 근거, 표준 버전과 Ontology artifact를 제공한다.
+서버 관찰 materialization과 read-only Source·Mapping, 검색·비교·근거 조회를 구현했다.
+문서 근거·프로파일·Ontology·Runtime artifact 버전을 반환하며 적용 범위·단위·역할을 구분한다.
 검증된 질문 handler만 Context에 등록하고 범용 AI planner의 완료로 표시하지 않는다.
 
 ### 4. 전용 실행의 확장 검증

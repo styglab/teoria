@@ -24,7 +24,7 @@ Platform Ontology 작성·검토·게시
 Pipeline은 이를 오프라인 적용하고 새 의미 후보를 산출물로 보존한다. 프로파일을 Business Ontology로 저장하지 않는다.
 미해결 후보의 문맥별 묶기·기존 개념 검색과 선택 결과의 새 프로파일 Draft 작성을 지원한다.
 Codex가 의미 연결·신규 개념 초안을 제안하고 기존 작성 절차로 Draft를 만드는 경로도 제공한다.
-Runtime 물품 Object로 연결하는 단계는 후속 구현이다.
+서버 관찰의 Source·Mapping·검색·비교·근거 조회는 격리 환경에서 검증했으며 운영 bundle 전환은 남아 있다.
 파일·S3의 추출 결과가 자동으로 Ontology나 Runtime Object가 되는 것은 아니다.
 
 ## 권위와 실행 경계
@@ -57,3 +57,6 @@ Compose는 Data DB와 Control/Application PostgreSQL을 분리하고,
 metadata ingestion은 Prefect가 관리한다.
 OpenMetadata ingestion dependency는 전용 ephemeral Job에 둔다.
 현재 구성과 완료 조건은 [시작 안내](../platform-guide.md)와 [로드맵](../roadmap.md)을 따른다.
+
+과거 조달 운영 데이터와 미사용 goods Draft는 [백업 검증 후 정리했다](../verification/retired_data_cleanup_2026_10_26.md).
+법령·게시 Ontology·승인 이력과 현재 Runtime bundle은 보존한다.

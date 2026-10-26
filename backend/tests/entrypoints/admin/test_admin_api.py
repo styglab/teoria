@@ -7,7 +7,7 @@ from teoria.settings import Settings
 from teoria.features.semantic_modeling.registry.loader import RegistryLoader
 
 
-REGISTRIES = Path("archive/procurement_services/platform/registries")
+REGISTRIES = Path("backend/tests/fixtures/registry")
 
 
 def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:
@@ -18,82 +18,19 @@ def test_admin_api_exposes_overview_and_runtime_contract_graph() -> None:
 
     overview = client.get("/v1/admin/overview")
     assert overview.status_code == 200
-    assert overview.json()["counts"]["runtime_contract_domains"] == 2
-    assert overview.json()["counts"]["runtime_contracts"] == 2
-    assert overview.json()["counts"]["business_domains"] == 2
-    assert overview.json()["counts"]["runtime_object_types"] == 38
+    assert overview.json()["counts"]["runtime_contracts"] == 1
+    assert overview.json()["counts"]["runtime_object_types"] == 2
     assert overview.json()["validation"]["status"] == "valid"
-
-    release = client.get("/v1/admin/registry-release")
-    assert release.status_code == 200
-    assert release.json() == {
-        "version": None,
-        "git_commit": None,
-        "checksum": None,
-        "published_at": None,
-        "status": "draft",
-    }
-
-    validation = client.get("/v1/admin/validation")
-    assert validation.status_code == 200
-    assert validation.json() == {
-        "status": "valid",
-        "diagnostic_count": 0,
-        "diagnostics": [],
-    }
-
+    assert client.get("/v1/admin/registry-release").json()["status"] == "draft"
+    assert client.get("/v1/admin/validation").json()["diagnostic_count"] == 0
     capabilities = client.get("/v1/admin/capabilities").json()["capabilities"]
-    assert any(item["kind"] == "query" and item["steps"] for item in capabilities)
-    assert (
-        next(item for item in capabilities if item["id"] == "get_bid_notices_by_ids")[
-            "exposure"
-        ]
-        == "internal"
-    )
-    assert any(
-        source["type"] == "database"
-        for source in client.get("/v1/admin/sources").json()["sources"]
-    )
+    assert next(c for c in capabilities if c["id"] == "get_record")["exposure"] == "internal"
     assert client.get("/v1/admin/mappings").json()["mappings"][0]["binding_count"] > 0
-    assert any(
-        link["kind"] == "mapping"
-        for link in client.get("/v1/admin/lineage").json()["links"]
-    )
-
-    contracts = client.get("/v1/admin/runtime-contracts")
-    assert contracts.status_code == 200
-    assert len(contracts.json()["runtime_contracts"]) == 2
-
-    graph = client.get("/v1/admin/runtime-contracts/public_procurement/graph")
+    graph = client.get("/v1/admin/runtime-contracts/example/graph")
     assert graph.status_code == 200
-    payload = graph.json()
-    assert payload["runtime_contract"]["id"] == "public_procurement"
-    assert any(node["id"] == "public_procurement.contract" for node in payload["nodes"])
-    assert any(
-        node["id"] == "company.business_registration" and node["external"]
-        for node in payload["nodes"]
-    )
-    assert any(
-        edge["link_type"] == "contract_participation_is_for_contract"
-        for edge in payload["edges"]
-    )
-    link = next(
-        edge
-        for edge in payload["edges"]
-        if edge["link_type"] == "contract_participation_is_for_contract"
-    )
-    assert link["ontology"] == "public_procurement"
-    assert link["name"]
-
-    combined = client.get("/v1/admin/runtime-contracts/all/graph").json()
-    assert combined["runtime_contract"]["id"] == "all"
-    assert any(
-        node["id"] == "company.business_registration" and not node["external"]
-        for node in combined["nodes"]
-    )
-    assert any(
-        edge["source"] == "company.business_registration" for edge in combined["edges"]
-    )
+    assert any(n["id"] == "example.record" for n in graph.json()["nodes"])
+    assert any(e["link_type"] == "belongs_to" for e in graph.json()["edges"])
+    assert client.get("/v1/admin/runtime-contracts/all/graph").status_code == 200
 
 
 def test_admin_api_removes_legacy_ontology_routes() -> None:

@@ -106,6 +106,13 @@ kory-parser document.hwpx -o legacy.json --no-numbered-structure
 
 ## 결과 계약
 
+- PDF의 텍스트 없는 선 기반 표는 이미지가 셀 안에 들어가면 격자를 보존하고
+  각 셀의 `blocks`에 이미지를 배치한다. 병합·좌표와 `images` 옵션을 유지하며,
+  중첩 표에서는 가장 작은 셀에 한 번만 배치한다. 여러 셀을 가로지르는 이미지와
+  소유 셀이 불명확한 이미지는 페이지 블록에 남긴다. OCR 텍스트 복원을 뜻하지 않으며
+  `UNEXTRACTED_IMAGE_TEXT`와 `NEEDS_OCR` 상태를 유지한다.
+  원문 대조와 사용자 예외 승인에 따른 적용은 [검증 기록](pdf_image_tables_2026_10_26.md)에 있다.
+
 - 0.9.13은 BIFF8 XLS의 외부 참조 시트명에서 잘못된 UTF-16이 발견되면 해당 이름의
   해석을 생략하고 저장된 로컬 셀 값을 읽는다. `XLS_EXTERNAL_NAMES_SKIPPED` 경고를
   남기며, 복구 중 정의 이름 평가도 생략되면 별도 경고로 알린다. 원본 바이트·xlrd 전역

@@ -21,12 +21,9 @@ Provider API를 새로 수집할 때만 [Connector와 Definition](connectors.md)
 기존 Flow를 바꾸면 소유 기능의 테스트와 배포 선언 검증을 실행한다.
 이미지 반영·Worker 교체·실행 검증은 [Prefect 운영 안내](prefect.md)를 따른다.
 
-이 URL에서 안내하던 일반 주문 ETL 예제는 현재 제품 범위에 포함되지 않아
-[보관 코드](../../archive/examples/db_sales/flows.py),
-[배포 예제](../../archive/examples/db_sales/prefect.yaml),
-[보관 테스트](../../archive/examples/db_sales/tests/test_flows.py)로 옮겼다.
-운영 배포에 등록하지 않으며 Great Expectations·pandas와 전용 `etl-example` 의존성 그룹도
-활성 백엔드에서 제거했다. 이 보관 예제를 현재 실행 절차로 사용하지 않는다.
+이 URL에서 안내하던 일반 주문 ETL 예제는 현재 제품 범위에서 제외했다.
+활성 백엔드에는 예제 코드·전용 테스트와 Great Expectations·pandas·`etl-example`
+의존성 그룹이 없다. 현행 기능의 Flow와 테스트를 기준으로 작성한다.
 
 공식 참고: [Prefect Task](https://docs.prefect.io/v3/concepts/tasks),
 [배포 YAML](https://docs.prefect.io/v3/how-to-guides/deployments/prefect-yaml).

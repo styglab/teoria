@@ -301,3 +301,7 @@ backend/references/**
 
 # Keep retired procurement services only in the local workspace.
 /archive/procurement_services/
+
+# Synthetic Provider evidence is part of the independent backend test fixture.
+!backend/tests/fixtures/references/
+!backend/tests/fixtures/references/**

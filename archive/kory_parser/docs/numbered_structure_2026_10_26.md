@@ -6,7 +6,7 @@
 
 직접 입력한 번호가 HWPX의 제목/목록 속성 없이 일반 문단으로 저장된 경우를 개선했다.
 `ParseOptions(recover_numbered_structure=True)` 또는 CLI `--numbered-structure`로 사용한다.
-기존 출력 호환성을 위해 기본값은 꺼져 있으며 HWP·PDF·DOCX에는 이번 복원을 적용하지 않는다.
+평가 당시0.9.14의 기본값은 꺼져 있었다. HWP·PDF·DOCX에는 이번 복원을 적용하지 않는다.
 
 본문의 로마 숫자 구획 반복과 원문 앞쪽 공백으로 깊이를 확인하고 평평한 `blocks`에
 `type="list"`, `level`을 표시한다. 기존 제목/목록 속성을 우선하고 원문 텍스트·span·source를

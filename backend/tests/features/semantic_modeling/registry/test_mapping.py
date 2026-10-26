@@ -20,41 +20,9 @@ from teoria.features.semantic_modeling.registry.codecs.legacy.company import (
 )
 
 
-REGISTRIES = Path("archive/procurement_services/platform/registries")
+REGISTRIES = Path("backend/tests/fixtures/registry")
 
 
-def test_company_mapping_loads_and_references_are_valid() -> None:
-    catalog = RegistryLoader(REGISTRIES).load()
-
-    assert RegistryValidator().validate(catalog) == []
-    mapping = catalog.mappings["company"]
-    assert mapping.ontology == "company"
-    assert "legal_entity.legal_name" in mapping.bindings
-    assert "financial_fact.amount" in mapping.bindings
-    corporate_number_bindings = mapping.bindings[
-        "legal_entity.corporate_registration_number"
-    ]
-    assert len(corporate_number_bindings) == 14
-    assert sum(".request." in rule.field for rule in corporate_number_bindings) == 7
-    assert sum(".response." in rule.field for rule in corporate_number_bindings) == 7
-    assert all(
-        rule.decode is None and rule.encode is None
-        for rule in corporate_number_bindings
-    )
-    assert len(mapping.bindings["legal_entity.representative_names"]) == 1
-    business_registration = mapping.materializations[
-        "fsc_company_basic.get_company_overview"
-    ].objects["business_registration"]
-    assert business_registration.identity == ["business_registration_number"]
-    assert business_registration.parents == []
-    assert all(
-        "response.request_param" not in source
-        for rules in mapping.bindings.values()
-        for rule in rules
-        for source in (
-            [rule.field] if isinstance(rule.field, str) else rule.field.values()
-        )
-    )
 
 
 def test_mapping_transforms_execute() -> None:
@@ -93,7 +61,7 @@ def test_parse_korean_tenure_years_rejects_unsupported_text() -> None:
 
 def test_reports_codec_return_type_mismatch() -> None:
     catalog = RegistryLoader(REGISTRIES).load()
-    binding = catalog.mappings["company"].bindings["legal_entity.established_date"][0]
+    binding = catalog.mappings["example"].bindings["record.created_date"][0]
     binding.decode = "common.format_year"
 
     diagnostics = RegistryValidator().validate(catalog)

@@ -36,7 +36,7 @@ Path(c['measurement']).write_text(json.dumps({'seconds':seconds,'version':__vers
 
 
 def benchmark(
-    manifest_path, baseline, reference, output, *, repetitions=3, timeout=90, candidate=PROJECT, ocr=False, numbered_structure=False
+    manifest_path, baseline, reference, output, *, repetitions=3, timeout=90, candidate=PROJECT, ocr=False, numbered_structure=True
 ):
     if repetitions < 1 or timeout <= 0:
         raise ValueError("Positive repetitions and timeout required")
@@ -163,7 +163,7 @@ def main():
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=90)
     parser.add_argument("--ocr", action="store_true", help="Enable OCR explicitly for both engines")
-    parser.add_argument("--numbered-structure", action="store_true")
+    parser.add_argument("--numbered-structure", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
     benchmark(
         args.manifest.resolve(),

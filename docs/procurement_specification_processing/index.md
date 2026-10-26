@@ -73,3 +73,5 @@
 
 문서는 이 폴더에 모으되 실행 코드는 [소유권 기준](../architecture/repository-structure.md)에 따른다.
 실행 코드는 Pipelines가 소유하고 `.artifacts`에는 보존 결과와 로컬 객체 저장소 데이터만 둔다.
+
+- [서버 요구조건 검색·비교·원문 근거 조회](server_capabilities.md)

@@ -14,7 +14,7 @@ from teoria.features.metadata_management.catalog.models import (
 from teoria.features.semantic_modeling.registry.loader import RegistryLoader
 
 
-REGISTRIES = Path("archive/procurement_services/platform/registries")
+REGISTRIES = Path("backend/tests/fixtures/registry")
 
 
 class FakeMetadataService:

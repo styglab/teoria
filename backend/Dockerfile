@@ -25,6 +25,7 @@ RUN ln -s /opt/codex/node_modules/@openai/codex/bin/codex.js /usr/local/bin/code
     mkdir -p /home/teoria/.codex && chown teoria:teoria /home/teoria/.codex
 COPY --chown=teoria:teoria backend/authoring/ontology_migrations ./backend/authoring/ontology_migrations
 COPY --chown=teoria:teoria backend/authoring/ontology_blueprints ./backend/authoring/ontology_blueprints
+COPY --chown=teoria:teoria backend/authoring/normalization_profiles ./backend/authoring/normalization_profiles
 COPY --chown=teoria:teoria backend/references ./backend/references
 COPY --chown=teoria:teoria backend/migrations/application ./backend/migrations/application
 USER teoria

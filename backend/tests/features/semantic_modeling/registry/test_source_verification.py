@@ -15,11 +15,11 @@ ROOT = (Path(__file__).resolve().parents[5] / 'backend')
 async def test_source_verification_profiles(profile: str) -> None:
     graph = create_source_verification_graph()
     state = {
-        "registry_root": str(Path("archive/procurement_services/platform/registries")),
-        "source_id": "nts_business_registration",
-        "operation_id": "get_business_registration_status",
+        "registry_root": str(Path("backend/tests/fixtures/registry")),
+        "source_id": "example_api",
+        "operation_id": "get_records",
         "profile": profile,
-        "input_data": {"body": {"b_no": ["0000000000"]}},
+        "input_data": {"body": {"codes": ["0000000000"]}},
         "diagnostics": [],
         "completed_steps": [],
         "step_results": [],
@@ -44,7 +44,7 @@ class FakeExecutor:
             status_code=200,
             content_type="application/json",
             headers={},
-            body={"status_code": "OK", "data": [{"b_no": "0000000000", "b_stt_cd": "01"}]},
+            body={"status_code": "OK", "data": [{"code": "0000000000", "status": "01"}]},
             elapsed_ms=1.0,
         )
 
@@ -58,7 +58,7 @@ class EmptyOptionalValuesExecutor:
             status_code=200,
             content_type="application/json",
             headers={},
-            body={"status_code": "OK", "data": [{"b_no": "0000000000", "b_stt_cd": "", "end_dt": ""}]},
+            body={"status_code": "OK", "data": [{"code": "0000000000", "status": "", "observed_date": ""}]},
             elapsed_ms=1.0,
         )
 
@@ -68,11 +68,11 @@ async def test_live_profile_executes_and_validates_response() -> None:
     graph = create_source_verification_graph(SourceVerificationServices(executor=FakeExecutor()))
     result = await graph.ainvoke(
         {
-            "registry_root": str(Path("archive/procurement_services/platform/registries")),
-            "source_id": "nts_business_registration",
-            "operation_id": "get_business_registration_status",
+            "registry_root": str(Path("backend/tests/fixtures/registry")),
+            "source_id": "example_api",
+            "operation_id": "get_records",
             "profile": "live",
-            "input_data": {"body": {"b_no": ["0000000000"]}},
+            "input_data": {"body": {"codes": ["0000000000"]}},
             "diagnostics": [],
             "completed_steps": [],
             "step_results": [],
@@ -97,11 +97,11 @@ async def test_live_profile_is_blocked_without_credentials() -> None:
     )
     result = await graph.ainvoke(
         {
-            "registry_root": str(Path("archive/procurement_services/platform/registries")),
-            "source_id": "nts_business_registration",
-            "operation_id": "get_business_registration_status",
+            "registry_root": str(Path("backend/tests/fixtures/registry")),
+            "source_id": "example_api",
+            "operation_id": "get_records",
             "profile": "live",
-            "input_data": {"body": {"b_no": ["0000000000"]}},
+            "input_data": {"body": {"codes": ["0000000000"]}},
             "diagnostics": [],
             "completed_steps": [],
             "step_results": [],
@@ -121,11 +121,11 @@ async def test_live_profile_accepts_empty_optional_source_values() -> None:
     )
     result = await graph.ainvoke(
         {
-            "registry_root": str(Path("archive/procurement_services/platform/registries")),
-            "source_id": "nts_business_registration",
-            "operation_id": "get_business_registration_status",
+            "registry_root": str(Path("backend/tests/fixtures/registry")),
+            "source_id": "example_api",
+            "operation_id": "get_records",
             "profile": "live",
-            "input_data": {"body": {"b_no": ["0000000000"]}},
+            "input_data": {"body": {"codes": ["0000000000"]}},
             "diagnostics": [],
             "completed_steps": [],
             "step_results": [],

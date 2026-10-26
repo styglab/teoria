@@ -19,6 +19,7 @@ Ontology·Binding·Mapping·Capability·Runtime·OpenMetadata·Prefect 기반은
 |---|---|
 | 규격서 실행·후보 관리·표준 적용 | [규격서 처리 목차](procurement_specification_processing/index.md), [파이프라인 계약](procurement_specification_processing/pipeline.md) |
 | 추출 품질 개선·평가 | [고정 평가 절차](procurement_specification_processing/evaluation.md) |
+| 서버 요구조건 검색·비교·근거 조회 | [서버 Capability](procurement_specification_processing/server_capabilities.md) |
 | 물품 Ontology 작성·검토·게시 | [Ontology](platform/ontology.md), [Admin UI](platform/admin_ui.md) |
 | 자산·Glossary·Concept 연결 | [자산 맥락](platform/metadata/asset_context.md), [제안 검토·적용](platform/metadata/suggestions.md) |
 | 법령 수집·조회 | [법령 운영](pipelines/domains/legal_information.md), [진단 근거](platform/metadata/law_evidence.md), [복구 검증](verification/law_recovery_2026_10_25.md) |

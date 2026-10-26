@@ -1,0 +1,167 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+runtime_contract:
+  id: server_specifications
+  name: 서버 규격 조회 계약
+  description: 문서별 요구조건 관찰의 Runtime projection. Business Ontology 개념과 구분한다.
+  object_types:
+  - id: requirement_observation
+    name: 서버 요구조건 관찰
+    description: 원문·주체·프로파일·Ontology 버전이 고정된 관찰
+    primary_key: observation_id
+    properties:
+    - id: observation_id
+      name: observation_id
+      description: observation_id
+      data_type: string
+    - id: snapshot_id
+      name: snapshot_id
+      description: snapshot_id
+      data_type: string
+    - id: run_id
+      name: run_id
+      description: run_id
+      data_type: string
+    - id: document_id
+      name: document_id
+      description: document_id
+      data_type: string
+    - id: source_sha256
+      name: source_sha256
+      description: source_sha256
+      data_type: string
+    - id: subject_observation_id
+      name: subject_observation_id
+      description: subject_observation_id
+      data_type: string
+    - id: subject_name
+      name: subject_name
+      description: subject_name
+      data_type: string
+    - id: subject_concept_id
+      name: subject_concept_id
+      description: subject_concept_id
+      data_type: string
+    - id: subject_concept_key
+      name: subject_concept_key
+      description: subject_concept_key
+      data_type: string
+    - id: property_concept_id
+      name: property_concept_id
+      description: property_concept_id
+      data_type: string
+    - id: property_stable_key
+      name: property_stable_key
+      description: property_stable_key
+      data_type: string
+    - id: operator
+      name: operator
+      description: operator
+      data_type: string
+    - id: unit
+      name: unit
+      description: unit
+      data_type: string
+    - id: role
+      name: role
+      description: role
+      data_type: string
+    - id: semantic_scope
+      name: semantic_scope
+      description: semantic_scope
+      data_type: string
+    - id: value_raw
+      name: value_raw
+      description: value_raw
+      data_type: string
+    - id: unit_raw
+      name: unit_raw
+      description: unit_raw
+      data_type: string
+    - id: profile_revision_id
+      name: profile_revision_id
+      description: profile_revision_id
+      data_type: string
+    - id: profile_key
+      name: profile_key
+      description: profile_key
+      data_type: string
+    - id: profile_version
+      name: profile_version
+      description: profile_version
+      data_type: string
+    - id: package_checksum
+      name: package_checksum
+      description: package_checksum
+      data_type: string
+    - id: ontology_version_id
+      name: ontology_version_id
+      description: ontology_version_id
+      data_type: string
+    - id: ontology_namespace
+      name: ontology_namespace
+      description: ontology_namespace
+      data_type: string
+    - id: ontology_version
+      name: ontology_version
+      description: ontology_version
+      data_type: string
+    - id: ontology_checksum
+      name: ontology_checksum
+      description: ontology_checksum
+      data_type: string
+    - id: extraction_uri
+      name: extraction_uri
+      description: extraction_uri
+      data_type: string
+    - id: extraction_sha256
+      name: extraction_sha256
+      description: extraction_sha256
+      data_type: string
+    - id: normalized_uri
+      name: normalized_uri
+      description: normalized_uri
+      data_type: string
+    - id: normalized_sha256
+      name: normalized_sha256
+      description: normalized_sha256
+      data_type: string
+    - id: evidence_ref
+      name: evidence_ref
+      description: evidence_ref
+      data_type: string
+    - id: value_decimal
+      name: value_decimal
+      description: value_decimal
+      data_type: number
+    - id: evidence_node_ids
+      name: evidence_node_ids
+      description: evidence_node_ids
+      data_type: string
+      collection: list
+    - id: qualifiers_raw
+      name: qualifiers_raw
+      description: qualifiers_raw
+      data_type: string
+      collection: list
+    - id: owner_observation_id
+      name: owner_observation_id
+      data_type: string
+      description: owner_observation_id
+    - id: owner_name
+      name: owner_name
+      data_type: string
+      description: owner_name
+    - id: owner_concept_key
+      name: owner_concept_key
+      data_type: string
+      description: owner_concept_key
+    - id: document_status
+      name: document_status
+      data_type: string
+      description: document_status
+    - id: run_status
+      name: run_status
+      data_type: string
+      description: run_status

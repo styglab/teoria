@@ -26,33 +26,28 @@ MANIFEST = (
 
 def test_active_catalog_cannot_discover_retired_services():
     catalog = RegistryLoader(ROOT / "backend/contracts/runtime").load()
-    assert (
-        catalog.sources
-        == catalog.capabilities
-        == catalog.mappings
-        == catalog.runtime_contracts
-        == {}
-    )
+    assert set(catalog.sources) == {"specification_observations"}
+    assert set(catalog.runtime_contracts) == {"server_specifications"}
     client = TestClient(create_admin_app(settings=Settings(), catalog=catalog))
-    assert client.get("/v1/admin/capabilities").json() == {"capabilities": []}
+    capabilities = client.get("/v1/admin/capabilities").json()["capabilities"]
+    assert {c["id"] for c in capabilities} == {
+        "search_server_specifications", "get_server_requirements",
+        "compare_server_specifications", "get_server_requirement_evidence"}
     assert client.get("/v1/admin/overview").json()["validation"]["status"] == "valid"
+
 
 
 async def test_retired_contracts_have_explicit_dispositions():
     active = RegistryLoader(ROOT / "backend/contracts/runtime").load()
-    legacy = RegistryLoader(
-        ROOT / "archive/procurement_services/platform/registries"
-    ).load()
     manifest = OntologyMigrationManifest.load(MANIFEST)
-    old_objects = {
-        f"{key}.{obj.id}"
-        for key, contract in legacy.runtime_contracts.items()
-        for obj in contract.object_types
-    }
-    assert set(manifest.objects) == old_objects
+    assert len(manifest.objects) == 38
+    assert all(row.classification == "DEPRECATED" and row.migration_status == "deprecated"
+               for row in manifest.objects.values())
+    current = OntologyMigrationManifest.load(ROOT / "backend/authoring/ontology_migrations/pending/2026_10_server_specifications/ontology_v2.yaml")
+    manifest.objects.update(current.objects)
     assert (await build_migration_report(active, manifest))["status"] == "valid"
     # An unretired reference must still be rejected instead of silently ignored.
-    manifest.objects[next(iter(old_objects))].classification = "RUNTIME_PROJECTION"
+    manifest.objects["company.legal_entity"].classification = "RUNTIME_PROJECTION"
     assert (await build_migration_report(active, manifest))["status"] == "invalid"
 
 

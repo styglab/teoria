@@ -1,37 +1,16 @@
 from pathlib import Path
-
-from teoria.features.semantic_modeling.ontology.migration import (
-    OntologyMigrationManifest,
-    build_migration_report,
-)
+from teoria.features.semantic_modeling.ontology.migration import OntologyMigrationManifest, build_migration_report
 from teoria.features.semantic_modeling.registry.loader import RegistryLoader
 
 
-ROOT = Path(__file__).resolve().parents[5]
-
-
-async def test_archived_ontology_v2_manifest_covers_its_registry_snapshot() -> None:
-    catalog = RegistryLoader(
-        Path("archive/procurement_services/platform/registries")
-    ).load()
-    manifest = OntologyMigrationManifest.load(
-        ROOT
-        / "archive"
-        / "ontology_migrations"
-        / "pending"
-        / "2026_10_archive_bid_document_processing"
-        / "ontology_v2.yaml"
-    )
-
+async def test_migration_requires_classification_of_every_runtime_object():
+    catalog = RegistryLoader(Path("backend/tests/fixtures/registry")).load()
+    manifest = OntologyMigrationManifest(schema_version="1.0", source_registry_release="fixture",
+        target_ontology="example", classifications={"RUNTIME_PROJECTION": "Runtime only"},
+        objects={f"example.{name}": {"classification": "RUNTIME_PROJECTION", "migration_status": "runtime_contract",
+                                  "rationale": "A runtime projection is not a business concept"} for name in ("record", "group")})
     report = await build_migration_report(catalog, manifest)
-
-    assert report["status"] == "valid"
-    assert report["registry_object_count"] == 38
-    assert report["manifest_object_count"] == 38
-    assert report["missing_objects"] == []
-    assert report["unknown_objects"] == []
-    assert report["classification_counts"] == {
-        "ASSESSMENT_RESULT": 3,
-        "BUSINESS_CONCEPT": 21,
-        "RUNTIME_PROJECTION": 14,
-    }
+    assert report["status"] == "valid" and report["registry_object_count"] == 2
+    del manifest.objects["example.group"]
+    report = await build_migration_report(catalog, manifest)
+    assert report["status"] == "invalid" and report["missing_objects"] == ["example.group"]

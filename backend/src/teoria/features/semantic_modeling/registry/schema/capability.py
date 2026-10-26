@@ -97,8 +97,10 @@ class CapabilityInput(RegistryModel):
             raise ValueError("input minimum cannot exceed maximum")
         if self.enum is not None and not self.enum:
             raise ValueError("input enum cannot be empty")
-        if self.default is not None and self.enum is not None and self.default not in self.enum:
-            raise ValueError("input default must be one of enum")
+        if self.default is not None and self.enum is not None:
+            defaults = self.default if self.collection == "list" else [self.default]
+            if not isinstance(defaults, list) or any(value not in self.enum for value in defaults):
+                raise ValueError("input default must be one of enum")
         for field_id in self.fields:
             if not SNAKE_CASE_PATTERN.fullmatch(field_id):
                 raise ValueError(f"input field id '{field_id}' must be snake_case")

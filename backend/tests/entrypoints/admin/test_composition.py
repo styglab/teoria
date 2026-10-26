@@ -10,7 +10,7 @@ from teoria.entrypoints.composition.admin import (
 from teoria.features.semantic_modeling.registry.loader import RegistryLoader
 from teoria.settings import Settings
 
-REGISTRIES = Path("archive/procurement_services/platform/registries")
+REGISTRIES = Path("backend/tests/fixtures/registry")
 
 
 def test_router_installation_reuses_injected_services_without_constructing_dependencies():

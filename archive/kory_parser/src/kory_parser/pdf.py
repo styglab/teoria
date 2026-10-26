@@ -229,6 +229,52 @@ def has_text(block: Block) -> bool:
     return bool(block.text.strip())
 
 
+def image_block(image: dict, page_number: int, index: int, options: ParseOptions) -> Block:
+    box = (image["x0"], image["top"], image["x1"], image["bottom"])
+    block = Block("image", source=source(page_number, box, f"image:{index}"))
+    if options.images:
+        if image.get("image_bytes"):
+            block.image_data = base64.b64encode(image["image_bytes"]).decode()
+            extension = image.get("image_ext", "")
+            block.mime_type = "image/jpeg" if extension in ("jpg", "jpeg") else f"image/{extension}"
+        stream = image.get("stream")
+        if stream:
+            block.image_data = base64.b64encode(stream.get_data()).decode()
+            block.mime_type = "application/octet-stream"
+    return block
+
+
+def retain_image_tables(tables, images: list[Block]):
+    """Keep textless ruled tables when image bounds identify an unambiguous cell.
+
+    Image-only cell content is still untranscribed. A scan covering several cells
+    or an image outside the grid stays a page object, rather than being assigned
+    by its centre. The smallest enclosing cell owns a nested image exactly once;
+    equal-size competing cells leave ownership unconfirmed.
+    """
+    cells = [
+        (area(cell.source.bbox), index, cell)
+        for index, (_, block) in enumerate(tables)
+        if block.table.geometry_source == "line"
+        for row in block.table.cells
+        for cell in row
+        if not cell.covered and cell.source and cell.source.bbox
+    ]
+    placed, retained = set(), set()
+    for index, image in enumerate(images):
+        matches = sorted(
+            (item for item in cells if inside(image.source.bbox, item[2].source.bbox)),
+            key=lambda item: item[0],
+        )
+        if not matches or len(matches) > 1 and matches[0][0] == matches[1][0]:
+            continue
+        _, table_index, cell = matches[0]
+        cell.blocks.append(image)
+        placed.add(index)
+        retained.add(table_index)
+    return [table for index, table in enumerate(tables) if index in retained], placed
+
+
 def trim_pdf_columns(blocks: list[Block]) -> None:
     for block in blocks:
         table = block.table
@@ -316,7 +362,7 @@ def parse_pdf(data: bytes, options: ParseOptions) -> ParseResult:
                 if clean_chars
                 else []
             )
-            lined = ruled_grids(geometry_page.edges, options) if clean_chars else []
+            lined = ruled_grids(geometry_page.edges, options) if clean_chars or page.images else []
             # Consult complete ruled grids before overlapping text clips or
             # inferred shading can suppress those very grids as duplicates.
             retained = {id(grid) for grid in distinct_grids(clipped + filled, edge_index, lined)}
@@ -340,6 +386,8 @@ def parse_pdf(data: bytes, options: ParseOptions) -> ParseResult:
             candidates = distinct_grids(candidates, edge_index)
             blocks = []
             tables = []
+            textless_tables = []
+            images = [image_block(image, index, n, options) for n, image in enumerate(page.images)]
             for table in candidates:
                 if len(table.cells) < 2 and getattr(table, "strategy", "") != "clip":
                     continue
@@ -356,6 +404,8 @@ def parse_pdf(data: bytes, options: ParseOptions) -> ParseResult:
                         tables.append((table, block))
                         if getattr(table, "boundary_part", False):
                             boundary_parts.add(id(block))
+                    else:
+                        textless_tables.append((table, block))
                 except ParseError as error:
                     if error.code != "INVALID_TABLE":
                         raise
@@ -364,6 +414,8 @@ def parse_pdf(data: bytes, options: ParseOptions) -> ParseResult:
                             "INVALID_TABLE", "Ambiguous PDF grid retained as text", source(index, table.bbox)
                         )
                     )
+            image_tables, cell_images = retain_image_tables(textless_tables, images)
+            tables.extend(image_tables)
             # Small contained tables are placed under the enclosing cell rather than emitted twice.
             consumed = set()
             for small_index, (small, small_block) in enumerate(tables):
@@ -428,22 +480,12 @@ def parse_pdf(data: bytes, options: ParseOptions) -> ParseResult:
             ]
             for block in paragraph_lines(body_chars, index, typography, columns=True, cuts=page.layout_cuts):
                 blocks.append((block.source.bbox[1], block.source.bbox[0], block))
-            for n, image in enumerate(page.images):
+            for n, block in enumerate(images):
+                ref = block.source
+                image = page.images[n]
                 box = (image["x0"], image["top"], image["x1"], image["bottom"])
-                ref = source(index, box, f"image:{n}")
-                block = Block("image", source=ref)
-                if options.images:
-                    if image.get("image_bytes"):
-                        block.image_data = base64.b64encode(image["image_bytes"]).decode()
-                        extension = image.get("image_ext", "")
-                        block.mime_type = (
-                            "image/jpeg" if extension in ("jpg", "jpeg") else f"image/{extension}"
-                        )
-                    stream = image.get("stream")
-                    if stream:
-                        block.image_data = base64.b64encode(stream.get_data()).decode()
-                        block.mime_type = "application/octet-stream"
-                blocks.append((box[1], box[0], block))
+                if n not in cell_images:
+                    blocks.append((box[1], box[0], block))
                 result.warnings.append(
                     Diagnostic("UNEXTRACTED_IMAGE_TEXT", "PDF image content requires review", ref)
                 )

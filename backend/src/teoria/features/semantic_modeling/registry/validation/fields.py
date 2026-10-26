@@ -34,6 +34,10 @@ class FieldValidationMixin:
                     fields = field.fields
             if field is None:
                 return None
+            if field.type == "array" and field.items and field.items.data_type:
+                definition = catalog.data_types.get(field.items.data_type)
+                category = definition.base_type if definition else field.items.data_type
+                return f"list:{category}"
             if field.data_type:
                 definition = catalog.data_types.get(field.data_type)
                 return definition.base_type if definition else field.data_type

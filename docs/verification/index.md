@@ -1,5 +1,9 @@
 # 검증 기록
 
+- [이전 조달 데이터·규격서 실험 정리](retired_data_cleanup_2026_10_26.md): 백업·복원 확인 후 운영 데이터 정리, 법령·게시·승인 이력 보존
+
+- [테스트 독립화·첫 서버 Capability](server_capabilities_2026_10_26.md): 보관 Registry 의존 제거·관찰 적재·검색/비교/근거 조회·격리 PostgreSQL/OPA/bundle 검증
+
 - [Compose 자원 상한 적용](compose_resource_limits_2026_10_26.md): 전체 서비스·임시 Job CPU/RAM 제한과 운영 실실행 검증
 
 - [HTTP 진입점 통합](http_gateway_consolidation_2026_10_26.md): Compose nginx 통합 운영 반영·K3s Traefik 직접 라우팅 검증

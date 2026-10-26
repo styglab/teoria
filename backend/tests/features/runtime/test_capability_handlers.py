@@ -90,15 +90,14 @@ def test_duplicate_registration_cannot_replace_existing_handler(method):
 
 @pytest.fixture(scope="module")
 def catalog():
-    return RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
+    return RegistryLoader(Path("backend/tests/fixtures/registry")).load()
 
 
 def test_default_handlers_do_not_load_retired_processors(catalog):
     handlers = create_capability_handlers()
-    processors = {capability.processor for capability in catalog.capabilities.values()
-                  if capability.kind != "query"}
-    assert processors
-    assert all(handlers.processor(processor) is None for processor in processors)
+    assert handlers.processor("company_identity.resolve_company_identifiers") is None
+    assert handlers.processor("market_context.search_company_bid_participations") is None
+
 
 
 @pytest.mark.asyncio
@@ -117,15 +116,15 @@ async def test_query_hook_runs_after_database_query_materialization(catalog):
         return result.model_copy(update={"outcome": {"enriched": True}})
 
     handlers = CapabilityHandlers()
-    handlers.register_query_hook("search_bid_notices", hook)
+    handlers.register_query_hook("search_records", hook)
     result = await CapabilityRunner(
         handlers=handlers, database_executor=EmptyDatabase()
     ).run(
         catalog,
-        "search_bid_notices",
+        "search_records",
         {
-            "notice_published_at_from": "2026-10-01T00:00:00",
-            "notice_published_at_to": "2026-10-02T00:00:00",
+            "from_date": "2026-10-01",
+
         },
     )
     assert events == ["database", "hook"]

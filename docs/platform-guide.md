@@ -65,12 +65,13 @@ AI 자산 진단도 기준일에 해당하는 법령 snapshot 근거를 사용�
 이 동작의 회귀·Task 통합 테스트와 실제 모델의 문서 전체 품질 평가는 구분한다.
 개선 평가 CLI는 각 실행 전후 Parser 소스·설치 패키지 지문을 검사하며, 실행 중 변경되면 비교를 중단한다.
 
-물품·구성품·규격 요구조건을 위한 초기 blueprint는
-`backend/authoring/ontology_blueprints/goods.yaml`이다. 현재 운영에는 인증된 Admin API로 `goods 0.1.0` Draft를 등록했다.
+서버 의미의 작성 입력은 `backend/authoring/ontology_blueprints/computer_server.yaml`이다.
+사용하지 않던 운영 `goods 0.1.0` Draft와 과거 실험·조달 데이터를 [정리했다](verification/retired_data_cleanup_2026_10_26.md).
+새 서버 Ontology는 아직 운영에 게시하지 않았다.
 새 환경에서는 다음 명령으로 Draft만 생성할 수 있다.
 
 ```bash
-uv run --project backend --locked --extra api teoria apply-ontology-blueprint --manifest backend/authoring/ontology_blueprints/goods.yaml
+uv run --project backend --locked --extra api teoria apply-ontology-blueprint --manifest backend/authoring/ontology_blueprints/computer_server.yaml
 ```
 
 Application DB를 구성한 뒤 실행하고, [Ontology 검토·승인·게시](platform/ontology.md)를 따른다.
@@ -84,10 +85,13 @@ Application DB를 구성한 뒤 실행하고, [Ontology 검토·승인·게시](
 자동 승인 평가는 격리 DB의 `goods_eval_` Ontology에서만 실행한다.
 전체 표준관리는 `teoria-pipelines specification standard-workflow --manifest ...`로 실행한다.
 상위 Prefect Flow가 추출·작성 API·패키지 저장·재적용을 연결하며 승인 대기와 실패에서 같은 실행 ID로 재개한다.
-Semantic Binding 및 Runtime Mapping 연결은 아직 구현하지 않았다.
-물품 검색·비교 Capability와 AI 질의 handler도 별도 구현 대상이다.
-현재 활성 Registry는 공통 타입만 제공하므로 Capability discovery는 빈 목록을 반환한다.
-배포된 bundle은 `2026.10.25.1`이며 `goods 0.1.0`은 검증된 Draft로 등록했다.
+서버용 Semantic Binding 작성 입력과 조회용 Database Source·Mapping을 추가했다.
+승인 프로파일을 적용한 숫자 관찰은 실행 완료 checkpoint와 같은 transaction으로 적재한다.
+[서버 검색·비교·원문 근거 Capability](procurement_specification_processing/server_capabilities.md)는
+격리 PostgreSQL·OPA·불변 bundle에서 검증한다. 작성 Registry에는 공개 Capability 3개와 내부 조회 1개가 있다.
+운영은 기존 bundle을 유지하므로 배포된 discovery는 여전히 빈 목록이다.
+범용 AI 질의 handler와 운영 의미 게시·bundle 전환은 남아 있다.
+배포된 bundle은 `2026.10.25.1`이다. 미사용 `goods 0.1.0` Draft는 정리했고 게시·승인 이력은 보존했다.
 실제 배포·인증·모델 준비 상태는 [배포 검증 기록](verification/goods_focus_deployment_2026_10_25.md)을 따른다.
 이전 게시 Ontology와 Runtime artifact는 수정하지 않는다.
 새 코드가 기존의 조달 artifact를 그대로 사용하면 은퇴한 기능이 재노출될 수 있으므로,

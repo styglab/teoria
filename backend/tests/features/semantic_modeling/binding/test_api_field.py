@@ -10,14 +10,14 @@ ROOT = (Path(__file__).resolve().parents[5] / 'backend')
 
 
 def test_api_field_binding_requires_a_verified_source_response_field() -> None:
-    catalog = RegistryLoader(Path("archive/procurement_services/platform/registries")).load()
+    catalog = RegistryLoader(Path("backend/tests/fixtures/registry")).load()
 
     target = resolve_api_field_contract(
         catalog,
-        source_id="nts_business_registration",
-        operation_id="get_business_registration_status",
-        object_id="business_status",
-        field_path="b_stt_cd",
+        source_id="example_api",
+        operation_id="get_records",
+        object_id="record",
+        field_path="status",
     )
 
     assert target["data_type"] == "string"
@@ -26,9 +26,9 @@ def test_api_field_binding_requires_a_verified_source_response_field() -> None:
     with pytest.raises(ApiFieldContractError) as exc_info:
         resolve_api_field_contract(
             catalog,
-            source_id="nts_business_registration",
-            operation_id="get_business_registration_status",
-            object_id="business_status",
+            source_id="example_api",
+            operation_id="get_records",
+            object_id="record",
             field_path="invented_field",
         )
     assert exc_info.value.code == "unknown_response_field"

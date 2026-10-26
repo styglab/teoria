@@ -402,7 +402,7 @@ async def test_operational_standard_management_uses_package_and_saves_only_canon
         "stage_original_documents",
         "persist_extraction",
         "select_and_map_standard",
-        "persist_report",
+        "persist_report", "prepare_query_observations",
     ]:
         monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
     monkeypatch.setattr(flows, "start_execution", AsyncMock(return_value=None))
@@ -797,7 +797,7 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
         "resolve_attribute_semantics",
         "persist_extraction",
         "select_and_map_standard",
-        "persist_report",
+        "persist_report", "prepare_query_observations",
     ]:
         monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
     monkeypatch.setattr(

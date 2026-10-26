@@ -1,0 +1,10 @@
+files:
+- format: markdown
+  path: api.md
+provider: Example
+registry: registry/sources/example_api.yaml
+retrieved_at: '2026-10-26'
+source: example_api
+status: active
+target: source
+title: Synthetic fixture API

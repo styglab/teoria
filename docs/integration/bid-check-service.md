@@ -48,8 +48,8 @@ Capability 응답의 object와 link에는 type, identity와 provenance가 포함
 ## 기관·업체 계약 집계 표시
 
 기관·업체 조달 프로필의 계약 통계는
-[`analyze_organization_procurement_profile`](../../archive/procurement_services/platform/registries/domains/public_procurement/capabilities/analyze_organization_procurement_profile.yaml)과
-[`analyze_company_procurement_profile`](../../archive/procurement_services/platform/registries/domains/public_procurement/capabilities/analyze_company_procurement_profile.yaml)을 사용한다.
+`analyze_organization_procurement_profile`과
+`analyze_company_procurement_profile`을 사용한다.
 산정 규칙의 단일 원본은 [공공조달 계약 집계 기준](../platform/domains/public_procurement/contract_aggregation.md)이다.
 
 입찰체크는 응답의 `analysis_basis`와 `summary.amount_completeness`,

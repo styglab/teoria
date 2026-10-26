@@ -1,0 +1,39 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+runtime_contract:
+  id: example
+  name: Example
+  description: Synthetic contract
+  object_types:
+  - id: record
+    name: Record
+    description: Record
+    primary_key: record_id
+    properties:
+    - id: record_id
+      name: record_id
+      description: record_id
+      data_type: string
+    - id: name
+      name: name
+      description: name
+      data_type: string
+    - id: created_date
+      name: created_date
+      description: created_date
+      data_type: date
+  - id: group
+    name: Group
+    description: Group
+    primary_key: group_id
+    properties:
+    - id: group_id
+      name: Group ID
+      description: Identity
+      data_type: string
+  link_types:
+  - id: belongs_to
+    description: Record belongs to group
+    source: record
+    target: group

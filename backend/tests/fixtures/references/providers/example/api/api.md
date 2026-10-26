@@ -1,0 +1,1 @@
+Synthetic test API. POST /records accepts codes and returns data records. POST /verify echoes request_param. No external provider.

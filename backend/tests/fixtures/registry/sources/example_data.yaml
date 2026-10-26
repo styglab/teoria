@@ -1,0 +1,35 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+source:
+  id: example_data
+  name: Synthetic DB
+  description: Independent relational query fixture.
+  type: database
+  access:
+    engine: postgresql
+    connection_env: TEORIA_RUNTIME_DATA_DATABASE_URL
+  relations:
+  - id: records
+    name: Records
+    relation: example.records
+    primary_key:
+    - record_id
+    fields:
+    - id: record_id
+      name: record_id
+      data_type: string
+    - id: name
+      name: name
+      data_type: string
+    - id: created_date
+      name: created_date
+      data_type: date
+    - id: group_id
+      name: group_id
+      data_type: string
+    - id: categories
+      name: categories
+      type: array
+      items:
+        data_type: string

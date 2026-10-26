@@ -37,23 +37,15 @@ def test_unregistered_source_reference_remains_an_error(tmp_path):
 
 
 def test_registered_api_source_evidence_resolves_from_backend_root(tmp_path):
-    archived = Path("archive/procurement_services/platform")
+    fixture = BACKEND / "tests/fixtures"
     runtime = tmp_path / "contracts/runtime"
-    shutil.copytree(archived / "registries/core", runtime / "core")
-    (runtime / "sources").mkdir()
-    shutil.copyfile(
-        archived / "registries/sources/nts_business_registration.yaml",
-        runtime / "sources/nts_business_registration.yaml",
-    )
-    reference = tmp_path / "references/providers/nts/business_registration"
-    shutil.copytree(
-        archived / "references/providers/nts/business_registration", reference
-    )
+    shutil.copytree(fixture / "registry", runtime)
+    reference = tmp_path / "references/providers/example/api"
+    shutil.copytree(fixture / "references/providers/example/api", reference)
     metadata = reference / "metadata.yaml"
     document = yaml.safe_load(metadata.read_text())
-    document["registry"] = "contracts/runtime/sources/nts_business_registration.yaml"
-    metadata.write_text(yaml.safe_dump(document, allow_unicode=True))
-
+    document["registry"] = "contracts/runtime/sources/example_api.yaml"
+    metadata.write_text(yaml.safe_dump(document))
     catalog = RegistryLoader(runtime).load()
-    assert catalog.references["nts_business_registration"].target == "source"
+    assert catalog.references["example_api"].target == "source"
     assert RegistryValidator().validate(catalog) == []

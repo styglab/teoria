@@ -159,6 +159,18 @@ class ComposeConfigurationTests(unittest.TestCase):
             "/opt/kory_parser/bin/python",
         )
 
+    def test_runtime_can_read_specification_evidence_without_worker_write_or_model_access(self):
+        services = self.resolved("teoria-test-evidence")["services"]
+        runtime = services["runtime-api"]
+        worker = services["prefect-worker"]
+        target = "/app/specification_artifacts"
+        runtime_mount = next(v for v in runtime["volumes"] if v["target"] == target)
+        worker_mount = next(v for v in worker["volumes"] if v["target"] == target)
+        self.assertEqual(runtime_mount["source"], worker_mount["source"])
+        self.assertTrue(runtime_mount["read_only"])
+        self.assertFalse(worker_mount.get("read_only", False))
+        self.assertFalse(any(v["target"] == "/home/teoria/.codex" for v in runtime["volumes"]))
+
     def test_law_credentials_are_isolated_from_document_worker(self):
         services = self.resolved("teoria-test-law")["services"]
         law = services["prefect-law-worker"]

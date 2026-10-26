@@ -1,0 +1,10 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-10-26'
+data_types:
+- id: record_code
+  base_type: string
+  pattern: ^[0-9]{10}$
+- id: optional_code
+  base_type: string
+  pattern: ^([0-9]{10})?$

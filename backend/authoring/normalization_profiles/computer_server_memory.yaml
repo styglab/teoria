@@ -1,0 +1,70 @@
+schema_version: 1
+profile_key: server_memory
+version: 1.0.0
+classification_code: '4321150102'
+entities:
+- rule_id: server
+  aliases:
+  - 서버
+  - 컴퓨터 서버
+  - 컴퓨터서버
+  - Server
+  - 컴퓨터 서버장비
+  source_kinds:
+  - equipment
+  concept_id: computer_server.server
+- rule_id: memory_component
+  aliases:
+  - 메모리
+  - Memory
+  - RAM
+  - 메모리 모듈
+  source_kinds:
+  - equipment
+  concept_id: computer_server.memory
+requirements:
+- rule_id: memory
+  target_concept_id: computer_server.server
+  property_concept_id: computer_server.server.memory_capacity
+  source_property_keys:
+  - memory_capacity
+  roles: &id001
+  - requirement_candidate
+  - supported_capability
+  - existing_reference
+  scopes: &id002
+  - system_total
+  - per_module
+  - support_limit
+  value_type: number
+  units: &id003
+  - source_unit: GB
+    canonical_unit: GB
+    multiplier: '1'
+  - source_unit: GiB
+    canonical_unit: GB
+    multiplier: '1.073741824'
+  - source_unit: TB
+    canonical_unit: GB
+    multiplier: '1000'
+- rule_id: memory_component_capacity
+  target_concept_id: computer_server.memory
+  property_concept_id: computer_server.memory.capacity
+  source_property_keys:
+  - capacity
+  - memory_capacity
+  - total_memory_capacity
+  - total_capacity
+  roles: *id001
+  scopes: *id002
+  value_type: number
+  units: *id003
+relations:
+- rule_id: server_memory_component
+  source_kind: component_of
+  relationship_concept_id: computer_server.has_memory
+  reverse: true
+- rule_id: server_memory_physical_part
+  source_kind: physical_part_of
+  relationship_concept_id: computer_server.has_memory
+  reverse: true

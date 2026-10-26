@@ -79,6 +79,9 @@ Manifest는 `schema_version: 1`, `corpus_version`, 비어 있지 않은 `cases`�
 자동 루프는 미채택으로 남긴다. 별도 확인 없이 속도 퇴행을 품질 개선으로 상쇄하지 않는다.
 원본 kordoc 비교는 기존 CLI로 별도 실행하며 독립 정확도와 구분한다.
 
+0.9.15부터 API·파싱 CLI와 benchmark의 번호 계층 복원 기본값은 켜져 있다. 과거 실행을
+재현할 때는 기록된 옵션을 명시하며, 복원 없는 비교에는 `--no-numbered-structure`를 쓴다.
+
 ## 개선 후보와 판정
 
 `report.json`은 소스·평가기·manifest·lock hash, Python·주요 dependency 버전,

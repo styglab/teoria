@@ -1,0 +1,10 @@
+schema_version: '1.0'
+source_registry_release: server_specifications_initial
+target_ontology: computer_server
+classifications:
+  RUNTIME_PROJECTION: 문서별 관찰은 Runtime projection
+objects:
+  server_specifications.requirement_observation:
+    classification: RUNTIME_PROJECTION
+    migration_status: runtime_contract
+    rationale: 문서별 관찰·버전·근거 projection이며 Business Ontology Object로 게시하지 않는다.

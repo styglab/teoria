@@ -550,6 +550,7 @@ services:
       TEORIA_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_DATABASE_CONCURRENCY_LIMIT:-10}
     volumes:
       - runtime-artifacts:/app/runtime_artifacts:ro
+      - specification-artifacts:/app/specification_artifacts:ro
     depends_on:
       postgres-migrate:
         condition: service_completed_successfully

@@ -222,3 +222,18 @@ async def persist_report(request:SpecificationRun,workspace:str,standard_version
     text=render_report(corpus,normalized,standard_version,candidates)
     async with artifact_store(request.artifact_root) as store:
         return (await store.put(run_key(request,'index.md'),text.encode(),'text/markdown')).model_dump()
+
+
+@task(name='09 조회용 관찰 적재 준비', **TASK_OPTIONS)
+async def prepare_query_observations(request: SpecificationRun, workspace: str, artifacts):
+    from teoria.features.goods_normalization.contracts import NormalizationPackage
+    from teoria.features.specification_processing.storage.query_observations import build_query_observations
+
+    raw = await read_uri(request.standard.uri)
+    if hashlib.sha256(raw).hexdigest() != request.standard.sha256:
+        raise ValueError('profile package checksum mismatch')
+    package = NormalizationPackage.model_validate_json(raw)
+    refs = {Path(a.key).name: a.model_dump() for a in artifacts}
+    corpus = await load(Path(workspace) / 'extracted.json')
+    normalized = await load(Path(workspace) / 'normalized.json')
+    return build_query_observations(corpus, normalized, package, refs['extracted.json'], refs['normalized.json'])

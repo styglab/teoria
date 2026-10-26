@@ -57,37 +57,37 @@ class TimeoutClient(RetryClient):
 
 def test_builds_request_from_source_registry() -> None:
     catalog = RegistryLoader(
-        Path("archive/procurement_services/platform/registries")
+        Path("backend/tests/fixtures/registry")
     ).load()
     request = SourceRequestBuilder().build(
         catalog,
-        "nts_business_registration",
-        "get_business_registration_status",
-        {"body": {"b_no": ["0000000000"]}},
+        "example_api",
+        "get_records",
+        {"body": {"codes": ["0000000000"]}},
     )
 
     assert request.method == "POST"
-    assert request.url.endswith("/status")
-    assert request.query == {"returnType": "JSON"}
-    assert request.body == {"b_no": ["0000000000"]}
+    assert request.url.endswith("/records")
+    assert request.query == {"format": "JSON"}
+    assert request.body == {"codes": ["0000000000"]}
     assert request.authentication is not None
     assert (
         request.authentication.environment_variable
-        == "TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY"
+        == "TEORIA_SOURCE_EXAMPLE_API_API_KEY"
     )
 
 
 def test_rejects_invalid_operation_input() -> None:
     catalog = RegistryLoader(
-        Path("archive/procurement_services/platform/registries")
+        Path("backend/tests/fixtures/registry")
     ).load()
 
     with pytest.raises(RequestBuildError) as exc_info:
         SourceRequestBuilder().build(
             catalog,
-            "nts_business_registration",
-            "get_business_registration_status",
-            {"body": {"b_no": ["invalid"]}},
+            "example_api",
+            "get_records",
+            {"body": {"codes": ["invalid"]}},
         )
 
     assert {item.code for item in exc_info.value.diagnostics} == {
@@ -97,12 +97,12 @@ def test_rejects_invalid_operation_input() -> None:
 
 def test_database_source_cannot_be_built_as_an_http_request() -> None:
     catalog = RegistryLoader(
-        Path("archive/procurement_services/platform/registries")
+        Path("backend/tests/fixtures/registry")
     ).load()
 
     with pytest.raises(RequestBuildError) as exc_info:
         SourceRequestBuilder().build(
-            catalog, "teoria_public_procurement", "list_contracts", {}
+            catalog, "example_data", "records", {}
         )
 
     assert exc_info.value.diagnostics[0].code == "unsupported_source_operation"
@@ -111,13 +111,13 @@ def test_database_source_cannot_be_built_as_an_http_request() -> None:
 @pytest.mark.asyncio
 async def test_retries_idempotent_source_request_on_temporary_failure() -> None:
     catalog = RegistryLoader(
-        Path("archive/procurement_services/platform/registries")
+        Path("backend/tests/fixtures/registry")
     ).load()
     request = SourceRequestBuilder().build(
         catalog,
-        "nts_business_registration",
-        "get_business_registration_status",
-        {"body": {"b_no": ["0000000000"]}},
+        "example_api",
+        "get_records",
+        {"body": {"codes": ["0000000000"]}},
     )
     client = RetryClient(
         [
@@ -126,7 +126,7 @@ async def test_retries_idempotent_source_request_on_temporary_failure() -> None:
         ]
     )
     executor = ProviderExecutor(
-        environment={"TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY": "secret"},
+        environment={"TEORIA_SOURCE_EXAMPLE_API_API_KEY": "secret"},
         backoff_seconds=0,
         client_factory=lambda **kwargs: client,
     )
@@ -141,17 +141,17 @@ async def test_retries_idempotent_source_request_on_temporary_failure() -> None:
 @pytest.mark.asyncio
 async def test_reports_structured_source_timeout_after_retries() -> None:
     catalog = RegistryLoader(
-        Path("archive/procurement_services/platform/registries")
+        Path("backend/tests/fixtures/registry")
     ).load()
     request = SourceRequestBuilder().build(
         catalog,
-        "nts_business_registration",
-        "get_business_registration_status",
-        {"body": {"b_no": ["0000000000"]}},
+        "example_api",
+        "get_records",
+        {"body": {"codes": ["0000000000"]}},
     )
     client = TimeoutClient([])
     executor = ProviderExecutor(
-        environment={"TEORIA_SOURCE_NTS_BUSINESS_REGISTRATION_API_KEY": "secret"},
+        environment={"TEORIA_SOURCE_EXAMPLE_API_API_KEY": "secret"},
         max_attempts=2,
         backoff_seconds=0,
         client_factory=lambda **kwargs: client,
@@ -163,8 +163,8 @@ async def test_reports_structured_source_timeout_after_retries() -> None:
     assert exc_info.value.to_dict() == {
         "code": "source_timeout",
         "message": "source request timed out after 2 attempt(s)",
-        "source": "nts_business_registration",
-        "operation": "get_business_registration_status",
+        "source": "example_api",
+        "operation": "get_records",
         "attempts": 2,
         "retryable": True,
         "http_status": None,
@@ -172,79 +172,13 @@ async def test_reports_structured_source_timeout_after_retries() -> None:
     assert client.calls == 2
 
 
-def test_allows_empty_optional_source_field() -> None:
-    catalog = RegistryLoader(
-        Path("archive/procurement_services/platform/registries")
-    ).load()
-    request = SourceRequestBuilder().build(
-        catalog,
-        "nts_business_registration",
-        "verify_business_registration",
-        {
-            "body": {
-                "businesses": [
-                    {
-                        "b_no": "0000000000",
-                        "start_dt": "20000101",
-                        "p_nm": "홍길동",
-                        "corp_no": "",
-                    }
-                ]
-            }
-        },
-    )
-
-    assert request.body["businesses"][0]["corp_no"] == ""
 
 
-def test_recursively_validates_nested_response_refs() -> None:
-    catalog = RegistryLoader(
-        Path("archive/procurement_services/platform/registries")
-    ).load()
-    response = ExecutionResponse(
-        status_code=200,
-        content_type="application/json",
-        headers={},
-        body={
-            "status_code": "OK",
-            "request_cnt": 1,
-            "valid_cnt": 1,
-            "data": [
-                {
-                    "b_no": "0000000000",
-                    "valid": "01",
-                    "valid_msg": "확인",
-                    "request_param": {
-                        "b_no": "0000000000",
-                        "start_dt": "20200101",
-                        "p_nm": "홍길동",
-                        "corp_no": "invalid",
-                    },
-                    "status": {
-                        "b_no": "0000000000",
-                        "b_stt_cd": "01",
-                        "tax_type_cd": "01",
-                    },
-                }
-            ],
-        },
-        elapsed_ms=1.0,
-    )
-
-    diagnostics = SourceResponseValidator().validate(
-        catalog,
-        "nts_business_registration",
-        "verify_business_registration",
-        response,
-    )
-
-    assert [item.code for item in diagnostics] == ["response_data_type_mismatch"]
-    assert diagnostics[0].location.endswith("request_param.corp_no")
 
 
 def test_rejects_failed_source_control_code() -> None:
     catalog = RegistryLoader(
-        Path("archive/procurement_services/platform/registries")
+        Path("backend/tests/fixtures/registry")
     ).load()
     response = ExecutionResponse(
         status_code=200,
@@ -256,9 +190,21 @@ def test_rejects_failed_source_control_code() -> None:
 
     diagnostics = SourceResponseValidator().validate(
         catalog,
-        "nts_business_registration",
-        "get_business_registration_status",
+        "example_api",
+        "get_records",
         response,
     )
 
     assert [item.code for item in diagnostics] == ["source_operation_failed"]
+
+
+def test_nested_reference_preserves_empty_optional_value_and_rejects_invalid_code():
+    catalog = RegistryLoader(Path("backend/tests/fixtures/registry")).load()
+    request = SourceRequestBuilder().build(catalog, "example_api", "verify_records", {
+        "body": {"records": [{"code": "0000000000", "optional_code": ""}]}})
+    assert request.body["records"][0]["optional_code"] == ""
+    response = ExecutionResponse(status_code=200, content_type="application/json", headers={},
+        body={"data": [{"request_param": {"code": "0000000000", "optional_code": "invalid"}}]}, elapsed_ms=1.0)
+    diagnostics = SourceResponseValidator().validate(catalog, "example_api", "verify_records", response)
+    assert [d.code for d in diagnostics] == ["response_data_type_mismatch"]
+    assert diagnostics[0].location.endswith("request_param.optional_code")
