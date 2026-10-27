@@ -126,6 +126,15 @@ class ComposeConfigurationTests(unittest.TestCase):
         )
         self.assertEqual(environment["TEORIA_OPENMETADATA_ENABLED"], "true")
 
+    def test_admin_mlflow_connection_uses_server_static_prefix(self):
+        services = self.resolved("teoria-test-mlflow")["services"]
+        self.assertEqual(
+            services["admin-api"]["environment"]["TEORIA_MODEL_MLFLOW_URL"],
+            "http://mlflow:5000/mlflow",
+        )
+        command = services["mlflow"]["command"]
+        self.assertEqual(command[command.index("--static-prefix") + 1], "/mlflow")
+
     def test_pipeline_worker_has_resource_and_execution_limits(self):
         services = self.resolved("teoria-test-limits")["services"]
         worker = services["prefect-worker"]

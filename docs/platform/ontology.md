@@ -59,7 +59,9 @@ Business Object로 추가하지 않는다. 검토·승인·게시된 새 version
 기존 `teoria`의 Published version과 예전 namespace는 이력으로 보존한다.
 분류 계층·물품 유형·구성 관계를 구분하며 서비스는 물리 구성품과 별도 연결한다.
 분류 없이 검증하는 문서 그래프 계약과 네 샘플의 대표 작성 예시를 추가했다.
-사전 인스턴스·승인 API·자동 재추출·DB 적재·Runtime 조회는 아직 연결하지 않았다.
+원문 명칭 사전의 저장·자동 승인·재사용 API를 추가했다. 유형 31개·특성 14개를 실제 저장했다.
+현재 정책은 `source_literal_v1`이며 의미 동등성·동의어·단위 환산을 자동 승인하지 않는다.
+새 모델의 자동 그래프 생성·Published 모델·Runtime 조회 연결은 후속 단계다.
 추출 표준은 `pipeline_selected_draft`이고 Business Ontology 승인·게시와 별도다.
 
 ## 규격서 물품 모델의 발전 방향
@@ -159,3 +161,7 @@ uv run --locked --project backend --all-extras --all-groups pytest backend/tests
 
 Ontology 작성 코드는 `backend/src/teoria/features/semantic_modeling/ontology/`, Binding은 `binding/`, 관리 API는
 각 기능의 `admin_router.py`에서 찾는다.
+
+현재 원문 등록 319개는 표준 개념 사전이 아니다. 원문 등록 ID는 source_term_ref로 연결하며 표준 개념 참조를 대체하지 않는다.
+
+[물품 사전](goods_dictionary.md)의 표준 정의와 원문 매핑은 Application DB의 업무 의미 항목이다. 승인된 사전 개정도 Published Ontology schema 또는 Runtime artifact 게시를 대신하지 않는다.

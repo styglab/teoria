@@ -13,12 +13,15 @@ from teoria.features.specification_processing import tasks
 def processor_revision():
     import teoria.features.goods_normalization.contracts
     import teoria.integrations.codex
+    import inspect
+    from teoria.features.semantic_modeling.goods_dictionary.contracts import source_literal_definition
     root=Path(__file__).resolve().parent
     paths=sorted(p for p in root.rglob('*.py') if not p.name.startswith('evaluation'))
     contract_root=Path(teoria.features.goods_normalization.contracts.__file__).parent
     contract_paths=sorted(contract_root.rglob('*.py'))
     body=b''.join(p.relative_to(root).as_posix().encode()+p.read_bytes() for p in paths)
     body+=b''.join(b'goods_normalization/'+p.relative_to(contract_root).as_posix().encode()+p.read_bytes() for p in contract_paths)
+    body+=b'goods_dictionary_contract/'+Path(inspect.getfile(source_literal_definition)).read_bytes()
     runner_root=Path(teoria.integrations.codex.__file__).parent
     body+=b''.join(b'codex_inference/'+p.relative_to(runner_root).as_posix().encode()+p.read_bytes() for p in sorted(runner_root.rglob('*.py')))
     return hashlib.sha256(body).hexdigest()
@@ -63,7 +66,8 @@ async def execute_specification_run(request:SpecificationRun):
         with TemporaryDirectory(prefix='specification_pipeline_') as temporary:
             # Clients, parser output and model responses never outlive this workspace.
             extracted_ref,reused=await extract_documents(request,temporary)      # 01–05
-            selection=await tasks.select_and_map_standard(request,temporary,extracted_ref)    # 06–07
+            dictionary=await tasks.resolve_dictionary(request,temporary,extracted_ref)        # 06
+            selection=await tasks.select_and_map_standard(request,temporary,extracted_ref,dictionary) # 07
             normalized=await tasks.load(Path(temporary)/'normalized.json')
             report_ref=await tasks.persist_report(request,temporary,normalized['standard_version']) # 08
             corpus=await tasks.load(Path(temporary)/'extracted.json');work=await tasks.load(Path(temporary)/'work.json')
@@ -80,14 +84,16 @@ async def execute_specification_run(request:SpecificationRun):
                     'result_summary':{'stage':d.get('stage'),'reason':d['reason']}})
             partial=bool(corpus['unavailable_documents']) or any(d['status']=='partial' for d in document_results) or any(
                 normalized.get(key,{}).get('automatically_deferred',0)>0 for key in ['summary','entity_summary','relation_summary'])
+            partial=partial or dictionary['summary'].get('held',0)>0 or dictionary['summary'].get('proposed',0)>0
             state='failed' if not corpus['documents'] else 'partial' if partial else 'completed'
             result=RunResult(run_id=request.run_id,status=state,
-                artifacts=sorted([ArtifactRef.model_validate(a) for a in [*(e['artifact'] for e in work),extracted_ref,*selection['artifacts'],report_ref]],key=lambda a:a.key),
+                artifacts=sorted([ArtifactRef.model_validate(a) for a in [*(e['artifact'] for e in work),extracted_ref,*dictionary['artifacts'],*selection['artifacts'],report_ref]],key=lambda a:a.key),
                 document_results=sorted(document_results,key=lambda d:d['document_id']),standard=StandardReference.model_validate(selection['standard']),
                 summary={'documents':len(corpus['documents']),'failed_documents':len(corpus['unavailable_documents']),
                     'attributes':sum(len(d['attributes']) for d in corpus['documents']),**normalized['summary'],
                     'entity_normalization':normalized.get('entity_summary',{}),'relation_normalization':normalized.get('relation_summary',{}),
-                    'human_approval_required':False,'reused_extraction':reused})
+                    'human_approval_required':False,'reused_extraction':reused,
+                    'dictionary':dictionary['summary'],'dictionary_operation_id':dictionary['result']['operation_id']})
             # This is the only success/partial checkpoint: every referenced object exists first.
             await complete_execution(result)
             return result

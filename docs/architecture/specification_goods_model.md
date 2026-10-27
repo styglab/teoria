@@ -2,8 +2,8 @@
 
 상태: 2026-10-27 `goods` 1.0.0 Draft 보완. 작성 입력은
 [goods.yaml](../../backend/authoring/ontology_blueprints/goods.yaml)이다.
-객체 17개·속성 93개·관계 50개를 정의한다. Published 모델, 사전 데이터 적재,
-추출기 적용, 조회 Capability의 완료를 의미하지 않는다.
+객체 17개·속성 93개·관계 50개를 정의한다. 원문 명칭 사전의 자동 승인·저장·재사용 경로를 추가했다.
+Published 모델·표준 동의어/동등성 확정·새 Runtime 조회 Capability의 완료를 의미하지 않는다.
 실제 Draft 반영과 검사 결과는 [검증 기록](../verification/goods_model_revision_2026_10_27.md)에 둔다.
 
 
@@ -20,8 +20,9 @@
 
 Application DB는 Ontology 정의·프로파일·제안·검토 이력을 소유한다.
 문서별 인스턴스 조회 데이터·실행 상태는 Data DB, 큰 본문·원문은 파일/S3에 둔다.
-사전 객체를 선언한 것이 사전 저장 API나 승인 기능의 구현을 뜻하지 않는다.
-사전 판본·작성 데이터의 적재·승인 계약은 후속 구현 대상이다.
+물품 사전 저장·자동 검토·승인은 `semantic_modeling/goods_dictionary`가 소유한다.
+현재 `source_literal_v1`은 원문 명칭에 한정한 항목을 승인하고, 의미 재정의·동의어·동등성은 확정하지 않는다.
+공식 분류 사전 판본·적재와 고도화된 의미 정렬은 후속 구현이다.
 OpenMetadata의 기술·거버넌스 metadata를 복제하지 않는다.
 
 ## 공식 자료와 적용 판단
@@ -460,3 +461,66 @@ uv run --project backend --locked --extra api teoria-pipelines specification val
 
 이 명령은 읽기 전용이며 구조·참조 정합성만 검사한다. 원문 해석의 완전성·정확도, 외부 사전의 실재,
 실제 공급·설치 여부를 보증하지 않는다. 일반 추출을 실행하거나 DB·Published Ontology를 변경하지 않는다.
+
+
+## 물품 사전의 자동 승인·재사용
+
+별도 사전 모드·Flow는 제거했다. 기존 05 추출 검증 → 06 원문 표현 등록·재사용 → 07 표준 적용 → 08 저장에 통합한다. 분류 없는 원문 기반 처리를 허용하되 고정 프로파일 적용 조건은 유지한다.
+원문 추출 관찰 또는 기존 문서 그래프에서 후보를 수집하고 인증된 Admin HTTP API로 작성한다.
+기본값 `dictionary_auto_approve: true`는 아래 `source_literal_v1` 정책을 적용한다.
+
+1. 후보의 원본 SHA-256·문서 ID와 parser snapshot의 구절·위치가 일치해야 한다.
+2. 등록 명칭은 원문에 실제로 있어야 한다. Unicode·공백·대소문자 정규화만 사용한다.
+3. 새 물품 유형은 원문 명칭의 최소 정의, 새 특성은 승인된 소유 유형과 원문 특성명의 최소 정의를 사용한다.
+4. 같은 식별·정의·값 종류의 승인 항목은 기존 ID를 재사용한다.
+5. 근거 부족·소유 유형 미승인·정의 충돌·새 의미 해석은 보류한다. 유사 이름을 자동 동등 처리하지 않는다.
+6. 인증된 principal·정책 버전·자동 승인 방식·후보/승인/재사용/보류 이력을 transaction 안에서 기록한다.
+
+이 단계의 `semantic_maturity`는 `source_literal`이다. 예를 들어 ‘인버터의 정격출력에 관한 규격 특성’이라는
+최소 정의이며, QUDT 단위 정책·특성 동등성·외부 분류 매핑까지 검증한 완성 사전이라는 뜻은 아니다.
+원문 등록 ID는 `source_term_alignment.json`의 `source_term_ref: source_term:<entry_id>`에 연결한다. 표준 개념 필드 `type_ref`·`characteristic_ref`를 채우지 않는다.
+문서 그래프의 review_status는 proposed로 유지한다. 사전 승인이 실제 물품·요구·구성 관계 전체의 승인은 아니다.
+
+Application DB의 `goods.dictionary_entries`는 승인 항목을, `dictionary_decisions`·`dictionary_events`는 판정을,
+`dictionary_operations`는 재실행 식별·입력 checksum·결과를 소유한다.
+전체 parser snapshot·후보 본문·적용 그래프는 파일/S3, 실행 상태·산출물 참조·문서별 요약은 Data DB에 둔다.
+
+새 사전은 프로파일과 독립적이다. 기존 NormalizationProfile의 분류·Published Ontology 조건과
+기존 의미 작성의 평가용 auto-approve 제한을 완화하지 않는다. Published Ontology와 Runtime artifact는 변경하지 않는다.
+
+실제 네 샘플의 첫 실행에서 45개 승인(물품 유형 31개·특성 14개), 1개 재사용, 2개 보류를 확인했다.
+같은 입력을 새 작업 ID로 재처리했을 때 신규 승인 0개·재사용 46개·보류 2개이며 사전 항목은 45개로 유지됐다.
+이번 실행은 기존 대표 그래프와 원본 재파싱을 사용했다. 신규 LLM 추출·전체 정확도 평가로 표시하지 않는다.
+
+[자동 승인 검증 기록](../verification/goods_dictionary_auto_approval_2026_10_27.md)을 따른다.
+
+
+## 원문 사전과 표준 사전의 구분
+
+초기 45개(물품 명칭 31·특성 명칭 14)는 원문 표현 등록 항목이며 45개 표준 개념이 아니다.
+RAM과 메모리가 각각 등록되어도 동등성이 확정되지 않는다. 원문 표현 → 범위·근거가 있는 개념 매핑 →
+표준 유형·특성 정의의 세 층이 필요하다. 표준 특성에는 정의·자료형·차원·허용 단위·적용 대상·버전이 필요하다.
+원문 존재 확인만으로 이 의미나 Published Ontology를 자동 승인하지 않는다.
+
+## Palantir 지침을 참고한 현재 설계 평가
+
+[Best practices](https://www.palantir.com/docs/foundry/ontology/ontology-best-practices/),
+[Structural guidance](https://www.palantir.com/docs/foundry/ontology/ontology-structural-guidance/),
+[Anti-patterns](https://www.palantir.com/docs/foundry/ontology/ontology-anti-patterns/)를 참고한 Teoria에 대한 판단이다.
+
+물품·구성품, 수량·조건·근거가 있는 구성 명세, 요구와 관찰의 구분은 유지할 만하다.
+분류 계층·납품 범위·물리적 구성을 분리한 것도 타당하다. 관계 명세 객체가 있더라도 사용자에게는
+물품→구성품의 직접 탐색과 관계 상세를 함께 제공해야 한다.
+
+보완 우선순위는 원문 등록과 표준 의미의 분리, 주요 특성의 자료형·단위 검증 및 검색 뷰,
+문서별 요구 물품과 제조사 제품 모델·실제 자산의 식별 구분이다. 이름만으로 병합하지 않는다.
+specified_context에 장소·시험 대상·참조 모델이 섞이는 점은 독립 정체성과 생명주기가 확인될 때 분리한다.
+분류 코드마다 Ontology 타입을 만들지 않는다. 타입의 깊은 상속 회피와 실제 다단계 구성품 트리는 다른 문제다.
+
+현재 Draft의 방향은 타당하지만 표준 의미와 검색 구현은 미완성이다. 즉시 전면 교체하기보다 같은 물품군의
+여러 실문서에서 구성 탐색·조건 조회·근거 추적·유사 대상 검색을 검증하며 보완한다.
+Palantir 인터페이스 기능을 Teoria가 구현했다는 의미는 아니며 실제 재사용 없이 조달 규칙을 공통 계층으로 올리지 않는다.
+
+표준 정의·개정·승인 매핑과 기존 파이프라인의 재사용 경로는 [물품 사전](../platform/goods_dictionary.md)에 구현 상태를 기록한다. 기존 원문 등록 45개와 표준 정의 2개는 별도다.
+
+네 규격서 새 전체 실행 후 원문 등록은 319개, 표준 정의·매핑은 각각 2개다. [실제 결과 및 관계·표현 정렬 문제](../verification/goods_four_sample_pipeline_2026_10_27.md)를 참고한다.

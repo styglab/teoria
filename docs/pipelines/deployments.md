@@ -52,6 +52,20 @@ Teoria Data PostgreSQL metadata를 격리된 OpenMetadata ingestion container로
 |---|---|---|
 | `0 5 * * *` | `Asia/Seoul` | 활성 |
 
+## `demo-customer-churn-pipeline`
+
+데이터 검증 → 학습 → 평가 → MLflow 등록을 수행하고, deploy=true이면 별도 배포 Worker에서 배포·추론 검증까지 완료한다.
+
+- 선언: `deploy/prefect/model_operations.yaml`
+- Flow: `teoria.features.model_operations.flows.customer_churn_pipeline`
+- Work pool: `teoria-model-training`
+- Work queue: `default`
+- 파라미터: `deploy=False`
+
+| Cron | Timezone | 예약 상태 |
+|---|---|---|
+| — | — | 수동 실행 |
+
 ## `demo-seed-customers`
 
 실제 개인정보가 없는 가상 고객·이용 이력 600건을 재현 가능하게 적재한다.

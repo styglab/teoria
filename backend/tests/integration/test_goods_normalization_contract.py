@@ -405,6 +405,9 @@ async def test_operational_standard_management_uses_package_and_saves_only_canon
         "persist_report",
     ]:
         monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
+    monkeypatch.setattr(tasks, "resolve_dictionary", AsyncMock(return_value={
+        "result":{"operation_id":"isolated_profile_fixture"}, "summary":{}, "alignment_ref":None, "artifacts":[],
+    }))
     monkeypatch.setattr(flows, "start_execution", AsyncMock(return_value=None))
     complete = AsyncMock()
     monkeypatch.setattr(flows, "complete_execution", complete)
@@ -800,6 +803,9 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
         "persist_report",
     ]:
         monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
+    monkeypatch.setattr(tasks, "resolve_dictionary", AsyncMock(return_value={
+        "result":{"operation_id":"isolated_profile_fixture"}, "summary":{}, "alignment_ref":None, "artifacts":[],
+    }))
     monkeypatch.setattr(
         flows, "document_processing_flow", flows.document_processing_flow.fn
     )

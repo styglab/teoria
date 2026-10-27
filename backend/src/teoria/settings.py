@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     model_operations_enabled: bool = False
     model_prefect_url: str = "http://prefect-server:4200/api"
     model_prefect_auth: str = ""
-    model_mlflow_url: str = "http://mlflow:5000"
+    model_mlflow_url: str = "http://mlflow:5000/mlflow"
     model_inference_url: str = "http://demo-inference:8003"
     demo_inference_token: str | None = None
     assessment_law_max_documents: int = Field(default=5, ge=1, le=5)

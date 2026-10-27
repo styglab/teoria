@@ -7,6 +7,10 @@ from typing import Any
 import httpx
 from fastapi import FastAPI
 from teoria.features.model_operations.admin_router import create_model_operations_router
+from teoria.features.workflow_management.admin_router import create_workflow_router
+from teoria.features.semantic_modeling.goods_dictionary.admin_router import create_goods_dictionary_router
+from teoria.features.semantic_modeling.goods_dictionary.service import GoodsDictionaryService
+from teoria.features.semantic_modeling.goods_dictionary.meaning_service import GoodsMeaningService
 
 from teoria.features.metadata_management.intelligence.asset_assessment.admin_router import (
     create_asset_assessment_router,
@@ -253,6 +257,10 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
         prefect_url=services.settings.model_prefect_url, prefect_auth=services.settings.model_prefect_auth,
         mlflow_url=services.settings.model_mlflow_url, inference_url=services.settings.model_inference_url,
         inference_token=services.settings.demo_inference_token))
+    app.include_router(create_workflow_router(authorizer=services.authorizer, client=model_client,
+        prefect_url=services.settings.model_prefect_url, prefect_auth=services.settings.model_prefect_auth,
+        mlops_enabled=services.settings.model_operations_enabled,
+        inference_token=services.settings.demo_inference_token))
     profiles = (
         NormalizationProfileService(
             services.settings.app_database_url,
@@ -273,6 +281,11 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
     app.include_router(
         create_normalization_profile_router(profiles, services.authorizer, operations)
     )
+    app.include_router(create_goods_dictionary_router(
+        GoodsDictionaryService(services.settings.app_database_url) if services.settings.app_database_url else None,
+        services.authorizer,
+        GoodsMeaningService(services.settings.app_database_url) if services.settings.app_database_url else None,
+    ))
     app.include_router(
         create_asset_assessment_router(
             services.assessment_repository,

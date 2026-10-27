@@ -28,8 +28,21 @@ def inputs(tmp_path,mode='document_processing'):
 @pytest.fixture
 def undecorated(monkeypatch):
     # Exercise the exact operational task bodies without starting an orchestration server.
-    for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','select_and_map_standard','persist_report']:
+    for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','resolve_dictionary','select_and_map_standard','persist_report']:
         monkeypatch.setattr(tasks,name,getattr(tasks,name).fn)
+    from teoria.features.specification_processing.normalization import dictionary_alignment
+    class DictionaryAPI:
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def resolve_dictionary_meanings(self,source_entry_ids,classification_code=None):
+            return {'policy_version':'fixture','items':[]}
+        async def dictionary(self,operation_id,payload):
+            from uuid import UUID
+            return {'operation_id':operation_id,'policy_version':'fixture','approval_mode':'automatic_policy',
+                'status':'completed','summary':{'approved':len(payload['candidates']),'reused':0,'held':0,'proposed':0},
+                'decisions':[{'candidate_key':c['candidate_key'],'origin_ref':c['origin_ref'],'status':'approved',
+                              'reason':'controlled_fixture','entry_id':str(UUID(int=i+1))} for i,c in enumerate(payload['candidates'])]}
+    monkeypatch.setattr(dictionary_alignment,'GoodsAuthoringClient',DictionaryAPI)
     start=AsyncMock(return_value=None);complete=AsyncMock();failed=AsyncMock()
     monkeypatch.setattr(flows,'start_execution',start);monkeypatch.setattr(flows,'complete_execution',complete);monkeypatch.setattr(flows,'fail_execution',failed)
     return start,complete,failed
@@ -39,9 +52,9 @@ async def test_canonical_artifacts_are_separate_and_db_completion_is_last(tmp_pa
     result=await flows.execute_specification_run(request)
     assert result.status=='completed'
     assert result.summary['applied']==1
-    assert len(result.artifacts)==4
+    assert len(result.artifacts)==7
     root=tmp_path/'objects/specification_processing/fixture_run'
-    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==['extracted.json','index.md','normalized.json','sources/doc_1.hwp']
+    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==sorted(['source_term_alignment.json','dictionary_bindings.json','dictionary_candidates.json','extracted.json','index.md','normalized.json','sources/doc_1.hwp'])
     for artifact in result.artifacts:
         path=Path(artifact.uri.removeprefix('file://'))
         assert path.exists() and hashlib.sha256(path.read_bytes()).hexdigest()==artifact.sha256
@@ -95,3 +108,39 @@ def test_contract_policy_changes_invalidate_processing_revision(tmp_path,monkeyp
     monkeypatch.setattr(teoria.features.goods_normalization.contracts,'__file__',str(module))
     first=flows.processor_revision();module.write_text('policy = 2\n')
     assert flows.processor_revision()!=first
+
+
+
+async def test_dictionary_is_an_existing_stage_and_applies_refs_without_changing_observations(tmp_path,undecorated):
+    request=inputs(tmp_path,'standard_management');request.classification_code=None;request.standard=None
+    checkpoint=Path(request.extraction_checkpoint.uri.removeprefix('file://'))
+    data=json.loads(checkpoint.read_text());data['classification_code']=None
+    data['documents'][0]['attributes'][0]['property_raw']='코어 수'
+    data['documents'][0]['parsed_document']['nodes'][0]['text']='서버 CPU 코어 수 16core'
+    checkpoint.write_text(json.dumps(data));request.extraction_checkpoint.sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    result=await flows.execute_specification_run(request)
+    root=tmp_path/'objects/specification_processing/fixture_run'
+    aligned=json.loads((root/'source_term_alignment.json').read_text())
+    normalized=json.loads((root/'normalized.json').read_text())
+    assert result.summary['dictionary']['approved']==3
+    assert aligned['documents'][0]['entities'][1]['source_term_ref'].startswith('source_term:')
+    assert aligned['documents'][0]['attributes'][0]['source_term_ref'].startswith('source_term:')
+    assert 'type_ref' not in aligned['documents'][0]['entities'][1]
+    assert 'characteristic_ref' not in aligned['documents'][0]['attributes'][0]
+    assert aligned['documents'][0]['attributes'][0]['value_raw']=='16'
+    assert aligned['documents'][0]['review_status']=='proposed'
+    assert normalized['source_term_alignment']['artifact']['uri'].endswith('/source_term_alignment.json')
+    assert normalized['source_term_alignment']['human_review_performed'] is False
+    assert normalized['dictionary_meanings']['summary']=={'unresolved':3}
+    assert all(a['meaning_status']=='unresolved' for a in normalized['dictionary_meanings']['documents'][0]['attributes'])
+    undecorated[1].assert_awaited_once_with(result)
+
+
+def test_retired_dictionary_mode_and_graph_entry_are_rejected(tmp_path):
+    body=inputs(tmp_path).model_dump(mode='json')
+    body['mode']='dictionary_authoring'
+    with pytest.raises(ValueError):SpecificationRun.model_validate(body)
+    body['mode']='standard_management';body['classification_code']=None;body['standard']=None
+    assert SpecificationRun.model_validate(body).dictionary_auto_approve is True
+    body['dictionary_graphs']={'uri':'file:///tmp/legacy.yaml','sha256':'a'*64}
+    with pytest.raises(ValueError):SpecificationRun.model_validate(body)

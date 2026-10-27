@@ -57,7 +57,8 @@ class StandardReference(Record):
 class SpecificationRun(Record):
     run_id: str = Field(pattern=r"^[a-z][a-z0-9_]{0,79}$")
     mode: Literal['standard_management','document_processing']
-    classification_code: str = Field(pattern=r"^\d{10}$")
+    classification_code: str | None = Field(default=None,pattern=r"^\d{10}$")
+    dictionary_auto_approve: bool = True
     documents: list[SourceDocument] = Field(min_length=1,max_length=100)
     artifact_root: str = Field(min_length=1)
     standard: StandardReference | None = None
@@ -130,7 +131,7 @@ class StandardArtifact(Record):
     schema_version: Literal[1] = 1
     rule_set: Literal['source_only','server'] = 'source_only'
     version: str = Field(pattern=r'^[a-z][a-z0-9_]*$')
-    classification_code: str = Field(pattern=r'^\d{10}$')
+    classification_code: str | None = Field(default=None,pattern=r'^\d{10}$')
     status: Literal['pipeline_selected_draft'] = 'pipeline_selected_draft'
     published: Literal[False] = False
     definitions: list[dict]

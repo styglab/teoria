@@ -71,11 +71,13 @@ graphs:
     subject_id: transmitters
     kind: item
     name: 공급 데이터 전송장치
+    designation_raw: 데이터 전송장치
   - evidence_ids:
     - e_existing
     subject_id: existing_transmitter
     kind: item
     name: 기존 데이터 전송장치
+    designation_raw: 데이터 전송장치
   - evidence_ids:
     - e_software
     subject_id: monitoring_software
@@ -385,6 +387,7 @@ graphs:
       - kind: number
         number: '10'
     semantic_scope: 펌프 1set당 설정 가능한 유량
+    characteristic_name_raw: 유량 설정 범위
   - evidence_ids:
     - e_accuracy
     statement_id: injection_accuracy
@@ -406,6 +409,7 @@ graphs:
       value:
         kind: number
         number: '20'
+    characteristic_name_raw: 주입량 정확도
   - evidence_ids:
     - e_temperature
     statement_id: oven_range
@@ -422,6 +426,7 @@ graphs:
         number: '100'
         unit_raw: ℃
     semantic_scope: 컬럼오븐 설정 범위
+    characteristic_name_raw: 온도 설정 범
   - evidence_ids:
     - e_capacity
     statement_id: column_capacity
@@ -436,6 +441,7 @@ graphs:
         text: 300 mmL. Column x 3ea
     assertion_role: supported_capability
     semantic_scope: 서로 대안인 수용 구성
+    characteristic_name_raw: 수용가능한 컬럼 크기 및 수
   - evidence_ids:
     - e_boards
     statement_id: supported_boards
@@ -448,6 +454,7 @@ graphs:
     operator: lte
     assertion_role: supported_capability
     semantic_scope: 컨트롤러가 지원하는 개수
+    characteristic_name_raw: 아날로그 보드
 - document_id: sample_03
   revision_id: 2fbb97780e28f5e9868e63f5240862eb4eb8907209510335831f8478ef81f4cd
   source_sha256: 2fbb97780e28f5e9868e63f5240862eb4eb8907209510335831f8478ef81f4cd
@@ -513,6 +520,7 @@ graphs:
     subject_id: farm_system
     kind: item
     name: 지능형 농기계 분석시험장치
+    designation_raw: 지능형 농기계 정적상태·주행성능 분석시험장치
   - evidence_ids:
     - e_laser
     subject_id: laser
@@ -558,6 +566,7 @@ graphs:
     subject_id: truss
     kind: item
     name: 트러스 구조물
+    designation_raw: 트러스(Truss) 구조물
   - evidence_ids:
     - e_thermal_components
     subject_id: thermal_lens
@@ -692,6 +701,7 @@ graphs:
       unit_raw: ℃
     operator: gte
     semantic_scope: 측정 가능한 온도 범위의 상한
+    characteristic_name_raw: 최대 측정온도
   - evidence_ids:
     - e_position_accuracy
     statement_id: laser_accuracy
@@ -702,6 +712,7 @@ graphs:
       text: ±15 μm + 6 μm/m급 이하
       reference: measurement_distance
     semantic_scope: 거리 의존 정확도
+    characteristic_name_raw: 위치측정 정확도
   - evidence_ids:
     - e_output_rate
     statement_id: laser_rate
@@ -713,6 +724,7 @@ graphs:
       unit_raw: Hz
     operator: gte
     semantic_scope: 위치데이터 출력
+    characteristic_name_raw: 위치데이터 출력속도
   - evidence_ids:
     - e_resolution
     statement_id: camera_resolution
@@ -732,6 +744,7 @@ graphs:
       - height
     operator: gte
     semantic_scope: 각 축의 최대 이미지 해상도
+    characteristic_name_raw: 최대 이미지 해상도
   - evidence_ids:
     - e_fps
     statement_id: camera_max_fps
@@ -743,6 +756,7 @@ graphs:
       unit_raw: fps
     operator: gte
     semantic_scope: 최대 촬영속도; 최대 해상도와 동시 달성 여부는 미기재
+    characteristic_name_raw: 최대 촬영속도
   requirements:
   - evidence_ids:
     - e_sync
@@ -871,6 +885,7 @@ graphs:
     subject_id: external_cage
     kind: item
     name: 별도 제작 이동형 케이지
+    designation_raw: 이동형 케이지
   - evidence_ids:
     - e_rail
     subject_id: rail
@@ -965,6 +980,7 @@ graphs:
       unit_raw: kW
     operator: gte
     semantic_scope: 인버터 정격출력
+    characteristic_name_raw: 정격출력
   - evidence_ids:
     - e_table
     statement_id: table_load
@@ -976,6 +992,7 @@ graphs:
       unit_raw: kg
     operator: gte
     semantic_scope: 진료대 허용하중
+    characteristic_name_raw: 허용하중
   - evidence_ids:
     - e_table
     statement_id: table_height
@@ -990,6 +1007,7 @@ graphs:
       - kind: number
         number: '1100'
     semantic_scope: 진료대 상판 높이
+    characteristic_name_raw: 상하 범위
   - evidence_ids:
     - e_light
     statement_id: workplane_illuminance
@@ -1003,6 +1021,7 @@ graphs:
     semantic_scope: 수술 작업면 기준
     conditions:
     - description: 수술 작업면에서 측정
+    characteristic_name_raw: 조도
   requirements:
   - evidence_ids:
     - e_rail

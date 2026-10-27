@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "policy": "inverter_seed_v1",
+  "authority": "local_business_definition_not_published_ontology",
+  "definitions": [
+    {
+      "key": "inverter",
+      "kind": "item_type",
+      "preferred_name": "인버터",
+      "definition": "직류 전력을 교류 전력으로 변환하는 장치. 실제 제품 모델이나 설치 자산이 아닌 물품 유형을 의미한다.",
+      "references": [
+        "https://www.energy.gov/cmei/systems/solar-integration-inverters-and-grid-services-basics"
+      ]
+    },
+    {
+      "key": "inverter_rated_output_power",
+      "kind": "characteristic",
+      "preferred_name": "인버터 정격출력",
+      "definition": "인버터의 정격 운전 조건에 대해 명시한 출력 전력의 크기. 순간 최대 출력 및 소비 전력과 구분한다. 원문에 없는 정격 조건이나 실제 성능을 추정하지 않는다.",
+      "value_kind": "number",
+      "applicable_item_type_ids": [
+        "b77248f3-7d1a-5b6a-995c-6273e075a51a"
+      ],
+      "quantity_dimension": "power",
+      "canonical_unit": "W",
+      "allowed_units": [
+        "W",
+        "kW"
+      ],
+      "references": [
+        "https://www.bipm.org/en/publications/si-brochure",
+        "source_sha256:40c6d6203877a0bdc50b8cbb4f2f71f3efcd5eb5a1c06bc9ac5756ac3c86289d"
+      ]
+    }
+  ],
+  "mapping_policy": {
+    "relation": "equivalent",
+    "classification_code": null,
+    "source_labels": {
+      "inverter": "인버터",
+      "inverter_rated_output_power": "정격출력"
+    },
+    "rationale": "inverter_seed_v1 자동 정책 판정: 인버터 원문 및 그 소유 특성 정격출력과 정의를 대조한다. kW 전력값만 수치 검증하며 원문에 없는 조건·단위 환산·제품 실성능은 추정하지 않는다. 사람 검토로 기록하지 않는다."
+  }
+}

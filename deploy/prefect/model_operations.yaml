@@ -5,6 +5,15 @@ push: null
 pull: null
 
 deployments:
+  - name: demo-customer-churn-pipeline
+    version: 1.0.0
+    description: 데이터 검증 → 학습 → 평가 → MLflow 등록을 수행하고, deploy=true이면 별도 배포 Worker에서 배포·추론 검증까지 완료한다.
+    entrypoint: teoria.features.model_operations.flows.customer_churn_pipeline
+    tags: [feature:model_operations, demo:synthetic]
+    concurrency_limit: {limit: 1, collision_strategy: CANCEL_NEW}
+    parameters: {deploy: false}
+    schedules: []
+    work_pool: {name: teoria-model-training, work_queue_name: default}
   - name: demo-seed-customers
     version: 1.0.0
     description: 실제 개인정보가 없는 가상 고객·이용 이력 600건을 재현 가능하게 적재한다.

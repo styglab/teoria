@@ -312,3 +312,14 @@ Prefect에 제출할 때는 같은 JSON을 `manifest` parameter로 제공한다.
 backend/authoring/specification_examples/four_sample_graphs.yaml`로 네 샘플의 대표 제안 그래프를 검사한다.
 이 검사는 기존 `NormalizationProfile`의 컴파일·게시·적용과 별도다. 기존 분류 필수 Flow를 완화하거나
 이 제안 그래프를 자동 채택하지 않는다. 새 모델의 자동 추출·프로파일 적용·DB·Runtime 연결은 후속 단계다.
+
+
+## 기존 단계에 통합한 원문 표현 등록
+
+별도 dictionary_authoring 모드·Flow와 dictionary_graphs 입력은 제거했다.
+standard_management·document_processing의 06 단계에서 원문 표현을 조회·등록·재사용하고 07 단계에서 표준을 적용한다.
+dictionary_auto_approve 기본값은 true이며 source_literal_v1 정책이다. 개념 동등성이나 단위 환산 승인은 아니다.
+분류 없는 원문 처리를 허용하지만 고정 Published 프로파일 적용 조건은 유지한다. document_processing에는 고정 표준이 필요하다.
+source_term_alignment.json의 source_term_ref는 표준 개념 참조를 대체하지 않는다. 원본 추출 결과는 보존한다.
+
+승인된 표준 정의와 범위별 매핑의 적용은 [물품 사전](../platform/goods_dictionary.md)을 따른다. normalized.json의 dictionary_meanings에 별도 기록하며 Published 프로파일의 Ontology 참조와 혼용하지 않는다.

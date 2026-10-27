@@ -305,3 +305,7 @@ backend/references/**
 # Synthetic Provider evidence is part of the independent backend test fixture.
 !backend/tests/fixtures/references/
 !backend/tests/fixtures/references/**
+
+# Frontend source helpers are application code, not Python build output.
+!frontend/src/lib/
+!frontend/src/lib/utils.ts

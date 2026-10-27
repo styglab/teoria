@@ -32,9 +32,14 @@ def register_model(
 
     mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
     mlflow.set_experiment("teoria_synthetic_customer_churn")
-    with mlflow.start_run(
-        tags={"teoria.synthetic": "true", "teoria.requested_by": requested_by}
-    ) as run:
+    from prefect.runtime import flow_run
+
+    tags = {"teoria.synthetic": "true", "teoria.requested_by": requested_by}
+    if flow_run.id:
+        tags["teoria.prefect_flow_run_id"] = str(flow_run.id)
+        if flow_run.parent_flow_run_id:
+            tags["teoria.prefect_pipeline_run_id"] = str(flow_run.parent_flow_run_id)
+    with mlflow.start_run(tags=tags) as run:
         mlflow.log_params(
             {
                 "dataset_version": dataset_version,

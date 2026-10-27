@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, RefreshCw, X } from "lucide-react";
-import { modelOperationsApi, type RunDetail } from "../../api/model_operations";
+import { workflowsApi, type RunDetail } from "../../api/workflows";
 import { PageState } from "../../components/workspace/WorkspaceLayout";
-import { dateLabel, runDurationLabel, stateLabels } from "./presentation";
+import {
+  dateLabel,
+  runDurationLabel,
+  stateLabels,
+} from "../model_operations/presentation";
 
 export function RunDetailPanel({
   runId,
@@ -15,6 +19,8 @@ export function RunDetailPanel({
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"tasks" | "logs">("tasks");
   const [refresh, setRefresh] = useState(0);
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     let active = true;
@@ -24,7 +30,7 @@ export function RunDetailPanel({
     setTab("tasks");
     const load = async () => {
       try {
-        const next = await modelOperationsApi.runDetail(runId);
+        const next = await workflowsApi.runDetail(runId);
         if (!active) return;
         setDetail(next);
         setError(null);
@@ -40,7 +46,6 @@ export function RunDetailPanel({
     };
     void load();
     heading.current?.focus({ preventScroll: true });
-    heading.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
     return () => {
       active = false;
       clearTimeout(timer);
@@ -80,9 +85,36 @@ export function RunDetailPanel({
         <PageState loading title="실행 상세를 불러오고 있습니다…" />
       ) : (
         <>
+          {stopError && (
+            <p role="alert" className="workspace-error">
+              {stopError}
+            </p>
+          )}
           <div className="model-detail-summary">
+            {detail.can_cancel && (
+              <button
+                className="operations-link"
+                disabled={stopping}
+                onClick={async () => {
+                  setStopping(true);
+                  setStopError("");
+                  try {
+                    await workflowsApi.cancel(runId);
+                    setRefresh((value) => value + 1);
+                  } catch (reason) {
+                    setStopError((reason as Error).message);
+                  } finally {
+                    setStopping(false);
+                  }
+                }}
+              >
+                {stopping ? "중지 요청 중…" : "실행 중지"}
+              </button>
+            )}
             <span className={`model-state ${detail.run.state_type}`}>
-              {stateLabels[detail.run.state_type] || detail.run.state_type}
+              {detail.run.state_name ||
+                stateLabels[detail.run.state_type] ||
+                detail.run.state_type}
             </span>
             <span>소요 {runDurationLabel(detail.run)}</span>
             <a
@@ -113,6 +145,31 @@ export function RunDetailPanel({
             <p className={`model-state-message ${detail.run.state_type}`}>
               {detail.run.message}
             </p>
+          )}
+          {!!detail.subflows?.length && (
+            <div className="model-task-list" aria-label="하위 Flow 진행 상황">
+              {detail.subflows.map((child) => (
+                <article key={child.id}>
+                  <span className={`model-state-dot ${child.state_type}`} />
+                  <div>
+                    <strong>{child.name}</strong>
+                    <small>
+                      {child.state_name ||
+                        stateLabels[child.state_type] ||
+                        child.state_type}{" "}
+                      · {runDurationLabel(child)}
+                    </small>
+                    <a
+                      href={`/prefect/runs/flow-run/${encodeURIComponent(child.id)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      하위 Flow 단계·로그 <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </article>
+              ))}
+            </div>
           )}
           <div
             className="model-detail-tabs"

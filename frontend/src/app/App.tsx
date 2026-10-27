@@ -22,6 +22,7 @@ import {
 } from "../features/model_operations/ModelOperationsAvailability";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { currentNavigation } from "./navigation";
+import { Pipelines } from "../features/workflow_management/Pipelines";
 import { ModelOperations } from "../features/model_operations/ModelOperations";
 import { BindingManager } from "../features/binding/BindingManager";
 import { CapabilityStudio } from "../features/capability/CapabilityStudio";
@@ -208,7 +209,7 @@ function AdminWorkspace() {
             element={
               <AdminAccess>
                 <WorkspaceFrame>
-                  <ModelOperations view="pipelines" />
+                  <Pipelines />
                 </WorkspaceFrame>
               </AdminAccess>
             }

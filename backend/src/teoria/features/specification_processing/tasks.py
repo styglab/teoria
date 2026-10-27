@@ -170,8 +170,23 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
     async with artifact_store(request.artifact_root) as store:
         return (await store.put(run_key(request,'extracted.json'),await asyncio.to_thread((Path(workspace)/'extracted.json').read_bytes))).model_dump()
 
-@task(name='06 후보 수집·07 표준 적용',**TASK_OPTIONS)
-async def select_and_map_standard(request:SpecificationRun,workspace:str,extraction_ref:dict|None=None):
+@task(name='06 원문 표현 조회·자동 등록·재사용',**TASK_OPTIONS)
+async def resolve_dictionary(request:SpecificationRun,workspace:str,extraction_ref:dict):
+    from teoria.features.specification_processing.normalization.dictionary_alignment import align_dictionary
+    return await align_dictionary(request,await load(Path(workspace)/'extracted.json'),extraction_ref)
+
+
+def attach_source_term_alignment(normalized,dictionary):
+    if dictionary is not None:
+        normalized['dictionary_meanings']=dictionary.get('meaning_alignment',{})
+        normalized['source_term_alignment']={'artifact':dictionary['alignment_ref'],
+            'operation_id':dictionary['result']['operation_id'],'summary':dictionary['summary'],
+            'semantic_maturity':'source_literal','human_review_performed':False,
+            'meaning_summary':dictionary.get('meaning_summary',{})}
+
+
+@task(name='07 표준 의미 적용',**TASK_OPTIONS)
+async def select_and_map_standard(request:SpecificationRun,workspace:str,extraction_ref:dict|None=None,dictionary=None):
     from teoria.features.specification_processing.normalization.standard_versioning import manage_standard
     from teoria.features.specification_processing.normalization.standard_application import map_standard
     from teoria.features.specification_processing.models import StandardReference
@@ -187,6 +202,7 @@ async def select_and_map_standard(request:SpecificationRun,workspace:str,extract
             normalized,candidates=apply_profile(corpus,package,run_id=request.run_id)
             normalized['standard_ref']=request.standard.model_dump()
             normalized['extraction_ref']=extraction_ref
+            attach_source_term_alignment(normalized,dictionary)
             candidates['extraction_ref']=extraction_ref
             artifacts=[]
             async with artifact_store(request.artifact_root) as store:
@@ -209,6 +225,7 @@ async def select_and_map_standard(request:SpecificationRun,workspace:str,extract
             ref=await store.put(run_key(request,'meaning_candidates.json'),(json.dumps(candidates,ensure_ascii=False,indent=2)+'\n').encode());artifacts.append(ref.model_dump())
         else:standard_ref=request.standard
         normalized['standard_ref']=standard_ref.model_dump()
+        attach_source_term_alignment(normalized,dictionary)
         await save(Path(workspace)/'normalized.json',normalized)
         ref=await store.put(run_key(request,'normalized.json'),await asyncio.to_thread((Path(workspace)/'normalized.json').read_bytes));artifacts.append(ref.model_dump())
     if candidates is not None:await save(Path(workspace)/'meaning_candidates.json',candidates)

@@ -53,6 +53,7 @@ Python 패키지 이름과 대응시키지 않는다. 문서의 기존 `docs/pla
 
 | 위치 | 책임 |
 |---|---|
+| `features/semantic_modeling/goods_dictionary/` | 물품 사전의 HTTP 계약·원문 검증 정책·자동 승인·저장·감사 |
 | `features/semantic_modeling/ontology/` | 지속 가능한 업무 의미·Draft·검토·게시 |
 | `features/semantic_modeling/binding/` | Stable Concept ID와 외부 의미 대상의 연결 |
 | `features/semantic_modeling/ontology/service.py`, `repository.py` | 작성·검토·게시 정책과 transaction 내 저장 |
@@ -61,6 +62,7 @@ Python 패키지 이름과 대응시키지 않는다. 문서의 기존 `docs/pla
 | `features/goods_normalization/candidates/` | 표준 후보 제안·AI 의미 판정·Draft 작성 |
 | `features/goods_normalization/profiles/` | `service.py`의 프로파일 정책과 `repository.py`의 저장·감사 |
 | `features/goods_normalization/contracts/` | 발행과 적용이 공유하는 versioned 데이터 계약 |
+| `features/workflow_management/` | 명시한 운영 Prefect 파이프라인 목록·스케줄·실행·취소 관리 API |
 | `features/model_operations/` | 선택형 합성 데이터·모델 학습·평가·데모 서빙 전환·파이프라인 관리 |
 | `integrations/mlflow/`, `integrations/model_serving/` | MLflow 연결·고정 데모 추론 서버의 제한된 배포 실행 |
 | `features/metadata_management/` | 자산 맥락·Suggestion/Review/Application·AI 진단·메타데이터 ingestion |
@@ -84,7 +86,7 @@ Python 패키지 이름과 대응시키지 않는다. 문서의 기존 `docs/pla
 
 ## 의존성과 데이터 권위
 
-- 문서 처리 코드는 물품 프로파일의 공개 `contracts`를 사용한다. 의미 작성 저장소와
+- 문서 처리 코드는 물품 프로파일의 공개 `contracts`와 물품 사전 작성의 공개 HTTP `goods_dictionary/contracts.py`를 사용한다. 의미 작성 저장소와
   Runtime을 직접 호출하지 않는다. 상위 표준관리 Flow의 의미 작성 요청은 인증된
   Admin HTTP API를 사용한다.
 - MCP는 Runtime HTTP API만 호출한다. DB·의미 작성 코드·embedded Runtime을 사용하지 않는다.
@@ -199,4 +201,8 @@ API·Prefect proxy를 한 nginx에 제공한다. K3s의 `standalone` target은 U
 분류체계·분류항목·분류 판정·물품 유형·표준 특성·규격서 버전·물품·서비스·명세·근거를 연결하는 Draft다.
 기존 서버 전용 조회 feature·Registry·프로파일·숫자 관찰 적재 경로는 제거했다.
 범용 규격서 추출·정규화 및 파일/S3 산출물·Data DB 실행 checkpoint는 유지한다.
-문서 그래프 계약·대표 예시는 추가했고, 자동 추출·조회 연결은 새 모델의 검토 후 소유 기능에 작성한다. Pipeline은 Runtime을 직접 호출하지 않는다.
+문서 그래프 계약·대표 예시와 물품 사전 자동 승인 경로를 추가했다. 사전 작성은 인증된 Admin API를 사용하며, 새 의미의 Runtime 조회 연결은 별도다. Pipeline은 Runtime을 직접 호출하지 않는다.
+
+현재 원문 등록 319개는 표준 개념 사전이 아니다. 원문 등록 ID는 source_term_ref로 연결하며 표준 개념 참조를 대체하지 않는다.
+
+물품 표준 정의의 개정·의미 매핑·감사는 semantic_modeling/goods_dictionary/meaning_*가 소유한다. 작성 예시는 backend/authoring/goods_dictionary/에 두며 specification_processing은 인증된 Admin HTTP로 승인 매핑을 조회한다.

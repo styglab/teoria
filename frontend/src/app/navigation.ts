@@ -84,10 +84,9 @@ export const navigationItems: NavigationItem[] = [
   {
     path: "/admin/workflows",
     label: "파이프라인",
-    description: "데이터 준비·동기화·학습·배포 실행",
+    description: "운영 파이프라인·스케줄·실행 이력",
     icon: Workflow,
     group: "워크플로",
-    modelOperations: true,
   },
   {
     path: "/admin/operations",

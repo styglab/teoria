@@ -12,13 +12,14 @@ def imports(path):
             yield node.module
 
 
-def test_document_processing_only_uses_published_goods_contracts():
+def test_document_processing_only_uses_portable_goods_and_authoring_http_contracts():
     paths = list((SOURCE_ROOT / 'features/specification_processing').rglob('*.py'))
     assert paths
     assert not [(str(p.relative_to(SOURCE_ROOT)), name) for p in paths for name in imports(p)
                 if name.startswith('teoria.features.')
                 and not name.startswith(('teoria.features.specification_processing',
-                                         'teoria.features.goods_normalization.contracts'))]
+                                         'teoria.features.goods_normalization.contracts',
+                                         'teoria.features.semantic_modeling.goods_dictionary.contracts'))]
 
 
 def test_data_infrastructure_does_not_import_feature_implementations():

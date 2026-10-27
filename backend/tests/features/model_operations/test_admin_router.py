@@ -107,6 +107,8 @@ def test_run_detail_redacts_secrets_and_allowlists_parameters():
             return httpx.Response(
                 200, json=[{"id": "allowed", "name": "demo-seed-customers"}]
             )
+        if path.endswith("/flow_runs/filter"):
+            return httpx.Response(200, json=[])
         if "/flow_runs/" in path:
             return httpx.Response(
                 200,
@@ -175,4 +177,71 @@ def test_history_pagination_and_state_are_applied_at_prefect():
     body = next(body for path, body in requests if body.get("offset") == 25)
     assert body["flow_runs"]["state"]["type"]["any_"] == ["FAILED"]
     assert body["deployments"]["id"]["any_"] == ["allowed"]
-    assert "before_" in body["flow_runs"]["expected_start_time"]
+    assert "expected_start_time" not in body["flow_runs"]
+
+
+def test_registry_reads_multiple_models_and_selected_model_versions():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if "registered-models/search" in request.url.path:
+            return httpx.Response(
+                200,
+                json={
+                    "registered_models": [
+                        {"name": "churn", "description": "Customer churn"},
+                        {"name": "forecast", "description": "Revenue forecast"},
+                    ],
+                    "next_page_token": "next-models",
+                },
+            )
+        if "model-versions/search" in request.url.path:
+            assert request.url.params["filter"] == "name = 'forecast'"
+            return httpx.Response(
+                200,
+                json={
+                    "model_versions": [
+                        {"name": "forecast", "version": "3", "run_id": "run"}
+                    ]
+                },
+            )
+        if "/runs/get" in request.url.path:
+            return httpx.Response(
+                200,
+                json={
+                    "run": {
+                        "data": {
+                            "metrics": [{"key": "rmse", "value": 1.2}],
+                            "params": [],
+                        }
+                    }
+                },
+            )
+        return httpx.Response(200, json={"status": "ok", "model_version": 1})
+
+    with make_api(handler) as api:
+        response = api.get(
+            "/v1/admin/model-operations/models?model_name=forecast",
+            headers={"Authorization": "Bearer test-token"},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["registered_models"]) == 2
+    assert data["model_name"] == "forecast"
+    assert data["items"][0]["metrics"] == {"rmse": 1.2}
+    assert data["serving"]["model_name"] != "forecast"
+    assert data["next_page_token"] == "next-models"
+
+
+def test_auto_deployment_is_only_applicable_to_parent_pipeline():
+    with make_api(lambda request: httpx.Response(200, json=[])) as api:
+        response = api.post(
+            "/v1/admin/model-operations/pipelines/demo-seed-customers/runs",
+            headers={"Authorization": "Bearer test-token"},
+            json={
+                "idempotency_key": "12345678-1234-1234-1234-123456789012",
+                "deploy": True,
+            },
+        )
+    assert response.status_code == 422

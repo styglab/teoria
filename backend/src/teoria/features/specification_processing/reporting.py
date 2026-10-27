@@ -14,6 +14,13 @@ def render_report(corpus,normalized,standard_version,candidates=None):
         f"표준 적용 {normalized['summary'].get('applied',0)}개, 자동 보류 {normalized['summary'].get('automatically_deferred',0)}개.",'',
         '[표준화 전 결과](extracted.json) · [표준 적용 결과](normalized.json)','','보류와 partial은 사람 승인 대기가 아닌 자동 처리 결과입니다. 원문 근거가 맞아도 의미 정확도를 보장하지 않습니다.','']
     if candidates is not None:lines+=['[표준 의미 후보](meaning_candidates.json)','']
+    if normalized.get('source_term_alignment'):
+        dictionary=normalized['source_term_alignment'];counts=dictionary['summary']
+        lines+=['## 원문 표현 등록','',
+            f"원문 명칭 사전: 승인 {counts.get('approved',0)}개, 재사용 {counts.get('reused',0)}개, 보류 {counts.get('held',0)}개.",
+            '원문 표현 등록 ID는 표준 개념 ID가 아닙니다. 문서 요구·구성 전체나 개념 동등성의 승인을 뜻하지 않습니다.',
+            f"표준 개념 매핑 결과: {cell(dictionary.get('meaning_summary',{}))}. 승인된 범위의 매핑만 재사용하며 단위 환산은 수행하지 않습니다.",
+            '[원문 표현 연결](source_term_alignment.json) · [자동 검토 이력](dictionary_bindings.json)','']
     if normalized.get('artifact_kind')=='goods_normalized_observations':
         lines+=['## Ontology 프로파일 적용','',
                 f"프로파일: `{cell(normalized['profile_key'])}` / Ontology: `{cell(normalized['ontology']['namespace'])}@{cell(normalized['ontology']['version'])}`",'',

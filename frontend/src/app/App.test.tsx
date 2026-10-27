@@ -12,6 +12,7 @@ import { capabilityApi } from "../api/capability";
 import { registryApi } from "../api/registry";
 import { metadataApi } from "../api/metadata";
 import { authApi } from "../api/auth";
+import { workflowsApi } from "../api/workflows";
 import { modelOperationsApi } from "../api/model_operations";
 import { App } from "./App";
 afterEach(() => {
@@ -136,8 +137,32 @@ function mockWorkspace(modelEnabled = true) {
     items: [],
     runs: [],
   });
+  vi.spyOn(workflowsApi, "pipelines").mockResolvedValue({
+    enabled: true,
+    items: [],
+    runs: [],
+  });
+  vi.spyOn(modelOperationsApi, "services").mockResolvedValue({
+    items: [
+      {
+        id: "churn",
+        name: "고객 이탈 예측",
+        endpoint: "/inference-api/predict",
+        method: "POST",
+        description: "합성 검증",
+        model_name: "demo",
+        model_version: 1,
+        status: "ok",
+        environment: "검증",
+        deployment_pipeline_id: "demo-deploy-customer-churn",
+        request_schema: { properties: {}, required: [] },
+      },
+    ],
+  });
   vi.spyOn(modelOperationsApi, "models").mockResolvedValue({
     model_name: "demo",
+    demo_model_name: "demo",
+    registered_models: [],
     items: [],
     serving: { status: "ok", model_version: 1 },
     synthetic: true,
@@ -156,12 +181,11 @@ test("registry and serving routes have separate menus and screens", async () => 
   expect(
     screen.queryByRole("button", { name: "추론 실행" }),
   ).not.toBeInTheDocument();
-  fireEvent.click(
-    await screen.findByRole("link", { name: "추론 서비스" }),
-  );
+  fireEvent.click(await screen.findByRole("link", { name: "추론 서비스" }));
   expect(
     await screen.findByRole("heading", { name: "추론 서비스", level: 2 }),
   ).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "추론 테스트" }));
   expect(screen.getByRole("button", { name: "추론 실행" })).toBeInTheDocument();
   expect(
     screen.queryByRole("heading", { name: "등록 모델 버전" }),
@@ -215,9 +239,7 @@ test("mobile navigation overlays the workspace and closes after navigation", asy
     expect(
       screen.getByRole("button", { name: "메뉴 닫기" }),
     ).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("link", { name: "메타데이터 공백" }),
-    );
+    fireEvent.click(screen.getByRole("link", { name: "메타데이터 공백" }));
     await waitFor(() =>
       expect(
         screen.queryByRole("button", { name: "메뉴 닫기" }),

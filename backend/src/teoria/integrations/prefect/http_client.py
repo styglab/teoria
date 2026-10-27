@@ -19,7 +19,7 @@ class PrefectManagementClient:
             auth=self.auth,
         )
         response.raise_for_status()
-        return response.json()
+        return response.json() if response.content else None
 
     async def deployments(self, names: list[str]):
         return await self.request(
@@ -29,13 +29,17 @@ class PrefectManagementClient:
         )
 
     def run_filters(self, ids: list[str], state: str | None = None) -> dict:
-        criteria = {}
-        if state:
-            criteria["state"] = {"type": {"any_": [state]}}
-        if state != "SCHEDULED":
-            criteria["expected_start_time"] = {
-                "before_": datetime.now(timezone.utc).isoformat()
+        criteria = (
+            {"state": {"type": {"any_": [state]}}}
+            if state
+            else {
+                "operator": "or_",
+                "state": {"type": {"not_any_": ["SCHEDULED"]}},
+                "expected_start_time": {
+                    "before_": datetime.now(timezone.utc).isoformat()
+                },
             }
+        )
         return {"deployments": {"id": {"any_": ids}}, "flow_runs": criteria}
 
     async def runs(
@@ -66,8 +70,57 @@ class PrefectManagementClient:
             "POST", "/flow_runs/count", self.run_filters(ids, state)
         )
 
+    async def next_run(self, identifier: str):
+        return await self.request(
+            "POST",
+            "/flow_runs/filter",
+            {
+                "deployments": {"id": {"any_": [identifier]}},
+                "flow_runs": {
+                    "state": {"type": {"any_": ["SCHEDULED"]}},
+                    "expected_start_time": {
+                        "after_": datetime.now(timezone.utc).isoformat()
+                    },
+                },
+                "limit": 1,
+                "sort": "EXPECTED_START_TIME_ASC",
+            },
+        )
+
+    async def update_schedule(
+        self, deployment_id: str, schedule_id: str, updates: dict
+    ):
+        return await self.request(
+            "PATCH", f"/deployments/{deployment_id}/schedules/{schedule_id}", updates
+        )
+
+    async def cancel_run(self, identifier: str, actor: str):
+        return await self.request(
+            "POST",
+            f"/flow_runs/{identifier}/set_state",
+            {
+                "state": {
+                    "type": "CANCELLING",
+                    "name": "Cancelling",
+                    "message": f"Cancellation requested by {actor}",
+                },
+                "force": False,
+            },
+        )
+
     async def run(self, identifier: str):
         return await self.request("GET", f"/flow_runs/{identifier}", {})
+
+    async def subflows(self, identifier: str):
+        return await self.request(
+            "POST",
+            "/flow_runs/filter",
+            {
+                "flow_runs": {"parent_flow_run_id": {"any_": [identifier]}},
+                "limit": 50,
+                "sort": "EXPECTED_START_TIME_ASC",
+            },
+        )
 
     async def tasks(self, identifier: str):
         return await self.request(

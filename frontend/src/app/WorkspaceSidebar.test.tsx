@@ -41,7 +41,7 @@ it("hides optional model work areas and keeps collapsed links accessible", () =>
   );
   expect(screen.queryByRole("link", { name: "모델 레지스트리" })).toBeNull();
   expect(screen.queryByRole("link", { name: "추론 서비스" })).toBeNull();
-  expect(screen.queryByRole("link", { name: "파이프라인" })).toBeNull();
+  expect(screen.getByRole("link", { name: "파이프라인" })).toBeTruthy();
   expect(
     screen.getByRole("link", { name: "데이터 자산" }).getAttribute("href"),
   ).toBe("/admin/data-catalog");

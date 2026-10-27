@@ -20,6 +20,7 @@ def test_active_jobs_include_only_owned_workflows_and_optional_synthetic_demo():
         "openmetadata-postgres-metadata-sync",
         "moleg-law-daily", "moleg-law-weekly-reconciliation",
         "demo-seed-customers", "demo-train-customer-churn", "demo-deploy-customer-churn",
+        "demo-customer-churn-pipeline",
     }
     assert validate_deployment_contracts(catalog, deployments) == []
     for _, d in deployments:

@@ -92,6 +92,7 @@ class SpecificationSubject(EvidenceBacked):
     subject_id: str = Field(min_length=1)
     kind: Literal["item", "service", "context", "deliverable"]
     name: str = Field(min_length=1)
+    designation_raw: str | None = Field(default=None, min_length=1)
     context_kind: Literal["location", "functional_group", "test_subject", "reference_model", "measurand"] | None = None
     type_ref: str | None = None
 
@@ -151,6 +152,7 @@ class PropertySpecification(EvidenceBacked):
     statement_id: str = Field(min_length=1)
     subject_id: str = Field(min_length=1)
     characteristic_ref: str = Field(min_length=1)
+    characteristic_name_raw: str | None = Field(default=None, min_length=1)
     value: SpecificationValue
     operator: Literal["eq", "gte", "lte", "gt", "lt", "described"] = "described"
     assertion_role: Literal["requirement", "supported_capability", "description", "reference", "optional"] = "requirement"
