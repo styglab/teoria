@@ -26,13 +26,11 @@ MANIFEST = (
 
 def test_active_catalog_cannot_discover_retired_services():
     catalog = RegistryLoader(ROOT / "backend/contracts/runtime").load()
-    assert set(catalog.sources) == {"specification_observations"}
-    assert set(catalog.runtime_contracts) == {"server_specifications"}
+    assert not catalog.sources
+    assert not catalog.runtime_contracts
     client = TestClient(create_admin_app(settings=Settings(), catalog=catalog))
     capabilities = client.get("/v1/admin/capabilities").json()["capabilities"]
-    assert {c["id"] for c in capabilities} == {
-        "search_server_specifications", "get_server_requirements",
-        "compare_server_specifications", "get_server_requirement_evidence"}
+    assert capabilities == []
     assert client.get("/v1/admin/overview").json()["validation"]["status"] == "valid"
 
 
@@ -43,7 +41,7 @@ async def test_retired_contracts_have_explicit_dispositions():
     assert len(manifest.objects) == 38
     assert all(row.classification == "DEPRECATED" and row.migration_status == "deprecated"
                for row in manifest.objects.values())
-    current = OntologyMigrationManifest.load(ROOT / "backend/authoring/ontology_migrations/pending/2026_10_server_specifications/ontology_v2.yaml")
+    current = OntologyMigrationManifest.load(ROOT / "backend/authoring/ontology_migrations/applied/2026_10_specification_goods_reset/ontology_v2.yaml")
     manifest.objects.update(current.objects)
     assert (await build_migration_report(active, manifest))["status"] == "valid"
     # An unretired reference must still be rejected instead of silently ignored.
@@ -62,10 +60,14 @@ async def test_goods_blueprint_creates_a_draft_without_publication():
     repo.validate.return_value = {"status": "valid"}
     result = await apply_ontology_blueprint(repo, blueprint, actor="user:test")
     assert result["status"] == "draft"
+    assert blueprint.namespace == "goods"
     assert {obj.code for obj in blueprint.objects} == {
-        "specification_document",
-        "item",
-        "requirement",
+        "specification_document", "specified_item", "property_statement",
+        "composition_statement", "requirement_statement", "evidence",
+        "classification_scheme", "classification_entry", "classification_assignment",
+        "item_type", "characteristic_definition", "specified_service",
+        "supply_scope", "supply_membership", "specified_context",
+        "specified_deliverable", "item_relation_statement",
     }
     repo.publish.assert_not_called()
     assert all(

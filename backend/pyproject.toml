@@ -26,6 +26,13 @@ dev = ["pytest>=8,<9", "pytest-asyncio>=0.24,<2"]
 orchestration = ["prefect>=3,<4"]
 kubernetes-orchestration = ["prefect-kubernetes>=0.7,<0.8"]
 metadata-orchestration = ["docker>=7,<8", "kubernetes>=34,<36", "prefect>=3,<4"]
+model-operations = [
+    "boto3>=1.34,<2",
+    "docker>=7,<8",
+    "mlflow==3.14.0",
+    "psycopg2-binary>=2.9,<3",
+    "scikit-learn>=1.6,<2",
+]
 
 [project.scripts]
 teoria = "teoria.entrypoints.cli:main"
@@ -34,6 +41,7 @@ teoria-admin-api = "teoria.entrypoints.admin_api:main"
 teoria-metadata-assessment-worker = "teoria.entrypoints.asset_assessment_worker:main"
 teoria-policy-control-plane = "teoria.entrypoints.policy_control_plane:main"
 teoria-pipelines = "teoria.entrypoints.pipeline_cli:main"
+teoria-demo-inference = "teoria.entrypoints.demo_inference_api:main"
 teoria-mcp = "teoria.entrypoints.mcp.server:main"
 
 [tool.hatch.build.targets.wheel]

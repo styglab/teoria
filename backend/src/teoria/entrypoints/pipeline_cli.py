@@ -152,7 +152,7 @@ def main() -> int:
     )
     register_parser.add_argument(
         "--kind",
-        choices=("ingestion", "legal-information", "metadata", "all"),
+        choices=("ingestion", "legal-information", "metadata", "model-operations", "all"),
         default="ingestion",
     )
     register_parser.add_argument(
@@ -208,6 +208,10 @@ def main() -> int:
         "run", help="execute a specification Prefect flow"
     )
     specification_run.add_argument("--manifest", required=True, type=Path)
+    specification_graph = specification_subparsers.add_parser(
+        "validate-graph", help="validate proposed document goods graphs without requiring classification"
+    )
+    specification_graph.add_argument("--manifest", required=True, type=Path)
     specification_workflow = specification_subparsers.add_parser(
         "standard-workflow",
         help="orchestrate extraction, semantic authoring and standard application",

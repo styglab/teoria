@@ -362,7 +362,11 @@ def parse_pdf(data: bytes, options: ParseOptions) -> ParseResult:
                 if clean_chars
                 else []
             )
-            lined = ruled_grids(geometry_page.edges, options) if clean_chars or page.images else []
+            lined = (
+                ruled_grids(geometry_page.edges, options, clipped + filled)
+                if clean_chars or page.images
+                else []
+            )
             # Consult complete ruled grids before overlapping text clips or
             # inferred shading can suppress those very grids as duplicates.
             retained = {id(grid) for grid in distinct_grids(clipped + filled, edge_index, lined)}

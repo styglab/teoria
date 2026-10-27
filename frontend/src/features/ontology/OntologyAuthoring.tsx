@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Boxes, ChevronDown, ChevronRight, GitBranch, Plus, RefreshCw } from "lucide-react";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
+import { CatalogPagination, useCatalogPagination } from "../../components/workspace/CatalogPagination";
 import { CatalogLayout, FilterTabs, PageHeader, PageState, SearchField } from "../../components/workspace/WorkspaceLayout";
 import { useSearchParams } from "react-router-dom";
 import { type LinkEdge, type ObjectNode, type RuntimeContractGraph, type ValidationReport } from "../../api/registry";
@@ -71,6 +72,8 @@ export function OntologyAuthoring() {
   const objects = useMemo(() => detail?.objects.filter((item) => !normalized || [item.code, item.name, item.description, item.stable_key, ...item.properties.flatMap((property) => [property.code, property.name, property.stable_key])].some((value) => value?.toLocaleLowerCase().includes(normalized))) ?? [], [detail, normalized]);
   const relationships = useMemo(() => detail?.relationships.filter((item) => !normalized || [item.code, item.name, item.stable_key, objectCodes.get(item.source_object_id), objectCodes.get(item.target_object_id)].some((value) => value?.toLocaleLowerCase().includes(normalized))) ?? [], [detail, normalized]);
   const rules = useMemo(() => detail?.rules.filter((item) => !normalized || [item.code, item.name, item.description, item.stable_key].some((value) => value?.toLocaleLowerCase().includes(normalized))) ?? [], [detail, normalized]);
+  const listTotal = view === "relationships" ? relationships.length : view === "rules" ? rules.length : objects.length;
+  const pagination = useCatalogPagination(listTotal, JSON.stringify([namespace, detail?.ontology_version_id, view, normalized]));
   const domains = useMemo(() => [...new Set(detail?.objects.map((item) => item.stable_key.split(".")[0]).filter(Boolean) ?? [])].sort(), [detail]);
   const graph = useMemo<RuntimeContractGraph | null>(() => {
     if (!detail) return null;
@@ -158,7 +161,10 @@ export function OntologyAuthoring() {
     return names;
   }, [detail]);
 
-  return <CatalogLayout className="ontology-catalog" label="온톨로지 버전 탐색" sidebar={<>
+  const listView = view === "objects" || view === "relationships" || view === "rules";
+  const listKey = JSON.stringify([pagination.page, pagination.pageSize, normalized, detail?.ontology_version_id]);
+
+  return <CatalogLayout className={`ontology-catalog ${listView ? "ontology-catalog-list" : ""}`} label="온톨로지 버전 탐색" sidebar={<>
     <h2>온톨로지</h2>
     <label className="catalog-select-label">업무 모델<select aria-label="온톨로지" value={namespace} disabled={busy} onChange={event => { setParams({}); setNamespace(event.target.value); }}>{ontologies.map(item => <option value={item.namespace} key={item.namespace}>{item.namespace}</option>)}</select></label>
     <div className="catalog-sidebar-heading"><span>버전</span><Button variant="ghost" size="sm" disabled={busy || loading || !detail} onClick={() => { const version = window.prompt("새 초안 버전"); if (version) mutate(() => ontologyApi.createOntologyDraft(namespace, version)); }}><Plus size={13}/>새 초안</Button></div>
@@ -181,9 +187,9 @@ export function OntologyAuthoring() {
         { id: "graph", label: "관계도" }, { id: "review", label: "버전 검토" },
       ]}/>{view === "graph" && <label>도메인<select aria-label="도메인 필터" value={graphDomain} onChange={event => setGraphDomain(event.target.value)}><option value="all">모든 도메인</option>{domains.map(domain => <option value={domain} key={domain}>{domain}</option>)}</select></label>}</div>
       {view === "graph" && graph && <><div className="ontology-domain-legend">{domains.map((domain) => <button className={graphDomain === domain ? "active" : ""} key={domain} onClick={() => setGraphDomain(graphDomain === domain ? "all" : domain)}>{domain}</button>)}<span>업무 개념 {graph.nodes.length}개 · 관계 {graph.edges.length}개</span></div><div className="authored-ontology-graph"><OntologyGraph graph={graph} onSelect={setSelectedGraphItem} /></div></>}
-      {view === "objects" && <div className="ontology-object-list">
+      {view === "objects" && <div className="ontology-object-list" key={listKey}>
         <div className="ontology-list-heading"><span>업무 개념</span><span>설명</span><span>속성</span></div>
-        {objects.map(object => { const expanded = expandedObject === object.concept_id; return <article className={`ontology-object-row ${expanded ? "expanded" : ""}`} key={object.concept_id}>
+        {objects.slice(pagination.start, pagination.end).map(object => { const expanded = expandedObject === object.concept_id; return <article className={`ontology-object-row ${expanded ? "expanded" : ""}`} key={object.concept_id}>
           <button className="ontology-object-toggle" aria-expanded={expanded} onClick={() => setExpandedObject(expanded ? null : object.concept_id)}>
             <div className="ontology-object-name"><span className="page-item-icon"><Boxes size={18}/></span><div><strong>{object.name}</strong><code>{object.stable_key}</code></div></div>
             <p>{object.description || "설명 없음"}</p><span className="ontology-property-count">{object.properties.length}{expanded ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}</span>
@@ -194,8 +200,9 @@ export function OntologyAuthoring() {
         </article>; })}
         {!objects.length && <PageState title={query ? "조건에 맞는 업무 개념이 없습니다" : "등록된 업무 개념이 없습니다"}>{query && <Button variant="outline" onClick={() => setQuery("")}>검색 초기화</Button>}</PageState>}
       </div>}
-      {view === "relationships" && <div className="page-table-wrap"><table className="page-table"><thead><tr><th>관계</th><th>출발 개념</th><th>도착 개념</th><th>조건</th></tr></thead><tbody>{relationships.map(link => <tr key={link.concept_id}><td><strong>{link.name}</strong><code>{link.stable_key}</code></td><td>{objectCodes.get(link.source_object_id) ?? link.source_object_id}</td><td>{objectCodes.get(link.target_object_id) ?? link.target_object_id}</td><td>{link.source_cardinality} → {link.target_cardinality}{link.temporal ? " · 시점 관계" : ""}</td></tr>)}</tbody></table>{!relationships.length && <PageState title={query ? "조건에 맞는 관계가 없습니다" : "등록된 관계가 없습니다"}/>}</div>}
-      {view === "rules" && <div className="page-table-wrap"><table className="page-table"><thead><tr><th>규칙</th><th>설명</th><th>평가 방식</th></tr></thead><tbody>{rules.map(rule => <tr key={rule.concept_id}><td><strong>{rule.name}</strong><code>{rule.stable_key}</code></td><td>{rule.description || "설명 없음"}</td><td><code>{rule.evaluator_key ?? "선언형 규칙"}</code></td></tr>)}</tbody></table>{!rules.length && <PageState title={query ? "조건에 맞는 규칙이 없습니다" : "등록된 규칙이 없습니다"}/>}</div>}
+      {view === "relationships" && <div className="page-table-wrap" key={listKey}><table className="page-table"><thead><tr><th>관계</th><th>출발 개념</th><th>도착 개념</th><th>조건</th></tr></thead><tbody>{relationships.slice(pagination.start, pagination.end).map(link => <tr key={link.concept_id}><td><strong>{link.name}</strong><code>{link.stable_key}</code></td><td>{objectCodes.get(link.source_object_id) ?? link.source_object_id}</td><td>{objectCodes.get(link.target_object_id) ?? link.target_object_id}</td><td>{link.source_cardinality} → {link.target_cardinality}{link.temporal ? " · 시점 관계" : ""}</td></tr>)}</tbody></table>{!relationships.length && <PageState title={query ? "조건에 맞는 관계가 없습니다" : "등록된 관계가 없습니다"}/>}</div>}
+      {view === "rules" && <div className="page-table-wrap" key={listKey}><table className="page-table"><thead><tr><th>규칙</th><th>설명</th><th>평가 방식</th></tr></thead><tbody>{rules.slice(pagination.start, pagination.end).map(rule => <tr key={rule.concept_id}><td><strong>{rule.name}</strong><code>{rule.stable_key}</code></td><td>{rule.description || "설명 없음"}</td><td><code>{rule.evaluator_key ?? "선언형 규칙"}</code></td></tr>)}</tbody></table>{!rules.length && <PageState title={query ? "조건에 맞는 규칙이 없습니다" : "등록된 규칙이 없습니다"}/>}</div>}
+      {listView && <CatalogPagination {...pagination} disabled={busy}/>}
       {view === "review" && <div className="ontology-review-dashboard">{reviewLoading ? <div className="loading-state">검토 정보를 계산하는 중입니다.</div> : <>
         <article><span>구조 검증</span><h3>{validation?.status === "valid" ? "구조 검증 통과" : "구조 검증 필요"}</h3><strong className={validation?.status === "valid" ? "review-ok" : "review-warning"}>진단 {validation?.diagnostic_count ?? 0}개</strong>{validation?.diagnostics.map((diagnostic) => <div className="review-diagnostic" key={`${diagnostic.code}:${diagnostic.path}`}><b>{diagnostic.severity}</b><code>{diagnostic.path}</code><p>{diagnostic.message}</p></div>)}</article>
         <article><span>의미 연결 영향</span><h3>{bindingImpact?.compatible ? "호환 가능" : "의미 연결 확인 필요"}</h3><strong className={bindingImpact?.compatible ? "review-ok" : "review-warning"}>비호환 {bindingImpact?.incompatible_binding_count ?? 0}개</strong>{bindingImpact?.incompatible_bindings.map((binding) => <div className="review-diagnostic" key={binding.binding_id}><code>{binding.stable_key}</code><p>{statusLabels[binding.status] ?? binding.status}</p></div>)}</article>

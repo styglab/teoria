@@ -4,7 +4,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import FastAPI
+from teoria.features.model_operations.admin_router import create_model_operations_router
 
 from teoria.features.metadata_management.intelligence.asset_assessment.admin_router import (
     create_asset_assessment_router,
@@ -244,6 +246,13 @@ def create_admin_services(
 
 
 def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
+    model_client = httpx.AsyncClient(timeout=15)
+    services.resources.append(model_client)
+    app.include_router(create_model_operations_router(authorizer=services.authorizer, client=model_client,
+        enabled=services.settings.model_operations_enabled,
+        prefect_url=services.settings.model_prefect_url, prefect_auth=services.settings.model_prefect_auth,
+        mlflow_url=services.settings.model_mlflow_url, inference_url=services.settings.model_inference_url,
+        inference_token=services.settings.demo_inference_token))
     profiles = (
         NormalizationProfileService(
             services.settings.app_database_url,

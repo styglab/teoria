@@ -24,19 +24,73 @@ Business Object로 추가하지 않는다. 검토·승인·게시된 새 version
 
 ## 모델 경계
 
-현재 물품 Ontology의 초기 모델은 `backend/authoring/ontology_blueprints/goods.yaml`이다.
+물품 Ontology의 게시 경계는 `goods`다. 물품분류마다 별도의 Ontology namespace를 만들지 않는다.
+서버 등 물품 유형은 이 Ontology가 정의하는 업무 사전으로 연결하고, 분류번호별 추출 표현·단위·적용 범위는
+승인 프로파일이 관리한다. 관리 주체나 검토·게시 주기를 독립시킬 근거가 있을 때 별도 Ontology를 검토한다.
+현재 작성 입력은 `backend/authoring/ontology_blueprints/goods.yaml`이다.
 
 | 개념 | 의미 |
 |---|---|
-| `goods.specification_document` | 원문 checksum으로 식별하는 규격서 |
-| `goods.item` | 문서에 등장한 물품·구성품 항목 |
-| `goods.requirement` | 물품·구성품에 귀속되는 규격 요구조건 |
+| `goods.classification_scheme` | 물품 분류체계 판본 |
+| `goods.classification_entry` | 대·중·소·세 분류와 세부품명 등 공식 분류항목 |
+| `goods.classification_assignment` | 문서 물품에 대한 출처별 분류 주장과 검증 상태 |
+| `goods.item_type` | 업무 물품 유형 정의 사전의 항목 |
+| `goods.characteristic_definition` | 표준 특성 정의 사전의 항목 |
+| `goods.specified_service` | 설정·설치·연동시험 등 서비스 항목 |
+| `goods.supply_scope` | 문서별 물품·작업·자료의 납품 범위 |
+| `goods.supply_membership` | 공급·기존·외부 제공·시험 대상 등 범위별 역할 |
+| `goods.specified_context` | 공간·시험 대상·참고 모델 등 요구 적용 문맥 |
+| `goods.specified_deliverable` | 제출이 요구되는 설명서·성적서·도면 등 자료 |
+| `goods.item_relation_statement` | 설치·호환·데이터·전원 연결 요구 |
+| `goods.specification_document` | 특정 원본 버전의 규격서 |
+| `goods.specified_item` | 문서가 지시하는 물품·구성 대상 |
+| `goods.property_statement` | 대상의 특성에 관한 원문 값·조건 명세 |
+| `goods.composition_statement` | 대상 사이의 구성·수량·포함 조건 명세 |
+| `goods.requirement_statement` | 속성 하나로 축약하기 어려운 의무·조건 |
+| `goods.evidence` | 특정 문서 버전의 원문 구절·위치 근거 |
 
-문서→물품 기술, 물품→구성품, 물품→요구조건, 문서→요구조건 근거 관계를 둔다.
-실제 데이터 연결과 후보 검토를 완료한 Published 모델로 간주하지 않는다.
-문서별 관찰 ID·원문 위치와 공통 의미 개념을 구분하며 이름 유사성만으로 항목을 병합하지 않는다.
+사용자의 초기화 요청으로 기존 `goods` 0.2.0과 `computer_server` 모델·후보·프로파일·Binding·관찰을
+운영에서 삭제했다. 현재 `goods` 1.0.0은 객체 17개·속성 93개·관계 50개의 Draft이며 구조 검증을 통과했다.
+새 모델의 게시·승인 프로파일·새 명세 계약에 따른 재추출은 아직 수행하지 않았다.
+물품 유형과 구성품 역할, 문서 계층과 물리적 구성을 구분한다. 원문 값·조건·근거와 표준 의미를 혼용하지 않는다.
+실제 인스턴스 본문은 Data DB/파일/S3에 두고 Application DB의 의미 정의·승인 이력과 분리한다.
+삭제 범위와 새 Draft ID는
+`backend/authoring/ontology_migrations/applied/2026_10_specification_goods_reset/receipt.yaml`에 기록했다.
 기존 `teoria`의 Published version과 예전 namespace는 이력으로 보존한다.
+분류 계층·물품 유형·구성 관계를 구분하며 서비스는 물리 구성품과 별도 연결한다.
+분류 없이 검증하는 문서 그래프 계약과 네 샘플의 대표 작성 예시를 추가했다.
+사전 인스턴스·승인 API·자동 재추출·DB 적재·Runtime 조회는 아직 연결하지 않았다.
 추출 표준은 `pipeline_selected_draft`이고 Business Ontology 승인·게시와 별도다.
+
+## 규격서 물품 모델의 발전 방향
+
+목표는 규격서가 어떤 물품·구성품을 어떤 속성·조건·관계로 기술하는지 표현하는 것이다.
+검색·표준화·검토·문서 변경 확인·비교·추천과 AI 질의는 이 모델의 활용이다.
+기존 서버·메모리 조회 모델은 제거하고 규격서 물품 모델을 Draft에서 다시 작성했다.
+
+공식 설계 지침과 제품 특성·근거 표준을 조사한
+[규격서 물품 모델 설계안](../architecture/specification_goods_model.md)을 후속 검토 기준으로 사용한다.
+이 설계안은 새 Published Object type의 확정 목록이 아니다.
+
+- **표준 의미:** 물품 유형·속성·관계의 지속 가능한 정의. 분류·속성·값·단위를 구분한다.
+- **문서별 명세:** 해당 문서가 지시하는 대상, 구성 명세, 속성·조건 명세와 원문 근거.
+- **해석과 승인:** 원문 언급이 어떤 표준 의미로 해석됐는지에 대한 문맥별 매핑·검토 이력.
+
+물품과 구성품은 문맥상 역할을 구분한다. 같은 메모리도 단독 구매 물품 또는 서버의 구성품이 될 수 있다.
+규격서 내 항목을 제조사 제품 모델이나 실물 자산으로 동일시하지 않는다.
+문서 계층·물품 구성·분류 상하위는 다른 관계다. 수량·필수 여부·적용 조건·근거를 가진 구성 관계는
+별도 구성 명세로 표현할 수 있어야 한다.
+
+native Property는 객체의 고정 필드를 정의한다. 물품별 특성 사전은 `characteristic_definition`으로
+업무 정의·값 종류·단위 정책을 표현하고 문서의 속성 명세가 관계로 참조한다.
+수치 외에도 문자열·범위·집합·선택 조건, 반복·상충 진술, 보류 상태를 보존한다.
+규격서·명세에 지속적인 업무 식별과 검토 대상의 의미가 있다면 객체 타입으로 검토할 수 있지만,
+추출 JSON이나 일회성 Capability 응답을 그대로 Business Object로 게시하지 않는다.
+저장 위치와 객체의 업무 의미는 별개이며 Runtime Mapping이 승인 의미와 실제 데이터를 연결한다.
+
+AI는 검증 가능한 조회·탐색 기능과 인증된 검토·교정 기능을 사용한다.
+개념 동등성·물리적 구성·제품 충족을 이름이나 유사도만으로 확정하지 않는다.
+현재 의미 모델과 산출물은 유지하며 후속 구조 변경은 검토·승인·게시와 명시적 이관을 따른다.
 
 ## Semantic path
 

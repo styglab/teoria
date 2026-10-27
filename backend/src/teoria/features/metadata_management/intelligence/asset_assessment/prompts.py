@@ -12,7 +12,10 @@ SYSTEM_INSTRUCTION = (
 )
 
 LAW_QUERY_INSTRUCTION = (
-    "Generate up to three Korean keyword queries for disclosure risks. No findings yet."
+    "Generate up to three Korean keyword queries for disclosure risks. No findings yet. "
+    "Each query must contain 2 to 100 characters and at most eight whitespace-separated "
+    "words. Prefer two to four search keywords, not a sentence or a legal conclusion. "
+    'Return {"queries": ["개인정보 처리 동의", "합성 데이터 공개"]} shaped JSON.'
 )
 
 ASSESSMENT_INSTRUCTION = (

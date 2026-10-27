@@ -7,11 +7,39 @@ from teoria.features.specification_processing.models import SpecificationRun
 
 
 def run_command(args):
+    if args.specification_command == "validate-graph":
+        return _validate_graph(args)
     if args.specification_command == "standard-workflow":
         return _run_standard_workflow(args)
     if args.specification_command == "evaluate":
         return _run_evaluation(args)
     return _run_processing(args)
+
+
+def _validate_graph(args):
+    import yaml
+    from teoria.features.goods_normalization.contracts.specification_graph import (
+        DocumentGoodsGraphBatch,
+    )
+
+    try:
+        batch = DocumentGoodsGraphBatch.model_validate(
+            yaml.safe_load(args.manifest.read_text(encoding="utf-8"))
+        )
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        print(json.dumps({"status": "invalid", "message": str(exc)}, ensure_ascii=False))
+        return 1
+    print(json.dumps({
+        "status": "valid",
+        "validation_scope": "structure_and_references_only",
+        "documents": [{
+            "document_id": g.document_id, "review_status": g.review_status,
+            "subjects": len(g.subjects), "compositions": len(g.compositions),
+            "item_relations": len(g.item_relations), "properties": len(g.properties),
+            "requirements": len(g.requirements), "classifications": len(g.classifications),
+        } for g in batch.graphs],
+    }, ensure_ascii=False, indent=2))
+    return 0
 
 
 def _run_standard_workflow(args):

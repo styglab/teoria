@@ -30,6 +30,7 @@ class AssessmentModelClient:
     ):
         self.url, self.model, self.token, self.timeout = url, model, token, timeout
         self.max_tokens = max_tokens
+
         self._http_client = client
         self._owns_http_client = False
 
@@ -81,7 +82,10 @@ class AssessmentModelClient:
             response.raise_for_status()
             if len(response.content) > 200_000:
                 raise AssessmentError("model_response_too_large")
-            content = response.json()["choices"][0]["message"]["content"]
+            choice = response.json()["choices"][0]
+            if choice.get("finish_reason") == "length":
+                raise AssessmentError("model_output_truncated")
+            content = choice["message"]["content"]
             return output_type.model_validate_json(content)
         except httpx.TimeoutException:
             raise AssessmentError("model_timeout") from None

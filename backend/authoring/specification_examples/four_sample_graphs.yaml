@@ -1,0 +1,1030 @@
+purpose: Manually authored representative source-backed proposed graphs; partial examples, not automatic extraction
+  or approved gold data.
+graphs:
+- document_id: sample_01
+  revision_id: 62a72633c6b767e86a53f23a44a5cf822ba283bd73095bd4916961e1210344c6
+  source_sha256: 62a72633c6b767e86a53f23a44a5cf822ba283bd73095bd4916961e1210344c6
+  evidence:
+  - evidence_id: e_supply
+    quote: 센서 및 분석장치 (CO, H2S, O2, EX, SO2, HBR)
+    locator: /blocks/29/table/cells/1/1
+  - evidence_id: e_sensor_quantity
+    quote: '8'
+    locator: /blocks/29/table/cells/1/2
+  - evidence_id: e_transmitter
+    quote: 데이터 전송장치
+    locator: /blocks/29/table/cells/2/1
+  - evidence_id: e_transmitter_quantity
+    quote: '8'
+    locator: /blocks/29/table/cells/2/2
+  - evidence_id: e_existing
+    quote: '- 기존의 데이터 전송 장치에 온습도 센서 데이터 전송을 위한 기능 업그레이드'
+    locator: /blocks/93
+  - evidence_id: e_software
+    quote: 4) 운용 및 모니터링 프로그램
+    locator: /blocks/79
+  - evidence_id: e_upgrade
+    quote: '운용프로그램 업그레이드
+
+      (기존 센서 단종으로 인한 교체)'
+    locator: /blocks/29/table/cells/3/1
+  - evidence_id: e_installation
+    quote: '환경감시 센서 교체 및 설치공사
+
+      (가스센서 및 데이터 전송장치 등)'
+    locator: /blocks/29/table/cells/5/1
+  - evidence_id: e_environment
+    quote: 1) 환경가스 측정 장치
+    locator: /blocks/53
+  - evidence_id: e_harmful
+    quote: 2) 유해가스 측정 장치
+    locator: /blocks/62
+  - evidence_id: e_gas_targets
+    quote: '- 환경 가스 센서는 CO, H2S, O2, EX 조합으로 구성'
+    locator: /blocks/57
+  - evidence_id: e_harmful_targets
+    quote: '- 유해 가스 센서는 SO2, HBR 조합으로 구성'
+    locator: /blocks/66
+  - evidence_id: e_data_link
+    quote: '- 센서를 통해 수집된 데이터는 데이터전송장치와 연동 가능하도록 구성'
+    locator: /blocks/58
+  - evidence_id: e_program_link
+    quote: '- 환경가스 측정장치 및 유해가스 측정장치의 데이터를 수집하여 운용 및 모니터링 프로그램으로 전송해주는 데이터 전송장치'
+    locator: /blocks/72
+  - evidence_id: e_warranty
+    quote: 4.1 하자 보증 기간은 시운전을 완료한 날로부터 1년으로 하며, 하자 보증 기간 내에 문제가 발생한 경우에는 수리 후 1년으로 한다.
+    locator: /blocks/37
+  - evidence_id: e_detect_environment
+    quote: '- 시험장에서 시료의 이상 상태에 의해 누출되는 가스에 대해 검출 가능하도록 구성할 것'
+    locator: /blocks/55
+  - evidence_id: e_existing_upgrade
+    quote: '- 기존의 데이터 전송 장치에 온습도 센서 데이터 전송을 위한 기능 업그레이드'
+    locator: /blocks/93
+  subjects:
+  - evidence_ids:
+    - e_supply
+    subject_id: sensors
+    kind: item
+    name: 센서 및 분석장치
+  - evidence_ids:
+    - e_transmitter
+    subject_id: transmitters
+    kind: item
+    name: 공급 데이터 전송장치
+  - evidence_ids:
+    - e_existing
+    subject_id: existing_transmitter
+    kind: item
+    name: 기존 데이터 전송장치
+  - evidence_ids:
+    - e_software
+    subject_id: monitoring_software
+    kind: item
+    name: 운용 및 모니터링 프로그램
+  - evidence_ids:
+    - e_upgrade
+    subject_id: upgrade
+    kind: service
+    name: 운용프로그램 업그레이드
+  - evidence_ids:
+    - e_installation
+    subject_id: installation
+    kind: service
+    name: 센서 교체 및 설치공사
+  - evidence_ids:
+    - e_environment
+    subject_id: environment_device
+    kind: item
+    name: 환경가스 측정 장치
+  - evidence_ids:
+    - e_harmful
+    subject_id: harmful_device
+    kind: item
+    name: 유해가스 측정 장치
+  supply_scopes:
+  - evidence_ids:
+    - e_supply
+    scope_id: monitoring_supply
+    name: 환경감시 교체·개선 납품 범위
+  memberships:
+  - evidence_ids:
+    - e_sensor_quantity
+    membership_id: supply_sensors
+    scope_id: monitoring_supply
+    subject_id: sensors
+    role: required_supply
+    quantity:
+      value: '8'
+      unit_raw: 식
+      scope_raw: 전체 공급 목록
+  - evidence_ids:
+    - e_transmitter_quantity
+    membership_id: supply_transmitters
+    scope_id: monitoring_supply
+    subject_id: transmitters
+    role: required_supply
+    quantity:
+      value: '8'
+      unit_raw: 식
+      scope_raw: 전체 공급 목록
+  - evidence_ids:
+    - e_existing
+    membership_id: existing_membership
+    scope_id: monitoring_supply
+    subject_id: existing_transmitter
+    role: existing
+  - evidence_ids:
+    - e_upgrade
+    membership_id: upgrade_membership
+    scope_id: monitoring_supply
+    subject_id: upgrade
+    role: required_supply
+  - evidence_ids:
+    - e_installation
+    membership_id: installation_membership
+    scope_id: monitoring_supply
+    subject_id: installation
+    role: required_supply
+  compositions:
+  - evidence_ids:
+    - e_environment
+    evidence_basis: interpreted
+    composition_id: environment_group
+    parent_id: sensors
+    child_id: environment_device
+    relation_kind: system_member
+  - evidence_ids:
+    - e_harmful
+    evidence_basis: interpreted
+    composition_id: harmful_group
+    parent_id: sensors
+    child_id: harmful_device
+    relation_kind: system_member
+  item_relations:
+  - evidence_ids:
+    - e_data_link
+    evidence_basis: interpreted
+    relation_id: environment_data
+    source_id: environment_device
+    target_id: transmitters
+    relation_kind: data_connection
+  - evidence_ids:
+    - e_program_link
+    relation_id: program_data
+    source_id: transmitters
+    target_id: monitoring_software
+    relation_kind: data_connection
+  properties:
+  - evidence_ids:
+    - e_gas_targets
+    statement_id: environment_targets
+    subject_id: environment_device
+    characteristic_ref: draft:measurement_targets
+    value:
+      kind: set
+      arguments:
+      - kind: text
+        text: CO
+      - kind: text
+        text: H2S
+      - kind: text
+        text: O2
+      - kind: text
+        text: EX
+    semantic_scope: 환경가스 센서 조합
+  - evidence_ids:
+    - e_harmful_targets
+    statement_id: harmful_targets
+    subject_id: harmful_device
+    characteristic_ref: draft:measurement_targets
+    value:
+      kind: set
+      arguments:
+      - kind: text
+        text: SO2
+      - kind: text
+        text: HBR
+    semantic_scope: 유해가스 센서 조합
+  requirements:
+  - evidence_ids:
+    - e_warranty
+    requirement_id: warranty
+    requirement_kind: warranty
+    text: 시운전 완료일부터 1년, 보증기간 내 수리 후 1년 조건
+    subject_ids:
+    - sensors
+    - transmitters
+    trigger_raw: 시운전을 완료한 날 / 보증기간 내 수리 후
+  - evidence_ids:
+    - e_detect_environment
+    requirement_id: detect_leakage
+    requirement_kind: functional
+    text: 시험 시료의 이상 상태로 누출되는 가스를 검출
+    subject_ids:
+    - environment_device
+  - evidence_ids:
+    - e_existing_upgrade
+    requirement_id: existing_transmitter_upgrade
+    requirement_kind: functional
+    text: 기존 데이터 전송장치의 온습도 센서 데이터 전송 기능 업그레이드
+    subject_ids:
+    - existing_transmitter
+- document_id: sample_02
+  revision_id: b7e8b9661be430a76de1688fee666004d561d70a0e8b3059367d509a5ce91781
+  source_sha256: b7e8b9661be430a76de1688fee666004d561d70a0e8b3059367d509a5ce91781
+  evidence:
+  - evidence_id: e_system
+    quote: '액체크로마토그래프 질량분석기
+
+      (Liquid Chromatograph
+
+      Mass Spectrometer)'
+    locator: /blocks/2/table/cells/1/3
+  - evidence_id: e_pump
+    quote: 3. 용매 운반용 펌프
+    locator: /blocks/13
+  - evidence_id: e_pump_qty
+    quote: 2 set
+    locator: /blocks/14
+  - evidence_id: e_injector
+    quote: 4. 자동시료주입기
+    locator: /blocks/15
+  - evidence_id: e_oven
+    quote: 5. 컬럼오븐
+    locator: /blocks/17
+  - evidence_id: e_controller
+    quote: 2. 시스템 컨트롤러
+    locator: /blocks/11
+  - evidence_id: e_ups
+    quote: 15) UPS(5kW, 30min) 1 ea
+    locator: /blocks/161
+  - evidence_id: e_nitrogen
+    quote: 14) N2 generator 1 ea
+    locator: /blocks/160
+  - evidence_id: e_flow
+    quote: '3) 유량 설정 범위: 0.0001~10 mL/min'
+    locator: /blocks/57
+  - evidence_id: e_accuracy
+    quote: '4) 주입량 정확도: ≤ ±1% (5μL injection, n=20)'
+    locator: /blocks/71
+  - evidence_id: e_temperature
+    quote: '3) 온도 설정 범 : 상온-10 ℃ ~ 100 ℃'
+    locator: /blocks/91
+  - evidence_id: e_capacity
+    quote: '6) 수용가능한 컬럼 크기 및 수: 250 mm L. column x 6ea or 300 mmL. Column x 3ea'
+    locator: /blocks/94
+  - evidence_id: e_boards
+    quote: '5) 아날로그 보드: 최대 2개 사용가능'
+    locator: /blocks/52
+  subjects:
+  - evidence_ids:
+    - e_system
+    subject_id: lcms
+    kind: item
+    name: 액체크로마토그래프 질량분석기
+  - evidence_ids:
+    - e_pump
+    subject_id: pump
+    kind: item
+    name: 용매 운반용 펌프
+  - evidence_ids:
+    - e_injector
+    subject_id: injector
+    kind: item
+    name: 자동시료주입기
+  - evidence_ids:
+    - e_oven
+    subject_id: oven
+    kind: item
+    name: 컬럼오븐
+  - evidence_ids:
+    - e_controller
+    subject_id: controller
+    kind: item
+    name: 시스템 컨트롤러
+  - evidence_ids:
+    - e_ups
+    subject_id: ups
+    kind: item
+    name: UPS
+  - evidence_ids:
+    - e_nitrogen
+    subject_id: nitrogen
+    kind: item
+    name: N2 generator
+  supply_scopes:
+  - evidence_ids:
+    - e_system
+    scope_id: lcms_supply
+    name: LCMS 시스템 납품 범위
+  memberships:
+  - evidence_ids:
+    - e_system
+    membership_id: lcms_supply_member
+    scope_id: lcms_supply
+    subject_id: lcms
+    role: required_supply
+    quantity:
+      value: '1'
+      unit_raw: System
+      scope_raw: 전체 공급
+  compositions:
+  - evidence_ids:
+    - e_pump
+    - e_pump_qty
+    composition_id: lcms_pump
+    parent_id: lcms
+    child_id: pump
+    relation_kind: system_member
+    quantity:
+      value: '2'
+      unit_raw: set
+      scope_raw: LCMS 1 System당
+  - evidence_ids:
+    - e_injector
+    composition_id: lcms_injector
+    parent_id: lcms
+    child_id: injector
+    relation_kind: system_member
+  - evidence_ids:
+    - e_oven
+    composition_id: lcms_oven
+    parent_id: lcms
+    child_id: oven
+    relation_kind: system_member
+  - evidence_ids:
+    - e_controller
+    composition_id: lcms_controller
+    parent_id: lcms
+    child_id: controller
+    relation_kind: system_member
+  - evidence_ids:
+    - e_ups
+    composition_id: lcms_ups
+    parent_id: lcms
+    child_id: ups
+    relation_kind: accessory
+  - evidence_ids:
+    - e_nitrogen
+    composition_id: lcms_nitrogen
+    parent_id: lcms
+    child_id: nitrogen
+    relation_kind: accessory
+  properties:
+  - evidence_ids:
+    - e_flow
+    statement_id: flow_range
+    subject_id: pump
+    characteristic_ref: draft:flow_setting_range
+    value:
+      kind: range
+      unit_raw: mL/min
+      arguments:
+      - kind: number
+        number: '0.0001'
+      - kind: number
+        number: '10'
+    semantic_scope: 펌프 1set당 설정 가능한 유량
+  - evidence_ids:
+    - e_accuracy
+    statement_id: injection_accuracy
+    subject_id: injector
+    characteristic_ref: draft:injection_volume_accuracy
+    value:
+      kind: tolerance
+      number: '1'
+      unit_raw: '%'
+    operator: lte
+    semantic_scope: 주입량 정확도
+    conditions:
+    - description: 5μL injection
+      value:
+        kind: number
+        number: '5'
+        unit_raw: μL
+    - description: n=20
+      value:
+        kind: number
+        number: '20'
+  - evidence_ids:
+    - e_temperature
+    statement_id: oven_range
+    subject_id: oven
+    characteristic_ref: draft:temperature_setting_range
+    value:
+      kind: range
+      arguments:
+      - kind: relative
+        number: '-10'
+        unit_raw: ℃
+        reference: ambient_temperature
+      - kind: number
+        number: '100'
+        unit_raw: ℃
+    semantic_scope: 컬럼오븐 설정 범위
+  - evidence_ids:
+    - e_capacity
+    statement_id: column_capacity
+    subject_id: oven
+    characteristic_ref: draft:supported_column_configuration
+    value:
+      kind: any
+      arguments:
+      - kind: text
+        text: 250 mm L. column x 6ea
+      - kind: text
+        text: 300 mmL. Column x 3ea
+    assertion_role: supported_capability
+    semantic_scope: 서로 대안인 수용 구성
+  - evidence_ids:
+    - e_boards
+    statement_id: supported_boards
+    subject_id: controller
+    characteristic_ref: draft:supported_analog_board_count
+    value:
+      kind: number
+      number: '2'
+      unit_raw: 개
+    operator: lte
+    assertion_role: supported_capability
+    semantic_scope: 컨트롤러가 지원하는 개수
+- document_id: sample_03
+  revision_id: 2fbb97780e28f5e9868e63f5240862eb4eb8907209510335831f8478ef81f4cd
+  source_sha256: 2fbb97780e28f5e9868e63f5240862eb4eb8907209510335831f8478ef81f4cd
+  evidence:
+  - evidence_id: e_system
+    quote: 지능형 농기계 정적상태·주행성능 분석시험장치
+    locator: /blocks/25
+  - evidence_id: e_laser
+    quote: 가. 고속 레이저 동적위치 계측장치(동적주행성능시험)
+    locator: /blocks/107
+  - evidence_id: e_camera
+    quote: 나. 고해상도 초고속카메라(2대)(동적주행성능시험)
+    locator: /blocks/119
+  - evidence_id: e_motion
+    quote: 바. 3차원 모션캡처 장치(정적상태진단시험)
+    locator: /blocks/147
+  - evidence_id: e_thermal
+    quote: 사. 열화상카메라(정적상태진단시험)
+    locator: /blocks/154
+  - evidence_id: e_power
+    quote: 마. 고정밀 전력측정장치(동적주행성능시험)
+    locator: /blocks/139
+  - evidence_id: e_motion_components
+    quote: '6) 구성품 : 모션캡처 카메라 20 EA, 운영 소프트웨어 1 COPY, 브라켓 20 EA, 트러스(Truss) 구조물 1 SET'
+    locator: /blocks/153
+  - evidence_id: e_thermal_components
+    quote: '5) 구성품 : 열화상카메라 1 EA, 표준 렌즈 1 EA, 기타 부속품 1 SET'
+    locator: /blocks/159
+  - evidence_id: e_test_subject
+    quote: 본 시험장치는 트랙터, 농업용 로봇, 방제기, 수확기, 운반기, 전동 농기계 및 작업기 등 다양한 지능형 농기계를 대상으로 정적 상태와 실제 주행상태에서 발생하는 기체 거동,
+      발열, 음향, 전자파, 영상, 위치, 주행궤적 및 전력 등의 물리량을 계측·분석하고, 이를 종합적으로 연계하여 시험대상의 상태 및 주행성능을 분석하기 위한 통합 시험장치이다.
+    locator: /blocks/30
+  - evidence_id: e_maximum_temperature
+    quote: 3) 시험대상 주요 발열부 측정에 충분한 온도측정범위를 확보하여야 하며 최대 측정온도는 +1,000℃ 이상이어야 한다.
+    locator: /blocks/157
+  - evidence_id: e_position_accuracy
+    quote: 3) 3차원 위치측정 정확도는 ±15 μm + 6 μm/m급 이하 또는 동등 이상의 성능을 확보하여야 한다.
+    locator: /blocks/110
+  - evidence_id: e_output_rate
+    quote: 4) 위치데이터 출력속도는 100 Hz 이상이어야 하고, 실외 시험환경에서 안정적으로 운용할 수 있어야 한다.
+    locator: /blocks/111
+  - evidence_id: e_sync
+    quote: '6) 데이터 연계 : 영상, 위치, 전력 및 상태진단 데이터를 공통 Trigger 또는 시간정보로 연계하고 분석·저장·Export할 수 있어야 한다.'
+    locator: /blocks/104
+  - evidence_id: e_acceptance
+    quote: 100 Hz 이상 3차원 위치데이터 취득, Target 자동추적·재추적 및 주행궤적 분석기능 확인
+    locator: /blocks/199/table/cells/1/2
+  - evidence_id: e_resolution
+    quote: 2) 최대 이미지 해상도는 2,048×1,152 pixels 이상이어야 한다.
+    locator: /blocks/121
+  - evidence_id: e_fps
+    quote: 3) 시험대상의 고속거동 및 순간현상을 분석할 수 있도록 최대 촬영속도 100,000 fps 이상을 지원하여야 한다.
+    locator: /blocks/122
+  - evidence_id: e_pedestrian_target
+    quote: 라. 보행자 안전시험용 인간더미(동적주행성능시험)
+    locator: /blocks/134
+  - evidence_id: e_pedestrian_standard
+    quote: 2) 보행자 Target은 ISO 19206-2 또는 동등 이상의 국제적으로 통용되는 보행자 안전시험 요건에 대응 가능하여야 한다.
+    locator: /blocks/136
+  subjects:
+  - evidence_ids:
+    - e_system
+    subject_id: farm_system
+    kind: item
+    name: 지능형 농기계 분석시험장치
+  - evidence_ids:
+    - e_laser
+    subject_id: laser
+    kind: item
+    name: 고속 레이저 동적위치 계측장치
+  - evidence_ids:
+    - e_camera
+    subject_id: camera
+    kind: item
+    name: 고해상도 초고속카메라
+  - evidence_ids:
+    - e_motion
+    subject_id: motion
+    kind: item
+    name: 3차원 모션캡처 장치
+  - evidence_ids:
+    - e_thermal
+    subject_id: thermal
+    kind: item
+    name: 열화상카메라
+  - evidence_ids:
+    - e_power
+    subject_id: power
+    kind: item
+    name: 고정밀 전력측정장치
+  - evidence_ids:
+    - e_motion_components
+    subject_id: motion_cameras
+    kind: item
+    name: 모션캡처 카메라
+  - evidence_ids:
+    - e_motion_components
+    subject_id: motion_software
+    kind: item
+    name: 운영 소프트웨어
+  - evidence_ids:
+    - e_motion_components
+    subject_id: brackets
+    kind: item
+    name: 브라켓
+  - evidence_ids:
+    - e_motion_components
+    subject_id: truss
+    kind: item
+    name: 트러스 구조물
+  - evidence_ids:
+    - e_thermal_components
+    subject_id: thermal_lens
+    kind: item
+    name: 표준 렌즈
+  - evidence_ids:
+    - e_test_subject
+    subject_id: agricultural_test_subject
+    kind: context
+    name: 트랙터·농업용 로봇 등 시험 대상
+    context_kind: test_subject
+  - evidence_ids:
+    - e_pedestrian_target
+    subject_id: pedestrian_targets
+    kind: item
+    name: 보행자 안전시험용 인간더미
+  supply_scopes:
+  - evidence_ids:
+    - e_system
+    scope_id: farm_supply
+    name: 통합 시험장치 납품 범위
+  memberships:
+  - evidence_ids:
+    - e_system
+    membership_id: farm_member
+    scope_id: farm_supply
+    subject_id: farm_system
+    role: required_supply
+  - evidence_ids:
+    - e_test_subject
+    membership_id: test_subject_membership
+    scope_id: farm_supply
+    subject_id: agricultural_test_subject
+    role: test_subject
+  compositions:
+  - evidence_ids:
+    - e_laser
+    composition_id: farm_laser
+    parent_id: farm_system
+    child_id: laser
+    relation_kind: system_member
+  - evidence_ids:
+    - e_camera
+    composition_id: farm_camera
+    parent_id: farm_system
+    child_id: camera
+    relation_kind: system_member
+  - evidence_ids:
+    - e_motion
+    composition_id: farm_motion
+    parent_id: farm_system
+    child_id: motion
+    relation_kind: system_member
+  - evidence_ids:
+    - e_thermal
+    composition_id: farm_thermal
+    parent_id: farm_system
+    child_id: thermal
+    relation_kind: system_member
+  - evidence_ids:
+    - e_power
+    composition_id: farm_power
+    parent_id: farm_system
+    child_id: power
+    relation_kind: system_member
+  - evidence_ids:
+    - e_motion_components
+    composition_id: motion_motion_cameras
+    parent_id: motion
+    child_id: motion_cameras
+    relation_kind: system_member
+    quantity:
+      value: '20'
+      unit_raw: EA
+      scope_raw: 모션캡처 구성 전체
+  - evidence_ids:
+    - e_motion_components
+    composition_id: motion_motion_software
+    parent_id: motion
+    child_id: motion_software
+    relation_kind: system_member
+    quantity:
+      value: '1'
+      unit_raw: COPY
+      scope_raw: 모션캡처 구성 전체
+  - evidence_ids:
+    - e_motion_components
+    composition_id: motion_brackets
+    parent_id: motion
+    child_id: brackets
+    relation_kind: system_member
+    quantity:
+      value: '20'
+      unit_raw: EA
+      scope_raw: 모션캡처 구성 전체
+  - evidence_ids:
+    - e_motion_components
+    composition_id: motion_truss
+    parent_id: motion
+    child_id: truss
+    relation_kind: system_member
+    quantity:
+      value: '1'
+      unit_raw: SET
+      scope_raw: 모션캡처 구성 전체
+  - evidence_ids:
+    - e_thermal_components
+    evidence_basis: interpreted
+    composition_id: thermal_accessory
+    parent_id: thermal
+    child_id: thermal_lens
+    relation_kind: accessory
+    quantity:
+      value: '1'
+      unit_raw: EA
+      scope_raw: 열화상 구성 목록
+  - evidence_ids:
+    - e_pedestrian_target
+    composition_id: farm_pedestrian_targets
+    parent_id: farm_system
+    child_id: pedestrian_targets
+    relation_kind: system_member
+  properties:
+  - evidence_ids:
+    - e_maximum_temperature
+    statement_id: thermal_max
+    subject_id: thermal
+    characteristic_ref: draft:maximum_measurable_temperature
+    value:
+      kind: number
+      number: '1000'
+      unit_raw: ℃
+    operator: gte
+    semantic_scope: 측정 가능한 온도 범위의 상한
+  - evidence_ids:
+    - e_position_accuracy
+    statement_id: laser_accuracy
+    subject_id: laser
+    characteristic_ref: draft:position_measurement_accuracy
+    value:
+      kind: expression
+      text: ±15 μm + 6 μm/m급 이하
+      reference: measurement_distance
+    semantic_scope: 거리 의존 정확도
+  - evidence_ids:
+    - e_output_rate
+    statement_id: laser_rate
+    subject_id: laser
+    characteristic_ref: draft:position_output_rate
+    value:
+      kind: number
+      number: '100'
+      unit_raw: Hz
+    operator: gte
+    semantic_scope: 위치데이터 출력
+  - evidence_ids:
+    - e_resolution
+    statement_id: camera_resolution
+    subject_id: camera
+    characteristic_ref: draft:maximum_image_resolution
+    value:
+      kind: dimensions
+      arguments:
+      - kind: number
+        number: '2048'
+        unit_raw: pixels
+      - kind: number
+        number: '1152'
+        unit_raw: pixels
+      dimension_names:
+      - width
+      - height
+    operator: gte
+    semantic_scope: 각 축의 최대 이미지 해상도
+  - evidence_ids:
+    - e_fps
+    statement_id: camera_max_fps
+    subject_id: camera
+    characteristic_ref: draft:maximum_frame_rate
+    value:
+      kind: number
+      number: '100000'
+      unit_raw: fps
+    operator: gte
+    semantic_scope: 최대 촬영속도; 최대 해상도와 동시 달성 여부는 미기재
+  requirements:
+  - evidence_ids:
+    - e_sync
+    requirement_id: shared_synchronization
+    requirement_kind: interoperation
+    text: 영상·위치·전력 데이터를 공통 Trigger 또는 시간정보로 연계
+    subject_ids:
+    - laser
+    - camera
+    - power
+  - evidence_ids:
+    - e_acceptance
+    requirement_id: laser_acceptance
+    requirement_kind: acceptance
+    text: 100 Hz 이상 위치데이터 취득과 추적·재추적·주행궤적 기능 확인
+    subject_ids:
+    - laser
+    verifies:
+    - laser_rate
+  - evidence_ids:
+    - e_pedestrian_standard
+    requirement_id: pedestrian_compliance
+    requirement_kind: compliance
+    text: ISO 19206-2 또는 동등 이상의 보행자 안전시험 요건 대응
+    subject_ids:
+    - pedestrian_targets
+    standards:
+    - identifier_raw: ISO 19206-2
+      allows_equivalent: true
+- document_id: sample_04
+  revision_id: 40c6d6203877a0bdc50b8cbb4f2f71f3efcd5eb5a1c06bc9ac5756ac3c86289d
+  source_sha256: 40c6d6203877a0bdc50b8cbb4f2f71f3efcd5eb5a1c06bc9ac5756ac3c86289d
+  evidence:
+  - evidence_id: e_vehicle
+    quote: 동물이송진료용 차량
+    locator: /blocks/20/table/cells/5/3
+  - evidence_id: e_power
+    quote: '- 차량 내부에서 이동형 의료장비 및 진료장비의 안정적인 사용이 가능하도록 별도의 전원공급 시스템을 구축
+
+      ·인버터는 정격출력 3kW 이상으로 하며, 차량 전원을 의료장비 사용이 가능한 220V AC 전원으로 변환할 수 있어야 함
+
+      ·차량 내부에 220V AC 콘센트를 2개소 이상 설치
+
+      ·각 콘센트는 의료장비 사용에 적합하도록 안전하게 고정하고, 차량 운행 중 플러그가 쉽게 이탈하지 않는 구조
+
+      ·분전함은 장비보관함 측면에 하이박스(High Box) 형태로 견고하게 고정·설치하고, 내부에 누전차단기 및 과전류·과부하 보호장치 등을 구성하여 전원회로를 안전하게 분배·차단할 수
+      있는 구조 확보
+
+      ·인버터 및 전기설비는 차량의 기존 전기계통 및 특장 설비와 적절히 연계하여 설치하고, 배선은 차량 운행 중 진동·마찰 등에 의해 손상되지 않도록 보호
+
+      ·인버터 및 전기설비의 설치 위치는 진료공간의 사용성과 유지보수성을 고려하여 발주기관과 협의하여 결정'
+    locator: /blocks/39/table/cells/5/1
+  - evidence_id: e_table_inclusion
+    quote: 이동형 진료대는 차량 구성품으로 포함
+    locator: /blocks/39/table/cells/1/1
+  - evidence_id: e_table
+    quote: '- 차량에는 대형동물의 구조·이송 및 응급처치와 간이수술이 가능한 이동형 진료대 설치·비치
+
+      - 진료대는 대형동물의 안전한 이송 및 진료가 가능하도록 견고한 구조로 제작
+
+      상하 범위: 600~1,100㎜
+
+      상판 크기: 1,600 × 600㎜
+
+      허용하중: 200kg 이상
+
+      - 진료 및 수술 시 작업 높이에 맞게 상판의 높이를 원활하게 조절할 수 있는 구조 확보
+
+      - 차량 내 적재 후 주행 중 진료대가 움직이지 않도록 차량 고정장치 설치
+
+      - 상판은 혈액·분변·소변 등 오염물의 흡수 및 잔류가 최소화되며 세척·소독이 용이한 재질로 마감
+
+      - 진료대의 모서리 및 돌출부는 동물과 작업자의 부상 방지를 위해 안전하게 마감'
+    locator: /blocks/39/table/cells/3/1
+  - evidence_id: e_cage
+    quote: 우치동물원에서 별도 제작하는 이동형 케이지(800 × 1,800 × 900㎜)
+    locator: /blocks/39/table/cells/1/1
+  - evidence_id: e_rail
+    quote: '- 차량 바닥에는 이동형 진료대 및 이동형 케이지를 안전하게 고정할 수 있는 L-track 방식의 레일 시스템 설치
+
+      - 레일 시스템은 이동형 진료대 및 이동형 케이지의 고정장치와 호환 가능한 구조로 제작하고, 각 고정장치의 체결 및 해제가 용이한 구조 확보
+
+      - 레일은 차량 바닥에 견고하게 고정하여 차량 운행 중 진료대 및 케이지의 전후·좌우 이동 및 전도 방지
+
+      - 레일 시스템은 알루미늄 또는 스테인리스 재질로 제작하고, 동물의 배설물·체액 및 세척·소독제 등에 대한 내구성 확보
+
+      - 레일 및 체결장치는 차량의 구조와 진료대·케이지의 사용 형태를 고려하여 발주기관과 협의 후 설치 위치 및 수량 결정
+
+      - 이동형 진료대 및 케이지의 원활한 적재·하역과 차량 내부 공간 활용을 고려하여 레일 돌출부 및 설치 높이를 최소화하고, 바닥 청소 및 소독이 용이한 구조로 제작'
+    locator: /blocks/39/table/cells/4/1
+  - evidence_id: e_space
+    quote: 운전석·조수석 공간과 응급처치·간이수술 공간으로 구분
+    locator: /blocks/39/table/cells/1/1
+  - evidence_id: e_light
+    quote: 수술 작업면 기준 조도 100,000 lux 이상
+    locator: /blocks/39/table/cells/2/1
+  - evidence_id: e_warranty
+    quote: ·특장장치 전반사항에 대하여는 차량등록일 시점으로부터 2년을 적용한다.
+    locator: /blocks/53
+  - evidence_id: e_wiring_deliverable
+    quote: · 특장부품 분해도, 특장 전기배선 결선도(감지기․스위치 등 위치표시)
+    locator: /blocks/51
+  subjects:
+  - evidence_ids:
+    - e_vehicle
+    subject_id: vehicle
+    kind: item
+    name: 동물이송진료용 특수차량
+  - evidence_ids:
+    - e_power
+    subject_id: power_system
+    kind: item
+    name: 전력시스템
+  - evidence_ids:
+    - e_power
+    subject_id: inverter
+    kind: item
+    name: 인버터
+  - evidence_ids:
+    - e_table_inclusion
+    subject_id: treatment_table
+    kind: item
+    name: 이동형 진료대
+  - evidence_ids:
+    - e_cage
+    subject_id: external_cage
+    kind: item
+    name: 별도 제작 이동형 케이지
+  - evidence_ids:
+    - e_rail
+    subject_id: rail
+    kind: item
+    name: 바닥 레일시스템
+  - evidence_ids:
+    - e_space
+    subject_id: treatment_space
+    kind: context
+    name: 응급처치·간이수술 공간
+    context_kind: location
+  - evidence_ids:
+    - e_light
+    subject_id: surgical_light
+    kind: item
+    name: LED 수술조명
+  - evidence_ids:
+    - e_wiring_deliverable
+    subject_id: wiring_diagram
+    kind: deliverable
+    name: 특장 전기배선 결선도
+  supply_scopes:
+  - evidence_ids:
+    - e_vehicle
+    scope_id: vehicle_supply
+    name: 특수차량 납품 범위
+  memberships:
+  - evidence_ids:
+    - e_vehicle
+    membership_id: vehicle_member
+    scope_id: vehicle_supply
+    subject_id: vehicle
+    role: required_supply
+    quantity:
+      value: '1'
+      unit_raw: set
+      scope_raw: 전체 공급
+  - evidence_ids:
+    - e_cage
+    membership_id: external_cage_member
+    scope_id: vehicle_supply
+    subject_id: external_cage
+    role: externally_provided
+  - evidence_ids:
+    - e_wiring_deliverable
+    membership_id: wiring_delivery
+    scope_id: vehicle_supply
+    subject_id: wiring_diagram
+    role: required_supply
+  compositions:
+  - evidence_ids:
+    - e_power
+    composition_id: vehicle_power
+    parent_id: vehicle
+    child_id: power_system
+    relation_kind: physical_component
+  - evidence_ids:
+    - e_power
+    evidence_basis: interpreted
+    composition_id: power_inverter
+    parent_id: power_system
+    child_id: inverter
+    relation_kind: physical_component
+  - evidence_ids:
+    - e_table_inclusion
+    composition_id: vehicle_table
+    parent_id: vehicle
+    child_id: treatment_table
+    relation_kind: system_member
+  - evidence_ids:
+    - e_rail
+    composition_id: vehicle_rail
+    parent_id: vehicle
+    child_id: rail
+    relation_kind: physical_component
+  - evidence_ids:
+    - e_light
+    evidence_basis: interpreted
+    composition_id: vehicle_light
+    parent_id: vehicle
+    child_id: surgical_light
+    relation_kind: physical_component
+  properties:
+  - evidence_ids:
+    - e_power
+    statement_id: inverter_rating
+    subject_id: inverter
+    characteristic_ref: draft:rated_output_power
+    value:
+      kind: number
+      number: '3'
+      unit_raw: kW
+    operator: gte
+    semantic_scope: 인버터 정격출력
+  - evidence_ids:
+    - e_table
+    statement_id: table_load
+    subject_id: treatment_table
+    characteristic_ref: draft:permitted_load
+    value:
+      kind: number
+      number: '200'
+      unit_raw: kg
+    operator: gte
+    semantic_scope: 진료대 허용하중
+  - evidence_ids:
+    - e_table
+    statement_id: table_height
+    subject_id: treatment_table
+    characteristic_ref: draft:height_adjustment_range
+    value:
+      kind: range
+      unit_raw: ㎜
+      arguments:
+      - kind: number
+        number: '600'
+      - kind: number
+        number: '1100'
+    semantic_scope: 진료대 상판 높이
+  - evidence_ids:
+    - e_light
+    statement_id: workplane_illuminance
+    subject_id: surgical_light
+    characteristic_ref: draft:workplane_illuminance
+    value:
+      kind: number
+      number: '100000'
+      unit_raw: lux
+    operator: gte
+    semantic_scope: 수술 작업면 기준
+    conditions:
+    - description: 수술 작업면에서 측정
+  requirements:
+  - evidence_ids:
+    - e_rail
+    requirement_id: rail_compatibility
+    requirement_kind: interoperation
+    text: 레일은 진료대·케이지의 고정장치와 호환 가능한 구조
+    subject_ids:
+    - rail
+    - treatment_table
+    - external_cage
+  - evidence_ids:
+    - e_warranty
+    requirement_id: vehicle_warranty
+    requirement_kind: warranty
+    text: 특장장치 보증 2년
+    subject_ids:
+    - vehicle
+    trigger_raw: 차량등록일
+  - evidence_ids:
+    - e_wiring_deliverable
+    requirement_id: documentation_delivery
+    requirement_kind: documentation
+    text: 특장 전기배선 결선도 제공
+    subject_ids:
+    - wiring_diagram

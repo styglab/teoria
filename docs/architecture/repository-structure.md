@@ -27,6 +27,7 @@ backend/
   authoring/
     ontology_blueprints/ # Draft 작성 입력
     ontology_migrations/ # pending 입력과 applied 이력
+    specification_examples/ # 원문 근거가 있는 미승인 문서 그래프 작성 예시
   migrations/
     application/         # Ontology·Binding·Suggestion·승인 이력
     data/                # 수집·규격서 실행 상태와 산출물 참조
@@ -60,7 +61,8 @@ Python 패키지 이름과 대응시키지 않는다. 문서의 기존 `docs/pla
 | `features/goods_normalization/candidates/` | 표준 후보 제안·AI 의미 판정·Draft 작성 |
 | `features/goods_normalization/profiles/` | `service.py`의 프로파일 정책과 `repository.py`의 저장·감사 |
 | `features/goods_normalization/contracts/` | 발행과 적용이 공유하는 versioned 데이터 계약 |
-| `features/goods_querying/` | 서버 요구조건 비교·원문 근거 조회의 Runtime 처리기 |
+| `features/model_operations/` | 선택형 합성 데이터·모델 학습·평가·데모 서빙 전환·파이프라인 관리 |
+| `integrations/mlflow/`, `integrations/model_serving/` | MLflow 연결·고정 데모 추론 서버의 제한된 배포 실행 |
 | `features/metadata_management/` | 자산 맥락·Suggestion/Review/Application·AI 진단·메타데이터 ingestion |
 | `features/legal_information/` | 법령 조회와 `collection/`의 수집·구조화·적재 |
 | `features/runtime/` | 게시 artifact의 Source·Mapping·Capability·Context 실행 |
@@ -193,10 +195,8 @@ API·Prefect proxy를 한 nginx에 제공한다. K3s의 `standalone` target은 U
 각 Service로 직접 라우팅한다. 환경별 proxy 설정은 `deploy/compose/nginx/nginx.conf`와
 `deploy/k3s/application/ingress.yaml`이 소유한다.
 
-서버 숫자 관찰의 준비·적재는 `features/specification_processing/storage/query_observations.py`와
-실행 Repository가 소유하며 실행 완료와 같은 transaction을 사용한다. 조회 계약은
-`contracts/runtime/domains/goods/`와 `sources/specification_observations.yaml`에 있다.
-비교·근거 처리기는 `features/goods_querying/`에 두고 `entrypoints/composition/runtime.py`에서
-등록한다. Pipeline은 조회 처리기나 Runtime을 호출하지 않는다.
-서버 의미와 프로파일 작성 입력은 `authoring/ontology_blueprints/computer_server.yaml`과
-`authoring/normalization_profiles/computer_server_memory.yaml`이다.
+물품 의미의 작성 경계는 `goods`다. 현재 작성 입력 `authoring/ontology_blueprints/goods.yaml`은
+분류체계·분류항목·분류 판정·물품 유형·표준 특성·규격서 버전·물품·서비스·명세·근거를 연결하는 Draft다.
+기존 서버 전용 조회 feature·Registry·프로파일·숫자 관찰 적재 경로는 제거했다.
+범용 규격서 추출·정규화 및 파일/S3 산출물·Data DB 실행 checkpoint는 유지한다.
+문서 그래프 계약·대표 예시는 추가했고, 자동 추출·조회 연결은 새 모델의 검토 후 소유 기능에 작성한다. Pipeline은 Runtime을 직접 호출하지 않는다.

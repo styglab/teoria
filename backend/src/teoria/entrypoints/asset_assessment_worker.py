@@ -55,6 +55,8 @@ async def run():
             LawSearchReader(settings.admin_data_database_url)
             if settings.admin_data_database_url
             else None,
+            law_max_documents=settings.assessment_law_max_documents,
+            law_max_chars=settings.assessment_law_max_chars,
         )
         while True:
             try:

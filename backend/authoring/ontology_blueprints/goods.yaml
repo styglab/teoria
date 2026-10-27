@@ -1,95 +1,1074 @@
 schema_version: '1.0'
 namespace: goods
-name: 규격 물품
-description: 명시 입력 규격서의 물품·구성품·요구조건을 연결하는 업무 의미. 추출 표준과 문서별 관찰은 별도 관리한다.
-target_version: 0.1.0
+name: 규격서 물품
+description: 문서별 납품 범위·물품·서비스·자료·적용 문맥과 구성·연계·구조화한 규격·기능·검수·근거를 연결한다. 외부 분류 없이 기술할 수 있으며 분류·유형·특성 사전을 선택적으로
+  참조한다.
+target_version: 1.0.0
 objects:
-- code: specification_document
-  name: 규격서
-  stable_key: goods.specification_document
-  description: 요구사항의 근거가 되는 문서. 같은 파일명의 문서도 원문 checksum으로 구분한다.
+- code: classification_scheme
+  name: 물품 분류체계
+  stable_key: goods.classification_scheme
+  description: 조달 분류 등 외부 분류 사전의 특정 판본. 기술 metadata나 Ontology namespace가 아니다.
   identity_properties:
-  - source_sha256
+  - scheme_id
+  - edition
   properties:
+  - code: scheme_id
+    name: 분류체계 식별자
+    stable_key: goods.classification_scheme.scheme_id
+    value_type: string
+    cardinality: one
+    description: 제공기관이 식별하는 분류체계. 출처 확인 없이 서로 다른 체계를 합치지 않는다.
+  - code: edition
+    name: 분류 판본
+    stable_key: goods.classification_scheme.edition
+    value_type: string
+    cardinality: one
+    description: 제공기관 판본 또는 출처 snapshot 식별자. 기준 시점을 모르면 미확인 snapshot으로 명시한다.
+  - code: name
+    name: 분류체계명
+    stable_key: goods.classification_scheme.name
+    value_type: string
+    cardinality: one
+    description: 출처에 확인된 체계명.
+  - code: authority
+    name: 관리 기관
+    stable_key: goods.classification_scheme.authority
+    value_type: string
+    cardinality: one
+    description: 해당 분류체계의 관리 기관.
+  - code: source_ref
+    name: 사전 출처
+    stable_key: goods.classification_scheme.source_ref
+    value_type: string
+    cardinality: one
+    description: 공식 사전 또는 검증한 snapshot의 참조.
+- code: classification_entry
+  name: 물품 분류항목
+  stable_key: goods.classification_entry
+  description: 분류체계 판본 내의 코드. 조달 대·중·소·세 분류와 세부품명을 표현하며 개별 제품의 식별번호와 구분한다.
+  identity_properties:
+  - scheme_id
+  - edition
+  - code
+  properties:
+  - code: scheme_id
+    name: 분류체계 식별자
+    stable_key: goods.classification_entry.scheme_id
+    value_type: string
+    cardinality: one
+    description: 소속 분류체계와 일치해야 한다.
+  - code: edition
+    name: 분류 판본
+    stable_key: goods.classification_entry.edition
+    value_type: string
+    cardinality: one
+    description: 소속 분류체계 판본과 일치해야 한다.
+  - code: code
+    name: 분류 코드
+    stable_key: goods.classification_entry.code
+    value_type: string
+    cardinality: one
+    description: 선행 0을 보존하는 문자열. 물품식별번호·문서 품목번호와 구분한다.
+  - code: preferred_name
+    name: 공식 분류명
+    stable_key: goods.classification_entry.preferred_name
+    value_type: string
+    cardinality: one
+    description: 해당 판본의 공식 사전에서 검증한 이름.
+  - code: level
+    name: 분류 단계
+    stable_key: goods.classification_entry.level
+    value_type: string
+    cardinality: one
+    description: 조달에서는 segment/family/class/commodity/detail_name. 타 체계의 단계는 해당 체계 정의를 따른다.
+  - code: source_ref
+    name: 항목 출처
+    stable_key: goods.classification_entry.source_ref
+    value_type: string
+    cardinality: one
+    description: 코드 존재·명칭·상위 관계를 확인한 사전 위치.
+- code: classification_assignment
+  name: 물품 분류 판정
+  stable_key: goods.classification_assignment
+  description: 특정 규격 물품 항목에 대한 출처별 분류 주장. 원문 표기·수집 필터·검증 결과와 검토 상태를 구별하며 충돌을 덮어쓰지 않는다.
+  identity_properties:
+  - assignment_id
+  properties:
+  - code: assignment_id
+    name: 분류 판정 식별자
+    stable_key: goods.classification_assignment.assignment_id
+    value_type: string
+    cardinality: one
+    description: 대상·출처·판정 문맥의 식별자.
+  - code: raw_code
+    name: 원문 코드
+    stable_key: goods.classification_assignment.raw_code
+    value_type: string
+    cardinality: one
+    description: 표제의 자리 수와 맞지 않아도 원문 그대로 보존한다.
+  - code: raw_label
+    name: 원문 분류 표제
+    stable_key: goods.classification_assignment.raw_label
+    value_type: string
+    cardinality: optional
+    description: '예: 정부물품분류번호(8자리). 실제 코드와 불일치할 수 있다.'
+  - code: source_kind
+    name: 분류 주장 출처
+    stable_key: goods.classification_assignment.source_kind
+    value_type: string
+    cardinality: one
+    description: document/item_metadata/reviewed_inference 등. 검색 필터만으로 물품 분류를 확정하지 않는다.
+  - code: resolution_status
+    name: 분류 검증 상태
+    stable_key: goods.classification_assignment.resolution_status
+    value_type: string
+    cardinality: one
+    description: unresolved/verified/conflicting/rejected. 코드 길이만으로 verified로 만들지 않는다.
+  - code: source_ref
+    name: 주장 출처
+    stable_key: goods.classification_assignment.source_ref
+    value_type: string
+    cardinality: one
+    description: 원문 또는 항목별 metadata snapshot의 참조.
+  - code: review_ref
+    name: 검토 기록 참조
+    stable_key: goods.classification_assignment.review_ref
+    value_type: string
+    cardinality: optional
+    description: 기존 인증된 제안·검토·승인 이력의 참조. actor 문자열을 권위 정보로 쓰지 않는다.
+- code: item_type
+  name: 물품 유형 정의
+  stable_key: goods.item_type
+  description: 서버·메모리 등 규격 물품을 해석하는 업무 유형 사전. 개별 모델·실물이나 조달 분류 코드와 동일시하지 않으며 native Object schema의 복제본이 아니다.
+  identity_properties:
+  - type_id
+  properties:
+  - code: type_id
+    name: 물품 유형 식별자
+    stable_key: goods.item_type.type_id
+    value_type: string
+    cardinality: one
+    description: 검토 대상 사전 항목의 지속적인 식별자. 이름 변경으로 바꾸지 않는다.
+  - code: preferred_name
+    name: 표준 물품 유형명
+    stable_key: goods.item_type.preferred_name
+    value_type: string
+    cardinality: one
+    description: 동의어와 구분한 유형명.
+  - code: definition
+    name: 유형 정의
+    stable_key: goods.item_type.definition
+    value_type: string
+    cardinality: one
+    description: 대상의 의미와 포함·제외 범위를 설명한다.
+  - code: aliases
+    name: 유형 동의어
+    stable_key: goods.item_type.aliases
+    value_type: string
+    cardinality: many
+    description: 원문 표현만으로 동등성이나 분류 일치를 확정하지 않는다.
+  - code: source_ref
+    name: 정의 근거
+    stable_key: goods.item_type.source_ref
+    value_type: string
+    cardinality: one
+    description: 외부 표준 또는 검토 근거.
+  - code: review_ref
+    name: 정의 검토 참조
+    stable_key: goods.item_type.review_ref
+    value_type: string
+    cardinality: optional
+    description: 기존 승인 이력과 연결한다. 사전 행 생성이 승인을 뜻하지 않는다.
+- code: characteristic_definition
+  name: 물품 표준 특성 정의
+  stable_key: goods.characteristic_definition
+  description: 물품 특성 사전의 업무 항목. 가변적인 특성의 뜻·값 종류·단위 정책을 정의한다. Ontology native Property는 이 사전과 명세 객체의 고정 필드를
+    계속 정의한다.
+  identity_properties:
+  - characteristic_id
+  properties:
+  - code: characteristic_id
+    name: 표준 특성 식별자
+    stable_key: goods.characteristic_definition.characteristic_id
+    value_type: string
+    cardinality: one
+    description: 의미를 지속적으로 식별하는 사전 ID. 명칭·단위가 같다고 합치지 않는다.
+  - code: preferred_name
+    name: 표준 특성명
+    stable_key: goods.characteristic_definition.preferred_name
+    value_type: string
+    cardinality: one
+    description: 시스템 메모리 용량과 GPU 메모리 용량 등 업무상 구별되는 이름.
+  - code: definition
+    name: 특성 정의
+    stable_key: goods.characteristic_definition.definition
+    value_type: string
+    cardinality: one
+    description: 무엇을 기술하며 무엇과 구별되는지 설명한다.
+  - code: value_kind
+    name: 허용 값 종류
+    stable_key: goods.characteristic_definition.value_kind
+    value_type: string
+    cardinality: one
+    description: 수치·문자·불리언·식별자·범위·집합·복합 값 등의 계약.
+  - code: quantity_kind_ref
+    name: 수량 종류 참조
+    stable_key: goods.characteristic_definition.quantity_kind_ref
+    value_type: string
+    cardinality: optional
+    description: 의미가 검증된 수량 종류 식별자. 단위와 구분하며 모든 특성에 강제하지 않는다.
+  - code: allowed_unit_refs
+    name: 허용 단위 참조
+    stable_key: goods.characteristic_definition.allowed_unit_refs
+    value_type: string
+    cardinality: many
+    description: 의미·차원·환산 정책을 검증한 단위 ID. 원문 GB를 근거 없이 GiB로 바꾸지 않는다.
+  - code: source_ref
+    name: 정의 근거
+    stable_key: goods.characteristic_definition.source_ref
+    value_type: string
+    cardinality: one
+    description: 표준 또는 업무 정의 근거.
+  - code: review_ref
+    name: 정의 검토 참조
+    stable_key: goods.characteristic_definition.review_ref
+    value_type: string
+    cardinality: optional
+    description: 검토·승인 상태는 기존 사전/프로파일 검토 기능과 연결한다.
+- code: specification_document
+  name: 규격서 버전
+  stable_key: goods.specification_document
+  description: 특정 원본 버전의 규격서. 문서 간 개정 관계는 별도 근거로 판단하며 filename이나 checksum만으로 논리 문서를 합치지 않는다.
+  identity_properties:
+  - document_id
+  - revision_id
+  properties:
+  - code: document_id
+    name: 논리 문서 식별자
+    stable_key: goods.specification_document.document_id
+    value_type: string
+    cardinality: one
+    description: 명시적으로 확인한 문서의 식별자. 원문 파일명과 구분한다.
+  - code: revision_id
+    name: 문서 버전 식별자
+    stable_key: goods.specification_document.revision_id
+    value_type: string
+    cardinality: one
+    description: 해당 원본 버전의 식별자.
+  - code: title
+    name: 문서명
+    stable_key: goods.specification_document.title
+    value_type: string
+    cardinality: optional
+    description: 원문의 문서 제목.
   - code: source_sha256
-    name: 원문 SHA-256
+    name: 원본 SHA-256
     stable_key: goods.specification_document.source_sha256
     value_type: string
     cardinality: one
-  - code: name
-    name: 문서명
-    stable_key: goods.specification_document.name
+    description: 근거가 참조하는 원본의 checksum. 본문은 파일/S3에 둔다.
+  - code: revision_label
+    name: 원문 개정 표시
+    stable_key: goods.specification_document.revision_label
     value_type: string
-- code: item
-  name: 물품 항목
-  stable_key: goods.item
-  description: 규격서가 요구하는 물품 또는 구성품. 모델명 유사성만으로 다른 문서의 항목을 같은 물품으로 병합하지 않는다.
+    cardinality: optional
+    description: 원문에 명시된 개정명 또는 날짜. 추측하지 않는다.
+- code: specified_item
+  name: 규격 물품 항목
+  stable_key: goods.specified_item
+  description: 규격서 안에서 지시하는 물품 또는 구성 대상. 제조사 제품 모델이나 설치된 실물 자산과 동일시하지 않으며, 구성품 역할은 구성 명세의 문맥으로 표현한다.
   identity_properties:
   - item_id
   properties:
   - code: item_id
-    name: 물품 항목 식별자
-    stable_key: goods.item.item_id
+    name: 규격 항목 식별자
+    stable_key: goods.specified_item.item_id
     value_type: string
     cardinality: one
-  - code: name
-    name: 물품명
-    stable_key: goods.item.name
+    description: 문서 버전과 안정적인 항목 식별 근거로 구별하는 ID. 다른 문서의 같은 이름·행 번호와 충돌하지 않으며 run ID나 용량 문자열을 ID로 쓰지 않는다.
+  - code: designation
+    name: 원문 항목명
+    stable_key: goods.specified_item.designation
     value_type: string
-  - code: classification_code
-    name: 품목 분류 코드
-    stable_key: goods.item.classification_code
+    cardinality: optional
+    description: 원문 언급을 보존한다. 명칭 유사성만으로 다른 대상을 합치지 않는다.
+- code: property_statement
+  name: 속성 명세
+  stable_key: goods.property_statement
+  description: 특정 대상의 특성에 관하여 규격서가 기술한 값과 조건. 실제 장착량·제조사 사양의 확정 사실로 간주하지 않는다.
+  identity_properties:
+  - statement_id
+  properties:
+  - code: statement_id
+    name: 속성 명세 식별자
+    stable_key: goods.property_statement.statement_id
     value_type: string
-- code: requirement
-  name: 규격 요구조건
-  stable_key: goods.requirement
-  description: 물품 또는 구성품에 귀속되는 조건. 원문 표현과 적용 범위를 보존하며 서로 다른 조건을 임의로 합치지 않는다.
+    cardinality: one
+    description: 원문 관찰과 대응되는 명세의 ID. 반복·상충 원문을 추적할 수 있어야 한다.
+  - code: statement_text
+    name: 원문 속성 진술
+    stable_key: goods.property_statement.statement_text
+    value_type: string
+    cardinality: one
+    description: 값·연산·한정자를 포함하는 원문 진술.
+  - code: value_kind
+    name: 값의 종류
+    stable_key: goods.property_statement.value_kind
+    value_type: string
+    cardinality: one
+    description: 숫자·문자·식별자·불리언·범위·집합·복합 조건·미해결의 구분. 세부 값 계약은 별도 검증한다.
+  - code: value_raw
+    name: 원문 값
+    stable_key: goods.property_statement.value_raw
+    value_type: string
+    cardinality: optional
+    description: 원문 표현 그대로의 값. 복합 조건을 단일 숫자로 축약하지 않는다.
+  - code: operator
+    name: 조건 연산
+    stable_key: goods.property_statement.operator
+    value_type: string
+    cardinality: optional
+    description: 이상·이하·동일·선택 등 원문을 검증한 연산. 불확실하면 raw 또는 미해결로 유지한다.
+  - code: unit_raw
+    name: 원문 단위
+    stable_key: goods.property_statement.unit_raw
+    value_type: string
+    cardinality: optional
+    description: 원문 단위. 단위가 같다는 이유로 서로 다른 속성을 합치지 않는다.
+  - code: assertion_role
+    name: 진술 역할
+    stable_key: goods.property_statement.assertion_role
+    value_type: string
+    cardinality: one
+    description: 납품 요구·기재 사양·지원 상한·기보유·권고·선택 등의 구분. 검토 승인 상태와 별개다.
+  - code: semantic_scope
+    name: 적용 범위
+    stable_key: goods.property_statement.semantic_scope
+    value_type: string
+    cardinality: optional
+    description: 전체·구성품당·모듈당 등 적용 범위. 원문에 없는 합계를 계산해 명시 값으로 만들지 않는다.
+  - code: qualifiers
+    name: 원문 한정 조건
+    stable_key: goods.property_statement.qualifiers
+    value_type: string
+    cardinality: many
+    description: 부정·대안·호환 조건 등을 보존한다. 미주석을 조건 없음으로 해석하지 않는다.
+  - code: numeric_value
+    name: 해석한 수치
+    stable_key: goods.property_statement.numeric_value
+    value_type: decimal
+    cardinality: optional
+    description: 단일 수치 조건인 경우의 값. 원문·연산·단위를 함께 보존하며 복합 범위를 축약하지 않는다.
+  - code: unit_ref
+    name: 검증한 단위 참조
+    stable_key: goods.property_statement.unit_ref
+    value_type: string
+    cardinality: optional
+    description: 표준 특성의 허용 단위와 일치하는 ID. 해석 전에는 비워 둔다.
+  - code: value_expression
+    name: 구조화한 규격값
+    stable_key: goods.property_statement.value_expression
+    value_type: object
+    cardinality: optional
+    description: SpecificationValue 계약의 단일 값·범위·오차·차원·집합·상대값·대안·원문식. 해석하지 못한 식을 실행하지 않는다.
+  - code: conditions
+    name: 규격 적용 조건
+    stable_key: goods.property_statement.conditions
+    value_type: object
+    cardinality: many
+    description: SpecificationCondition 계약. 주입량·반복횟수·작업면·상온 등 조건.
+- code: composition_statement
+  name: 구성 명세
+  stable_key: goods.composition_statement
+  description: 물품 사이의 물리 구성·통합 시스템 구성·부속품 관계의 문서별 진술. 수량·포함·범위·근거를 보존하며 호환·데이터 연결은 별도 연계 명세로 표현한다.
+  identity_properties:
+  - composition_id
+  properties:
+  - code: composition_id
+    name: 구성 명세 식별자
+    stable_key: goods.composition_statement.composition_id
+    value_type: string
+    cardinality: one
+    description: 부모·자식과 원문 조건을 함께 추적하는 식별자.
+  - code: relation_kind
+    name: 관계 의미
+    stable_key: goods.composition_statement.relation_kind
+    value_type: string
+    cardinality: one
+    description: physical_component/system_member/accessory. 서로 다른 구성 의미를 구별한다. 호환·데이터 연결을 부품 포함으로 해석하지 않는다.
+  - code: quantity_raw
+    name: 원문 구성 수량
+    stable_key: goods.composition_statement.quantity_raw
+    value_type: string
+    cardinality: optional
+    description: 범위·미정·최소 수량을 보존하는 원문 표현.
+  - code: quantity_operator
+    name: 수량 조건 연산
+    stable_key: goods.composition_statement.quantity_operator
+    value_type: string
+    cardinality: optional
+    description: 원문 수량의 동일·이상·이하 등 조건.
+  - code: inclusion_role
+    name: 포함 조건
+    stable_key: goods.composition_statement.inclusion_role
+    value_type: string
+    cardinality: optional
+    description: 필수·선택·제외·참고·불명확 등을 구분한다. 제외된 부품을 장착 사실로 만들지 않는다.
+  - code: applicability_scope
+    name: 구성 적용 범위
+    stable_key: goods.composition_statement.applicability_scope
+    value_type: string
+    cardinality: optional
+    description: 본체당·세트 전체·선택 구성 등 범위.
+  - code: evidence_basis
+    name: 관계 해석 근거
+    stable_key: goods.composition_statement.evidence_basis
+    value_type: string
+    cardinality: one
+    description: 명시·해석·미해결을 구분한다. 명시적 구성과 추론된 소속을 혼용하지 않는다.
+  - code: qualifiers
+    name: 구성 한정 조건
+    stable_key: goods.composition_statement.qualifiers
+    value_type: string
+    cardinality: many
+    description: 구성·수량·적용의 원문 조건.
+  - code: quantity_value
+    name: 해석한 구성 수량
+    stable_key: goods.composition_statement.quantity_value
+    value_type: decimal
+    cardinality: optional
+    description: 수량 조건과 적용 범위가 확인된 단일 수치. 개별 실물의 존재를 만들지 않는다.
+  - code: quantity_unit
+    name: 구성 수량 단위
+    stable_key: goods.composition_statement.quantity_unit
+    value_type: string
+    cardinality: optional
+    description: 개·식·세트 등 원문 수량 단위.
+  - code: review_ref
+    name: 구성 해석 검토 참조
+    stable_key: goods.composition_statement.review_ref
+    value_type: string
+    cardinality: optional
+    description: 구성 해석의 기존 제안·검토 기록 참조.
+- code: requirement_statement
+  name: 기능·서비스·검수 요구
+  stable_key: goods.requirement_statement
+  description: 문서가 요구하는 기능·연계·서비스·준수·검수·보증·자료·안전 조건. 적용 대상을 복수로 연결하며 실제 작업·검사 결과와 구별한다.
   identity_properties:
   - requirement_id
   properties:
   - code: requirement_id
-    name: 요구조건 식별자
-    stable_key: goods.requirement.requirement_id
+    name: 요구 명세 식별자
+    stable_key: goods.requirement_statement.requirement_id
     value_type: string
     cardinality: one
-  - code: statement
-    name: 요구조건 원문
-    stable_key: goods.requirement.statement
+    description: 문서 안의 요구 진술을 식별한다.
+  - code: statement_text
+    name: 원문 요구 진술
+    stable_key: goods.requirement_statement.statement_text
     value_type: string
-  - code: attribute_key
-    name: 속성 의미 식별자
-    stable_key: goods.requirement.attribute_key
+    cardinality: one
+    description: 의무·대안·예외를 포함하는 원문 표현.
+  - code: requirement_role
+    name: 요구 역할
+    stable_key: goods.requirement_statement.requirement_role
     value_type: string
-  - code: operator
-    name: 비교 연산자
-    stable_key: goods.requirement.operator
+    cardinality: one
+    description: 필수·권고·선택·제외·미해결 등 원문의 의미.
+  - code: applicability_scope
+    name: 요구 적용 범위
+    stable_key: goods.requirement_statement.applicability_scope
     value_type: string
-  - code: value_text
-    name: 원문 값
-    stable_key: goods.requirement.value_text
+    cardinality: optional
+    description: 문서 전체·특정 대상·특정 조건에 대한 적용 범위.
+  - code: requirement_kind
+    name: 요구 종류
+    stable_key: goods.requirement_statement.requirement_kind
     value_type: string
-  - code: unit
-    name: 단위
-    stable_key: goods.requirement.unit
+    cardinality: one
+    description: functional/interoperation/service/compliance/acceptance/warranty/documentation/safety. Runtime
+      Capability 종류와 구별한다.
+  - code: conditions
+    name: 요구 적용 조건
+    stable_key: goods.requirement_statement.conditions
+    value_type: object
+    cardinality: many
+    description: SpecificationCondition 계약. 복수 대상 공동 조건을 보존한다.
+  - code: trigger_raw
+    name: 원문 기준 사건
+    stable_key: goods.requirement_statement.trigger_raw
     value_type: string
+    cardinality: optional
+    description: 보증·기한의 시작 사건. 시운전 완료·차량등록일·수리 후 등을 구별한다.
+  - code: standard_citations
+    name: 참조 표준
+    stable_key: goods.requirement_statement.standard_citations
+    value_type: object
+    cardinality: many
+    description: StandardCitation 계약의 원문 식별자·판본·조항·동등 대안 여부. 동등성을 자동 승인하지 않는다.
+- code: evidence
+  name: 원문 근거
+  stable_key: goods.evidence
+  description: 규격서 버전의 특정 구절·표·행·위치에 대한 참조. 문서 본문과 실행 로그를 복제하는 객체가 아니다.
+  identity_properties:
+  - evidence_id
+  properties:
+  - code: evidence_id
+    name: 근거 식별자
+    stable_key: goods.evidence.evidence_id
+    value_type: string
+    cardinality: one
+    description: 같은 원문 위치를 안정적으로 참조하는 식별자.
+  - code: quote
+    name: 근거 구절
+    stable_key: goods.evidence.quote
+    value_type: string
+    cardinality: one
+    description: 해당 위치의 원문 구절. 원문 없는 설명을 근거로 만들지 않는다.
+  - code: locator
+    name: 원문 위치 참조
+    stable_key: goods.evidence.locator
+    value_type: string
+    cardinality: one
+    description: 검증한 native ref·문자 범위·표/행 등 위치 선택자. 파서 node ID만을 영구 문서 ID로 사용하지 않는다.
+  - code: page_number
+    name: 원문 페이지
+    stable_key: goods.evidence.page_number
+    value_type: integer
+    cardinality: optional
+    description: 확인 가능한 경우에만 원문 페이지를 기록한다.
+- code: specified_service
+  name: 규격 서비스 항목
+  stable_key: goods.specified_service
+  description: 규격서가 요구하는 설치·설정·연동시험 등 서비스 또는 작업의 대상. 물리 구성품이나 실제 작업 실행으로 해석하지 않는다.
+  identity_properties:
+  - service_id
+  properties:
+  - code: service_id
+    name: 서비스 항목 식별자
+    stable_key: goods.specified_service.service_id
+    value_type: string
+    cardinality: one
+    description: 문서 버전 문맥의 서비스 항목 ID.
+  - code: designation
+    name: 원문 서비스명
+    stable_key: goods.specified_service.designation
+    value_type: string
+    cardinality: one
+    description: 설정·연동시험 등 원문 명칭.
+  - code: service_kind
+    name: 서비스 종류
+    stable_key: goods.specified_service.service_kind
+    value_type: string
+    cardinality: optional
+    description: 설치·설정·시험·교육·지원·미해결 등 검토한 종류.
+- code: supply_scope
+  name: 규격서 납품 범위
+  description: 문서가 요구하는 물품·소프트웨어·작업·납품자료의 구매 구성. 실제 물리 장비 한 대의 BOM과 구별한다.
+  stable_key: goods.supply_scope
+  identity_properties:
+  - scope_id
+  properties:
+  - code: scope_id
+    name: 납품 범위 식별자
+    stable_key: goods.supply_scope.scope_id
+    value_type: string
+    cardinality: one
+    description: 문서 버전 안의 구매 구성을 안정적으로 식별한다.
+  - code: name
+    name: 납품 범위명
+    stable_key: goods.supply_scope.name
+    value_type: string
+    cardinality: one
+    description: 원문 또는 근거 있는 구매 구성명. 해석한 이름은 근거 상태를 구분한다.
+- code: supply_membership
+  name: 납품 범위 항목
+  description: 납품 범위와 문서 대상의 관계. 필수 공급·선택·기존·외부 제공·시험 대상·참고·제외·미해결 역할을 문맥별로 보존한다.
+  stable_key: goods.supply_membership
+  identity_properties:
+  - membership_id
+  properties:
+  - code: membership_id
+    name: 납품 범위 항목 식별자
+    stable_key: goods.supply_membership.membership_id
+    value_type: string
+    cardinality: one
+    description: 대상·범위·주장 근거의 식별자.
+  - code: role
+    name: 공급 문맥상 역할
+    stable_key: goods.supply_membership.role
+    value_type: string
+    cardinality: one
+    description: required_supply/optional_supply/existing/externally_provided/test_subject/reference_only/excluded/unresolved.
+      외부 제작 케이지를 자동 공급품으로 바꾸지 않는다.
+  - code: quantity
+    name: 공급 수량 조건
+    stable_key: goods.supply_membership.quantity
+    value_type: object
+    cardinality: optional
+    description: Quantity 계약의 값·연산·원문 단위·전체/개별 적용 범위. 지원 가능 수량과 구분한다.
+  - code: evidence_basis
+    name: 해석 근거
+    stable_key: goods.supply_membership.evidence_basis
+    value_type: string
+    cardinality: one
+    description: 명시·문맥 해석·미해결의 구분.
+- code: specified_context
+  name: 규격 적용 문맥
+  description: 요구의 대상이 되는 문서 내 공간·시험 대상·기능 묶음·참고 모델·측정 대상의 식별 가능한 문맥. 납품 물품이나 Platform Context 설정과 구별한다.
+  stable_key: goods.specified_context
+  identity_properties:
+  - context_id
+  properties:
+  - code: context_id
+    name: 문맥 식별자
+    stable_key: goods.specified_context.context_id
+    value_type: string
+    cardinality: one
+    description: 문서 버전 안에서 식별하는 대상 문맥.
+  - code: name
+    name: 문맥명
+    stable_key: goods.specified_context.name
+    value_type: string
+    cardinality: one
+    description: 진료공간·시험 대상 농기계 등 원문 기반 이름.
+  - code: context_kind
+    name: 문맥 종류
+    stable_key: goods.specified_context.context_kind
+    value_type: string
+    cardinality: one
+    description: location/functional_group/test_subject/reference_model/measurand. 모든 명사를 별도 개체로 만들지 않는다.
+- code: specified_deliverable
+  name: 규격 납품자료
+  description: 사용설명서·시험성적서·구성도 등 제출이 요구되는 자료. 실제로 제출된 파일이나 OpenMetadata 자산과 구별한다.
+  stable_key: goods.specified_deliverable
+  identity_properties:
+  - deliverable_id
+  properties:
+  - code: deliverable_id
+    name: 납품자료 항목 식별자
+    stable_key: goods.specified_deliverable.deliverable_id
+    value_type: string
+    cardinality: one
+    description: 문서 버전의 제출 대상 항목 ID.
+  - code: name
+    name: 원문 자료명
+    stable_key: goods.specified_deliverable.name
+    value_type: string
+    cardinality: one
+    description: 제출을 요구하는 자료의 원문명.
+- code: item_relation_statement
+  name: 물품 간 연계 명세
+  description: 설치·호환·데이터·전원 연결에 관한 문서별 요구. 물리 구성 및 공급 포함과 구별하고 실제 장착·운영 사실을 주장하지 않는다.
+  stable_key: goods.item_relation_statement
+  identity_properties:
+  - relation_id
+  properties:
+  - code: relation_id
+    name: 연계 명세 식별자
+    stable_key: goods.item_relation_statement.relation_id
+    value_type: string
+    cardinality: one
+    description: 두 물품과 원문 조건의 식별자.
+  - code: relation_kind
+    name: 연계 관계 의미
+    stable_key: goods.item_relation_statement.relation_kind
+    value_type: string
+    cardinality: one
+    description: installed_on/compatible_with/data_connection/power_connection. 공동 동기화는 복수 대상 요구로 보존한다.
+  - code: conditions_raw
+    name: 원문 연계 조건
+    stable_key: goods.item_relation_statement.conditions_raw
+    value_type: string
+    cardinality: many
+    description: 호환 대상·적용 조건 등 원문 한정자.
+  - code: evidence_basis
+    name: 해석 근거
+    stable_key: goods.item_relation_statement.evidence_basis
+    value_type: string
+    cardinality: one
+    description: 명시·문맥 해석·미해결의 구분.
 relationships:
-- code: describes
-  name: 물품을 기술한다
-  stable_key: goods.describes
+- code: describes_item
+  name: 물품 항목을 기술한다
+  stable_key: goods.describes_item
   source: specification_document
-  target: item
-- code: has_component
-  name: 구성품을 갖는다
-  stable_key: goods.has_component
-  source: item
-  target: item
-- code: has_requirement
-  name: 요구조건을 갖는다
-  stable_key: goods.has_requirement
-  source: item
-  target: requirement
-- code: evidences
-  name: 요구조건의 근거다
-  stable_key: goods.evidences
+  target: specified_item
+  description: 문서 버전이 기술하는 대상. 실제 납품·설치 사실을 주장하지 않는다.
+  source_cardinality: one
+- code: has_property_statement
+  name: 속성 명세를 담는다
+  stable_key: goods.has_property_statement
   source: specification_document
-  target: requirement
+  target: property_statement
+  description: 미귀속 속성 명세도 원본 문서와 연결해 보존한다.
+  source_cardinality: one
+- code: property_subject
+  name: 속성의 적용 대상이다
+  stable_key: goods.property_subject
+  source: property_statement
+  target: specified_item
+  description: 해당 속성 진술의 대상. 미해결 소속은 연결을 추측하지 않는다.
+  target_cardinality: optional
+- code: has_composition_statement
+  name: 구성 명세를 담는다
+  stable_key: goods.has_composition_statement
+  source: specification_document
+  target: composition_statement
+  description: 구성의 수량·선택·근거 문맥을 보존한다.
+  source_cardinality: one
+- code: composition_parent
+  name: 구성의 상위 대상이다
+  stable_key: goods.composition_parent
+  source: composition_statement
+  target: specified_item
+  description: 명세에서 지시하는 상위 대상. 물리적 구성 여부는 relation_kind와 근거로 구분한다.
+  target_cardinality: one
+- code: composition_child
+  name: 구성의 하위 대상이다
+  stable_key: goods.composition_child
+  source: composition_statement
+  target: specified_item
+  description: 명세에서 지시하는 하위 대상. 고정된 Component 타입으로 한정하지 않는다.
+  target_cardinality: one
+- code: has_requirement_statement
+  name: 기타 요구를 담는다
+  stable_key: goods.has_requirement_statement
+  source: specification_document
+  target: requirement_statement
+  description: 속성으로 축약하지 않은 원문 의무와 조건.
+  source_cardinality: one
+- code: requirement_subject
+  name: 요구의 적용 대상이다
+  stable_key: goods.requirement_subject
+  source: requirement_statement
+  target: specified_item
+  description: 특정 대상에 적용되는 경우의 연결. 문서 전체 요구는 문서 연결만으로 보존할 수 있다.
+- code: evidence_document
+  name: 근거의 원본 문서다
+  stable_key: goods.evidence_document
+  source: evidence
+  target: specification_document
+  description: 구절·위치가 속하는 특정 원본 버전.
+  target_cardinality: one
+- code: item_mention
+  name: 대상이 언급된 근거다
+  stable_key: goods.item_mention
+  source: specified_item
+  target: evidence
+  description: 같은 대상의 복수 언급을 별도 근거로 연결한다.
+- code: property_evidence
+  name: 명세의 원문 근거다
+  stable_key: goods.property_evidence
+  source: property_statement
+  target: evidence
+  description: 복수·상충 근거를 보존한다. 명세를 승인했다는 의미는 아니다.
+- code: composition_evidence
+  name: 명세의 원문 근거다
+  stable_key: goods.composition_evidence
+  source: composition_statement
+  target: evidence
+  description: 복수·상충 근거를 보존한다. 명세를 승인했다는 의미는 아니다.
+- code: requirement_evidence
+  name: 명세의 원문 근거다
+  stable_key: goods.requirement_evidence
+  source: requirement_statement
+  target: evidence
+  description: 복수·상충 근거를 보존한다. 명세를 승인했다는 의미는 아니다.
+- code: entry_scheme
+  name: 분류체계 판본에 속한다
+  stable_key: goods.entry_scheme
+  source: classification_entry
+  target: classification_scheme
+  source_cardinality: many
+  target_cardinality: one
+  description: 정확히 같은 scheme_id·edition의 체계 판본에 연결한다.
+- code: broader_classification
+  name: 직접 상위 분류다
+  stable_key: goods.broader_classification
+  source: classification_entry
+  target: classification_entry
+  source_cardinality: many
+  target_cardinality: optional
+  description: 같은 체계·판본의 공식 직접 상위 항목. 코드 절단만으로 만들지 않으며 자기 참조·순환을 허용하지 않는다.
+- code: has_classification_assignment
+  name: 분류 판정을 담는다
+  stable_key: goods.has_classification_assignment
+  source: specification_document
+  target: classification_assignment
+  source_cardinality: one
+  target_cardinality: many
+  description: 물품별 분류 주장과 미해결·충돌 상태를 원본 문서에 연결한다.
+- code: classification_subject
+  name: 분류 판정의 물품이다
+  stable_key: goods.classification_subject
+  source: classification_assignment
+  target: specified_item
+  source_cardinality: many
+  target_cardinality: one
+  description: 분류를 주장하는 정확한 문서 항목. 구성품에 상위 물품의 분류를 전파하지 않는다.
+- code: resolved_classification
+  name: 검증한 분류항목이다
+  stable_key: goods.resolved_classification
+  source: classification_assignment
+  target: classification_entry
+  source_cardinality: many
+  target_cardinality: optional
+  description: 공식 코드·판본을 확인했을 때 연결한다. 불명확·충돌 상태에서 임의로 선택하지 않는다.
+- code: classification_evidence
+  name: 분류 주장의 원문 근거다
+  stable_key: goods.classification_evidence
+  source: classification_assignment
+  target: evidence
+  source_cardinality: many
+  target_cardinality: many
+  description: 원문 분류 표제와 코드의 위치. metadata 주장에는 별도 source_ref를 사용한다.
+- code: item_has_type
+  name: 물품 유형에 해당한다
+  stable_key: goods.item_has_type
+  source: specified_item
+  target: item_type
+  source_cardinality: many
+  target_cardinality: many
+  description: 검토한 유형 해석. 유형 미확정이면 연결하지 않는다. 분류 코드와 동등성을 뜻하지 않는다.
+- code: type_parent
+  name: 직접 상위 물품 유형이다
+  stable_key: goods.type_parent
+  source: item_type
+  target: item_type
+  source_cardinality: many
+  target_cardinality: many
+  description: 업무 정의로 검증한 유형 포함 관계. 구성·분류 계층과 구별하고 순환을 금지한다.
+- code: applicable_characteristic
+  name: 적용 가능한 표준 특성이다
+  stable_key: goods.applicable_characteristic
+  source: item_type
+  target: characteristic_definition
+  source_cardinality: many
+  target_cardinality: many
+  description: 유형에 적용 가능한 특성 정의. 개별 물품에 값이 존재하거나 반드시 요구된다는 뜻은 아니다.
+- code: statement_characteristic
+  name: 표준 특성을 기술한다
+  stable_key: goods.statement_characteristic
+  source: property_statement
+  target: characteristic_definition
+  source_cardinality: many
+  target_cardinality: optional
+  description: 명세의 뜻이 확인된 특성 정의. 미해결 표현은 원문으로 유지한다.
+- code: describes_service
+  name: 서비스 항목을 기술한다
+  stable_key: goods.describes_service
+  source: specification_document
+  target: specified_service
+  source_cardinality: one
+  target_cardinality: many
+  description: 구매 범위의 서비스·작업 항목. 하드웨어 구성과 구분한다.
+- code: service_subject
+  name: 서비스가 적용되는 물품이다
+  stable_key: goods.service_subject
+  source: specified_service
+  target: specified_item
+  source_cardinality: many
+  target_cardinality: many
+  description: 설정·연동시험 등의 대상. 실제 수행 사실을 뜻하지 않는다.
+- code: service_requirement
+  name: 서비스의 요구 조건이다
+  stable_key: goods.service_requirement
+  source: specified_service
+  target: requirement_statement
+  source_cardinality: many
+  target_cardinality: many
+  description: 서비스의 조건·의무를 원문 근거와 연결한다.
+- code: service_evidence
+  name: 서비스 항목의 원문 근거다
+  stable_key: goods.service_evidence
+  source: specified_service
+  target: evidence
+  source_cardinality: many
+  target_cardinality: many
+  description: 물리 구성품으로 잘못 연결하지 않도록 항목 근거를 보존한다.
+- code: describes_supply_scope
+  name: 납품 범위를 기술한다
+  stable_key: goods.describes_supply_scope
+  source: specification_document
+  target: supply_scope
+  source_cardinality: one
+  target_cardinality: many
+  description: 문서 버전의 구매 구성.
+- code: describes_context
+  name: 적용 문맥을 기술한다
+  stable_key: goods.describes_context
+  source: specification_document
+  target: specified_context
+  source_cardinality: one
+  target_cardinality: many
+  description: 공간·시험 대상·참고 모델 등 문서 내 문맥.
+- code: describes_deliverable
+  name: 납품자료를 요구한다
+  stable_key: goods.describes_deliverable
+  source: specification_document
+  target: specified_deliverable
+  source_cardinality: one
+  target_cardinality: many
+  description: 제출 대상의 요구. 실제 파일의 제출 사실이 아니다.
+- code: membership_scope
+  name: 속하는 납품 범위다
+  stable_key: goods.membership_scope
+  source: supply_membership
+  target: supply_scope
+  source_cardinality: many
+  target_cardinality: one
+  description: 항목마다 정확히 한 납품 범위.
+- code: membership_item
+  name: 물품 항목이다
+  stable_key: goods.membership_item
+  source: supply_membership
+  target: specified_item
+  source_cardinality: many
+  target_cardinality: optional
+  description: 대상 종류 관계 중 정확히 하나만 연결한다.
+- code: membership_service
+  name: 서비스 항목이다
+  stable_key: goods.membership_service
+  source: supply_membership
+  target: specified_service
+  source_cardinality: many
+  target_cardinality: optional
+  description: 대상 종류 관계 중 정확히 하나만 연결한다.
+- code: membership_context
+  name: 외부·시험·참고 문맥이다
+  stable_key: goods.membership_context
+  source: supply_membership
+  target: specified_context
+  source_cardinality: many
+  target_cardinality: optional
+  description: 문맥을 필수 공급 물품으로 만들지 않는다.
+- code: membership_deliverable
+  name: 제출자료 항목이다
+  stable_key: goods.membership_deliverable
+  source: supply_membership
+  target: specified_deliverable
+  source_cardinality: many
+  target_cardinality: optional
+  description: 대상 종류 관계 중 정확히 하나만 연결한다.
+- code: has_item_relation_statement
+  name: 물품 연계 요구를 담는다
+  stable_key: goods.has_item_relation_statement
+  source: specification_document
+  target: item_relation_statement
+  source_cardinality: one
+  target_cardinality: many
+  description: 물리 구성과 구별되는 설치·호환·데이터·전원 관계.
+- code: item_relation_source
+  name: 연계의 출발 물품이다
+  stable_key: goods.item_relation_source
+  source: item_relation_statement
+  target: specified_item
+  source_cardinality: many
+  target_cardinality: one
+  description: 관계 방향과 의미를 원문으로 확인한다.
+- code: item_relation_target
+  name: 연계의 상대 물품이다
+  stable_key: goods.item_relation_target
+  source: item_relation_statement
+  target: specified_item
+  source_cardinality: many
+  target_cardinality: one
+  description: 물품 관계의 정확한 상대. 공동 조건은 요구의 복수 대상 연결을 사용한다.
+- code: property_context
+  name: 특성의 적용 문맥이다
+  stable_key: goods.property_context
+  source: property_statement
+  target: specified_context
+  source_cardinality: many
+  target_cardinality: optional
+  description: property_subject와 합해 정확히 한 적용 대상. 작업면·공간·시험 대상 등.
+- code: requirement_context
+  name: 요구의 적용 문맥이다
+  stable_key: goods.requirement_context
+  source: requirement_statement
+  target: specified_context
+  source_cardinality: many
+  target_cardinality: many
+  description: 복수 물품·공간·시험 대상의 공동 조건을 보존한다.
+- code: requirement_scope
+  name: 요구의 적용 납품 범위다
+  stable_key: goods.requirement_scope
+  source: requirement_statement
+  target: supply_scope
+  source_cardinality: many
+  target_cardinality: many
+  description: 구매 구성 전체에 적용되는 조건.
+- code: requirement_service
+  name: 요구의 적용 서비스다
+  stable_key: goods.requirement_service
+  source: requirement_statement
+  target: specified_service
+  source_cardinality: many
+  target_cardinality: many
+  description: 실제 작업 수행을 주장하지 않는 서비스 조건.
+- code: requirement_deliverable
+  name: 요구의 적용 납품자료다
+  stable_key: goods.requirement_deliverable
+  source: requirement_statement
+  target: specified_deliverable
+  source_cardinality: many
+  target_cardinality: many
+  description: 제출자료의 언어·형식·부수·기한 등.
+- code: acceptance_verifies_property
+  name: 검수할 속성 규격이다
+  stable_key: goods.acceptance_verifies_property
+  source: requirement_statement
+  target: property_statement
+  source_cardinality: many
+  target_cardinality: many
+  description: acceptance 종류만 연결한다. 검사 실행·합격 사실을 뜻하지 않는다.
+- code: acceptance_verifies_requirement
+  name: 검수할 기능 요구다
+  stable_key: goods.acceptance_verifies_requirement
+  source: requirement_statement
+  target: requirement_statement
+  source_cardinality: many
+  target_cardinality: many
+  description: 검수 기준이 검증할 기능·연계 요구. 검수 기준 간 자기·순환 참조는 금지한다.
+- code: supply_scope_evidence
+  name: 원문 근거다
+  stable_key: goods.supply_scope_evidence
+  source: supply_scope
+  target: evidence
+  source_cardinality: many
+  target_cardinality: many
+  description: 각 해석의 원문 구절·위치를 추적한다.
+- code: membership_evidence
+  name: 원문 근거다
+  stable_key: goods.membership_evidence
+  source: supply_membership
+  target: evidence
+  source_cardinality: many
+  target_cardinality: many
+  description: 각 해석의 원문 구절·위치를 추적한다.
+- code: context_evidence
+  name: 원문 근거다
+  stable_key: goods.context_evidence
+  source: specified_context
+  target: evidence
+  source_cardinality: many
+  target_cardinality: many
+  description: 각 해석의 원문 구절·위치를 추적한다.
+- code: deliverable_evidence
+  name: 원문 근거다
+  stable_key: goods.deliverable_evidence
+  source: specified_deliverable
+  target: evidence
+  source_cardinality: many
+  target_cardinality: many
+  description: 각 해석의 원문 구절·위치를 추적한다.
+- code: item_relation_evidence
+  name: 원문 근거다
+  stable_key: goods.item_relation_evidence
+  source: item_relation_statement
+  target: evidence
+  source_cardinality: many
+  target_cardinality: many
+  description: 각 해석의 원문 구절·위치를 추적한다.

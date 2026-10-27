@@ -28,7 +28,7 @@ def inputs(tmp_path,mode='document_processing'):
 @pytest.fixture
 def undecorated(monkeypatch):
     # Exercise the exact operational task bodies without starting an orchestration server.
-    for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','select_and_map_standard','persist_report','prepare_query_observations']:
+    for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','select_and_map_standard','persist_report']:
         monkeypatch.setattr(tasks,name,getattr(tasks,name).fn)
     start=AsyncMock(return_value=None);complete=AsyncMock();failed=AsyncMock()
     monkeypatch.setattr(flows,'start_execution',start);monkeypatch.setattr(flows,'complete_execution',complete);monkeypatch.setattr(flows,'fail_execution',failed)

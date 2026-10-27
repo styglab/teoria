@@ -90,3 +90,10 @@ COPY --chown=teoria:teoria backend/contracts/runtime ./backend/contracts/runtime
 USER teoria
 ENV TEORIA_PLATFORM_REGISTRY_PATH=/app/backend/contracts/runtime
 CMD ["teoria-pipelines", "validate-integration", "/app/backend", "--platform-registries", "/app/backend/contracts/runtime"]
+
+# Optional MLOps processes do not contain the document parser or Codex CLI.
+FROM data-operations AS model-worker
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --project backend --locked --no-dev --extra api --group orchestration --group model-operations --no-editable
+USER teoria
+CMD ["prefect", "worker", "start", "--pool", "teoria-model-training"]

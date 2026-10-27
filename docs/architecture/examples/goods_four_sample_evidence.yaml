@@ -1,0 +1,223 @@
+purpose: Source-backed ontology design review; manually selected evidence, not an exhaustive extraction or
+  human-approved gold dataset.
+classification_metadata_supplied: false
+documents:
+- document_id: sample_01
+  source_name: (구매시방서) 레독스흐름전지 시험인증센터 환경감시 및 제어 모니터링 장치 구매.hwp
+  source_sha256: 62a72633c6b767e86a53f23a44a5cf822ba283bd73095bd4916961e1210344c6
+  parser_version: 0.9.15
+  classification_metadata: null
+  evidence:
+  - id: s1_supply_sensor
+    native_ref: /blocks/29/table/cells/1/1
+    quote: 센서 및 분석장치
+    source_page: null
+  - id: s1_supply_sensor_count
+    native_ref: /blocks/29/table/cells/1/2
+    quote: '8'
+    source_page: null
+  - id: s1_upgrade
+    native_ref: /blocks/29/table/cells/3/1
+    quote: 운용프로그램 업그레이드
+    source_page: null
+  - id: s1_install
+    native_ref: /blocks/29/table/cells/5/1
+    quote: 환경감시 센서 교체 및 설치공사
+    source_page: null
+  - id: s1_gas_targets
+    native_ref: /blocks/57
+    quote: CO, H2S, O2, EX
+    source_page: null
+  - id: s1_gas_link
+    native_ref: /blocks/58
+    quote: 데이터전송장치와 연동
+    source_page: null
+  - id: s1_harmful_targets
+    native_ref: /blocks/66
+    quote: SO2, HBR
+    source_page: null
+  - id: s1_warranty_trigger
+    native_ref: /blocks/37
+    quote: 시운전을 완료한 날로부터 1년
+    source_page: null
+  - id: s1_existing_device
+    native_ref: /blocks/93
+    quote: 기존의 데이터 전송 장치
+    source_page: null
+  - id: s1_installation_areas
+    native_ref: /blocks/94
+    quote: 설치구역
+    source_page: null
+- document_id: sample_02
+  source_name: (변환본)규격서_연천스마트팜(주)_액체크로마토그래프.pdf
+  source_sha256: b7e8b9661be430a76de1688fee666004d561d70a0e8b3059367d509a5ce91781
+  parser_version: 0.9.15
+  classification_metadata: null
+  evidence:
+  - id: s2_raw_classification
+    native_ref: /blocks/2/table/cells/1/2
+    quote: '41115404'
+    source_page: 1
+  - id: s2_pump_supply
+    native_ref: /blocks/13
+    quote: 용매 운반용 펌프
+    source_page: 1
+  - id: s2_pump_quantity
+    native_ref: /blocks/14
+    quote: 2 set
+    source_page: 1
+  - id: s2_flow_range
+    native_ref: /blocks/57
+    quote: 0.0001~10 mL/min
+    source_page: 2
+  - id: s2_sample_condition
+    native_ref: /blocks/71
+    quote: 5μL injection, n=20
+    source_page: 2
+  - id: s2_conditional_precision
+    native_ref: /blocks/79
+    quote: 0.5 ~ 0.9 μL
+    source_page: 3
+  - id: s2_ambient_relative
+    native_ref: /blocks/91
+    quote: 상온-10 ℃ ~ 100 ℃
+    source_page: 3
+  - id: s2_capacity_alternative
+    native_ref: /blocks/94
+    quote: 250 mm L. column x 6ea or 300 mmL. Column x 3ea
+    source_page: 3
+  - id: s2_optional_capacity
+    native_ref: /blocks/52
+    quote: 최대 2개 사용가능
+    source_page: 2
+  - id: s2_accessory_nitrogen
+    native_ref: /blocks/160
+    quote: N2 generator
+    source_page: 5
+  - id: s2_accessory_ups
+    native_ref: /blocks/161
+    quote: UPS(5kW, 30min)
+    source_page: 5
+- document_id: sample_03
+  source_name: 1. 규격서 (지능형 농기계 정적상태.주행성능 분석시험장치).hwpx
+  source_sha256: 2fbb97780e28f5e9868e63f5240862eb4eb8907209510335831f8478ef81f4cd
+  parser_version: 0.9.15
+  classification_metadata: null
+  evidence:
+  - id: s3_raw_classification
+    native_ref: /blocks/26/table/cells/1/2
+    quote: '4111161501'
+    source_page: null
+  - id: s3_test_subject
+    native_ref: /blocks/30
+    quote: 트랙터, 농업용 로봇
+    source_page: null
+  - id: s3_integrated_delivery
+    native_ref: /blocks/106
+    quote: 개별 구성장비는 독립적인 단품 납품이 아니라
+    source_page: null
+  - id: s3_synchronization
+    native_ref: /blocks/104
+    quote: 공통 Trigger 또는 시간정보
+    source_page: null
+  - id: s3_formula
+    native_ref: /blocks/110
+    quote: ±15 μm + 6 μm/m
+    source_page: null
+  - id: s3_resolution
+    native_ref: /blocks/121
+    quote: 2,048×1,152 pixels
+    source_page: null
+  - id: s3_max_fps
+    native_ref: /blocks/122
+    quote: 100,000 fps
+    source_page: null
+  - id: s3_motion_components
+    native_ref: /blocks/153
+    quote: 운영 소프트웨어 1 COPY
+    source_page: null
+  - id: s3_thermal_range
+    native_ref: /blocks/157
+    quote: 최대 측정온도는 +1,000℃ 이상
+    source_page: null
+  - id: s3_thermal_components
+    native_ref: /blocks/159
+    quote: 표준 렌즈 1 EA
+    source_page: null
+  - id: s3_measurement_target
+    native_ref: /blocks/155
+    quote: 배터리, 인버터, 모터
+    source_page: null
+  - id: s3_standard
+    native_ref: /blocks/136
+    quote: ISO 19206-2
+    source_page: null
+  - id: s3_acceptance
+    native_ref: /blocks/199/table/cells/1/2
+    quote: 100 Hz 이상
+    source_page: null
+  - id: s3_acceptance_sequence
+    native_ref: /blocks/197
+    quote: 주행 → 보행자 또는 장애물 접근
+    source_page: null
+- document_id: sample_04
+  source_name: 동물이송진료용 특수차량 규격서(수정안최종) (2).hwpx
+  source_sha256: 40c6d6203877a0bdc50b8cbb4f2f71f3efcd5eb5a1c06bc9ac5756ac3c86289d
+  parser_version: 0.9.15
+  classification_metadata: null
+  evidence:
+  - id: s4_equivalent_model
+    native_ref: /blocks/35/table/cells/1/1/blocks/1
+    quote: 현대 쏠라티 또는 동급 차량
+    source_page: null
+  - id: s4_external_cage
+    native_ref: /blocks/39/table/cells/1/1
+    quote: 우치동물원에서 별도 제작하는 이동형 케이지(800 × 1,800 × 900㎜)
+    source_page: null
+  - id: s4_table_included
+    native_ref: /blocks/39/table/cells/1/1
+    quote: 이동형 진료대는 차량 구성품으로 포함
+    source_page: null
+  - id: s4_workplane_illuminance
+    native_ref: /blocks/39/table/cells/2/1
+    quote: 수술 작업면 기준 조도 100,000 lux 이상
+    source_page: null
+  - id: s4_table_load
+    native_ref: /blocks/39/table/cells/3/1
+    quote: '허용하중: 200kg 이상'
+    source_page: null
+  - id: s4_table_height
+    native_ref: /blocks/39/table/cells/3/1
+    quote: '상하 범위: 600~1,100㎜'
+    source_page: null
+  - id: s4_rail_compatibility
+    native_ref: /blocks/39/table/cells/4/1
+    quote: 고정장치와 호환 가능한 구조
+    source_page: null
+  - id: s4_inverter
+    native_ref: /blocks/39/table/cells/5/1
+    quote: 인버터는 정격출력 3kW 이상
+    source_page: null
+  - id: s4_power_outlets
+    native_ref: /blocks/39/table/cells/5/1
+    quote: 220V AC 콘센트를 2개소 이상
+    source_page: null
+  - id: s4_medical_reference
+    native_ref: /blocks/39/table/cells/7/1
+    quote: 이동형 X-ray, 초음파, 마취기, 환자감시장치
+    source_page: null
+  - id: s4_registration_warranty
+    native_ref: /blocks/53
+    quote: 차량등록일 시점으로부터 2년
+    source_page: null
+image_review:
+- source_document: sample_01
+  native_container: BinData/BIN0006.bmp
+  kind: data_function_table
+  observed: 센서 마스터 관리·검지 데이터 분석 결과·통신 확인 이력 등 소프트웨어 기능 범위. 실제 운영 DB 자산으로 간주하지 않는다.
+  method: manual_visual_review
+- source_document: sample_01
+  native_container: BinData/BIN0007.bmp
+  kind: transaction_function_table
+  observed: 가스별 모니터링·공조장치 제어(자동/수동)·경보 기능 제어·이력 관리.
+  method: manual_visual_review

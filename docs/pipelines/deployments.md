@@ -52,6 +52,45 @@ Teoria Data PostgreSQL metadata를 격리된 OpenMetadata ingestion container로
 |---|---|---|
 | `0 5 * * *` | `Asia/Seoul` | 활성 |
 
+## `demo-seed-customers`
+
+실제 개인정보가 없는 가상 고객·이용 이력 600건을 재현 가능하게 적재한다.
+
+- 선언: `deploy/prefect/model_operations.yaml`
+- Flow: `teoria.features.model_operations.flows.seed_demo_customers`
+- Work pool: `teoria-model-training`
+- Work queue: `default`
+
+| Cron | Timezone | 예약 상태 |
+|---|---|---|
+| — | — | 수동 실행 |
+
+## `demo-train-customer-churn`
+
+식별정보를 제외한 합성 이용 이력으로 고객 이탈 모델을 학습·평가하고 MLflow에 등록한다.
+
+- 선언: `deploy/prefect/model_operations.yaml`
+- Flow: `teoria.features.model_operations.flows.train_demo_customer_churn`
+- Work pool: `teoria-model-training`
+- Work queue: `default`
+
+| Cron | Timezone | 예약 상태 |
+|---|---|---|
+| — | — | 수동 실행 |
+
+## `demo-deploy-customer-churn`
+
+명시한 합성 고객 모델 버전을 checksum 검증한 뒤 전용 추론 서버에 반영한다. 실패 시 이전 release를 복원한다.
+
+- 선언: `deploy/prefect/model_operations.yaml`
+- Flow: `teoria.features.model_operations.flows.deploy_demo_customer_churn`
+- Work pool: `teoria-model-deployment`
+- Work queue: `default`
+
+| Cron | Timezone | 예약 상태 |
+|---|---|---|
+| — | — | 수동 실행 |
+
 ## `specification-standard-management`
 
 명시적으로 입력한 규격서에서 표준 후보를 수집하고 추출 표준 draft를 생성한다.

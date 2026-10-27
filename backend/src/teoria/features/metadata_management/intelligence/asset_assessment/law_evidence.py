@@ -7,8 +7,13 @@ from uuid import UUID
 
 
 from teoria.features.legal_information.search import LawSearchRequest
-from teoria.features.metadata_management.intelligence.asset_assessment.models import AssessmentJob, LawQueries
-from teoria.features.metadata_management.intelligence.asset_assessment.prompts import LAW_QUERY_INSTRUCTION
+from teoria.features.metadata_management.intelligence.asset_assessment.models import (
+    AssessmentJob,
+    LawQueries,
+)
+from teoria.features.metadata_management.intelligence.asset_assessment.prompts import (
+    LAW_QUERY_INSTRUCTION,
+)
 
 
 def law_search_queries(columns: list[dict], generated: list[str]) -> list[str]:
@@ -48,6 +53,9 @@ async def collect_law_evidence(
     evidence: dict,
     model,
     law_reader,
+    *,
+    max_documents: int = 5,
+    max_chars: int = 12000,
 ) -> tuple[list[dict], bool]:
     partial = False
     diagnostics = []
@@ -88,10 +96,10 @@ async def collect_law_evidence(
                     )
                 for hit in result["items"]:
                     identity = (str(hit["snapshot_id"]), hit["path"])
-                    if identity in seen_documents or len(documents) >= 5:
+                    if identity in seen_documents or len(documents) >= max_documents:
                         continue
                     document = await law_reader.get_document(
-                        UUID(str(hit["snapshot_id"])), hit["path"], max_chars=12000
+                        UUID(str(hit["snapshot_id"])), hit["path"], max_chars=max_chars
                     )
                     if not document or document["content_truncated"]:
                         partial = True

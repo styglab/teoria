@@ -1,0 +1,8 @@
+schema_version: '1.0'
+source_registry_release: 2026.10.27.3
+target_ontology: goods
+classifications:
+  BUSINESS_CONCEPT: 납품 범위·적용 문맥·물품 구성과 연계·조건부 규격·기능·검수 요구의 Draft 보완
+# legacy Runtime YAML Object는 현재 0개다. 이번 작업은 작성 schema와 미게시
+# 문서 그래프 계약을 추가하며 Runtime projection·Capability를 등록하지 않는다.
+objects: {}

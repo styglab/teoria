@@ -1,0 +1,51 @@
+schema_version: 1
+applied_at: '2026-10-27'
+actor: system:admin
+target_ontology:
+  namespace: goods
+  version: 0.2.0
+  ontology_version_id: 1a95c9a3-6f85-410b-8cf4-083a5d2b0158
+profile:
+  key: server_memory
+  version: 2.0.0
+  revision_id: 413fb82e-52d0-4947-b2e9-7cb53927d378
+registry_release: 2026.10.27.2
+runtime_bundle_checksum: sha256:9bca0542483e97f34b1c039c97500c743c8402715905d1e51b610c36c143fe29
+data_migration: 094_goods_ontology_server_observations.sql
+new_run_id: goods_server_memory_20261027_01
+source_extraction_sha256: 405129d0ebd476cc237e4d1a6c4b1f0a1328e2b9a026ba27f839032a9c2e7dd0
+legacy_disposition:
+  ontology: computer_server@0.1.0 deprecated; original artifact and concept IDs preserved
+  profiles: 1.0.0 and 1.0.1 deprecated
+  capability_bindings: 5 deprecated; review history preserved
+  observations: 3 legacy and 3 goods observations preserved
+  unapproved_proposals: 73 remain in original legacy Draft, not adopted or rebased
+concept_identity_transitions:
+- source_stable_key: computer_server.has_memory
+  source_concept_id: 7902c862-b866-40cb-8a8e-fd33a29648f3
+  target_stable_key: goods.has_memory
+  target_concept_id: 4ac873b7-95f2-4e9b-a915-e3ee08789818
+- source_stable_key: computer_server.memory
+  source_concept_id: 128e7d73-eb36-44f5-a009-be3f335e5db0
+  target_stable_key: goods.memory
+  target_concept_id: 0baee575-eee5-4e6e-81ac-b98a8f84a243
+- source_stable_key: computer_server.memory.capacity
+  source_concept_id: aab638e9-d962-493b-9370-e931ce91d06c
+  target_stable_key: goods.memory.capacity
+  target_concept_id: 8bcabaa1-cab9-49ce-8ae1-0444c1509114
+- source_stable_key: computer_server.memory.item_id
+  source_concept_id: e2b14665-4b1f-4ef8-aca8-9e094d1bafbc
+  target_stable_key: goods.memory.item_id
+  target_concept_id: c36767b4-5c5d-45e4-8e78-4c41b6c44890
+- source_stable_key: computer_server.server
+  source_concept_id: 01bae731-9192-4dce-a7e9-9e37c4fe2ddb
+  target_stable_key: goods.server
+  target_concept_id: ea7914b2-d26b-4f23-8570-58ba1d10ce1c
+- source_stable_key: computer_server.server.item_id
+  source_concept_id: 512cb0ac-d0bf-4fe7-b82d-13ff5e08ef55
+  target_stable_key: goods.server.item_id
+  target_concept_id: 24558774-86fa-44a8-aa2b-30ab7e72a99d
+- source_stable_key: computer_server.server.memory_capacity
+  source_concept_id: a3811553-07a0-467a-b295-a5e76e2280b1
+  target_stable_key: goods.server.memory_capacity
+  target_concept_id: d71f8d1a-af89-4f93-bf5c-b0a996798896

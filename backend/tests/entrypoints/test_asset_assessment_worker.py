@@ -13,6 +13,8 @@ from teoria.entrypoints import asset_assessment_worker as worker
 async def test_worker_cancellation_closes_metadata_and_model_connections(monkeypatch):
     settings = SimpleNamespace(
         assessment_enabled=True,
+        assessment_law_max_documents=5,
+        assessment_law_max_chars=12000,
         app_database_url="postgresql://synthetic/test",
         openmetadata_enabled=True,
         openmetadata_base_url="http://metadata.invalid",

@@ -29,12 +29,8 @@ async def start_execution(request:SpecificationRun):
     return await SpecificationRepository.from_environment().start(request,fingerprint)
 
 @task(name='규격 처리 완료 체크포인트',persist_result=False,cache_policy=NO_CACHE)
-async def complete_execution(result:RunResult,observations=None):
-    repository=SpecificationRepository.from_environment()
-    if observations is None:
-        await repository.complete(result)
-    else:
-        await repository.complete(result,observations=observations)
+async def complete_execution(result:RunResult):
+    await SpecificationRepository.from_environment().complete(result)
 
 @task(name='규격 처리 실패 기록',persist_result=False,cache_policy=NO_CACHE)
 async def fail_execution(run_id,error_code):
@@ -93,11 +89,7 @@ async def execute_specification_run(request:SpecificationRun):
                     'entity_normalization':normalized.get('entity_summary',{}),'relation_normalization':normalized.get('relation_summary',{}),
                     'human_approval_required':False,'reused_extraction':reused})
             # This is the only success/partial checkpoint: every referenced object exists first.
-            if normalized.get('artifact_kind') == 'goods_normalized_observations':
-                rows=await tasks.prepare_query_observations(request,temporary,result.artifacts)
-                await complete_execution(result,rows)
-            else:
-                await complete_execution(result)
+            await complete_execution(result)
             return result
     except BaseException as exc:
         try:await asyncio.shield(fail_execution(request.run_id,type(exc).__name__))

@@ -1,0 +1,31 @@
+schema_version: 1
+source_ontology:
+  namespace: computer_server
+  version: 0.1.0
+target_ontology:
+  namespace: goods
+  version: 0.2.0
+identity_policy: Preserve prior concept IDs and published artifacts; create explicit
+  target IDs in the goods namespace. No in-place rename or merging by name.
+concepts:
+- source_stable_key: computer_server.server
+  target_stable_key: goods.server
+  meaning: unchanged
+- source_stable_key: computer_server.server.item_id
+  target_stable_key: goods.server.item_id
+  meaning: unchanged
+- source_stable_key: computer_server.server.memory_capacity
+  target_stable_key: goods.server.memory_capacity
+  meaning: unchanged
+- source_stable_key: computer_server.memory
+  target_stable_key: goods.memory
+  meaning: unchanged
+- source_stable_key: computer_server.memory.item_id
+  target_stable_key: goods.memory.item_id
+  meaning: unchanged
+- source_stable_key: computer_server.memory.capacity
+  target_stable_key: goods.memory.capacity
+  meaning: unchanged
+- source_stable_key: computer_server.has_memory
+  target_stable_key: goods.has_memory
+  meaning: unchanged

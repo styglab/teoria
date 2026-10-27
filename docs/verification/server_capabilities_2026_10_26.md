@@ -1,5 +1,8 @@
 # 테스트 독립화와 첫 서버 Capability — 2026-10-26
 
+> 과거 작업의 검증 기록이다. 이 문서의 물품 모델·조회 기능·관찰 데이터는 후속
+> [초기화](specification_goods_reset_2026_10_27.md)로 운영에서 삭제했다. 이전 산출물은 백업에 보관한다.
+
 보관 Registry 의존을 제거하고 컴퓨터 서버의 승인 프로파일 관찰을 Data DB와
 Source·Mapping·검색/비교/원문 근거 Capability까지 연결했다.
 구현 사용법은 [서버 Capability](../procurement_specification_processing/server_capabilities.md)를 따른다.

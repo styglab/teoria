@@ -1,0 +1,10 @@
+schema_version: '1.0'
+source_registry_release: 2026.10.27.2
+target_ontology: goods
+classifications:
+  DEPRECATED: 기존 서버 전용 조회와 모델을 삭제하고 규격서 물품 Draft로 재작성
+objects:
+  server_specifications.requirement_observation:
+    classification: DEPRECATED
+    migration_status: deprecated
+    rationale: 서버 메모리 숫자 조회 projection을 제거한다. 새 문서·물품·명세·근거 모델은 별도 Draft에서 검토한다.

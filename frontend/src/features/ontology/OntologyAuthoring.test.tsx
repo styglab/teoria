@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OntologyAuthoring } from "./OntologyAuthoring";
 import { MemoryRouter } from "react-router-dom";
 import { ontologyApi, type OntologyVersionDetail } from "../../api/ontology";
 
 describe("OntologyAuthoring", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
   beforeEach(() => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -60,6 +60,51 @@ describe("OntologyAuthoring", () => {
     expect(await screen.findByText("새 업무 v2")).toBeTruthy();
     expect(versions).toHaveBeenCalledWith("second_domain");
     expect(detail.mock.calls.every(([id]) => id === "draft-id")).toBe(true);
+  });
+
+  it("paginates concepts, relationships, and rules after filtering", async () => {
+    const detail: OntologyVersionDetail = {
+      ontology_version_id: "version-1", version: "1", namespace: "teoria", ontology_name: "업무 모델",
+      status: "published", created_at: "2026-10-27", metrics: [],
+      objects: Array.from({ length: 51 }, (_, index) => ({
+        business_object_id: `object-${index}`, concept_id: `concept-${index}`, stable_key: `goods.Item${index}`,
+        code: `Item${index}`, name: `개념 ${index}`, description: "", identity_policy: {}, properties: [],
+      })),
+      relationships: Array.from({ length: 51 }, (_, index) => ({
+        concept_id: `link-${index}`, stable_key: `goods.Link${index}`, code: `Link${index}`, name: `관계 ${index}`,
+        source_object_id: "object-0", target_object_id: "object-1", source_cardinality: "one", target_cardinality: "many", temporal: false,
+      })),
+      rules: Array.from({ length: 51 }, (_, index) => ({
+        concept_id: `rule-${index}`, stable_key: `goods.Rule${index}`, code: `Rule${index}`, name: `규칙 ${index}`,
+        description: "", evaluator_key: null,
+      })),
+    };
+    vi.spyOn(ontologyApi, "authoredOntologies").mockResolvedValue({ items: [] });
+    vi.spyOn(ontologyApi, "ontologyVersions").mockResolvedValue({ items: [detail] });
+    vi.spyOn(ontologyApi, "ontologyVersion").mockResolvedValue(detail);
+    render(<MemoryRouter><OntologyAuthoring /></MemoryRouter>);
+    expect(await screen.findByText("1–25 / 51개")).toBeTruthy();
+    for (const [tab, prefix] of [["업무 개념", "Item"], ["관계", "Link"], ["규칙", "Rule"]]) {
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${tab}\\s*51$`) }));
+      expect(screen.getByText(`goods.${prefix}0`)).toBeTruthy();
+      expect(screen.queryByText(`goods.${prefix}25`)).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
+      expect(screen.getByText(`goods.${prefix}25`)).toBeTruthy();
+      expect(screen.queryByText(`goods.${prefix}0`)).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
+      expect(screen.getByText("51–51 / 51개")).toBeTruthy();
+      expect((screen.getByRole("button", { name: "다음 페이지" }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.change(screen.getByRole("textbox", { name: "온톨로지 검색" }), { target: { value: `${prefix}0` } });
+      expect(screen.getByText(`goods.${prefix}0`)).toBeTruthy();
+      expect(screen.getByText("1–1 / 1개")).toBeTruthy();
+      fireEvent.change(screen.getByRole("textbox", { name: "온톨로지 검색" }), { target: { value: "" } });
+      fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
+    }
+    fireEvent.change(screen.getByLabelText("페이지당"), { target: { value: "50" } });
+    expect(screen.getByText("1–50 / 51개")).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "온톨로지 검색" }), { target: { value: "missing" } });
+    expect(screen.getByText("0개")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "다음 페이지" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

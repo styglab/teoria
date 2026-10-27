@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Database, Folder, RefreshCw, Table2 } from "lucide-react";
+import { ChevronRight, Database, Folder, RefreshCw, Table2 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { metadataApi, type MetadataEntity, type MetadataStatus } from "../../api/metadata";
 
+import { CatalogPagination } from "../../components/workspace/CatalogPagination";
 import { CatalogLayout, FilterTabs, PageHeader, SearchField } from "../../components/workspace/WorkspaceLayout";
 
 function normalizeAdminToken(input: string): string {
@@ -131,6 +132,6 @@ export function MetadataExplorer() {
  <td><div className="asset-labels">{table.tags.slice(0,2).map((tag,index)=><span key={index} title={String(tag.tagFQN||tag.name||"")}>{String(tag.displayName||tag.name||tag.tagFQN||"태그")}</span>)}{table.tags.length>2&&<small>+{table.tags.length-2}</small>}{!table.tags.length&&<span className="asset-value-missing">없음</span>}</div></td>
  <td><span className={table.owners.length?"asset-owner":"asset-value-missing"}>{table.owners.map(owner=>String(owner.displayName||owner.name||owner.id)).join(", ")||"미지정"}</span></td><td><ChevronRight size={16}/></td>
  </tr>)}</tbody></table>{loading?<div className="asset-catalog-empty" role="status">자산을 불러오고 있습니다…</div>:!error&&!visible.length&&<div className="asset-catalog-empty">{query||filter!=="all"?"조건에 맞는 자산이 없습니다.":"등록된 자산이 없습니다."}{(query||filter!=="all")&&<button onClick={()=>update({q:"",filter:""})}>검색·필터 초기화</button>}</div>}</div>
- <footer className="asset-catalog-footer"><label>페이지당<select value={pageSize} onChange={event=>update({size:event.target.value})}><option value="25">25개</option><option value="50">50개</option></select></label><span>{loading||error?"—":filtered.length?`${currentPage*pageSize+1}–${Math.min((currentPage+1)*pageSize,filtered.length)} / ${filtered.length}개`:"0개"}</span><div><button aria-label="이전 페이지" disabled={loading||currentPage===0} onClick={()=>update({page:String(currentPage-1)})}><ChevronLeft size={16}/></button><span>{currentPage+1} / {lastPage+1}</span><button aria-label="다음 페이지" disabled={loading||currentPage===lastPage} onClick={()=>update({page:String(currentPage+1)})}><ChevronRight size={16}/></button></div></footer>
+ <CatalogPagination page={currentPage} pageSize={pageSize} total={filtered.length} loading={loading} error={!!error} onPageChange={value=>update({page:String(value)})} onPageSizeChange={value=>update({size:String(value)})}/>
  </CatalogLayout>;
 }

@@ -18,6 +18,7 @@ source:
       schemaFilterPattern:
         includes:
           - public_procurement
+          - mlops_demo
       markDeletedTables: true
       includeTags: true
       includeOwners: true

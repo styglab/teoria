@@ -3,15 +3,23 @@ from __future__ import annotations
 import asyncio
 
 
-from teoria.features.metadata_management.intelligence.asset_assessment.context_builder import build_context
-from teoria.features.metadata_management.intelligence.asset_assessment.law_evidence import collect_law_evidence
-from teoria.features.metadata_management.intelligence.asset_assessment.model_client import AssessmentError
+from teoria.features.metadata_management.intelligence.asset_assessment.context_builder import (
+    build_context,
+)
+from teoria.features.metadata_management.intelligence.asset_assessment.law_evidence import (
+    collect_law_evidence,
+)
+from teoria.features.metadata_management.intelligence.asset_assessment.model_client import (
+    AssessmentError,
+)
 from teoria.features.metadata_management.intelligence.asset_assessment.models import (
     AssessmentAnalysis,
     AssessmentJob,
     AssessmentOutput,
 )
-from teoria.features.metadata_management.intelligence.asset_assessment.prompts import ASSESSMENT_INSTRUCTION
+from teoria.features.metadata_management.intelligence.asset_assessment.prompts import (
+    ASSESSMENT_INSTRUCTION,
+)
 from teoria.features.metadata_management.intelligence.asset_assessment.validation import (
     require_bounded_context,
     validate_output,
@@ -20,9 +28,20 @@ from teoria.features.metadata_management.intelligence.asset_assessment.validatio
 
 
 class AssetAssessmentService:
-    def __init__(self, repository, metadata, bindings, model, law_reader=None):
+    def __init__(
+        self,
+        repository,
+        metadata,
+        bindings,
+        model,
+        law_reader=None,
+        *,
+        law_max_documents=5,
+        law_max_chars=12000,
+    ):
         self.repository, self.metadata, self.bindings = repository, metadata, bindings
         self.model, self.law_reader = model, law_reader
+        self.law_max_documents, self.law_max_chars = law_max_documents, law_max_chars
 
     async def process(self, job: AssessmentJob) -> None:
         try:
@@ -61,6 +80,8 @@ class AssetAssessmentService:
             prepared.evidence,
             self.model,
             self.law_reader,
+            max_documents=self.law_max_documents,
+            max_chars=self.law_max_chars,
         )
         context["evidence"] = prepared.evidence
         require_bounded_context(context)

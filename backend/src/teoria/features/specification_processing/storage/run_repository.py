@@ -38,14 +38,11 @@ class SpecificationRepository:
             artifacts=[ArtifactRef(key=a['object_key'],uri=a['uri'],sha256=a['sha256'],size_bytes=a['size_bytes'],media_type=a['media_type']) for a in artifacts],
             document_results=[dict(d) for d in documents])
 
-    async def complete(self,result:RunResult,*,observations:list[dict]|None=None):
+    async def complete(self,result:RunResult):
         # Artifact upload must finish before this one transaction becomes the completion checkpoint.
         async with connect(self.database_url) as connection:
             row=await(await connection.execute("SELECT status FROM public_procurement.specification_processing_runs WHERE run_id=%s FOR UPDATE",(result.run_id,))).fetchone()
             if row is None or row[0]!='running':raise ValueError('run is not active')
-            if observations is not None:
-                from teoria.features.specification_processing.storage.query_observations import insert_query_observations
-                await insert_query_observations(connection, result.run_id, observations)
             for artifact in result.artifacts:
                 await connection.execute('''INSERT INTO public_procurement.specification_processing_artifacts
                     (run_id,object_key,uri,sha256,size_bytes,media_type) VALUES (%s,%s,%s,%s,%s,%s)

@@ -303,3 +303,12 @@ Prefect에 제출할 때는 같은 JSON을 `manifest` parameter로 제공한다.
 프로파일의 공개 작성 경계는 `NormalizationProfileService`, 의미 판정의 내구성 실행은
 `SemanticOperationService`다. 저장소의 내부 context·DB URL에 의존하는 대신 공개 서비스 메서드를 사용한다.
 승인 시 Ontology 서비스의 게시 artifact 조회와 version 잠금을 같은 transaction에 연결한다.
+
+
+## 분류 없는 문서 그래프 작성 예시
+
+신규 `DocumentGoodsGraph` 계약은 분류 metadata가 없어도 납품 범위·물품·구성·연계·규격·근거를
+작성·검증한다. `teoria-pipelines specification validate-graph --manifest
+backend/authoring/specification_examples/four_sample_graphs.yaml`로 네 샘플의 대표 제안 그래프를 검사한다.
+이 검사는 기존 `NormalizationProfile`의 컴파일·게시·적용과 별도다. 기존 분류 필수 Flow를 완화하거나
+이 제안 그래프를 자동 채택하지 않는다. 새 모델의 자동 추출·프로파일 적용·DB·Runtime 연결은 후속 단계다.

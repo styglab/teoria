@@ -1,0 +1,41 @@
+schema_version: 1
+applied_at: '2026-10-27'
+authorization: Explicit user request to delete the existing goods model and rebuild
+database_operator: platform_admin / teoria_pipeline
+draft_authoring_principal: system:admin
+deleted:
+  ontology_namespaces:
+  - goods
+  - computer_server
+  versions: 3
+  concepts: 160
+  profiles: 3
+  semantic_operations: 1
+  bindings: 10
+  query_observations: 6
+  specification_runs: 2
+  standard_workflows: 1
+  live_runtime_bundles:
+  - 2026.10.27.1
+  - 2026.10.27.2
+  live_operational_artifact_files: 17
+preserved:
+  non_target_application_datasets: 19
+  original_specifications: true
+  law_and_openmetadata_data: true
+  applied_migrations: true
+  backup_root: backups/teoria/specification_goods_reset_20261027
+new_model:
+  namespace: goods
+  version: 1.0.0
+  status: draft
+  ontology_version_id: 6bf176a6-913a-4b05-9a95-b8bbf6ba7866
+  objects: 6
+  properties: 35
+  relationships: 13
+  structural_validation: valid
+runtime_registry_release: 2026.10.27.3
+active_runtime_capabilities: 0
+data_migration: 095_remove_server_comparison_observations.sql
+remaining_work: Review the new model against source cases and define statement/profile/runtime
+  contracts before publication or new ingestion.

@@ -364,3 +364,32 @@ async def test_model_context_keeps_borrowed_client_open():
                 instruction="test", context={}, output_type=AssessmentOutput
             )
         assert not client.is_closed
+
+
+@pytest.mark.asyncio
+async def test_law_context_budget_limits_documents_without_dropping_provenance():
+    from teoria.features.metadata_management.intelligence.asset_assessment.law_evidence import collect_law_evidence
+    identifiers = [uuid4(), uuid4()]
+    hits = [{"snapshot_id": item, "path": "article/1", "law_id": str(index+1),
+        "mst": "10", "law_name": "Synthetic Law", "effective_date": "2020-01-01"}
+        for index,item in enumerate(identifiers)]
+    reader = Mock(search=AsyncMock(return_value={"items": hits, "unavailable_versions": []}),
+        get_document=AsyncMock(return_value={**hits[0], "content": "Synthetic provision", "content_truncated": False}))
+    model = Mock(generate=AsyncMock(return_value=LawQueries(queries=["개인정보"])))
+    context, evidence = {}, {}
+    await collect_law_evidence({"scopes": ["disclosure_assessment"], "assessment_date": "2026-10-27"},
+        [{"name": "email"}], context, evidence, model, reader, max_documents=1, max_chars=1000)
+    assert len(context["law_documents"]) == 1
+    assert reader.get_document.await_count == 1
+    assert reader.get_document.call_args.kwargs["max_chars"] == 1000
+    assert evidence["law:1"]["provenance"]["snapshot_id"] == str(identifiers[0])
+
+
+@pytest.mark.asyncio
+async def test_truncated_model_output_is_never_accepted_as_a_diagnosis():
+    async def handler(request):
+        return httpx.Response(200,json={"choices":[{"finish_reason":"length","message":{"content":'{"queries":[]}'}}]})
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        model=AssessmentModelClient('http://configured-gateway/chat','configured-model',None,client=http)
+        with pytest.raises(AssessmentError,match='model_output_truncated'):
+            await model.generate(instruction='keywords',context={},output_type=LawQueries)

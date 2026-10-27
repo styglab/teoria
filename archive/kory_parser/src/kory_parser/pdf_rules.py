@@ -7,7 +7,7 @@ pdfplumber 0.11.10 (MIT). See third_party/pdfplumber_license.txt.
 from itertools import groupby
 
 from .models import ParseError
-from .pdf_geometry import PdfGrid
+from .pdf_geometry import PdfGrid, intersection
 from .pdf_words import clusters
 
 
@@ -27,7 +27,50 @@ def edges_from_objects(objects):
     return edges
 
 
-def ruled_grids(edges, options):
+def open_sided_boundaries(vertical, horizontal, existing_grids=()):
+    """Infer open table sides from repeated row endpoints and an internal divider.
+
+    Both ends of the divider must meet full-width row rules. Every crossing row
+    must have the same endpoints; a lone separator, ragged rules or a divider
+    extending into surrounding text does not establish a table boundary.
+    """
+    inferred = []
+    for divider in vertical:
+        rows = [
+            rule
+            for rule in horizontal
+            if divider["top"] - 1 <= rule["top"] <= divider["bottom"] + 1
+            # A border can sit just inside a horizontal stroke's end cap.
+            # Use the visible-cell edge tolerance to exclude such outer rules.
+            and rule["x0"] + 1.6 < divider["x0"] < rule["x1"] - 1.6
+        ]
+        if len(rows) < 3:
+            continue
+        rows.sort(key=lambda rule: rule["top"])
+        left, right = rows[0]["x0"], rows[0]["x1"]
+        if (
+            abs(rows[0]["top"] - divider["top"]) > 1
+            or abs(rows[-1]["top"] - divider["bottom"]) > 1
+            or any(abs(row["x0"] - left) > 1 or abs(row["x1"] - right) > 1 for row in rows)
+        ):
+            continue
+        bounds = (left, divider["top"], right, divider["bottom"])
+        if any(intersection(bounds, grid.bbox) > 0 for grid in existing_grids):
+            continue  # Keep already detected clipping/shading geometry authoritative.
+        for position in (left, right):
+            if any(
+                left - 1 <= edge["x0"] <= right + 1
+                and (edge["x0"] < divider["x0"] if position == left else edge["x0"] > divider["x0"])
+                and edge["top"] <= divider["top"] + 1
+                and edge["bottom"] >= divider["bottom"] - 1
+                for edge in vertical + inferred
+            ):
+                continue
+            inferred.append(dict(divider, x0=position, x1=position, width=0))
+    return inferred
+
+
+def ruled_grids(edges, options, existing_grids=()):
     snapped = []
     for orientation, axis in (("v", "x0"), ("h", "top")):
         own = [
@@ -62,6 +105,7 @@ def ruled_grids(edges, options):
                 joined.append(current)
     vertical = [e for e in joined if e["orientation"] == "v" and e["bottom"] - e["top"] >= 1]
     horizontal = [e for e in joined if e["orientation"] == "h" and e["x1"] - e["x0"] >= 1]
+    vertical.extend(open_sided_boundaries(vertical, horizontal, existing_grids))
     points = {}
     for vi, v in enumerate(sorted(vertical, key=lambda e: (e["x0"], e["top"]))):
         for hi, h in enumerate(sorted(horizontal, key=lambda e: (e["top"], e["x0"]))):

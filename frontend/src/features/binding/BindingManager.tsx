@@ -7,6 +7,7 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Check, Link2, Plus, ShieldCheck, X } from "lucide-react";
+import { CatalogPagination, useCatalogPagination } from "../../components/workspace/CatalogPagination";
 import { Button } from "../../components/ui/button";
 import {
   FilterTabs,
@@ -168,6 +169,8 @@ export function BindingManager() {
     ),
   );
 
+  const pagination = useCatalogPagination(filtered.length, JSON.stringify([status, query.trim().toLocaleLowerCase(), assetId, selectedId]));
+
   return (
     <div className="binding-manager">
       <PageHeader
@@ -308,9 +311,10 @@ export function BindingManager() {
         </form>
       )}
       {error && <div className="binding-error">{error}</div>}
+      <div className="binding-results" key={JSON.stringify([pagination.page, pagination.pageSize, status, query, assetId, selectedId])}>
       <div className="binding-list">
         {!loading &&
-          filtered.map((item) => (
+          filtered.slice(pagination.start, pagination.end).map((item) => (
             <article key={item.binding_id}>
               <header>
                 <div className="binding-icon">
@@ -406,6 +410,8 @@ export function BindingManager() {
           }
         />
       )}
+      </div>
+      <CatalogPagination {...pagination} loading={loading} error={!!error} disabled={!!busy}/>
     </div>
   );
 }

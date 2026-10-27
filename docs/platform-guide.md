@@ -65,13 +65,17 @@ AI 자산 진단도 기준일에 해당하는 법령 snapshot 근거를 사용�
 이 동작의 회귀·Task 통합 테스트와 실제 모델의 문서 전체 품질 평가는 구분한다.
 개선 평가 CLI는 각 실행 전후 Parser 소스·설치 패키지 지문을 검사하며, 실행 중 변경되면 비교를 중단한다.
 
-서버 의미의 작성 입력은 `backend/authoring/ontology_blueprints/computer_server.yaml`이다.
+물품 의미의 작성 입력은 `backend/authoring/ontology_blueprints/goods.yaml`이다.
 사용하지 않던 운영 `goods 0.1.0` Draft와 과거 실험·조달 데이터를 [정리했다](verification/retired_data_cleanup_2026_10_26.md).
-새 서버 Ontology는 아직 운영에 게시하지 않았다.
+사용자의 초기화 요청으로 기존 `goods`·`computer_server` 모델과 후보·프로파일·Binding·관찰을 운영에서 삭제했다.
+현재 `goods` 1.0.0은 규격서 버전·규격 물품 항목·속성 명세·구성 명세·기타 요구 명세·원문 근거의 Draft다.
+분류체계·분류항목·분류 판정·물품 유형·표준 특성·서비스 항목을 보완했다.
+납품 범위·공급 역할·적용 문맥·납품자료·물품 연계 명세와 네 샘플 대표 그래프를 추가했다.
+객체 17개·속성 93개·관계 50개이며 새 승인 프로파일과 Published 물품 모델은 아직 없다.
 새 환경에서는 다음 명령으로 Draft만 생성할 수 있다.
 
 ```bash
-uv run --project backend --locked --extra api teoria apply-ontology-blueprint --manifest backend/authoring/ontology_blueprints/computer_server.yaml
+uv run --project backend --locked --extra api teoria apply-ontology-blueprint --manifest backend/authoring/ontology_blueprints/goods.yaml
 ```
 
 Application DB를 구성한 뒤 실행하고, [Ontology 검토·승인·게시](platform/ontology.md)를 따른다.
@@ -85,15 +89,12 @@ Application DB를 구성한 뒤 실행하고, [Ontology 검토·승인·게시](
 자동 승인 평가는 격리 DB의 `goods_eval_` Ontology에서만 실행한다.
 전체 표준관리는 `teoria-pipelines specification standard-workflow --manifest ...`로 실행한다.
 상위 Prefect Flow가 추출·작성 API·패키지 저장·재적용을 연결하며 승인 대기와 실패에서 같은 실행 ID로 재개한다.
-서버용 Semantic Binding 작성 입력과 조회용 Database Source·Mapping을 추가했다.
-승인 프로파일을 적용한 숫자 관찰은 실행 완료 checkpoint와 같은 transaction으로 적재한다.
-[서버 검색·비교·원문 근거 Capability](procurement_specification_processing/server_capabilities.md)는
-격리 PostgreSQL·OPA·불변 bundle에서 검증한다. 작성 Registry에는 공개 Capability 3개와 내부 조회 1개가 있다.
-운영은 기존 bundle을 유지하므로 배포된 discovery는 여전히 빈 목록이다.
-범용 AI 질의 handler와 운영 의미 게시·bundle 전환은 남아 있다.
-배포된 bundle은 `2026.10.25.1`이다. 미사용 `goods 0.1.0` Draft는 정리했고 게시·승인 이력은 보존했다.
-실제 배포·인증·모델 준비 상태는 [배포 검증 기록](verification/goods_focus_deployment_2026_10_25.md)을 따른다.
-이전 게시 Ontology와 Runtime artifact는 수정하지 않는다.
+기존 서버 전용 Source·Mapping·Capability와 숫자 관찰 적재 코드는 제거했다.
+현재 활성 bundle은 `2026.10.27.3`이며 물품 Capability discovery는 빈 목록이다.
+[규격서 물품 모델](architecture/specification_goods_model.md)의 명세·값·유형 참조 계약을 검토한 뒤
+새 프로파일과 Runtime 탐색 경로를 작성한다. 기존 처리·조회 결과를 새 모델의 결과로 재사용하지 않는다.
+삭제 범위와 새 Draft는 [초기화 기록](verification/specification_goods_reset_2026_10_27.md)에서 확인한다.
+원본 규격서와 물품 외 데이터는 유지하고, 이전 물품 모델과 산출물은 백업 후 운영에서 삭제했다.
 새 코드가 기존의 조달 artifact를 그대로 사용하면 은퇴한 기능이 재노출될 수 있으므로,
 새 Registry로 bundle을 구성하고 검증한 뒤 활성화한다. [Runtime 배포](platform/runtime.md)를 따른다.
 
@@ -111,3 +112,69 @@ uv run --project backend --locked --extra api teoria-pipelines validate-integrat
 
 프로젝트 소유권은 [저장소 구조](architecture/repository-structure.md), 남은 제품 결과는
 [로드맵](roadmap.md)을 따른다. 저장소 구성 검사와 실제 서비스 배포·모델 품질 검증은 구분한다.
+
+
+## 선택형 합성 고객 MLOps 예제
+
+`model_operations`는 개인정보 형태의 합성 데이터로 메타데이터 진단과 모델 운영을
+함께 검증하는 선택 기능이다. Data DB의 `mlops_demo.customers`와
+`mlops_demo.customer_activity`에 각각 600건을 명시적인 데이터 준비 Flow로 넣는다.
+이메일은 `example.invalid`, 전화번호는 `010-XXXX-…`, 이름·주소는 가상 값이다.
+기존 업무 데이터와 Published Ontology를 바꾸지 않는다.
+
+메타데이터 동기화는 `mlops_demo`를 수집 대상에 포함한다. 테이블을 만들자마자
+실행되는 DDL 이벤트 방식이 아니며 기존 Prefect 예약 또는 수동 실행으로 수집한다.
+AI 진단은 자산 상세에서 별도로 요청하고 행 데이터 없이 컬럼 metadata와 법령 근거만
+사용한다. 합성 데이터의 진단 결과를 실제 개인정보나 법률 적용 확정으로 해석하지 않는다.
+
+Compose 환경 파일에 MLflow DB 암호·MinIO access/secret key·전용 추론 token을 설정하고
+`TEORIA_MODEL_OPERATIONS_ENABLED=true`로 활성화한다. 추론 token은 24자 이상이어야 한다.
+MLflow 상태는 전용 PostgreSQL volume, 모델 산출물은 전용 MinIO bucket에 저장한다.
+다음 명령은 기반 스택이 이미 실행 중인 환경에서 선택 서비스를 추가한다.
+
+```bash
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile mlops build mlflow
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile mlops --profile object-storage up -d mlflow-postgres minio minio-init mlflow model-register model-training-worker model-deployment-worker
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile model-serving up -d --no-deps demo-inference
+```
+
+Data migration `096_mlops_demo_customers.sql`은 기존 migration 절차로 별도 적용한다.
+기존 Admin·UI 이미지에도 변경을 배포해야 새 메뉴와 관리 API를 사용할 수 있다.
+`/admin/workflows`에서 데이터 준비 → 메타데이터 동기화 → 모델 학습 → 명시 버전 배포를
+실행한다. `/admin/models`에서 등록 버전·평가 지표를, `/admin/serving`에서 배포 상태와 입력값별 예측을 확인한다.
+학습은 식별정보·연락처·생년월일·주소·소득·신용점수를 제외한 네 이용 이력 특성만 쓴다.
+고객 단위 480/120건 학습·평가 분리와 seed를 고정하며, 합성 지표는 실제 성능 근거가 아니다.
+
+배포 Flow는 모델 artifact checksum과 버전을 고정한 release를 원자적으로 기록한 뒤
+전용 추론 프로세스를 재시작한다. 이미지 변경 배포는 별도 Compose 재생성이 필요하다.
+준비 상태와 샘플 추론 검증에 실패하면 이전 release를 복원하고 재시작한다.
+Docker socket은 전용 배포 Worker만 mount하며 학습 Worker·Admin API는 mount하지 않는다.
+추론 프로세스는 MLflow가 관리하는 신뢰된 데모 모델만 적재한다.
+`POST /inference-api/predict`는 Admin token과 별도의 `TEORIA_DEMO_INFERENCE_TOKEN` bearer를
+사용한다. UI는 인증된 Admin API를 통해 추론하며 전용 token을 브라우저에 전달하지 않는다.
+
+현재 모델 배포 Flow는 Compose 전용이다. K3s에서 모델 학습 Job·서빙 Deployment를 제어하는
+어댑터와 운영 클러스터 검증은 후속 범위이며, 기존 Kubernetes Worker를 모델 배포에 사용하지 않는다.
+
+진단 모델의 문맥 크기에 맞춰 `TEORIA_ASSESSMENT_LAW_MAX_DOCUMENTS`(1~5개)와
+`TEORIA_ASSESSMENT_LAW_MAX_CHARS`(문서당 1,000~12,000자)를 조절한다.
+긴 법령 문서가 잘리면 근거로 채택하지 않고 결과를 partial로 유지한다.
+컬럼을 선택해 진단할 수 있으며 입력 제한을 줄였다고 법률 적용이나 공개 가능성을 확정하지 않는다.
+
+모델 운영 화면은 Prefect API의 실제 실행·Task·로그를 조회하며 별도 실행 상태를 복제하지 않는다.
+파이프라인별 최근 기록, 상태 필터, 서버 페이지네이션과 실행 상세를 제공한다.
+기본 실행 이력에서는 향후 예약을 제외하며 예약·대기 필터에서는 미래 예약도 표시한다.
+실행 상세는 허용된 네 파이프라인에 속한 Flow만 조회하고 최근 100개 로그와 최대 100개 Task를
+표시한다. 모델 버전의 평가 지표와 데이터 checksum은 MLflow에서 읽는다.
+
+
+## 관리 화면 메뉴
+
+메뉴는 데이터·의미(데이터 자산·온톨로지·의미 연결), 거버넌스(메타데이터 공백·제안 검토),
+모델 운영(모델 레지스트리·추론 서비스), 워크플로(파이프라인)로 구성한다.
+연결 및 설정·기능 계약은 사이드바 하단의 플랫폼 관리에 둔다.
+현재 선택형 모델 운영과 데이터·모델 파이프라인 메뉴는 해당 기능이 활성화되고 관리자 인증이
+확인된 환경에서 표시한다. 플랫폼 현황에서도 활성 기능의 모델·추론 상태를 확인할 수 있다.
+모델 레지스트리는 등록 버전과 평가 이력을, 추론 서비스는 현재 배포 버전과 API 테스트를 맡는다.
+기존 `/admin/model-operations` 주소는 query와 fragment를 보존해 `/admin/models`로 이동한다.
+모바일에서는 탐색 메뉴를 작업 화면 위에 열고, 메뉴 선택 또는 배경 클릭으로 닫는다.

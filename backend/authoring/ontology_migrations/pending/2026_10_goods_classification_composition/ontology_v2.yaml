@@ -1,0 +1,9 @@
+schema_version: '1.0'
+source_registry_release: 2026.10.27.3
+target_ontology: goods
+classifications:
+  BUSINESS_CONCEPT: 물품 분류·유형·특성 사전과 규격서 구성·서비스의 Draft 보완
+# 이 변경은 goods의 미게시 작성 입력만 보완한다.
+# 현재 Runtime에는 legacy YAML Object가 없어 이관 대상은 0개다.
+# 새 Draft 객체를 Runtime projection으로 추가하거나 기존 applied 이력을 수정하지 않는다.
+objects: {}

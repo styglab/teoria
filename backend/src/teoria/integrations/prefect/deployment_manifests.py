@@ -6,6 +6,7 @@ from pathlib import Path
 DEPLOYMENT_FILES = {
     "ingestion": "specification_processing.yaml",  # Existing CLI kind is preserved.
     "legal-information": "legal_information.yaml",
+    "model-operations": "model_operations.yaml",
     "metadata": "metadata_management.yaml",
 }
 

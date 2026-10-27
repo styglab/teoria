@@ -64,6 +64,17 @@ async def configure_pool(client, *, backend: str, kind: str) -> str:
     from prefect.exceptions import ObjectNotFound
     from prefect.workers.process import ProcessWorker
 
+    if kind == "model-operations":
+        if backend != "process":
+            raise ValueError("demo model deployment currently requires the Compose process backend")
+        for demo_pool in ("teoria-model-training", "teoria-model-deployment"):
+            template = ProcessWorker.get_default_base_job_template()
+            try:
+                await client.read_work_pool(demo_pool)
+            except ObjectNotFound:
+                await client.create_work_pool(WorkPoolCreate(name=demo_pool, type="process",
+                    base_job_template=template, concurrency_limit=1))
+        return "teoria-model-training"
     if kind == "metadata":
         pool_name, pool_type, concurrency = "teoria-metadata", "process", 1
         template = ProcessWorker.get_default_base_job_template()
@@ -144,6 +155,7 @@ def register_deployments(
         "ingestion",
         "metadata",
         "legal-information",
+        "model-operations",
         "all",
     }:
         raise ValueError("Unsupported deployment backend or kind")
@@ -163,12 +175,13 @@ def register_deployments(
             filename = source.name
             document = yaml.safe_load(source.read_text())
             for deployment in document["deployments"]:
-                deployment["work_pool"]["name"] = pools[item]
+                if item != "model-operations":
+                    deployment["work_pool"]["name"] = pools[item]
                 if item in {"ingestion", "legal-information"}:
                     queue = deployment["work_pool"]["work_queue_name"]
                     if queue != ("laws" if item == "legal-information" else "documents"):
                         raise ValueError(f"Unconfigured ingestion queue: {queue}")
-                elif image := os.getenv("TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE"):
+                elif item == "metadata" and (image := os.getenv("TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE")):
                     deployment["parameters"]["image"] = image
             target = Path(directory) / filename
             target.write_text(yaml.safe_dump(document, allow_unicode=True))
