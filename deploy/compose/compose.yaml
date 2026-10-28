@@ -594,6 +594,7 @@ services:
 
   prefect-worker:
     <<: *pipeline-runner
+    image: ${TEORIA_SPECIFICATION_WORKER_IMAGE:-teoria-pipelines:latest}
     restart: unless-stopped
     cpus: ${TEORIA_PIPELINE_WORKER_CPUS:-4}
     mem_limit: ${TEORIA_PIPELINE_WORKER_MEMORY:-8g}
@@ -708,7 +709,7 @@ services:
   admin-api:
     cpus: 1
     mem_limit: 512m
-    image: teoria-platform-authoring:latest
+    image: ${TEORIA_ADMIN_API_IMAGE:-teoria-platform-authoring:latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -716,6 +717,7 @@ services:
     restart: unless-stopped
     command: ["teoria-admin-api"]
     environment:
+      TEORIA_SPECIFICATION_UPLOAD_ENABLED: "true"
       TEORIA_MODEL_OPERATIONS_ENABLED: ${TEORIA_MODEL_OPERATIONS_ENABLED:-false}
       TEORIA_MODEL_MLFLOW_URL: http://mlflow:5000/mlflow
       TEORIA_MODEL_PREFECT_AUTH: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
@@ -745,6 +747,8 @@ services:
       TEORIA_OPA_URL: http://opa:8181
       TEORIA_OPA_DECISION_PATH: teoria/authz/decision
     volumes:
+      - specification-inputs:/app/specification_inputs
+      - specification-artifacts:/app/specification_artifacts:ro
       - runtime-artifacts:/app/runtime_artifacts:ro
       - specification-model-auth:/home/teoria/.codex
     healthcheck:

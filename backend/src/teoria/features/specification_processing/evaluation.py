@@ -94,10 +94,12 @@ def _processor_revision():
     return processor_revision()
 
 
-def _workspace(cycle):
+def _workspace(cycle, *, allow_missing=False):
     path=Path(cycle['workspace'])
     if path.is_symlink() or path.parent.resolve()!=Path(tempfile.gettempdir()).resolve() or not path.name.startswith('teoria_specification_eval_'):
         raise ValueError('unsafe evaluation cleanup boundary')
+    if allow_missing and not path.exists():
+        return path
     marker=_json(path/'.owner.json')
     if marker!={'cycle_id':cycle['cycle_id'],'token':cycle['token']}:raise ValueError('evaluation workspace owner mismatch')
     return path
@@ -138,7 +140,9 @@ def _report(directory,state):
         if cycle.get('cycle_outcome_note'):
             lines.extend(['',cycle['cycle_outcome_note']])
         lines.append('')
-    Path(directory,'index.md').write_text('\n'.join(lines)+'\n')
+    temporary=Path(directory,'index.md.tmp')
+    temporary.write_text('\n'.join(lines)+'\n')
+    temporary.replace(Path(directory,'index.md'))
 
 def _persist_finished(directory,state,cycle):
     for _ in range(3):
@@ -151,7 +155,8 @@ def _persist_finished(directory,state,cycle):
 
 def prepare_cycle(manifest_path,directory=DEFAULT_STATE):
     manifest=EvaluationManifest.model_validate(_json(manifest_path))
-    for document in manifest.documents+manifest.regression_documents:verify_document(document)
+    for document in manifest.documents+manifest.regression_documents:
+        verify_document(document,allow_unclassified=manifest.selection_mode=='fixed_sources')
     parser_runtime=_parser_runtime(manifest.parser_python)
     with _locked(directory):
         state=_state(directory)
@@ -217,7 +222,8 @@ def _load_cycle(directory,cycle_id):
     if file_sha256(workspace/'manifest.json')!=cycle['manifest_sha256']:raise ValueError('frozen manifest changed')
     if _grader_revision()!=cycle['grader_revision']:raise ValueError('frozen evaluator changed during cycle')
     manifest=EvaluationManifest.model_validate(_json(workspace/'manifest.json'))
-    for document in manifest.documents+manifest.regression_documents:verify_document(document)
+    for document in manifest.documents+manifest.regression_documents:
+        verify_document(document,allow_unclassified=manifest.selection_mode=='fixed_sources')
     return state,cycle,workspace,manifest
 
 
@@ -323,7 +329,7 @@ async def run_variant(cycle_id,variant,directory=DEFAULT_STATE):
 
 
 def _cleanup(cycle):
-    workspace=_workspace(cycle);size=_size(workspace)
+    workspace=_workspace(cycle,allow_missing=True);size=_size(workspace)
     if _running_elsewhere(cycle):raise ValueError('interrupt the active evaluation before aborting it')
     # A hard-killed controller may leave its worker alive. Signal only recorded, unreused process IDs.
     for path in workspace.rglob('worker_pid.json'):
@@ -335,7 +341,7 @@ def _cleanup(cycle):
         deadline=time.monotonic()+15
         while _process_identity(pid)==identity and time.monotonic()<deadline:time.sleep(0.1)
         if _process_identity(pid)==identity:raise ValueError('evaluation worker has not terminated; cleanup remains pending')
-    shutil.rmtree(workspace)
+    if workspace.exists():shutil.rmtree(workspace)
     cycle['cleanup']={'status':'complete','removed_bytes':size,'retained_bytes':0}
     cycle.pop('workspace',None);cycle.pop('token',None)
 
@@ -388,6 +394,9 @@ async def finish_cycle(cycle_id,directory=DEFAULT_STATE):
             if any(results['baseline'][split]['parser_versions']!=results['candidate'][split]['parser_versions']
                    for split in results['baseline']):
                 comparison={'decision':'inconclusive','reasons':['parser_version_changed']}
+        if manifest.selection_mode=='fixed_sources' and comparison['decision']!='rejected':
+            comparison={**comparison,'decision':'inconclusive',
+                        'reasons':sorted(set(comparison['reasons']+['known_fixed_sources_not_independent_validation']))}
         if manifest.model is None:
             comparison={'decision':'inconclusive','reasons':['model_not_pinned']}
         if _processor_revision()!=cycle[revision_key]:comparison={'decision':'inconclusive','reasons':['processor_changed_during_tests']}

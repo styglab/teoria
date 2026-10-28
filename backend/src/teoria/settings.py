@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     admin_api_roles: str = "metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner"
     admin_data_database_url: str | None = None
     app_database_url: str | None = None
+    specification_upload_enabled: bool = False
     model_operations_enabled: bool = False
     model_prefect_url: str = "http://prefect-server:4200/api"
     model_prefect_auth: str = ""

@@ -5,7 +5,7 @@
 
 보관 Registry 의존을 제거하고 컴퓨터 서버의 승인 프로파일 관찰을 Data DB와
 Source·Mapping·검색/비교/원문 근거 Capability까지 연결했다.
-구현 사용법은 [서버 Capability](../procurement_specification_processing/server_capabilities.md)를 따른다.
+구현 사용법은 [서버 Capability](specification_goods_reset_2026_10_27.md)를 따른다.
 
 ## 테스트와 계약
 

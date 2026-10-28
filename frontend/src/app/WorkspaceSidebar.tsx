@@ -1,5 +1,13 @@
-import { Braces, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { Link, NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
+import {
+  AppWindow,
+  Braces,
+  ChevronDown,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { navigationItems, type NavigationItem } from "./navigation";
 
 export function WorkspaceSidebar({
@@ -13,6 +21,15 @@ export function WorkspaceSidebar({
   onToggle: () => void;
   onNavigate?: () => void;
 }) {
+  const location = useLocation();
+  const [groups, setGroups] = useState<Record<string, boolean>>({});
+  const activeGroup = navigationItems.find((item) =>
+    location.pathname.startsWith(item.path),
+  )?.group;
+  useEffect(() => {
+    if (activeGroup)
+      setGroups((previous) => ({ ...previous, [activeGroup]: true }));
+  }, [activeGroup]);
   const items = navigationItems.filter(
     (item) => !item.modelOperations || modelOperationsEnabled,
   );
@@ -26,7 +43,9 @@ export function WorkspaceSidebar({
         to={item.path}
         onClick={onNavigate}
         aria-label={item.label}
-        title={expanded ? item.description : `${item.label} · ${item.description}`}
+        title={
+          expanded ? item.description : `${item.label} · ${item.description}`
+        }
         className={({ isActive }) =>
           `workspace-nav-link ${isActive ? "active" : ""}`
         }
@@ -53,25 +72,53 @@ export function WorkspaceSidebar({
         {expanded && (
           <span>
             <strong>Teoria</strong>
-            <small>
-              {modelOperationsEnabled
-                ? "데이터·의미·모델 운영"
-                : "메타데이터·온톨로지 관리"}
-            </small>
+            <small>메타데이터·온톨로지</small>
           </span>
         )}
       </Link>
       <nav className="workspace-primary-nav" aria-label="주요 메뉴">
-        {main.map((item, index) => (
-          <div key={item.path}>
-            {expanded &&
-              item.group &&
-              main[index - 1]?.group !== item.group && (
-                <p className="workspace-nav-group">{item.group}</p>
-              )}
-            {renderLink(item)}
-          </div>
-        ))}
+        {main
+          .filter(
+            (item, index) =>
+              !["의미 모델", "모델 운영", "앱"].includes(item.group) ||
+              main.findIndex((other) => other.group === item.group) === index,
+          )
+          .map((item) => {
+            if (!["의미 모델", "모델 운영", "앱"].includes(item.group))
+              return renderLink(item);
+            const children = main.filter((other) => other.group === item.group);
+            if (!expanded)
+              return <div key={item.group}>{children.map(renderLink)}</div>;
+            const Icon = item.group === "앱" ? AppWindow : item.icon;
+            const open = Boolean(groups[item.group]);
+            return (
+              <div key={item.group} className="workspace-nav-section">
+                <button
+                  className="workspace-nav-parent"
+                  aria-expanded={open}
+                  onClick={() =>
+                    setGroups((previous) => ({
+                      ...previous,
+                      [item.group]: !open,
+                    }))
+                  }
+                >
+                  <Icon size={17} />
+                  <span>{item.group}</span>
+                  {open ? (
+                    <ChevronDown size={13} />
+                  ) : (
+                    <ChevronRight size={13} />
+                  )}
+                </button>
+                {open && (
+                  <div className="workspace-nav-children">
+                    {children.map(renderLink)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
       </nav>
       <div className="workspace-sidebar-footer">
         <nav aria-label="플랫폼 관리">

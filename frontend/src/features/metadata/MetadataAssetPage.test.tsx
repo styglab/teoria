@@ -48,6 +48,9 @@ test("copies scoped diagnosis requests without starting or applying an analysis"
  vi.stubGlobal("navigator",{clipboard:{writeText}});
  vi.spyOn(metadataApi,"metadataTable").mockResolvedValue(detail);
  render(<MemoryRouter initialEntries={["/admin/data-catalog/assets/svc.db.schema.contracts"]}><Routes><Route path="/admin/data-catalog/assets/:fqn" element={<MetadataAssetPage/>}/></Routes></MemoryRouter>);
+ await screen.findByRole("button",{name:"진단 요청"});
+ expect(screen.queryByRole("region",{name:"자산 진단"})).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole("button",{name:"진단 요청"}));
  await screen.findByRole("region",{name:"자산 진단"});
  for(const [label,skill] of [["메타데이터 정비","enrich-metadata-asset"],["업무 의미 연결","align-metadata-semantics"],["개방 적합성 진단","assess-data-disclosure"]]){
   fireEvent.click(screen.getByRole("button",{name:`${label} 요청 복사`}));

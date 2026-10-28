@@ -1,51 +1,32 @@
 # Teoria
 
-Teoria는 AI-Native Metadata & Ontology Platform이다. OpenMetadata가 데이터 자산과
-기술·거버넌스 metadata를, Teoria가 Business Ontology·Semantic Binding·Metadata
-Intelligence·Capability와 Context 실행을 담당한다. Prefect는 수집·변환·동기화를 관리한다.
-현재 활성 업무는 명시 입력 규격서의 파싱·물품 정보 추출·표준 후보 관리와 물품 Ontology 구축이다.
-법령 수집·조회는 메타데이터 진단의 근거 저장소로 운영한다.
-이전 기업·공고·계약·낙찰 분석과 조달 API 수집은 `archive/procurement_services/`에 비활성 보관한다.
+Teoria는 데이터 자산과 업무 의미를 연결하는 **AI-Native Metadata & Ontology Platform**이다.
+OpenMetadata의 데이터 자산을 탐색하고, Ontology와 의미 연결을 작성하며, AI가 만든 변경안을 검토한다.
+규격서 분석은 첫 업무 앱이다. 물품·구성품·속성·조건을 원문 근거와 함께 추출한다.
 
-```text
-규격서 → Pipelines / Prefect → 원문·추출 산출물 + Data DB 실행·참조
-                                       ↓ metadata
-                                  OpenMetadata
-                                       ↕ Semantic Binding
-AI Client → MCP / Runtime API → Capability·Context ← Ontology
-```
+## 어디서 시작하나
 
-추출 결과와 물품 Ontology·Capability의 연결은 후속 구현이다. 현재 활성 Registry는
-공통 타입만 포함하며 이전 조달 Capability를 노출하지 않는다.
+| 하려는 일 | 안내 |
+|---|---|
+| 제품과 화면 이해 | [사용 안내](docs/platform-guide.md) |
+| 규격서 처리와 Codex 사용 단계 확인 | [파이프라인](docs/procurement_specification_processing/pipeline.md) |
+| 물품·구성품·분류·속성 모델 이해 | [물품 모델](docs/architecture/specification_goods_model.md) |
+| 로컬 실행·환경 설정 | [Compose](docs/deployment/compose.md) · [환경 설정](docs/deployment/configuration.md) |
+| 개발 위치와 책임 확인 | [저장소 구조](docs/architecture/repository-structure.md) |
+| 구현 상태와 다음 작업 확인 | [로드맵](docs/roadmap.md) |
 
-## 시작
+전체 문서는 [문서 목차](docs/index.md), 실제 실행 결과는 [검증 기록](docs/verification/index.md)에서 찾는다.
 
-[시작과 역할별 작업](docs/platform-guide.md)에서 환경 설정, 스택 실행과 작업 흐름을
-확인한다. 전체 문서는 [문서 목차](docs/index.md), 시스템의 책임 경계는
-[아키텍처](docs/architecture/overview.md)를 따른다.
+## 코드 구조
 
-## 저장소 구성
+| 위치 | 내용 |
+|---|---|
+| `backend/src/teoria/` | API·업무 기능·외부 연결·Prefect 실행 |
+| `frontend/` | 관리 화면과 규격서 분석 앱 |
+| `deploy/` | Compose·K3s·Prefect 배포 설정 |
+| `docs/` | 현재 사용·설계·개발·운영 안내 |
+| `archive/` | 비활성 코드와 [과거 문서](archive/documentation/index.md) |
 
-| 위치 | 책임 | 안내 |
-|---|---|---|
-| `backend/` | 기능별 Python 백엔드·API·MCP·Prefect 실행 | [구조와 소유권](docs/architecture/repository-structure.md) |
-| `frontend/` | React 관리 UI | [UI 개발](docs/platform/admin_ui.md) |
-| `deploy/` | Prefect 배포 선언·로컬 Compose·EC2 K3s·GitHub 자동 배포 | [K3s 배포](docs/deployment/k3s.md) |
-| `docs/` | 사용·개발·운영 안내와 검증 기록 | [목차](docs/index.md) |
-
-Python 의존성의 기준은 `backend/pyproject.toml`과 `backend/uv.lock`이다.
-API·MCP·규격서·법령·메타데이터 Worker는 역할별 이미지와 권한으로 분리한다.
-OpenMetadata entity를 Teoria DB에 복제하지 않으며 MCP는 Runtime API만 호출한다.
-운영 Runtime은 게시된 Ontology·승인된 Binding·Registry를 고정한 checksum 검증 bundle을
-사용한다. 자세한 개발 규칙은 [저장소 구조](docs/architecture/repository-structure.md)를 따른다.
-
-현재 소스의 계약·작성 입력·배포 위치는 [리소스 구조 정리](docs/verification/backend_contract_structure_2026_10_26.md)를 따른다.
-현재 Compose HTTP 진입점은 [nginx 통합 배포](docs/verification/http_gateway_consolidation_2026_10_26.md), 백엔드 운영 배포는 [계약 구조 변경 재배포](docs/verification/backend_contract_structure_deployment_2026_10_26.md), 남은 기능은 [로드맵](docs/roadmap.md)을 따른다.
-
-## 자주 찾는 문서
-
-- [환경 설정](docs/deployment/configuration.md), [Compose](docs/deployment/compose.md), [EC2 K3s](docs/deployment/k3s.md), [OpenMetadata](docs/deployment/openmetadata.md)
-- [Registry 작성](docs/platform/registry/guide.md), [Ontology](docs/platform/ontology.md), [Runtime 배포](docs/platform/runtime.md)
-- [Prefect 운영](docs/pipelines/prefect.md), [배포 목록](docs/pipelines/deployments.md)
-- [Admin UI](docs/platform/admin_ui.md), [자산 진단](docs/platform/metadata/asset_assessment.md)
-- [제품 로드맵](docs/roadmap.md), [검증 기록](docs/verification/index.md)
+Python 의존성은 `backend/pyproject.toml`·`backend/uv.lock`에서 관리한다.
+API·Runtime·MCP·각 Worker는 별도 이미지와 권한을 사용한다.
+현재 구현과 후속 계획은 구분한다. 규격서 추출 결과가 자동으로 Published Ontology가 되지는 않는다.

@@ -43,19 +43,32 @@ def render_report(corpus,normalized,standard_version,candidates=None):
                 lines.append(f"| {cell(document['document_id'])} | {cell(a['property_stable_key'])} | {cell(text)} | {cell(a['operator'])} | {cell(a['role'])} / {cell(a['semantic_scope'])} | {cell(a['evidence_ref'])} |")
         lines.append('')
     for d in corpus['documents']:
-        entities={e['id']:e for e in d['entities']};children=defaultdict(list)
+        entities={e['id']:e for e in d['entities']};children=defaultdict(dict)
+        relation_labels={'in_procurement_scope':'범위','component_of':'구성','physical_part_of':'물리적 포함',
+                         'specification_for':'상세 명세','service_for':'작업'}
         for r in d['relations']:
-            if r['kind'] in {'in_procurement_scope','component_of','physical_part_of','specification_for','service_for'}:children[r['target_id']].append(r)
+            if r['kind'] in relation_labels:
+                labels=children[r['target_id']].setdefault(r['source_id'],[])
+                if relation_labels[r['kind']] not in labels:labels.append(relation_labels[r['kind']])
         lines += [f"## {cell(d['document_id'])} — {cell(d.get('extraction_status','extracted'))}",'',f"[원본]({d['source']['path']})",'','```text']
         seen=set()
-        def branch(eid,prefix='',path=frozenset()):
-            lines.append(prefix+entities[eid]['name'].replace('\n',' ').replace('`','ˋ')+f' [{eid}]');seen.add(eid)
+        def branch(eid,prefix='',path=frozenset(),labels=()):
+            label='['+'·'.join(labels)+'] ' if labels else ''
+            lines.append(prefix+label+entities[eid]['name'].replace('\n',' ').replace('`','ˋ')+f' [{eid}]');seen.add(eid)
             if eid in path:return
-            for r in children[eid]:branch(r['source_id'],prefix+'  └─ ',path|{eid})
+            for child,labels in children[eid].items():branch(child,prefix+'  └─ ',path|{eid},labels)
         if 'root' in entities:branch('root')
         for eid in entities:
             if eid not in seen:branch(eid)
-        lines += ['```','','| 대상 | 속성 | 원문 값·단위·조건 | 역할 / 범위 | 근거 |','|---|---|---|---|---|']
+        lines += ['```','']
+        if d.get('held_relations'):
+            lines+=['### 보류한 관계','','| 출발 | 관계 | 도착 | 보류 사유 | 근거 |','|---|---|---|---|---|']
+            for relation in d['held_relations']:
+                name=lambda key:entities.get(relation.get(key),{}).get('name',relation.get(key,''))
+                refs=' / '.join(e.get('native_ref',e.get('node_id','')) for e in relation.get('evidence',[]))
+                lines.append(f"| {cell(name('source_id'))} | {cell(relation['kind'])} | {cell(name('target_id'))} | {cell('; '.join(relation.get('reasons',[])))} | {cell(refs)} |")
+            lines.append('')
+        lines += ['| 대상 | 속성 | 원문 값·단위·조건 | 역할 / 범위 | 근거 |','|---|---|---|---|---|']
         for a in d['attributes']:
             subjects=', '.join(entities[e]['name'] for e in a['subject_ids']) or '대상 미확정'
             raw=f"{a['value_raw']} {a.get('unit_raw') or ''}; {a.get('operator_raw') or a['operator']}; {' / '.join(a.get('qualifiers_raw',[]))}"

@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI
+from teoria.features.specification_processing.workspace_router import create_processing_workspace_router
 from teoria.features.model_operations.admin_router import create_model_operations_router
 from teoria.features.workflow_management.admin_router import create_workflow_router
 from teoria.features.semantic_modeling.goods_dictionary.admin_router import create_goods_dictionary_router
@@ -261,6 +262,7 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
         prefect_url=services.settings.model_prefect_url, prefect_auth=services.settings.model_prefect_auth,
         mlops_enabled=services.settings.model_operations_enabled,
         inference_token=services.settings.demo_inference_token))
+    app.include_router(create_processing_workspace_router(authorizer=services.authorizer, database_url=services.settings.admin_data_database_url, uploads_enabled=services.settings.specification_upload_enabled))
     profiles = (
         NormalizationProfileService(
             services.settings.app_database_url,

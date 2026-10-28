@@ -8,4 +8,4 @@
 | 같은 키워드, 최근 90일, `all` | 0.95초 |
 
 조회 기간·차수 조건이 다르므로 직접적인 속도 비교나 전체 성능·P95의 근거로 사용하지 않는다.
-현재 계약과 후속 성능 평가 범위는 [조달 탐색 연동](../integration/procurement_exploration_contract.md)을 따른다.
+현재 계약과 후속 성능 평가 범위는 [조달 탐색 연동](../../archive/documentation/integration/procurement_exploration_contract.md)을 따른다.

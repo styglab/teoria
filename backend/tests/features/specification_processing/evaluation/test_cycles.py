@@ -300,3 +300,61 @@ def test_parser_probe_detects_same_version_source_and_dependency_changes(tmp_pat
 def test_unavailable_parser_remains_explicit_without_leaking_process_output():
     profile=ev._parser_runtime('/bin/false')
     assert profile=={'available':False,'executable':'/bin/false','error':'parser_probe_failed'}
+
+
+def test_unclassified_originals_require_explicit_fixed_source_mode(frame):
+    _,data=frame
+    for document in data['documents']+data['regression_documents']:
+        for key in ('notice_number','classification_code','classification_evidence'):
+            document.pop(key)
+    with pytest.raises(ValueError,match='classified sampling requires'):
+        EvaluationManifest.model_validate(data)
+    data.update(selection_mode='fixed_sources',classification_code=None)
+    manifest=EvaluationManifest.model_validate(data)
+    for document in manifest.documents+manifest.regression_documents:
+        with pytest.raises(ValueError,match='metadata is required'):
+            verify_document(document)
+        verify_document(document,allow_unclassified=True)
+    splits,aliases,sampling=sample_documents(manifest,{'used':data['documents']},42)
+    assert splits['development']==[d.document_id for d in manifest.documents]
+    assert splits['validation']==[] and sampling['freshness']=='known_fixed_sources'
+    assert sampling['sampled_documents']==0 and len(aliases)==7
+    # Fixed known checks cannot silently acquire a claimed classification.
+    data['classification_code']='4321150102'
+    with pytest.raises(ValueError,match='explicitly absent'):
+        EvaluationManifest.model_validate(data)
+
+
+async def test_fixed_source_finish_never_claims_independent_acceptance(frame,tmp_path,monkeypatch):
+    path,data=frame
+    for document in data['documents']+data['regression_documents']:
+        for key in ('notice_number','classification_code','classification_evidence'):document.pop(key)
+    data.update(selection_mode='fixed_sources',classification_code=None)
+    write_json(path,data);state_dir=tmp_path/'fixed_state'
+    ev.prepare_cycle(path,state_dir)
+    changed=False
+    async def execute(request,run_dir,manifest):
+        docs={d.document_id:d for d in manifest.documents+manifest.regression_documents}
+        return {'documents':[extracted(docs[d['document_id']]) for d in request['documents']]},0.01
+    monkeypatch.setattr(ev,'_execute',execute)
+    await ev.run_variant('cycle_1','baseline',state_dir)
+    monkeypatch.setattr(ev,'_processor_revision',lambda:'candidate')
+    await ev.run_variant('cycle_1','candidate',state_dir)
+    async def launch(*args,**kwargs):return 0,b'checks passed',b''
+    monkeypatch.setattr(ev,'_launch',launch)
+    result=await ev.finish_cycle('cycle_1',state_dir)
+    assert result['decision']=='inconclusive'
+    assert 'known_fixed_sources_not_independent_validation' in result['reasons']
+    assert result['cleanup']['status']=='complete'
+
+
+def test_failed_prepare_report_can_be_aborted_without_an_orphaned_cycle(frame,tmp_path,monkeypatch):
+    path,_=frame;directory=tmp_path/'failed_prepare';original=ev._report
+    def fail_report(*args):raise PermissionError('read-only existing report')
+    monkeypatch.setattr(ev,'_report',fail_report)
+    with pytest.raises(PermissionError):ev.prepare_cycle(path,directory)
+    cycle=ev._state(directory)['cycles']['cycle_1']
+    assert not Path(cycle['workspace']).exists()
+    monkeypatch.setattr(ev,'_report',original)
+    result=ev.abort_cycle('cycle_1',directory,'failed_preflight')
+    assert result['status']=='complete' and result['removed_bytes']==0

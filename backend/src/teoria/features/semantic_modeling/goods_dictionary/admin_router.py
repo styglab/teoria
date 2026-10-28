@@ -9,6 +9,7 @@ import psycopg
 from teoria.features.access_control.auth import AdminPrincipal
 from teoria.features.semantic_modeling.goods_dictionary.contracts import DictionarySubmission
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import ConceptDefinition, MappingProposal, MeaningDecision, MeaningResolution
+from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import DictionaryChangeSet
 
 
 def create_goods_dictionary_router(service, authorizer, meaning_service=None):
@@ -71,6 +72,18 @@ def create_goods_dictionary_router(service, authorizer, meaning_service=None):
     @router.post('/resolve')
     async def resolve(payload: MeaningResolution, actor: AdminPrincipal = Depends(principal)):
         return await translate(meanings().resolve(payload))
+
+    @router.get('/snapshot')
+    async def snapshot(actor: AdminPrincipal = Depends(principal)):
+        return await translate(meanings().snapshot())
+
+    @router.post('/maintenance/{operation_id}')
+    async def maintain(operation_id: str, payload: DictionaryChangeSet, actor: AdminPrincipal = Depends(principal)):
+        return await translate(meanings().apply_changes(operation_id,payload,actor=actor.actor))
+
+    @router.post('/maintenance-preview')
+    async def preview(payload: DictionaryChangeSet, actor: AdminPrincipal = Depends(principal)):
+        return await translate(meanings().preview_changes(payload))
 
     @router.post('/{kind}/{entity_id}/decisions')
     async def decide(kind: Literal['concept','mapping'], entity_id: UUID, payload: MeaningDecision,

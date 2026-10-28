@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
@@ -11,8 +11,18 @@ it("groups task navigation separately from platform administration", () => {
     </MemoryRouter>,
   );
   const primary = screen.getByRole("navigation", { name: "주요 메뉴" });
-  for (const group of ["데이터·의미", "거버넌스", "모델 운영", "워크플로"])
-    expect(within(primary).getByText(group)).toBeTruthy();
+  expect(
+    within(primary).getByRole("button", { name: "의미 모델" }),
+  ).toBeTruthy();
+  expect(
+    within(primary).getByRole("button", { name: "모델 운영" }),
+  ).toBeTruthy();
+  expect(within(primary).getByRole("link", { name: "검토함" })).toBeTruthy();
+  const apps = within(primary).getByRole("button", { name: "앱" });
+  const groups = within(primary).getAllByRole("button");
+  expect(groups.at(-1)).toBe(apps);
+  fireEvent.click(apps);
+  expect(within(primary).getByRole("link", { name: "규격서 분석" })).toBeTruthy();
   expect(
     within(primary)
       .getByRole("link", { name: "모델 레지스트리" })

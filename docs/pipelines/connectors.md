@@ -93,4 +93,4 @@ uv run --locked --project backend teoria-pipelines verify connector \
 
 - Flow·Task 작성은 [파이프라인 작성 안내](writing_pipelines.md)를 따른다. 실제 기능의 코드 배치는 [개발 안내](development.md)를 따른다.
 - 스케줄 등록·재시도는 [Prefect 운영](prefect.md)을 따른다.
-- 개찰 보강의 완료 판정은 [공공조달 수집](domains/public_procurement.md)을 따른다.
+- 개찰 보강의 완료 판정은 [공공조달 수집](../../archive/documentation/pipelines/domains/public_procurement.md)을 따른다.

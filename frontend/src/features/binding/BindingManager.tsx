@@ -7,7 +7,10 @@ import {
 } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Check, Link2, Plus, ShieldCheck, X } from "lucide-react";
-import { CatalogPagination, useCatalogPagination } from "../../components/workspace/CatalogPagination";
+import {
+  CatalogPagination,
+  useCatalogPagination,
+} from "../../components/workspace/CatalogPagination";
 import { Button } from "../../components/ui/button";
 import {
   FilterTabs,
@@ -56,7 +59,16 @@ const targetLabels: Record<string, string> = {
 };
 
 export function BindingManager() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
+  const update = (values: Record<string, string>) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete("page");
+      Object.entries(values).forEach(([k, v]) =>
+        v ? next.set(k, v) : next.delete(k),
+      );
+      return next;
+    });
   const asset = params.get("asset");
   const assetId = params.get("assetId");
   const selectedId = params.get("binding");
@@ -64,8 +76,15 @@ export function BindingManager() {
   const [items, setItems] = useState<SemanticBinding[]>([]);
   const [concepts, setConcepts] = useState<OntologyConcept[]>([]);
   const [validation, setValidation] = useState<BindingValidation | null>(null);
-  const [status, setStatus] = useState<(typeof statuses)[number]>("all");
-  const [query, setQuery] = useState("");
+  const status = (statuses as readonly string[]).includes(
+    params.get("status") || "",
+  )
+    ? (params.get("status") as (typeof statuses)[number])
+    : "all";
+  const setStatus = (status: (typeof statuses)[number]) =>
+    update({ status, binding: "" });
+  const query = params.get("q") || "";
+  const setQuery = (q: string) => update({ q, binding: "" });
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -85,7 +104,7 @@ export function BindingManager() {
     setLoading(true);
     try {
       let ids: string[] | undefined;
-      if (selectedId) ids = [selectedId];
+      if (selectedId && assetId) ids = [selectedId];
       else if (assetId) {
         const context = await metadataApi.assetContext(assetId);
         if (context.business.status !== "available")
@@ -102,6 +121,13 @@ export function BindingManager() {
           ontologyApi.ontologyConcepts(),
           bindingApi.bindingValidation(),
         ]);
+      if (
+        selectedId &&
+        !bindingResponse.items.some((item) => item.binding_id === selectedId)
+      ) {
+        const focused = await bindingApi.bindings(undefined, [selectedId]);
+        bindingResponse.items.push(...focused.items);
+      }
       setItems(bindingResponse.items);
       setConcepts(conceptResponse.items);
       setValidation(validationResponse);
@@ -169,7 +195,17 @@ export function BindingManager() {
     ),
   );
 
-  const pagination = useCatalogPagination(filtered.length, JSON.stringify([status, query.trim().toLocaleLowerCase(), assetId, selectedId]));
+  const pagination = useCatalogPagination(
+    filtered.length,
+    JSON.stringify([
+      status,
+      query.trim().toLocaleLowerCase(),
+      assetId,
+      selectedId,
+    ]),
+  );
+
+  const activeBindingId = selectedId || filtered[pagination.start]?.binding_id;
 
   return (
     <div className="binding-manager">
@@ -194,7 +230,7 @@ export function BindingManager() {
       />
       {selectedId && (
         <div className="context-banner">
-          <span>제안에서 생성된 의미 연결을 검토합니다.</span>
+          <span>선택한 의미 연결의 근거와 승인 상태를 확인합니다.</span>
           <Link to="/admin/semantic-model/bindings">모든 연결 보기</Link>
         </div>
       )}
@@ -311,107 +347,155 @@ export function BindingManager() {
         </form>
       )}
       {error && <div className="binding-error">{error}</div>}
-      <div className="binding-results" key={JSON.stringify([pagination.page, pagination.pageSize, status, query, assetId, selectedId])}>
-      <div className="binding-list">
-        {!loading &&
-          filtered.slice(pagination.start, pagination.end).map((item) => (
-            <article key={item.binding_id}>
-              <header>
-                <div className="binding-icon">
-                  <Link2 size={15} />
-                </div>
-                <div>
-                  <small>
-                    {conceptLabels[item.ontology_concept_kind] ??
-                      item.ontology_concept_kind}
-                  </small>
-                  <h3>{item.ontology_stable_key}</h3>
-                </div>
-                <b className={`binding-status ${item.status}`}>
-                  {statusLabels[item.status] ?? item.status}
-                </b>
-              </header>
-              <div className="binding-direction">
-                <span>↕</span>
-                <div>
-                  <strong>{item.fully_qualified_name}</strong>
-                  <small>
-                    OpenMetadata · {item.entity_type} ·{" "}
-                    {targetLabels[item.target_type] ?? item.target_type}
-                  </small>
-                </div>
-              </div>
-              <dl>
-                <div>
-                  <dt>연결 유형</dt>
-                  <dd>{item.binding_type}</dd>
-                </div>
-                <div>
-                  <dt>권위 수준</dt>
-                  <dd>{authorityLabels[item.authority] ?? item.authority}</dd>
-                </div>
-                <div>
-                  <dt>사용 목적</dt>
-                  <dd>{item.purpose ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt>최근 검증</dt>
-                  <dd>
-                    {item.last_verified_at
-                      ? item.last_verified_at.slice(0, 10)
-                      : "검증 기록 없음"}
-                  </dd>
-                </div>
-              </dl>
-              <footer>
-                <small>
-                  생성 {item.created_by}
-                  {item.approved_by ? ` · 승인 ${item.approved_by}` : ""}
-                </small>
-                <div>
-                  {item.status === "draft" && (
-                    <>
-                      <button
-                        disabled={busy === item.binding_id}
-                        onClick={() => review(item, "reject")}
-                      >
-                        거절
-                      </button>
-                      <button
-                        className="primary"
-                        disabled={busy === item.binding_id}
-                        onClick={() => review(item, "approve")}
-                      >
-                        <Check size={13} />
-                        승인
-                      </button>
-                    </>
-                  )}
-                  {item.status === "approved" && (
-                    <button
-                      disabled={busy === item.binding_id}
-                      onClick={() => review(item, "deprecate")}
-                    >
-                      사용 종료
-                    </button>
-                  )}
-                </div>
-              </footer>
-            </article>
-          ))}
+      <div
+        className="binding-results"
+        key={JSON.stringify([
+          pagination.page,
+          pagination.pageSize,
+          status,
+          query,
+          assetId,
+          selectedId,
+        ])}
+      >
+        <div className="binding-selection" data-selected={!!selectedId}>
+          <button
+            className="binding-mobile-back"
+            onClick={() => update({ binding: "" })}
+          >
+            ← 의미 연결 목록
+          </button>
+          <nav className="binding-selection-list" aria-label="의미 연결 목록">
+            {filtered.slice(pagination.start, pagination.end).map((item) => (
+              <button
+                type="button"
+                key={item.binding_id}
+                aria-pressed={activeBindingId === item.binding_id}
+                onClick={() =>
+                  update({
+                    binding: item.binding_id,
+                    page: String(pagination.page),
+                  })
+                }
+              >
+                <strong>{item.ontology_stable_key}</strong>
+                <span>{item.fully_qualified_name}</span>
+                <small>{statusLabels[item.status]}</small>
+              </button>
+            ))}
+          </nav>
+          <div className="binding-list">
+            {!loading &&
+              filtered
+                .filter((item) => item.binding_id === activeBindingId)
+                .map((item) => (
+                  <article key={item.binding_id}>
+                    <header>
+                      <div className="binding-icon">
+                        <Link2 size={15} />
+                      </div>
+                      <div>
+                        <small>
+                          {conceptLabels[item.ontology_concept_kind] ??
+                            item.ontology_concept_kind}
+                        </small>
+                        <h3>{item.ontology_stable_key}</h3>
+                      </div>
+                      <b className={`binding-status ${item.status}`}>
+                        {statusLabels[item.status] ?? item.status}
+                      </b>
+                    </header>
+                    <div className="binding-direction">
+                      <span>↕</span>
+                      <div>
+                        <strong>{item.fully_qualified_name}</strong>
+                        <small>
+                          OpenMetadata · {item.entity_type} ·{" "}
+                          {targetLabels[item.target_type] ?? item.target_type}
+                        </small>
+                      </div>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>연결 유형</dt>
+                        <dd>{item.binding_type}</dd>
+                      </div>
+                      <div>
+                        <dt>권위 수준</dt>
+                        <dd>
+                          {authorityLabels[item.authority] ?? item.authority}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>사용 목적</dt>
+                        <dd>{item.purpose ?? "—"}</dd>
+                      </div>
+                      <div>
+                        <dt>최근 검증</dt>
+                        <dd>
+                          {item.last_verified_at
+                            ? item.last_verified_at.slice(0, 10)
+                            : "검증 기록 없음"}
+                        </dd>
+                      </div>
+                    </dl>
+                    <footer>
+                      <small>
+                        생성 {item.created_by}
+                        {item.approved_by ? ` · 승인 ${item.approved_by}` : ""}
+                      </small>
+                      <div>
+                        {item.status === "draft" && (
+                          <>
+                            <button
+                              disabled={busy === item.binding_id}
+                              onClick={() => review(item, "reject")}
+                            >
+                              거절
+                            </button>
+                            <button
+                              className="primary"
+                              disabled={busy === item.binding_id}
+                              onClick={() => review(item, "approve")}
+                            >
+                              <Check size={13} />
+                              승인
+                            </button>
+                          </>
+                        )}
+                        {item.status === "approved" && (
+                          <button
+                            disabled={busy === item.binding_id}
+                            onClick={() => review(item, "deprecate")}
+                          >
+                            사용 종료
+                          </button>
+                        )}
+                      </div>
+                    </footer>
+                  </article>
+                ))}
+          </div>
+        </div>
+        {loading && (
+          <PageState loading title="의미 연결을 불러오고 있습니다…" />
+        )}
+        {!loading && !error && !filtered.length && (
+          <PageState
+            title={
+              query
+                ? "조건에 맞는 의미 연결이 없습니다"
+                : "해당 상태의 의미 연결이 없습니다."
+            }
+          />
+        )}
       </div>
-      {loading && <PageState loading title="의미 연결을 불러오고 있습니다…" />}
-      {!loading && !error && !filtered.length && (
-        <PageState
-          title={
-            query
-              ? "조건에 맞는 의미 연결이 없습니다"
-              : "해당 상태의 의미 연결이 없습니다."
-          }
-        />
-      )}
-      </div>
-      <CatalogPagination {...pagination} loading={loading} error={!!error} disabled={!!busy}/>
+      <CatalogPagination
+        {...pagination}
+        loading={loading}
+        error={!!error}
+        disabled={!!busy}
+      />
     </div>
   );
 }

@@ -1,4 +1,6 @@
 import "./selection_catalog.css";
+import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { ReactNode } from "react";
 import { CatalogLayout, SearchField } from "./WorkspaceLayout";
 
@@ -28,8 +30,14 @@ export function SelectionCatalog({
   footer?: ReactNode;
   children: ReactNode;
 }) {
+  const [params] = useSearchParams();
+  const [mobileDetail, setMobileDetail] = useState(() =>
+    ["run", "model", "pipeline", "service"].some((key) => params.has(key)),
+  );
   return (
-    <div className="selection-catalog">
+    <div
+      className={`selection-catalog ${mobileDetail ? "mobile-show-detail" : "mobile-show-list"}`}
+    >
       <CatalogLayout
         label={`${title} 목록`}
         sidebar={
@@ -49,7 +57,10 @@ export function SelectionCatalog({
                   type="button"
                   aria-pressed={selected === item.id}
                   className={selected === item.id ? "selected" : ""}
-                  onClick={() => onSelect(item.id)}
+                  onClick={() => {
+                    setMobileDetail(true);
+                    onSelect(item.id);
+                  }}
                 >
                   <span>
                     <strong>{item.title}</strong>
@@ -66,6 +77,12 @@ export function SelectionCatalog({
           </>
         }
       >
+        <button
+          className="selection-mobile-back"
+          onClick={() => setMobileDetail(false)}
+        >
+          ← {title} 목록
+        </button>
         {children}
       </CatalogLayout>
     </div>

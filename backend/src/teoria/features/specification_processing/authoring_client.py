@@ -54,3 +54,13 @@ class GoodsAuthoringClient:
         if not response.is_success:
             raise RuntimeError(f'dictionary meaning API returned HTTP {response.status_code}')
         return response.json()
+
+    async def dictionary_meaning(self, method, path, payload=None):
+        """Write through authenticated Admin policy and audit boundaries."""
+        try:
+            response = await self.http.request(method, '/v1/admin/goods/dictionary'+path, json=payload)
+        except httpx.HTTPError:
+            raise RuntimeError('dictionary meaning API transport failure') from None
+        if not response.is_success:
+            raise RuntimeError(f'dictionary meaning API returned HTTP {response.status_code}')
+        return response.json()

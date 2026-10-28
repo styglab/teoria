@@ -61,10 +61,10 @@ class RequirementCase(Record):
 
 
 class EvaluationDocument(SourceDocument):
-    notice_number: str = Field(min_length=1)
+    notice_number: str | None = Field(default=None,min_length=1)
     sha256: str = Field(pattern=r'^[a-f0-9]{64}$')
-    classification_code: str = Field(pattern=r'^\d{10}$')
-    classification_evidence: ClassificationEvidence
+    classification_code: str | None = Field(default=None,pattern=r'^\d{10}$')
+    classification_evidence: ClassificationEvidence | None = None
     template_family: str | None = None
     layout: Literal['table', 'prose', 'mixed', 'unknown'] = 'unknown'
     label_status: Literal['silver', 'human_reviewed'] = 'silver'
@@ -75,6 +75,9 @@ class EvaluationDocument(SourceDocument):
 
     @model_validator(mode='after')
     def unique_cases(self):
+        present=[self.notice_number is not None,self.classification_code is not None,self.classification_evidence is not None]
+        if any(present) and not all(present):
+            raise ValueError('classification requires complete notice and metadata evidence')
         aliases={}
         norm=lambda value:re.sub(r'\s+','',unicodedata.normalize('NFKC',value))
         for name,values in self.entity_aliases.items():
@@ -92,7 +95,8 @@ class EvaluationDocument(SourceDocument):
 
 class EvaluationManifest(Record):
     cycle_id: str = Field(pattern=r'^[a-z][a-z0-9_]{0,59}$')
-    classification_code: str = Field(default='4321150102', pattern=r'^\d{10}$')
+    classification_code: str | None = Field(default='4321150102', pattern=r'^\d{10}$')
+    selection_mode: Literal['classified_random','fixed_sources'] = 'classified_random'
     case_contract_version: Literal[2] = 2
     purpose: Literal['extraction_improvement','grader_calibration'] = 'extraction_improvement'
     replay_of: str | None = None
@@ -112,7 +116,13 @@ class EvaluationManifest(Record):
 
     @model_validator(mode='after')
     def unique_ids(self):
-        ids=[d.document_id for d in self.documents+self.regression_documents]
+        all_documents=self.documents+self.regression_documents
+        if self.selection_mode=='classified_random':
+            if self.classification_code is None or any(d.classification_evidence is None for d in all_documents):
+                raise ValueError('classified sampling requires classification metadata for every document')
+        elif self.classification_code is not None or any(d.classification_code is not None for d in all_documents):
+            raise ValueError('fixed source checks require explicitly absent classification')
+        ids=[d.document_id for d in all_documents]
         if len(ids)!=len(set(ids)):raise ValueError('evaluation document IDs must be unique')
         if (self.purpose=='grader_calibration')!=(self.replay_of is not None):
             raise ValueError('grader calibration requires an explicit prior-cycle replay')
@@ -144,11 +154,15 @@ def pointer(value, path):
     return value
 
 
-def verify_document(document: EvaluationDocument):
+def verify_document(document: EvaluationDocument, *, allow_unclassified=False):
     source=local_source(document)
     if source.stat().st_size>25*1024*1024:raise ValueError('source exceeds 25 MiB')
     if file_sha256(source)!=document.sha256:raise ValueError('evaluation source checksum mismatch')
     evidence=document.classification_evidence
+    if evidence is None:
+        if not allow_unclassified:
+            raise ValueError('classification metadata is required')
+        return
     if file_sha256(evidence.path)!=evidence.sha256:raise ValueError('classification evidence checksum mismatch')
     record=json.loads(evidence.path.read_text())
     if str(pointer(record,evidence.code_pointer))!=document.classification_code:
@@ -159,6 +173,17 @@ def verify_document(document: EvaluationDocument):
 
 def sample_documents(manifest: EvaluationManifest, history: dict, seed: int):
     """Union related notices/templates/bytes before excluding or assigning whole groups."""
+    if manifest.selection_mode=='fixed_sources':
+        docs=sorted(manifest.documents,key=lambda d:d.document_id)
+        all_docs=docs+manifest.regression_documents
+        if len({d.sha256 for d in all_docs})!=len(all_docs):
+            raise ValueError('fixed source checks require distinct original bytes')
+        if len(all_docs)>100:
+            raise ValueError('fixed source checks exceed 100 documents')
+        return ({'development':[d.document_id for d in docs],'validation':[],
+                 'regression':[d.document_id for d in manifest.regression_documents]},all_docs,
+                {'sampled_documents':0,'fixed_documents':len(all_docs),'independent_groups':None,
+                 'freshness':'known_fixed_sources','selection_mode':'fixed_sources'})
     docs=sorted((d for d in manifest.documents if d.classification_code==manifest.classification_code),key=lambda d:d.document_id)
     parent=list(range(len(docs)))
     def find(i):

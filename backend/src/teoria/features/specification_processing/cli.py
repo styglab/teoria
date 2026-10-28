@@ -7,6 +7,13 @@ from teoria.features.specification_processing.models import SpecificationRun
 
 
 def run_command(args):
+    if args.specification_command == 'dictionary-maintain':
+        from teoria.features.specification_processing.normalization.dictionary_maintenance import maintain_dictionary
+        result = asyncio.run(maintain_dictionary(json.loads(args.manifest.read_text())))
+        summary={key:value for key,value in result.items() if key not in {'application','artifacts'}}
+        summary['report']=next((ref['uri'] for ref in result['artifacts'] if ref['key'].endswith('/index.md')),None)
+        print(json.dumps(summary,ensure_ascii=False,indent=2))
+        return 1 if result['status']=='held' else 0
     if args.specification_command == "validate-graph":
         return _validate_graph(args)
     if args.specification_command == "standard-workflow":

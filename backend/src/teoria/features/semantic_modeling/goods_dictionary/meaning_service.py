@@ -18,6 +18,34 @@ class GoodsMeaningService:
     def __init__(self, database_url=None, *, repository=None):
         self.repository=repository or GoodsMeaningRepository(database_url)
 
+    async def snapshot(self):
+        from teoria.features.semantic_modeling.goods_dictionary.change_service import repository_snapshot
+        async with self.repository.transaction() as conn:
+            await self.repository.lock(conn)
+            return (await repository_snapshot(self.repository,conn)).model_dump(mode='json')
+
+    async def apply_changes(self, operation_id, changes, *, actor):
+        from teoria.features.semantic_modeling.goods_dictionary.change_service import apply_change_set
+        return await apply_change_set(self.repository,operation_id,changes,actor=actor)
+
+    async def preview_changes(self, changes):
+        from teoria.features.semantic_modeling.goods_dictionary.change_service import repository_snapshot, preview_change_set, validate_document_coverage
+        from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import DictionaryChangeSet
+        changes=DictionaryChangeSet.model_validate(changes)
+        async with self.repository.transaction() as conn:
+            await self.repository.lock(conn)
+            try:
+                preview = preview_change_set(await repository_snapshot(self.repository,conn),changes)
+            except ValueError as exc:
+                return {'status':'blocked','reason':str(exc)}
+            documents=await self.repository.affected_documents(conn,{r['source_entry_id'] for r in preview['impact']})
+            try:
+                validate_document_coverage(preview['impact'],changes,documents)
+            except ValueError as exc:
+                return {'status':'blocked','reason':str(exc),'affected_documents':documents}
+            return {'status':'valid','snapshot':preview['snapshot'].model_dump(mode='json'),
+                    'impact':preview['impact'],'affected_documents':documents}
+
     async def propose_concept(self, definition, *, actor):
         repo=self.repository
         async with repo.transaction() as conn:

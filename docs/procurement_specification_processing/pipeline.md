@@ -1,278 +1,164 @@
-# 규격 정보 추출과 표준 관리 파이프라인
+# 규격서 파이프라인과 Codex 사용
 
-현재 실행 코드는 `backend/src/teoria/features/specification_processing/`가 소유한다.
-`.artifacts`의 중복 실행 코드와 이전 `semantic_batch`·`semantic_ir`·`semantic_evaluation`은 삭제했다.
-과거 원본·JSON·Markdown 결과는 보존한다. 이전 코드 스냅샷을 실행 의존성으로 사용하지 않는다.
+원본 입력부터 결과 저장까지 아래 순서로 처리한다. 실행은 Prefect, 원문 해석은 파서와 Codex,
+표준관리에서는 미해결 사전 의미도 Codex가 판단한다. 검증·승인 정책·표준 적용·저장은 코드가 담당한다.
 
 ## 두 흐름과 공통 단계
 
-Ontology를 참조하는 schema v2 표준의 작성·승인·내보내기와 적용은
-[정규화 프로파일](normalization_profiles.md)을 따른다. 기존 schema v1 로컬 draft와 구분한다.
-
-| 흐름 | Prefect Flow | 표준 처리 |
+| 처리 방식 | 목적 | Prefect Flow |
 |---|---|---|
-| 표준 관리 | `procurement-standard-management` | v2 승인 프로파일 적용·근거와 문맥을 보존한 후보 묶기. 비교·Draft 생성은 Platform Admin API에서 수행. v1 호환 경로는 로컬 draft 자동 채택·보류 |
-| 문서 처리 | `procurement-document-processing` | URI와 SHA-256으로 고정한 기존 표준 적용. 표준을 수정하지 않음 |
-| 상위 표준관리 실행 | `procurement-standard-workflow` | 추출→후보→Platform 작성 API→승인 패키지 저장→동일 추출 결과에 재적용. 두 의미 판정 단계와 실패·승인 대기에서 재개 |
+| 표준관리 | 추출 표준과 의미 후보를 관리하며 처리 | `procurement-standard-management` |
+| 문서처리 | 지정한 고정 표준/프로파일로 처리 | `procurement-document-processing` |
 
-두 흐름은 같은 추출 단계를 호출한다. 사람이 개별 검토하지 않아도 끝까지 진행하지만,
-불명확한 의미·단위·귀속은 보류한다. v1 로컬 표준은 `pipeline_selected_draft`다.
-v2는 승인 패키지를 적용하며 문서 관찰은 게시 Ontology가 아니다.
-상위 실행만 별도 Platform 작성 API의 승인 상태와 연결하고 Runtime은 호출하지 않는다.
+두 방식은 같은 00–08 단계를 공유한다. 사전 전용 Flow는 없다.
 
-```text
-명시적으로 제공한 원본
-  → 00 원본 보관·체크섬 검사
-  → 01 문서 파싱: 제목·표·계층·위치 보존
-  → 02 기준 목록 → 하위 엔티티·관계 추출
-  → 03 속성·요구조건 추출 → 누락 구간 한 차례 재추출
-  → 04 대상 귀속·납품/지원/기보유 역할·범위 해석
-  → 05 표준화 전 extracted.json 저장
-  → 06–07 표준 관리 또는 고정 표준 적용
-  → 08 normalized.json을 포함한 결과를 index.md로 표시
-  → 모든 산출물 저장 성공 후 Data DB 완료 체크포인트
-```
+| 단계 | 하는 일 | Codex |
+|---|---|---|
+| **00 원본 준비** | 파일 보관·해시 확인, 지정한 checkpoint 검증 | 사용 안 함 |
+| **01 문서 파싱** | 본문·표·계층·위치 추출 | 사용 안 함 |
+| **02 물품·계층·관계 추출** | 기준 목록, 하위 대상, 구성·작업·연계 관계 해석 | **사용** |
+| **03 요구조건 추출** | 속성·값·단위·조건 분리, 누락 후보 재추출 | **사용** |
+| **04 대상·역할·범위 해석** | 어느 대상의 조건인지, 납품/지원/기보유·개별/전체 범위 해석 | **사용** |
+| **05 검증·저장** | 원문·참조·관계 유형 검사, 추출·보류 보존 | 사용 안 함 |
+| **06 사전 연결·표준 의미 작성** | 원문 등록·승인 매핑 재사용, 미해결 정의·매핑 판단과 반영 | **표준관리의 미해결 항목에 사용** |
+| **07 표준 적용** | 고정 표준/프로파일 적용, 사전 개념 연결 결과 저장 | 사용 안 함 |
+| **08 보고서 저장** | 구성 트리·속성·근거·보류 표시, 산출물 저장 후 완료 기록 | 사용 안 함 |
 
-각 행은 실제 Prefect Task 경계다. 06–07은 하나의 Task 안에서 프로파일 적용·후보 수집을 수행한다.
-기존 v1 호환 실행은 후보 수집·선택·적용을 수행하며 이 로컬 초안을 Ontology 게시로 취급하지 않는다.
-각 단계는 앞 단계의 결과를 사용한다. LLM 호출 수와 단계 수는 같지 않다.
-파서 native·청크·모델 응답·임시 그래프는 실행 임시 디렉터리에만 존재한다.
-정상 종료와 예외 종료 시 임시 디렉터리를 제거한다. Prefect 결과 본문 저장은 비활성화한다.
+Flow 코드가 [실행 순서](../../backend/src/teoria/features/specification_processing/flows.py),
+Task 코드가 [단계 경계](../../backend/src/teoria/features/specification_processing/tasks.py)의 기준이다.
 
-```text
-specification_processing/
-  cli.py                         CLI 진입점
-  flows.py                       추출·적용 Flow의 실행 순서
-  standard_workflow.py            상위 표준관리 Flow·전달 Task
-  authoring_client.py             Platform 작성 API HTTP client
-  standard_workflow_repository.py 실행 lease·산출물 참조·재개 체크포인트
-  tasks.py                       단계별 Prefect Task
-  models.py                      실행 입력·결과·표준 계약
-  # 모델 실행은 backend/src/teoria/integrations/codex/의 내부 추론 모듈 사용
-  reporting.py                   Markdown 결과 생성
-  evaluation.py                  평가 사이클 CLI·격리 실행·정리
-  evaluation_cases.py            고정 사례·분류 검증·그룹 샘플링
-  evaluation_scoring.py          독립 채점·전후 비교
-  parsing/
-    document_parser.py           외부 Parser 호출
-    document_evidence.py         문서 구조·원문 위치 변환
-  extraction/
-    entity_relation_extraction.py
-    document_context.py          절·표·상위 문맥 선택, 구성품 관계는 생성하지 않음
-    requirement_extraction.py    요구조건 추출 조립
-    attribute_chunking.py
-    attribute_extraction.py
-    attribute_resolution.py      대상·역할·범위 해석
-    attribute_validation.py      원문·누락·중복 검사
-    value_normalization.py       기본 값·단위 표현 정리
-  normalization/
-    candidate_collection.py
-    candidate_selection.py
-    standard_versioning.py
-    standard_application.py
-    server_rules.py
-  storage/
-    artifact_store.py
-    run_repository.py
-```
+## Codex를 사용하는 단계
 
-Parsing은 문서 구조를 읽고, IE(`extraction/`)는 엔티티·관계·속성·요구조건을 추출한다.
-`normalization/`은 공통 의미 연결과 draft 표준 버전을 소유한다.
-테스트는 `backend/tests/features/specification_processing/`에서
-같은 책임별 구조를 따른다. 단계 번호는 파일명 대신 Task 이름과 Flow 실행 순서에 표시한다.
+| 단계 | 호출 내용 | 검증·재시도 |
+|---|---|---|
+| 02 | 구매 기준 목록을 찾고, 이를 고정한 뒤 상세 대상·관계 추출 | 목록/관계 오류는 한 번 재판정. 관계 미해결은 보류 |
+| 03 | 원문 조각별 요구조건 추출 | 누락 후보 구간을 한 차례 추가 처리 |
+| 04 | 속성의 대상·역할·범위 판정 | 잘못된 ID·근거·응답만 한 번 재판정. 불명확하면 unknown 유지 |
+| 06 | 표준관리의 미해결 표현에 기존 개념 동등 연결 또는 새 로컬 정의 판단 | 별도 Codex 재검증과 코드 검증 통과 시 승인 정책에 따라 반영, 불명확·충돌은 보류 |
+
+한 단계가 한 번의 모델 호출이라는 뜻은 아니다. 문서 크기·구간 수·재판정에 따라 달라진다.
+Codex는 제공한 원문과 문맥으로 JSON을 반환한다. 추론 호출에서 도구·파일·네트워크·위임을 금지하고,
+코드가 스키마·원문 일치·ID·유형을 검사한다. 파이프라인 자체가 Skill을 읽어 실행하지는 않는다.
+
+모델·동시 실행·시간 제한은 실행 입력으로 지정한다. 유효한 extraction_checkpoint를 재사용하면
+01–04의 새 파싱·추론을 건너뛰므로 새 추출 품질 검증으로 표시하지 않는다.
 
 ## 엔티티·속성·관계 계약
 
-표준화 전 결과는 `extracted.json`이다. 문서별 `entities`, `relations`, `attributes`,
-파서 근거 노드와 추출 미해결 요약을 포함한다. 계층은 문서 근거가 있는 만큼 재귀적으로 표현하며
-공고 바로 아래 한 단계로 제한하지 않는다. 제목·표의 포함 구조를 물리적 BOM 포함 관계로 자동 확정하지 않는다.
-CPU·Memory는 요구조건의 대상이 될 수 있으며 별도 납품 품목 여부는 원문 근거로 판별한다.
-본체 → CPU 등의 관계를 원문 없이 사전 규칙으로 추가하지 않는다.
+### 물품과 관계
 
-속성의 원문 값·단위·연산자·한정자는 보존한다. 모델명에 붙은 ‘이상’을 문자열이나 숫자 크기 비교로
-해석하지 않는다. 대상 미확정, 원문 불일치, 누락 의심은 자동 보류하거나 문서 `partial`로 남긴다.
-파서에서 없어진 구조는 IE가 복원했다고 표시하지 않는다. OCR은 기본 실행하지 않는다.
+- 물품·구성품 외에도 소프트웨어·작업·문서·그룹을 추출한다. 대상 수가 납품 물품 수는 아니다.
+- `대상 → in_procurement_scope → 구매 범위`와 `하위 → component_of → 상위`는 다른 관계다.
+- 원문 구성 근거가 있으면 두 관계를 함께 보존한다. 단순 표·절 배치로 구성을 만들지 않는다.
+- 작업은 `activity → service_for → 작업 대상`으로 표현한다. 문서·작업을 장비 부품으로 넣지 않는다.
+- 물리적 내부 포함은 명시 근거가 있어야 한다. 수량을 상위에서 하위로 전파하지 않는다.
 
-03 단계에서 모델이 수치의 단위를 생략한 경우, 같은 원문 구절의 숫자 바로 뒤에 알려진 단위가
-명확하게 붙어 있을 때만 원문 표기로 보완한다. 모델 식별자·미지의 단위·서로 다른 단위가 붙은
-동일 수치는 추정하지 않는다. 보완된 단위도 원문 위치 검증을 거친다.
-04 단계의 최종 귀속 후 대상·속성·값·조건·역할·범위와 원문 근거가 모두 같은 관찰만 합친다.
-원문 위치나 조건이 다르면 유지하며, 합친 관찰의 원래 ID와 추출 대상은 `merged_observations`에 보존한다.
-추가 산출물 파일은 만들지 않는다.
+잘못된 관계를 코드가 임의로 뒤집지는 않는다. 재판정 후에도 해결되지 않은 관계,
+불확실한 동일 대상·유형·순환은 `held_relations`에 원래 방향·근거·사유를 남긴다.
+엔티티·속성은 유지한다. 기존 checkpoint의 잘못된 작업/구성 유형은 재추출을 요구한다.
 
-04 단계의 응답은 속성별로 검증한다. 정상 판단은 보존하고, 누락·중복 ID·잘못된 대상·근거·스키마가
-있는 속성만 한 차례 재판정한다. 재판정에도 실패한 속성만 미분류로 남긴다. 원문상 불명확하여
-유효하게 `unknown`을 반환한 판단은 재시도하지 않는다. 기존 `semantic_resolution` 요약의
-`retried_attributes`는 재판정 요청 수, `recovered_attributes`는 재판정에서 유효한 응답을 받은 수다.
-후자는 `unknown`도 포함할 수 있으므로 의미 귀속 성공률로 해석하지 않는다.
+### 속성과 근거
 
-03 단계의 원문 조각과 누락 재추출은 절·표의 `context_group`을 보존하며, 작은 구간들은 기존
-글자 수 범위 안에서 한 모델 호출로 묶는다. 번호가 있는 절·하위 절은 원문 표현으로 구분한다.
-문단 번호는 문맥 선택용이며 제품·BOM 관계의
-근거로 자동 승격하지 않는다. 표는 `source_table_id`가 없더라도 파서의 셀→표 부모 연결을 사용하고,
-중첩 문단·병합 셀을 따라 같은 행의 항목명과 첫 행의 열 머리글을 보존한다.
+원문 값·단위·연산·한정 조건을 보존한다. 모델명·기보유 제품·지원 한도를 신규 납품 성능으로 바꾸지 않는다.
+수치 단위 보완은 같은 구절의 값 바로 뒤에 명확히 붙은 알려진 단위만 사용한다.
+최종 귀속 후 대상·값·조건·역할·범위·원문 근거가 모두 같은 관찰만 합치고 원래 ID를 남긴다.
+다른 위치의 반복 진술이나 상충 조건은 보존한다.
 
-03 단계는 `context_nodes`에 선택한 원문 노드를 한 번씩 보내고, `node_context`에는 조각별
-참조 ID만 둔다. 보조 문맥은 가까운 문장·절 제목·같은 표 행과 머리글에서 최대 8개 노드,
-노드당 원문 앞부분 1,000자로 제한한다. 이는 보조 문맥의 상한이며 추출 대상 원문 조각은
-자르거나 버리지 않는다. 공통 머리글·상위 문장을 조각마다 반복 전송하지 않는다.
+03·04는 절·표·상위 문맥을 선택해 전달한다. 전체 원문을 처음부터 품목명 목록으로 걸러내지는 않는다.
+파서에서 사라진 정보는 추출기가 복원했다고 표시하지 않는다. 기본 파싱은 OCR을 사용하지 않는다.
 
-04 단계는 절·표별로 속성을 모아 정렬한 후 최대 45개씩 호출한다. 작은 절이나 표의 행마다
-별도 호출하지 않으며, 한 호출에 여러 구간이 있어도 속성별 `context_group`을 유지한다.
-해당 절·표 행, 상위 절의 공통 문장,
-엔티티의 상위 관계와 원문 명칭, IE가 대상·상위 대상에 명시적으로 연결한 공통 조건을 전달한다.
-전체 엔티티 ID·관계 골격은 유지하여 최초 귀속이 틀려도 다른 대상으로 수정할 수 있다.
-재판정도 실패한 속성에 필요한 문맥을 다시 선택하며, 응답 근거는 실제 전달한 노드에서만 허용한다.
-절·표·부모 경계가 없는 원문은 전체 문서 문맥을 유지한다. 02 단계의 엔티티·관계 추출은 여전히
-전체 문서를 사용하여 문서 전반의 연결을 찾는다.
+## 사전과 표준 적용
 
-`semantic_resolution`의 `batches`는 최초 속성 묶음 수, `input_nodes`·`input_characters`는 재판정을
-포함해 전달한 원문 노드 수·글자 수의 합이다. 프롬프트·엔티티 골격·출력 스키마의 크기나 실제
-토큰 비용·지연시간을 나타내지 않는다. 원문 전달 보존과 문맥 축소 검사는 LLM 추출 정확도 평가와 구분한다.
+06 단계는 원문에 나온 표현을 조회·등록하고, 승인된 의미 매핑이 있으면 표준 정의를 가져온다.
+원문 명칭이 없는 속성은 내부 영문 후보명을 원문 표현처럼 등록하지 않는다.
+새 동의어·표준 의미를 이름 유사도만으로 확정하지 않는다.
+
+표준관리 모드에서는 미해결 물품 유형부터 Codex가 판단하고, 승인된 물품 유형을 소유자로 속성을 판단한다.
+기존 정의 동등 매핑 또는 새 로컬 정의를 별도 Codex 호출로 재검증한다. 근거·유형·적용 대상·값 유형·단위 검사를 통과하면
+`dictionary_meaning_auto_approve: true`(기본값)에 따라 인증된 Admin API로 정의와 매핑을 승인한다.
+같은 실행에서 승인 매핑을 다시 조회해 07 결과에 적용한다. `false`이면 제안만 저장하며 새 정의의 승인이 필요한 속성은 보류한다.
+문서처리 모드는 이 의미 작성 경로를 실행하지 않는다. 승인 주체·판정 사유는 Admin 감사 이력에 남고 Published Ontology는 바꾸지 않는다.
+
+07 단계는 다음 두 연결을 구분해 저장한다.
+
+| 연결 | 결과 |
+|---|---|
+| 사전의 승인된 개념 매핑 | `dictionary_meanings`, `dictionary_concept_ref`, 정의 개정·매핑 ID |
+| 고정 표준/프로파일 적용 | 표준 버전·URI·checksum과 관찰별 적용/보류 |
+
+사전 개념 ID와 Published Ontology Stable Concept ID는 다르다.
+기본 `source_only`는 미확정 의미를 후보로 남긴다. 분류값만으로 분야 규칙을 켜지 않는다.
+과거 `server` 규칙은 명시적인 호환 설정이며 현재 운영 물품 사전이나 활성 서버 Capability를 뜻하지 않는다.
+상세 내용은 [사전](../platform/goods_dictionary.md)과 [프로파일](normalization_profiles.md)을 따른다.
+
+여러 실행의 기존 extracted.json을 모은 초기 사전 구축·개정은 기존 06 단계의 `dictionary_reconcile` 옵션 또는 사전 안내의 `dictionary-maintain` 명령을 사용한다.
+개정과 영향 매핑을 함께 검증·반영하고 사전 스냅샷을 내보낸다. 문서처리는 `dictionary_standard` URI·checksum으로 사전 버전까지 고정할 수 있다.
 
 ## 저장 위치와 최소 산출물
 
-`artifact_root`는 실행 코드와 독립된 `file://` 또는 `s3://` 위치다.
+| 산출물 | 내용 |
+|---|---|
+| `sources/` | 원본 파일 |
+| `extracted.json` | 표준화 전 대상·관계·속성·원문·보류 |
+| `dictionary_candidates.json` | 원문 표현 등록 후보와 근거 |
+| `dictionary_bindings.json` | 등록·재사용·보류 판정 |
+| `dictionary_semantic_decisions.json` | Codex 정의·매핑 판단, 재검증·자동 승인/제안/보류와 ID |
+| `source_term_alignment.json` | 원문 등록과 표준 개념 연결 |
+| `meaning_candidates.json` | 표준관리의 미해결 의미 후보 |
+| `normalized.json` | 고정 표준 적용과 사전 연결 결과 |
+| `index.md` | 사람이 보는 트리·속성·근거·보류 보고서 |
 
-```text
-<artifact_root>/specification_processing/
-  <run_id>/
-    sources/                  원본 문서
-    extracted.json            표준화 전 엔티티·관계·속성·원문 근거
-    meaning_candidates.json   표준 관리 흐름에서만 생성
-    normalized.json           표준 버전 참조·관측별 매핑/보류 결과
-    index.md                  사람이 읽는 구성 트리·속성 결과
-  standards/<version>/
-    standard.json             정의·문맥별 매핑 규칙을 가진 독립 버전
-```
+본문은 `<artifact_root>/specification_processing/<run_id>/`의 파일/S3에 저장한다.
+표준관리의 로컬 표준 초안은 `standards/<version>/standard.json`에 별도로 저장한다.
+Data DB에는 실행·문서별 요약·URI·checksum만 저장한다. [저장소 기준](../pipelines/database.md)을 따른다.
 
-문서 처리 흐름은 후보 파일과 새 표준을 만들지 않는다. 원시 모델 응답·청크·로그·코드 복사본·HTML은
-영구 산출물로 저장하지 않는다. 원문 근거는 추적용 별도 파일 대신 핵심 JSON 안에 둔다.
-객체 키는 불변이다. 같은 바이트 재저장은 허용하고 다른 내용 덮어쓰기는 거부한다.
-S3는 조건부 PUT과 체크섬을 사용하며 HTTP는 native async로 실행한다.
-
-Data DB에는 아래 세 테이블의 실행 메타데이터만 저장한다. 원문·그래프·속성 본문은 복제하지 않는다.
-
-- `public_procurement.specification_processing_runs`: 입력·처리 코드 식별, 상태, 표준 참조, 요약
-- `public_procurement.specification_processing_artifacts`: URI·SHA-256·크기·미디어 유형
-- `public_procurement.specification_processing_documents`: 문서별 원본 해시·상태·개수·품질 요약
-
-새 migration은 `090_specification_processing_runs.sql`, `091_specification_processing_schema_usage.sql`이다.
-원본과 최종 산출물 저장이 모두 성공한 뒤에만 완료/부분완료 상태를 기록한다.
-같은 입력·코드의 완료 실행은 DB 결과를 반환한다. 같은 run ID에 다른 입력·코드는 거부한다.
-실패 후에는 이미 보관한 원본·`extracted.json`을 검증해 재사용할 수 있다.
-외부 추출 재사용도 `extraction_checkpoint`의 URI·SHA-256과 문서 집합·원본 해시·근거 검사를 통과해야 한다.
+다른 내용으로 같은 객체 키를 덮어쓰지 않는다. 모든 산출물 저장 후 완료/부분완료 상태를 기록한다.
+파서 native·청크·원시 모델 응답은 임시 디렉터리에서 처리 후 정리한다. 일반 실행의 최종 산출물은 보존한다.
 
 ## 실행 방법
 
-필수 환경은 Pipeline Data DB, Prefect 실행 환경, Codex CLI 인증, Kory Parser가 설치된 Python이다.
-파서는 `parser_python` 또는 `TEORIA_SPECIFICATION_PARSER_PYTHON`으로 지정한다.
-설정하지 않으면 현재 Python을 사용한다. 아카이브 경로나 실험 venv를 실행 코드에 고정하지 않는다.
-현재 기본 Worker 이미지에 파서·Codex 설치와 신규 Flow 배포·스케줄은 추가하지 않았다.
-
-| 설정 | 용도 |
-|---|---|
-| `TEORIA_PIPELINE_DATA_DATABASE_URL` | 소유 프로젝트의 async Data DB 연결 |
-| `TEORIA_SPECIFICATION_PARSER_PYTHON` | Kory Parser 실행 Python |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | S3 인증 환경변수 |
-| `AWS_SESSION_TOKEN`, `AWS_REGION` | 임시 토큰·리전, 필요 시 지정 |
-| `TEORIA_SPECIFICATION_S3_ENDPOINT` | MinIO 등 S3 호환 endpoint, 선택 |
-
-예시 manifest의 경로는 실제 원본과 저장소에 맞춰 바꾼다.
+화면에서는 [규격서 분석](../platform/admin_ui.md)을 사용한다. CLI는 다음과 같다.
+실행 전에 Data DB·Prefect·Codex 인증·파서 Python·Admin 작성 API를 [환경 설정](../deployment/configuration.md)대로 준비한다.
 
 ```json
 {
-  "run_id": "server_standard_01",
+  "run_id": "specification_example_01",
   "mode": "standard_management",
-  "classification_code": "4321150102",
-  "artifact_root": "file:///workspace/.artifacts/specification_store",
-  "documents": [
-    {
-      "document_id": "server_01",
-      "source_uri": "file:///data/server_specification.hwpx",
-      "filename": "server_specification.hwpx"
-    }
-  ]
+  "model": "gpt-6.1-sol",
+  "model_timeout_seconds": 600,
+  "artifact_root": "file:///app/specification_artifacts",
+  "documents": [{
+    "document_id": "equipment_01",
+    "source_uri": "file:///app/specification_inputs/equipment.hwpx",
+    "filename": "equipment.hwpx"
+  }]
 }
 ```
 
 ```bash
-uv run --locked --project backend teoria-pipelines specification run --manifest /data/specification_run.json
+uv run --project backend --locked --group orchestration \
+  teoria-pipelines specification run --manifest /data/run.json
 ```
 
-`mode: document_processing`은 `standard`에 실제 표준 파일의 URI와 SHA-256을 지정해야 한다.
-표준 관리도 선택적으로 기준 표준을 입력한다. 기준이 없으면 `rule_set: source_only`인 빈 초안으로 시작한다.
+컨테이너 실행에서는 컨테이너가 읽을 수 있는 경로를 사용한다.
+분류가 없으면 생략하고, 있으면 검증된 10자리 값을 `classification_code`로 지정한다.
+`document_processing`에는 `standard.uri`와 파일 전체의 `standard.sha256`이 필수다.
+입력·코드가 달라지면 새 run_id를 사용한다. 저장된 실행의 다른 내용 덮어쓰기는 거부한다.
 
-## 분야 규칙의 명시적 선택
+## 선택적인 상위 표준 작성
 
-기본 추출은 서버 사전과 독립적이다. 엔티티·관계·속성 프롬프트는 원문 구조·의미를 사용하며,
-누락 재추출 신호도 특정 부품명 목록 대신 수치·단위·요구 표현을 사용한다. 이 신호는 누락 후보를
-찾는 보조 검사이며, 신호에 잡히지 않는 원문도 최초 추출에는 모두 전달한다.
-
-표준의 `rule_set`이 적용할 규칙을 결정한다. 실행 manifest의 서버 분류번호만으로 서버 규칙을 켜지 않는다.
-
-| 표준 설정 | 처리 |
-|---|---|
-| 생략 또는 `source_only` | 원문 대상 종류·명칭, 속성 표현, 역할·적용 범위·단위별로 후보를 보존. 미확정 의미는 자동 보류 |
-| `server` | 컴퓨터 서버 분류 `4321150102`에서만 `server_rules.py`의 유형·동의어·채택·값 처리 규칙 사용 |
-
-기본 모드의 `equipment:압력 펌프` 같은 문맥 키는 원문 관측을 묶는 키다. 공통 Ontology 유형이나
-동의어가 확정됐다는 뜻이 아니다. 다른 품목의 이름을 CPU·메모리·네트워크 유형으로 강제 분류하지 않는다.
-새로운 속성명도 모두 `meaning_candidates.json`에 남긴다. 기준 표준과 의미 판정이 없으면 자동으로
-새 의미 정의를 확정하지 않는다. 이 경우 초안이 비어 있거나 보류율이 높을 수 있으며 실행은 계속 완료한다.
-
-기존에 명시적으로 구성한 일반 표준은 `rule_kind: source_literal`로 원문 조건을 연결할 수 있다.
-값·단위·연산 표현·한정자가 원문에 있는지 확인하고 원문 상태로 보존하며 숫자 비교를 완료했다고 표시하지 않는다.
-매핑 문맥에는 대상·속성·단위·자료형·역할뿐 아니라 `semantic_scope`도 포함한다.
-개별 구성품과 시스템 전체, 납품 요구와 지원 능력을 자동으로 같은 의미에 연결하지 않는다.
-
-서버 규칙을 사용하려면 다음과 같은 **새 표준 초안**을 파일로 제공하고 그 URI·해시를 manifest에 고정한다.
-
-```json
-{
-  "schema_version": 1,
-  "version": "server_seed_v1",
-  "classification_code": "4321150102",
-  "rule_set": "server",
-  "definitions": [],
-  "bindings": []
-}
-```
-
-서버 규칙의 `server_literal`·`typed_definition`·`source_constraint` 바인딩은 명시적 서버 설정이 없으면
-입력 검증에서 거부한다. 기존 실험 표준 파일에 새 설정을 추측해 붙이거나 기존 버전을 덮어쓰지 않는다.
-재사용이 필요하면 설정과 적용 범위를 확인한 새 버전·체크섬을 만든다. 일회성 과거 데이터 반입 명령은 제거했다.
-
-## 개선 평가 실행
-
-스킬 사용법과 `prepare → baseline → candidate → finish` 실행 절차는
-[규격서 추출 개선 평가](evaluation.md)를 따른다.
+`procurement-standard-workflow`는 기존 처리와 Admin 작성 API를 연결하는 상위 조립이다.
+새 문서 처리 방식이 아니며 승인된 기준 프로파일이 필요하다.
+이 경로를 명시적으로 실행하면 Admin API의 의미 제안에서도 Codex를 사용한다.
+일반 06 사전 조회·07 표준 적용 자체의 모델 호출과 혼동하지 않는다.
+[프로파일·상위 작성 절차](normalization_profiles.md)를 따른다.
 
 ## 검증 범위와 남은 한계
 
-반복 개선에는 [규격서 처리 개선 Skill](../../.agents/skills/improve_specification_processing/SKILL.md)을 사용한다.
-한 사이클의 원문 대조·회귀 확인·보고가 끝나면 평가용 중간·최종 산출물과 임시 Prefect 상태를 정리한다. 평가 Flow는 DB를 사용하지 않는다.
-입력 원본·기준 표준·코드·필요한 회귀 사례와 누적 `state.json`·`index.md`만 남긴다.
-이 정리 정책은 개선 실험에 적용하며 일반 실행의 영구 산출물 저장 계약을 바꾸지 않는다.
+실행 완료, 원문 적합성, 업무 의미 정확도는 구분한다. Prefect Completed여도 문서는 partial일 수 있다.
+현재 원본 처리와 Worker 반영은 [운영 검증](../verification/goods_relation_deployment_2026_10_28.md),
+고정 원본 비교의 한계는 [평가 기록](../verification/goods_relation_repair_2026_10_28.md)에 있다.
+별칭·동일 대상·조건 귀속·표준 의미 확대와 새 물품 Runtime 연결은 후속이다.
 
-격리된 실제 PostgreSQL·MinIO·Prefect에서 객체 저장 → 완료 체크포인트, 완료 실행 재호출,
-저장 실패 → 추출 재사용 재개, 별도 draft 표준 저장을 검증했다.
-운영 DB migration 적용이나 운영 S3·Worker 배포 완료를 뜻하지 않는다.
-서버 규칙의 명시적 선택, 비서버 압력 요구조건의 후보 보존·원문 매핑·누락 재추출, 적용 범위 혼용 방지를 회귀 테스트로 검증한다.
-이는 실제 여러 품목 규격서의 LLM 추출 정확도 측정이 아니다. 추출 재현율·관계 정확도의 독립 정답 평가는 별도 과제이며 저장 통합 검증으로 대체하지 않는다.
-자동 첨부 수집·참가자격 판단은 계속 제공하지 않는다. 공고·계약 수집은 유지한다. 과거 검색 평가·Harness2 실험 코드와 전용 의존성은 삭제했다.
-
-## 서버 표준 관리 1차 실행
-
-아래는 이전 실험 당시의 관측이다. 새 Flow로 모든 문서를 재추출한 수치가 아니다.
-
-| 보존 결과 | 당시 관측 |
-|---|---|
-| 서버 기준 실행 (`run_01`, 과거 산출물 삭제) | 공고 20건·원본 21개 중 19개 추출. 엔티티 870개·관계 931개·속성 1,851개. 서버 15개 중심, 정의 112개 |
-| 수정 전 새 5건 (`holdout_01`, 과거 산출물 삭제) | 4개 추출·1개 실패, 속성 62개 중 매핑 11개·보류 51개 |
-| IE 수정 후 동일 5건 (`holdout_repaired_01`, 과거 산출물 삭제) | 5개 추출, 속성 463개 중 매핑 82개·보류 381개, 문서 부분완료 2개 |
-| 추가 미사용 2건 (`holdout_new_01`, 과거 산출물 삭제) | 속성 133개 중 매핑 28개·보류 105개, 문서 부분완료 1개 |
-
-네 샘플의 과거 IE 산출물은 현재 삭제되어 제공하지 않는다.
-AI 검토 후보는 사람이 확정한 오류 정답이 아니며 높은 보류율과 남은 계층·누락 문제를
-추출·관계·정규화 품질 개선의 입력으로 사용한다.
+추출 개선은 [평가 절차](evaluation.md)를 따른다. 자동 공고 첨부 수집·참가자격 판단은 연결하지 않는다.
+이전 실행 설계는 [보관 기록](../../archive/documentation/procurement_specification_processing/pipeline_2026_10_27.md)에서만 확인한다.

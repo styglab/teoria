@@ -47,6 +47,11 @@ def validate_checkpoint(corpus,request,source_items):
         ids={e['id'] for e in d['entities']};nodes={n['node_id'] for n in d['parsed_document']['nodes']}
         if len(ids)!=len(d['entities']):raise ValueError('duplicate entity ID')
         if any(r['source_id'] not in ids or r['target_id'] not in ids for r in d['relations']):raise ValueError('invalid relation')
+        from teoria.features.specification_processing.extraction.entity_relation_extraction import relation_type_errors
+        kinds={e['id']:e.get('kind') for e in d['entities']}
+        for relation in d['relations']:
+            errors=relation_type_errors(relation['kind'],kinds[relation['source_id']],kinds[relation['target_id']])
+            if errors:raise ValueError('invalid relation type: '+'; '.join(errors))
         attribute_ids=set()
         for a in d['attributes']:
             if a['id'] in attribute_ids or not set(a['subject_ids'])<=ids:raise ValueError('invalid attribute ID or subject')
@@ -158,11 +163,12 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                 row['evidence']={k:v for k,v in a['evidence'].items() if k!='quote'};attributes.append(row)
             documents.append({**common,'classification_code':request.classification_code,'parsed_document':context,
                 'parser':{'name':'kory_parser','version':context['parser_version'],'ocr':False},
-                'entities':graph['entities'],'relations':graph['relations'],'inventory_ids':graph.get('inventory_ids',[]),
+                'entities':graph['entities'],'relations':graph['relations'],'held_relations':graph.get('held_relations',[]),'inventory_ids':graph.get('inventory_ids',[]),
                 'declared_quantities':graph.get('declared_quantities',[]),'attributes':attributes,
-                'extraction_status':'partial' if summary['status']=='partial' else 'extracted',
+                'extraction_status':'partial' if summary['status']=='partial' or graph.get('held_relations') else 'extracted',
                 'attribute_input_coverage':summary['input_coverage'],
-                'unresolved_extraction':{k:summary[k] for k in ['failed_chunks','uncovered_spec_fragments','semantic_resolution','recovery_passes']}})
+                'unresolved_extraction':{**{k:summary[k] for k in ['failed_chunks','uncovered_spec_fragments','semantic_resolution','recovery_passes']},
+                                         'held_relations':len(graph.get('held_relations',[]))}})
         corpus={'schema_version':'specification_extraction_v1','classification_code':request.classification_code,'documents':documents,'unavailable_documents':failed,
             'extraction_policy':'all_text_nodes_forwarded_with_bounded_recovery_and_semantic_resolution'}
     validate_checkpoint(corpus,request,items)
@@ -173,7 +179,18 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
 @task(name='06 원문 표현 조회·자동 등록·재사용',**TASK_OPTIONS)
 async def resolve_dictionary(request:SpecificationRun,workspace:str,extraction_ref:dict):
     from teoria.features.specification_processing.normalization.dictionary_alignment import align_dictionary
-    return await align_dictionary(request,await load(Path(workspace)/'extracted.json'),extraction_ref)
+    maintenance=None
+    if request.dictionary_reconcile:
+        from teoria.features.specification_processing.normalization.dictionary_maintenance import maintain_dictionary
+        maintenance=await maintain_dictionary({
+            'batch_id':'run_'+request.run_id[:40]+'_'+hashlib.sha256(request.run_id.encode()).hexdigest()[:8],
+            'artifact_root':request.artifact_root,'model':request.model,
+            'classification_code':request.classification_code,'model_timeout_seconds':request.model_timeout_seconds,
+            'auto_apply':request.dictionary_meaning_auto_approve,
+            'extractions':[{'uri':extraction_ref['uri'],'sha256':extraction_ref['sha256']},
+                           *[r.model_dump(mode='json') for r in request.dictionary_corpus]],
+            'validation_extractions':[r.model_dump(mode='json') for r in request.dictionary_validation_corpus]})
+    return await align_dictionary(request,await load(Path(workspace)/'extracted.json'),extraction_ref,maintenance=maintenance)
 
 
 def attach_source_term_alignment(normalized,dictionary):

@@ -208,6 +208,10 @@ def main() -> int:
         "run", help="execute a specification Prefect flow"
     )
     specification_run.add_argument("--manifest", required=True, type=Path)
+    specification_dictionary = specification_subparsers.add_parser(
+        "dictionary-maintain", help="reconcile existing extraction corpora and export a versioned dictionary"
+    )
+    specification_dictionary.add_argument("--manifest", required=True, type=Path)
     specification_graph = specification_subparsers.add_parser(
         "validate-graph", help="validate proposed document goods graphs without requiring classification"
     )

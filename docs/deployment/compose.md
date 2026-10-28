@@ -77,6 +77,24 @@ Application DB에는 `017` 물품 프로파일·`018` 관계 설명·`019` 의�
 기존 수집 pool과 배포는 일시정지를 유지하고 과거 실행·checkpoint를 지우지 않는다.
 규격서 배포는 cron 없이 manifest를 받는다. [배포 목록](../pipelines/deployments.md)을 확인한다.
 
+## 규격서 Worker 이미지 선택
+
+`TEORIA_SPECIFICATION_WORKER_IMAGE`는 prefect-worker 이미지에만 적용한다. 기본값은
+`teoria-pipelines:latest`다. 특정 릴리스를 유지하려면 로컬 `deploy/compose/.env`에서 지정한다.
+각 릴리스는 별도 태그를 사용하고 변경한 Worker만 재생성한다.
+
+```bash
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml up -d --no-deps --no-build prefect-worker
+```
+
+기존 법령·메타데이터·모델 Worker의 이미지를 함께 변경하지 않는다. 실행 중인 규격서 작업이 없을 때 교체하고,
+이전 이미지·볼륨·환경을 보존한다. [구성 관계 수정 배포](../verification/goods_relation_deployment_2026_10_28.md)는
+실제 원본 처리를 확인했다. 후속 [사전 의미 자동 승인 배포](../verification/goods_dictionary_deployment_2026_10_28.md)는
+새 Worker heartbeat와 기존 원문 추출 부분집합의 실제 Codex·Admin API 승인·결과 저장을 확인했다.
+
+Admin HTTP만 별도 반영할 때는 `TEORIA_ADMIN_API_IMAGE`에 릴리스 태그를 지정하고
+`admin-api`만 재생성한다. 다른 authoring 역할 이미지에는 이 변수를 적용하지 않는다.
+
 ## 법령 기능 배포
 
 `prefect-law-worker`는 parser·모델 CLI를 설치하지 않는 `law-worker` 이미지다.

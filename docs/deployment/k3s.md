@@ -225,7 +225,7 @@ Control Plane HA는 CPU·GPU agent 추가와 별개의 datastore·server 구성 
 [영속 스토리지](https://docs.k3s.io/add-ons/storage),
 [GHCR 인증](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
-기존 [scaffold 안내 주소](experimental_k3s.md)는 문서 링크 호환을 위해 새 안내를 가리킨다.
+기존 [scaffold 안내 주소](k3s.md)는 문서 링크 호환을 위해 새 안내를 가리킨다.
 
 
 ## HTTP 진입점

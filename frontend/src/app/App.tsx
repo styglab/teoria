@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Menu } from "lucide-react";
 import {
   Navigate,
+  Link,
   Route,
   Routes,
   useLocation,
@@ -30,7 +31,8 @@ import { SuggestionReview } from "../features/intelligence/SuggestionReview";
 import { MetadataExplorer } from "../features/metadata/MetadataExplorer";
 import { MetadataAssetPage } from "../features/metadata/MetadataAssetPage";
 import { Overview, OperationsSettings } from "../features/overview/Overview";
-import { GovernanceOverview } from "../features/governance/GovernanceOverview";
+import { ReviewInbox } from "../features/intelligence/ReviewInbox";
+import { SpecificationWorkspace } from "../features/specification_processing/SpecificationWorkspace";
 import {
   AdminAccess,
   AdminAccessProvider,
@@ -79,6 +81,7 @@ function AdminWorkspace() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!location.pathname.startsWith("/admin/developer/capabilities")) return;
     const requests = [
       {
         label: "기능",
@@ -122,7 +125,7 @@ function AdminWorkspace() {
           );
       },
     );
-  }, []);
+  }, [location.pathname]);
 
   const current = currentNavigation(location.pathname);
   const wideSidebar = sidebarOpen && !compact;
@@ -157,10 +160,21 @@ function AdminWorkspace() {
           >
             <Menu size={17} />
           </button>
-          <div>
-            <p>{current.group || "Teoria"}</p>
-            <h1>{current.label}</h1>
-          </div>
+          <nav className="workspace-location" aria-label="현재 위치">
+            <Link to="/admin/overview">홈</Link>
+            {current.path !== "/admin/overview" && (
+              <>
+                <span aria-hidden="true">/</span>
+                {["의미 모델", "모델 운영"].includes(current.group) && (
+                  <>
+                    <span>{current.group}</span>
+                    <span aria-hidden="true">/</span>
+                  </>
+                )}
+                <span aria-current="page">{current.label}</span>
+              </>
+            )}
+          </nav>
         </div>
         {current.path === "/admin/developer/capabilities" && (
           <div className="workspace-contract-status flex items-center gap-2 pr-48">
@@ -200,8 +214,18 @@ function AdminWorkspace() {
             path="/admin/governance"
             element={
               <WorkspaceFrame>
-                <GovernanceOverview />
+                <Navigate to="/admin/data-catalog?filter=description" replace />
               </WorkspaceFrame>
+            }
+          />
+          <Route
+            path="/admin/specifications"
+            element={
+              <AdminAccess>
+                <WorkspaceFrame>
+                  <SpecificationWorkspace />
+                </WorkspaceFrame>
+              </AdminAccess>
             }
           />
           <Route
@@ -291,7 +315,7 @@ function AdminWorkspace() {
             element={
               <AdminAccess>
                 <WorkspaceFrame>
-                  <SuggestionReview />
+                  <ReviewInbox />
                 </WorkspaceFrame>
               </AdminAccess>
             }

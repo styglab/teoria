@@ -62,9 +62,13 @@ additional=[새 고유 ID, 근거 node, 원문 명칭] 목록. 문서에 명시�
 types 각 배열=[ID,equipment/software/activity/group/document/unknown,existing/required/unknown]. root와 모든 items 및 additional ID를 정확히 한 번 분류한다.
 relations=[출발 ID,도착 ID,관계,explicit/interpreted/ambiguous,근거 node 목록]. specification_for/component_of/physical_part_of는 하위→상위다.
 component_of는 원문의 일반 구성, physical_part_of는 물리적 내부 장착이 직접 명시된 경우만 사용한다.
-service_for는 작업→작업대상, sends_data_to는 발신→수신이다. 수치 속성을 구성품으로 만들지 않는다.
+service_for는 activity로 분류한 작업→작업대상이다. 장비→작업으로 뒤집지 않는다. sends_data_to는 발신→수신이다. 수치 속성을 구성품으로 만들지 않는다.
 추가 대상의 상위는 1차 항목 또는 다른 추가 대상이다. 근거가 없으면 무리하게 root에 붙이지 말고 unknown/ambiguous로 보존한다.
-root→items 관계는 코드가 목록으로 생성하므로 relations에 중복 출력하지 않는다. 없는 부품을 제품 상식으로 채우지 않는다.
+코드는 items→root의 in_procurement_scope(구매 범위 소속)만 생성한다. 이것은 구성 관계를 대신하지 않는다.
+원문에 장비의 구성 목록이나 구성품 포함 문장이 있으면 기존 item ID→root의 component_of도 relations에 별도로 출력한다. 기존 item을 additional에 다시 만들지 않는다.
+구성 근거 node를 반드시 지정한다. 공급 목록에 함께 있다는 사실이나 표·절 제목만으로 구성품이라고 추정하지 않는다.
+작업·납품 문서는 장비의 구성품이 아니다. 작업 대상은 service_for로, 범위 소속은 코드가 생성하는 관계로 표현한다.
+통합 구매라는 이유로 물리적 내부 장착을 추정하지 않는다. 판단이 불확실하면 ambiguous 또는 unknown으로 남긴다. 없는 부품을 제품 상식으로 채우지 않는다.
 scopes=[대상 ID,그 대상에 적용되는 상세 원문 node ID 목록]. 원문 전체를 재출력하지 않는다.
 표의 헤더·행·열·병합 셀과 절 문맥을 이용한다. 작은 대상에 직접 적용되는 구절은 해당 하위 대상에 귀속시킨다.
 공통 납품/보증/교육 조건은 root 범위이며 모든 구성품에 복제하지 않는다. 여러 대상에 실제 적용되면 여러 scopes에 같은 node를 참조할 수 있다.
@@ -109,6 +113,80 @@ def project_root_identifier(value,inventory):
     return result,alias
 
 
+HIERARCHY_RELATIONS = {'component_of', 'physical_part_of', 'specification_for'}
+
+
+def relation_type_errors(kind, source_kind, target_kind):
+    """Check declared endpoint roles; never infer meaning from names or swap endpoints."""
+    errors = []
+    if kind == 'service_for' and source_kind != 'activity':
+        errors.append('service_for source must be an activity')
+    if (kind in {'component_of', 'physical_part_of'}
+            and target_kind in {'equipment', 'software', 'group'}
+            and source_kind in {'activity', 'document'}):
+        errors.append('equipment composition cannot include an activity or document')
+    return errors
+
+
+def relation_errors(row, entity_ids, types, node_ids):
+    source, target, kind, basis, refs = row
+    errors = []
+    if source not in entity_ids or target not in entity_ids or source == target:
+        errors.append('invalid relation endpoints')
+    if not refs or not set(refs) <= node_ids:
+        errors.append('invalid relation evidence')
+    if kind == 'physical_part_of' and basis != 'explicit' and basis != 'ambiguous':
+        errors.append('physical inclusion not explicit')
+    if basis != 'ambiguous' and kind != 'unknown':
+        errors.extend(relation_type_errors(kind, types.get(source), types.get(target)))
+    return errors
+
+
+def cyclic_relation_indexes(relations):
+    """Find every edge participating in a cycle, rather than choosing an arbitrary DAG."""
+    parents = {}
+    for source, target, kind, basis, _ in relations:
+        if kind in HIERARCHY_RELATIONS and basis != 'ambiguous':
+            parents.setdefault(source, set()).add(target)
+
+    def reaches(start, destination):
+        pending = [start]
+        seen = set()
+        while pending:
+            current = pending.pop()
+            if current == destination:
+                return True
+            if current not in seen:
+                seen.add(current)
+                pending.extend(parents.get(current, ()))
+        return False
+
+    return {index for index, (source, target, kind, basis, _) in enumerate(relations)
+            if kind in HIERARCHY_RELATIONS and basis != 'ambiguous' and reaches(target, source)}
+
+
+def review_relations(value, inventory, document):
+    """Retain unresolved proposals separately without changing entities or quantities."""
+    ids = {'root', *(i[0] for i in inventory.items), *(i[0] for i in value.additional)}
+    types = {id: kind for id, kind, _ in value.types}
+    node_ids = {n['node_id'] for n in document['nodes']}
+    cyclic = cyclic_relation_indexes(value.relations)
+    accepted, held = [], []
+    for index, row in enumerate(value.relations):
+        reasons = relation_errors(row, ids, types, node_ids)
+        if index in cyclic:
+            reasons.append('cyclic hierarchy')
+        if row[3] == 'ambiguous':
+            reasons.append('ambiguous relationship')
+        if row[2] == 'unknown':
+            reasons.append('unresolved relationship kind')
+        if reasons:
+            held.append({'proposal_index': index, 'relation': row, 'reasons': reasons})
+        else:
+            accepted.append(row)
+    return value.model_copy(deep=True, update={'relations': accepted}), held
+
+
 def validate_details(value,inventory,document):
     nodes={n['node_id']:n for n in document['nodes']};seed={'root',*(i[0] for i in inventory.items)}
     additional=[i[0] for i in value.additional];all_ids=seed|set(additional);errors=[]
@@ -118,20 +196,17 @@ def validate_details(value,inventory,document):
         if node not in nodes or not norm(label) or norm(label) not in norm(nodes[node]['text']):errors.append(f'{id}: additional label not in source')
         if norm(label) in seed_labels:errors.append(f'{id}: recreated frozen inventory label')
     if len(value.types)!=len(all_ids) or {i[0] for i in value.types}!=all_ids:errors.append('types must cover every seed and new target once')
-    parents={}
-    for source,target,kind,basis,refs in value.relations:
-        if source not in all_ids or target not in all_ids or source==target:errors.append('invalid relation endpoints')
-        if not refs or not set(refs)<=nodes.keys():errors.append(f'{source}->{target}: invalid relation evidence')
-        if kind=='physical_part_of' and basis!='explicit':errors.append('physical inclusion not explicit')
-        if kind in {'component_of','physical_part_of','specification_for'} and basis!='ambiguous':parents.setdefault(source,[]).append(target)
-    def cycle(node,path):return node in path or any(cycle(n,path|{node}) for n in parents.get(node,[]))
-    if any(cycle(node,set()) for node in parents):errors.append('cyclic hierarchy')
+    types={id:kind for id,kind,_ in value.types}
+    for row in value.relations:
+        errors.extend(f'{row[0]}->{row[1]}: {reason}'
+                      for reason in relation_errors(row,all_ids,types,nodes.keys()))
+    if cyclic_relation_indexes(value.relations):errors.append('cyclic hierarchy')
     for id,refs in value.scopes:
         if id not in all_ids or not set(refs)<=nodes.keys():errors.append('invalid scope assignment')
     return errors
 
 
-def materialize(inventory,details,document):
+def materialize(inventory,details,document,held_relations=()):
     nodes={n['node_id']:n for n in document['nodes']};types={id:(kind,state) for id,kind,state in details.types}
     seeds=[('root',*inventory.root),*inventory.items];entities=[];quantities=[];requirements=[]
     def evidence(refs):return [{'node_id':n,'text':nodes[n]['text'],'quote':nodes[n]['text'],'native_ref':nodes[n]['native_ref']} for n in dict.fromkeys(refs)]
@@ -163,7 +238,14 @@ def materialize(inventory,details,document):
         subjects=list(dict.fromkeys(ownership.get(node['node_id'],[])))
         requirements.append({'id':'clause_'+node['node_id'],'text':text,'subject_ids':subjects,'value_raw':None,'unit_raw':None,'operator_raw':None,
                              'observation_type':'source_clause','atomic_requirement':False,'evidence':evidence([node['node_id']]),'review_status':'needs_review'})
-    return {'document_id':document['document_id'],'entities':entities,'relations':relations,'requirements':requirements,
+    held=[]
+    for index,proposal in enumerate(held_relations):
+        source,target,kind,basis,refs=proposal['relation']
+        held.append({'id':f'held_rel_{index+1:03}','source_id':source,'target_id':target,
+                     'kind':kind,'basis':basis,'review_status':'held','reasons':proposal['reasons'],
+                     'proposal_index':proposal['proposal_index'],'proposed_evidence_node_ids':refs,
+                     'evidence':evidence([n for n in refs if n in nodes])})
+    return {'document_id':document['document_id'],'entities':entities,'relations':relations,'held_relations':held,'requirements':requirements,
             'declared_quantities':quantities,'inventory_ids':[i[0] for i in inventory.items],
             'issues':inventory.issues+details.issues,'review_status':'needs_review','ontology_mapping_enabled':False}
 
@@ -183,23 +265,30 @@ async def extract_entity_relations(document,out,runner):
     save(out/'inventory.json',inventory.model_dump());save(out/'inventory_validation.json',{'errors':errors})
     save(out/'status.json',{'stage':'specification_alignment','state':'running','frozen_primary_items':len(inventory.items)})
     detail_request={'document_id':document['document_id'],'nodes':nodes,'root_id':'root','inventory':inventory.model_dump(),'output_schema':Details.model_json_schema()}
+    details=None
     for detail_attempt in range(2):
         raw=await runner.generate(DETAIL_PROMPT,detail_request,out/('inference/details.json' if detail_attempt==0 else 'inference/details_repair.json'))
         try:
             details=Details.model_validate(raw)
             details,alias=project_root_identifier(details,inventory)
             errors=validate_details(details,inventory,document)
-        except ValueError as exc:errors=[str(exc)]
+        except ValueError as exc:
+            details=None
+            errors=[str(exc)]
         if not errors:break
         detail_request.update({'previous_prediction':raw,'validation_errors':errors,'repair_instruction':'고정된 root/items를 유지한다. 원문에 없는 이름·물리적 관계를 만들지 말고 오류만 수정한다.'})
+    if details is None:raise ValueError(json.dumps(errors,ensure_ascii=False))
+    details,held=review_relations(details,inventory,document)
+    errors=validate_details(details,inventory,document)
     if errors:raise ValueError(json.dumps(errors,ensure_ascii=False))
     save(out/'identifier_projection.json',{'aliases':alias,'reason':'Frozen root node reference to canonical entity ID; no semantic edits'})
     save(out/'details.json',details.model_dump());save(out/'details_validation.json',{'errors':errors})
-    graph=materialize(inventory,details,document)
+    save(out/'held_relations.json',held)
+    graph=materialize(inventory,details,document,held)
     save(out/'graph.json',graph)
-    summary={'document_id':document['document_id'],'status':'needs_review','inventory_basis':inventory.basis,'primary_items':len(inventory.items),
+    summary={'document_id':document['document_id'],'status':'partial' if held else 'needs_review','held_relations':len(held),'inventory_basis':inventory.basis,'primary_items':len(inventory.items),
              'primary_labels':[i[2] for i in inventory.items],'entities':len(graph['entities']),'relations':len(graph['relations']),
              'inventory_repair_attempts':inventory_attempt,'detail_repair_attempts':detail_attempt,'raw_clauses':sum(q.get('observation_type')=='source_clause' for q in graph['requirements']),'seconds':round(time.monotonic()-started,2),
              'integrated_scope':inventory.integrated_scope,'human_reviewed':False,'notes':'Raw source clauses are preserved, not scored as atomic extracted requirements.'}
-    save(out/'summary.json',summary);save(out/'status.json',{'stage':'complete','state':'needs_review'})
+    save(out/'summary.json',summary);save(out/'status.json',{'stage':'complete','state':summary['status']})
     return summary

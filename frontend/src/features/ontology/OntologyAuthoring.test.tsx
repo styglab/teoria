@@ -79,7 +79,7 @@ describe("OntologyAuthoring", () => {
         description: "", evaluator_key: null,
       })),
     };
-    vi.spyOn(ontologyApi, "authoredOntologies").mockResolvedValue({ items: [] });
+    vi.spyOn(ontologyApi, "authoredOntologies").mockResolvedValue({ items: [{namespace:"teoria",name:"업무 모델",description:"",version_count:1,latest_version:"1",latest_status:"published"}] });
     vi.spyOn(ontologyApi, "ontologyVersions").mockResolvedValue({ items: [detail] });
     vi.spyOn(ontologyApi, "ontologyVersion").mockResolvedValue(detail);
     render(<MemoryRouter><OntologyAuthoring /></MemoryRouter>);

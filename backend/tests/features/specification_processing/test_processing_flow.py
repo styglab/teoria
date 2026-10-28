@@ -43,6 +43,8 @@ def undecorated(monkeypatch):
                 'decisions':[{'candidate_key':c['candidate_key'],'origin_ref':c['origin_ref'],'status':'approved',
                               'reason':'controlled_fixture','entry_id':str(UUID(int=i+1))} for i,c in enumerate(payload['candidates'])]}
     monkeypatch.setattr(dictionary_alignment,'GoodsAuthoringClient',DictionaryAPI)
+    monkeypatch.setattr(dictionary_alignment,'author_dictionary_meanings',AsyncMock(return_value={
+        'status':'completed','summary':{},'decisions':[]}))
     start=AsyncMock(return_value=None);complete=AsyncMock();failed=AsyncMock()
     monkeypatch.setattr(flows,'start_execution',start);monkeypatch.setattr(flows,'complete_execution',complete);monkeypatch.setattr(flows,'fail_execution',failed)
     return start,complete,failed
@@ -52,9 +54,9 @@ async def test_canonical_artifacts_are_separate_and_db_completion_is_last(tmp_pa
     result=await flows.execute_specification_run(request)
     assert result.status=='completed'
     assert result.summary['applied']==1
-    assert len(result.artifacts)==7
+    assert len(result.artifacts)==8
     root=tmp_path/'objects/specification_processing/fixture_run'
-    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==sorted(['source_term_alignment.json','dictionary_bindings.json','dictionary_candidates.json','extracted.json','index.md','normalized.json','sources/doc_1.hwp'])
+    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==sorted(['source_term_alignment.json','dictionary_semantic_decisions.json','dictionary_bindings.json','dictionary_candidates.json','extracted.json','index.md','normalized.json','sources/doc_1.hwp'])
     for artifact in result.artifacts:
         path=Path(artifact.uri.removeprefix('file://'))
         assert path.exists() and hashlib.sha256(path.read_bytes()).hexdigest()==artifact.sha256
@@ -108,6 +110,14 @@ def test_contract_policy_changes_invalidate_processing_revision(tmp_path,monkeyp
     monkeypatch.setattr(teoria.features.goods_normalization.contracts,'__file__',str(module))
     first=flows.processor_revision();module.write_text('policy = 2\n')
     assert flows.processor_revision()!=first
+
+
+def test_pinned_dictionary_resolution_policy_changes_invalidate_processing_revision(tmp_path,monkeypatch):
+    from teoria.features.semantic_modeling.goods_dictionary import meaning_contracts
+    module=tmp_path/'meaning_contracts.py';module.write_text('policy = 1\n')
+    monkeypatch.setattr(meaning_contracts,'__file__',str(module))
+    before=flows.processor_revision();module.write_text('policy = 2\n')
+    assert flows.processor_revision()!=before
 
 
 

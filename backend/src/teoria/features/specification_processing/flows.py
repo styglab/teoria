@@ -15,6 +15,7 @@ def processor_revision():
     import teoria.integrations.codex
     import inspect
     from teoria.features.semantic_modeling.goods_dictionary.contracts import source_literal_definition
+    import teoria.features.semantic_modeling.goods_dictionary.meaning_contracts as meaning_contracts
     root=Path(__file__).resolve().parent
     paths=sorted(p for p in root.rglob('*.py') if not p.name.startswith('evaluation'))
     contract_root=Path(teoria.features.goods_normalization.contracts.__file__).parent
@@ -22,6 +23,7 @@ def processor_revision():
     body=b''.join(p.relative_to(root).as_posix().encode()+p.read_bytes() for p in paths)
     body+=b''.join(b'goods_normalization/'+p.relative_to(contract_root).as_posix().encode()+p.read_bytes() for p in contract_paths)
     body+=b'goods_dictionary_contract/'+Path(inspect.getfile(source_literal_definition)).read_bytes()
+    body+=b'goods_dictionary_meaning_contract/'+Path(inspect.getfile(meaning_contracts)).read_bytes()
     runner_root=Path(teoria.integrations.codex.__file__).parent
     body+=b''.join(b'codex_inference/'+p.relative_to(runner_root).as_posix().encode()+p.read_bytes() for p in sorted(runner_root.rglob('*.py')))
     return hashlib.sha256(body).hexdigest()
@@ -85,6 +87,9 @@ async def execute_specification_run(request:SpecificationRun):
             partial=bool(corpus['unavailable_documents']) or any(d['status']=='partial' for d in document_results) or any(
                 normalized.get(key,{}).get('automatically_deferred',0)>0 for key in ['summary','entity_summary','relation_summary'])
             partial=partial or dictionary['summary'].get('held',0)>0 or dictionary['summary'].get('proposed',0)>0
+            semantic_summary=dictionary['summary'].get('semantic_authoring',{})
+            partial=partial or semantic_summary.get('held',0)>0 or semantic_summary.get('proposed',0)>0
+            partial=partial or dictionary.get('meaning_summary',{}).get('held',0)>0
             state='failed' if not corpus['documents'] else 'partial' if partial else 'completed'
             result=RunResult(run_id=request.run_id,status=state,
                 artifacts=sorted([ArtifactRef.model_validate(a) for a in [*(e['artifact'] for e in work),extracted_ref,*dictionary['artifacts'],*selection['artifacts'],report_ref]],key=lambda a:a.key),

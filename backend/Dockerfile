@@ -22,7 +22,7 @@ USER root
 COPY --from=model_cli /usr/local/bin/node /usr/local/bin/node
 COPY --from=model_cli /usr/local/lib/node_modules/@openai /opt/codex/node_modules/@openai
 RUN ln -s /opt/codex/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex && \
-    mkdir -p /home/teoria/.codex && chown teoria:teoria /home/teoria/.codex
+    mkdir -p /home/teoria/.codex /app/specification_inputs /app/specification_artifacts && chown teoria:teoria /home/teoria/.codex /app/specification_inputs /app/specification_artifacts
 COPY --chown=teoria:teoria backend/authoring/ontology_migrations ./backend/authoring/ontology_migrations
 COPY --chown=teoria:teoria backend/authoring/ontology_blueprints ./backend/authoring/ontology_blueprints
 COPY --chown=teoria:teoria backend/authoring/normalization_profiles ./backend/authoring/normalization_profiles

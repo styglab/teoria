@@ -1,6 +1,6 @@
 """Versioned business definitions and explicit source-expression mappings."""
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from pydantic import Field, model_validator
 
@@ -53,3 +53,112 @@ class MappingProposal(Record):
 class MeaningResolution(Record):
     source_entry_ids: list[UUID] = Field(max_length=1000)
     classification_code: str | None = Field(default=None, pattern=r'^\d{10}$')
+
+
+def concept_id_for_key(key):
+    return uuid5(UUID('3b790e06-dd7b-4fc3-b1d8-8832380578e9'), key)
+
+
+class DefinitionChange(Record):
+    base_revision_id: UUID | None = None
+    definition: ConceptDefinition
+
+
+class MappingChange(Record):
+    source_entry_id: UUID
+    target_key: str
+    owner_key: str | None = None
+    classification_code: str | None = Field(default=None, pattern=r'^\d{10}$')
+    rationale: str = Field(min_length=10, max_length=4000)
+
+
+class DictionaryChangeSet(Record):
+    baseline_checksum: str = Field(pattern=r'^[a-f0-9]{64}$')
+    definitions: list[DefinitionChange] = Field(default_factory=list, max_length=1000)
+    mappings: list[MappingChange] = Field(default_factory=list, max_length=5000)
+    retire_concept_ids: list[UUID] = Field(default_factory=list, max_length=1000)
+    reviewed_source_sha256: list[str] = Field(default_factory=list,max_length=100000)
+    rationale: str = Field(min_length=10, max_length=4000)
+
+    @model_validator(mode='after')
+    def unique_changes(self):
+        import re
+        if any(not re.fullmatch(r'[a-f0-9]{64}',value) for value in self.reviewed_source_sha256):
+            raise ValueError('reviewed sources require SHA256 hashes')
+        keys = [d.definition.key for d in self.definitions]
+        scopes = [(m.source_entry_id, m.classification_code) for m in self.mappings]
+        if len(keys) != len(set(keys)) or len(scopes) != len(set(scopes)):
+            raise ValueError('duplicate definition or source scope in changeset')
+        if len(self.retire_concept_ids) != len(set(self.retire_concept_ids)):
+            raise ValueError('duplicate retired concept')
+        return self
+
+
+class DictionarySnapshot(Record):
+    schema_version: Literal[1] = 1
+    artifact_kind: Literal['goods_dictionary_snapshot'] = 'goods_dictionary_snapshot'
+    checksum: str = Field(pattern=r'^[a-f0-9]{64}$')
+    concepts: list[dict]
+    mappings: list[dict]
+    sources: list[dict]
+
+    @model_validator(mode='after')
+    def verify_checksum(self):
+        from teoria.features.semantic_modeling.goods_dictionary.contracts import dictionary_checksum
+        if self.checksum != dictionary_checksum(self.content()):
+            raise ValueError('dictionary snapshot checksum mismatch')
+        return self
+
+    def content(self):
+        return {'concepts': self.concepts, 'mappings': self.mappings, 'sources': self.sources}
+
+
+def snapshot_from_records(concepts, mappings, sources):
+    """A deterministic snapshot of meaning state, excluding clocks, actors and evidence bodies."""
+    import json
+    from teoria.features.semantic_modeling.goods_dictionary.contracts import dictionary_checksum
+    fields = [('concepts', concepts, ('revision_id','concept_id','concept_key','revision','kind','content','status')),
+              ('mappings', mappings, ('mapping_id','source_entry_id','target_revision_id','classification_code','owner_concept_id','relation','status')),
+              ('sources', sources, ('entry_id','kind','owner_entry_id','status','preferred_name'))]
+    body = {}
+    for name, records, keys in fields:
+        values = [{k: r.get(k) for k in keys} for r in records]
+        body[name] = sorted(json.loads(json.dumps(values, default=str)), key=lambda row: dictionary_checksum(row))
+    return DictionarySnapshot(checksum=dictionary_checksum(body), **body)
+
+
+def resolve_snapshot(snapshot, source_entry_ids, classification_code=None):
+    """Pure resolution shared by pinned document runs and change impact checks."""
+    snapshot = DictionarySnapshot.model_validate(snapshot)
+    concepts = {str(c['revision_id']): c for c in snapshot.concepts if c['status']=='approved'}
+    sources = {str(s['entry_id']): s for s in snapshot.sources}
+    mappings = [m for m in snapshot.mappings if m['status']=='approved' and m['relation']=='equivalent'
+                and str(m['target_revision_id']) in concepts
+                and m['classification_code'] in {None, classification_code}]
+    results = {}
+    def resolve(entry_id, path=frozenset()):
+        key = str(entry_id)
+        if key in results:
+            return results[key]
+        row = {'source_entry_id': key, 'status':'unresolved', 'reason':'no_approved_scoped_equivalence'}
+        source = sources.get(key)
+        if not source or source.get('status') not in {None,'approved'}:
+            return {**row, 'reason':'source_not_found'}
+        if key in path:
+            return {**row, 'reason':'cyclic_owner'}
+        choices = [m for m in mappings if str(m['source_entry_id'])==key]
+        if source['kind']=='characteristic':
+            owner = resolve(source['owner_entry_id'], path|{key})
+            choices = [m for m in choices if owner['status']=='resolved' and str(m['owner_concept_id'])==owner['concept_id']]
+        targets = {str(m['target_revision_id']) for m in choices}
+        if len(targets)>1:
+            row.update(status='held',reason='ambiguous_approved_mappings')
+        elif targets:
+            target = concepts[next(iter(targets))]
+            row.update(status='resolved',reason='approved_scoped_equivalence',concept_id=str(target['concept_id']),
+                revision_id=str(target['revision_id']),concept_key=target['concept_key'],kind=target['kind'],
+                definition=target['content'],mapping_ids=[str(m['mapping_id']) for m in choices])
+        results[key] = row
+        return row
+    return {'policy_version':'approved_scoped_equivalence_v1', 'snapshot_checksum':snapshot.checksum,
+            'items':[resolve(entry) for entry in source_entry_ids]}

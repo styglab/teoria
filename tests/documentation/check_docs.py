@@ -59,6 +59,7 @@ def markdown_links(text: str) -> list[tuple[int, str]]:
 def validate(root: Path) -> tuple[list[str], int, int]:
     root = root.resolve()
     docs = sorted((root / 'docs').rglob('*.md'))
+    docs += sorted((root / 'archive/documentation').rglob('*.md'))
     sources = [p for p in [root / 'README.md', root / 'AGENTS.md'] if p.exists()]
     sources += docs + sorted((root / '.agents/skills').rglob('*.md'))
     graph: dict[Path, set[Path]] = defaultdict(set)

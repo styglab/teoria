@@ -126,6 +126,19 @@ class ComposeConfigurationTests(unittest.TestCase):
         )
         self.assertEqual(environment["TEORIA_OPENMETADATA_ENABLED"], "true")
 
+    def test_document_input_storage_is_only_writable_from_admin_and_readonly_for_worker(self):
+        services = self.resolved("teoria-test-specification-input")["services"]
+        admin = services["admin-api"]
+        self.assertEqual(admin["environment"]["TEORIA_SPECIFICATION_UPLOAD_ENABLED"], "true")
+        inputs = next(v for v in admin["volumes"] if v["target"] == "/app/specification_inputs")
+        artifacts = next(v for v in admin["volumes"] if v["target"] == "/app/specification_artifacts")
+        worker_inputs = next(v for v in services["prefect-worker"]["volumes"] if v["target"] == "/app/specification_inputs")
+        self.assertEqual(inputs["source"], worker_inputs["source"])
+        self.assertFalse(inputs.get("read_only", False))
+        self.assertTrue(worker_inputs["read_only"])
+        self.assertTrue(artifacts["read_only"])
+        self.assertFalse(any(v["target"] == "/app/specification_inputs" for v in services["model-deployment-worker"]["volumes"]))
+
     def test_admin_mlflow_connection_uses_server_static_prefix(self):
         services = self.resolved("teoria-test-mlflow")["services"]
         self.assertEqual(
@@ -193,6 +206,24 @@ class ComposeConfigurationTests(unittest.TestCase):
             "TEORIA_CONNECTOR_MOLEG_LAW_API_KEY",
             services["prefect-worker"]["environment"],
         )
+
+    def test_specification_worker_release_does_not_change_other_role_images(self):
+        before = self.resolved("teoria-test-specification-release")["services"]
+        self.environment["TEORIA_SPECIFICATION_WORKER_IMAGE"] = "teoria-pipelines:test-release"
+        after = self.resolved("teoria-test-specification-release")["services"]
+        self.assertEqual(after["prefect-worker"]["image"], "teoria-pipelines:test-release")
+        for name, service in before.items():
+            if name != "prefect-worker":
+                self.assertEqual(service.get("image"), after[name].get("image"), name)
+
+    def test_admin_release_does_not_change_other_authoring_roles(self):
+        before = self.resolved("teoria-test-admin-release")["services"]
+        self.environment["TEORIA_ADMIN_API_IMAGE"] = "teoria-platform-authoring:test-release"
+        after = self.resolved("teoria-test-admin-release")["services"]
+        self.assertEqual(after["admin-api"]["image"], "teoria-platform-authoring:test-release")
+        for name, service in before.items():
+            if name != "admin-api":
+                self.assertEqual(service.get("image"), after[name].get("image"), name)
 
 
 if __name__ == "__main__":

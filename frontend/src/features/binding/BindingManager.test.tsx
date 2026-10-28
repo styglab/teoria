@@ -19,8 +19,8 @@ describe("BindingManager", () => {
     });
 
     render(<MemoryRouter><BindingManager /></MemoryRouter>);
-    expect(await screen.findByText("procurement.Contract.currentAmount")).toBeTruthy();
-    expect(screen.getByText("Procurement.ContractAmount")).toBeTruthy();
+    expect(await screen.findByRole("heading",{name:"procurement.Contract.currentAmount"})).toBeTruthy();
+    expect(screen.getAllByText("Procurement.ContractAmount").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText("승인"));
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes("binding-1/reviews") && init?.method === "POST")).toBe(true));
   });
@@ -52,7 +52,7 @@ describe("BindingManager", () => {
     expect(await screen.findByText("1–25 / 51개")).toBeTruthy();
     expect(screen.queryByText("goods.Item25")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
-    expect(screen.getByText("goods.Item25")).toBeTruthy();
+    expect(screen.getAllByText("goods.Item25").length).toBeGreaterThan(0);
     expect(screen.queryByText("goods.Item0")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
     expect(screen.getByText("51–51 / 51개")).toBeTruthy();
@@ -63,13 +63,13 @@ describe("BindingManager", () => {
     expect(screen.getByText("1–50 / 51개")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
     fireEvent.change(screen.getByRole("textbox", { name: "의미 연결 검색" }), { target: { value: "Item0" } });
-    expect(screen.getByText("goods.Item0")).toBeTruthy();
+    expect(screen.getAllByText("goods.Item0").length).toBeGreaterThan(0);
     expect(screen.getByText("1–1 / 1개")).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "의미 연결 검색" }), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
     fireEvent.click(screen.getByRole("button", { name: "승인됨" }));
     expect(await screen.findByText("1–2 / 2개")).toBeTruthy();
-    expect(screen.getByText("goods.Item0")).toBeTruthy();
+    expect(screen.getAllByText("goods.Item0").length).toBeGreaterThan(0);
   });
 });
 

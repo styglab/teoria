@@ -1,11 +1,23 @@
 """Async persistence for immutable definitions and reviewable mappings."""
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from psycopg.types.json import Jsonb
 from teoria.features.semantic_modeling.goods_dictionary.repository import GoodsDictionaryRepository
 
 
 class GoodsMeaningRepository(GoodsDictionaryRepository):
+    async def all_sources(self, conn):
+        return await (await conn.execute('SELECT entry_id,kind,owner_entry_id,status,preferred_name FROM goods.dictionary_entries ORDER BY entry_id')).fetchall()
+
+    async def affected_documents(self, conn, entry_ids):
+        return await (await conn.execute('''SELECT DISTINCT d.entry_id,d.operation_id,
+        e.value->>'document_id' AS document_id,e.value->>'source_sha256' AS source_sha256
+        FROM goods.dictionary_decisions d
+        CROSS JOIN LATERAL jsonb_array_elements(d.candidate->'evidence') e
+        WHERE d.entry_id=ANY(%s)
+        ORDER BY d.entry_id,d.operation_id,document_id,source_sha256''',
+        ([UUID(str(id)) for id in entry_ids],))).fetchall()
+
     async def concepts(self, conn):
         return await (await conn.execute('SELECT * FROM goods.concept_revisions ORDER BY concept_key,revision')).fetchall()
 

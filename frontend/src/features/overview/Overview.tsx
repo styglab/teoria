@@ -1,165 +1,235 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { RefreshCw, ArrowRight } from "lucide-react";
 import { metadataApi, type MetadataStatus } from "../../api/metadata";
-import {
-  suggestionApi,
-  type IntelligenceSuggestion,
-} from "../../api/suggestions";
+import { workflowsApi, type ModelRun } from "../../api/workflows";
+import { loadReviewWork } from "../intelligence/review_work";
 import { ModelOperationsOverview } from "../model_operations/ModelOperationsOverview";
 import { useModelOperationsAvailability } from "../model_operations/ModelOperationsAvailability";
-import { PageHeader } from "../../components/workspace/WorkspaceLayout";
+import {
+  PageHeader,
+  PageState,
+} from "../../components/workspace/WorkspaceLayout";
 import { useAdminAccess } from "../access/AdminAccess";
+import { stateLabels, dateLabel } from "../model_operations/presentation";
+
+type HomeRun = ModelRun & { pipeline_label?: string };
+
 export function Overview() {
+  const { principal, requestLogin } = useAdminAccess();
+  const [refresh, setRefresh] = useState(0);
   const [status, setStatus] = useState<MetadataStatus | null>(null);
   const [total, setTotal] = useState<number | null>(null);
-  const [items, setItems] = useState<IntelligenceSuggestion[] | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
-  const { principal, requestLogin } = useAdminAccess();
+  const [reviews, setReviews] = useState<Awaited<
+    ReturnType<typeof loadReviewWork>
+  > | null>(null);
+  const [recent, setRecent] = useState<HomeRun[] | null>(null);
+  const [failed, setFailed] = useState<HomeRun[] | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   useEffect(() => {
     let active = true;
-    const fail = (label: string) => {
-      if (active) setErrors((values) => [...values, label]);
+    setErrors({});
+    const fail = (key: string, message: string) => {
+      if (active) setErrors((previous) => ({ ...previous, [key]: message }));
     };
     metadataApi
       .metadataStatus()
       .then((value) => {
         if (active) setStatus(value);
       })
-      .catch(() => fail("메타데이터 연결 상태 조회 실패"));
+      .catch(() => fail("metadata", "메타데이터 연결을 확인하지 못했습니다."));
     metadataApi
       .metadataTables({ limit: 1 })
       .then((value) => {
         if (active) setTotal(value.total);
       })
-      .catch(() => fail("자산 수 조회 실패"));
-    return () => {
-      active = false;
-    };
-  }, []);
-  useEffect(() => {
-    let active = true;
-    setItems(null);
-    if (principal)
-      suggestionApi
-        .intelligenceSuggestions()
+      .catch(() => fail("assets", "자산 수를 조회하지 못했습니다."));
+    setReviews(null);
+    setRecent(null);
+    setFailed(null);
+    if (principal) {
+      loadReviewWork().then((value) => {
+        if (active) setReviews(value);
+      });
+      workflowsApi
+        .pipelines({ size: 25 })
         .then((value) => {
-          if (active) setItems(value.items);
+          if (active)
+            setRecent(
+              value.runs.map((run) => ({
+                ...run,
+                pipeline_label: value.items.find(
+                  (item) => item.deployment_id === run.deployment_id,
+                )?.name,
+              })),
+            );
         })
-        .catch(() => {
-          if (active) setErrors((values) => [...values, "검토 이력 조회 실패"]);
-        });
+        .catch(() => fail("recent", "최근 실행을 조회하지 못했습니다."));
+      workflowsApi
+        .pipelines({ state: "FAILED", size: 25 })
+        .then((value) => {
+          if (active)
+            setFailed(
+              value.runs.map((run) => ({
+                ...run,
+                pipeline_label: value.items.find(
+                  (item) => item.deployment_id === run.deployment_id,
+                )?.name,
+              })),
+            );
+        })
+        .catch(() => fail("failed", "실패한 실행을 조회하지 못했습니다."));
+    }
     return () => {
       active = false;
     };
-  }, [principal]);
-  const pending = items?.filter((item) => item.status === "pending");
-  const failed = items?.filter((item) => item.status === "failed");
+  }, [principal?.actor, refresh]);
+  const execution = (
+    title: string,
+    items: HomeRun[] | null,
+    error?: string,
+  ) => (
+    <section className="home-work-section">
+      <header>
+        <h3>{title}</h3>
+        <Link
+          to={`/admin/workflows${title === "실패한 실행" ? "?state=FAILED&tab=history" : ""}`}
+        >
+          전체 실행 <ArrowRight size={12} />
+        </Link>
+      </header>
+      {error ? (
+        <p role="alert">
+          {error}{" "}
+          <button onClick={() => setRefresh((v) => v + 1)}>다시 조회</button>
+        </p>
+      ) : items === null ? (
+        <PageState loading title="실행을 확인하고 있습니다…" />
+      ) : !items.length ? (
+        <p className="home-empty">조회된 실행이 없습니다.</p>
+      ) : (
+        <ul>
+          {items.slice(0, 5).map((run) => (
+            <li key={run.id}>
+              <Link to={`/admin/workflows?run=${run.id}&tab=history`}>
+                <strong>{run.pipeline_label || run.name}</strong>
+                <span>
+                  {stateLabels[run.state_type] || run.state_name} ·{" "}
+                  {dateLabel(run.created)}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
   return (
-    <div className="workspace-page">
+    <div className="workspace-page home-page">
       <PageHeader
-        title="플랫폼 현황"
-        description="데이터 자산과 검토할 작업, 활성화된 기능의 운영 상태를 확인합니다."
+        title="홈"
+        description="검토할 변경과 실행 상태를 확인하고 작업을 이어갑니다."
         actions={
-          <Link className="page-primary-link" to="/admin/data-catalog">
-            데이터 자산 탐색 →
-          </Link>
+          <button
+            className="page-icon-button"
+            aria-label="홈 새로고침"
+            onClick={() => setRefresh((v) => v + 1)}
+          >
+            <RefreshCw size={16} />
+          </button>
         }
       />
-      <div className="overview-grid">
-        <Link to="/admin/operations" className="overview-stat">
-          <span>메타데이터 연결</span>
-          <strong>
-            {status
-              ? status.available
-                ? "정상"
-                : status.enabled
-                  ? "연결 확인 필요"
-                  : "미설정"
-              : "확인 중"}
-          </strong>
-          <small>OpenMetadata 실시간 상태</small>
+      <div className="home-shortcuts">
+        <Link to="/admin/data-catalog">
+          데이터 자산 찾기 <ArrowRight size={13} />
         </Link>
-        <Link to="/admin/data-catalog" className="overview-stat">
-          <span>등록된 데이터 자산</span>
+        <Link to="/admin/specifications">
+          규격서 분석 시작 <ArrowRight size={13} />
+        </Link>
+        <Link to="/admin/semantic-model/ontology">
+          의미 모델 탐색 <ArrowRight size={13} />
+        </Link>
+      </div>
+      {!principal ? (
+        <section className="home-work-section">
+          <h3>작업 현황</h3>
+          <p>관리자로 연결하면 검토 대기와 실행 이력을 확인할 수 있습니다.</p>
+          <button className="page-primary-link" onClick={requestLogin}>
+            관리자 연결
+          </button>
+        </section>
+      ) : (
+        <>
+          <section className="home-work-section">
+            <header>
+              <h3>검토 대기</h3>
+              <Link to="/admin/changes/review">
+                검토함 열기 <ArrowRight size={12} />
+              </Link>
+            </header>
+            {!reviews ? (
+              <PageState loading title="검토할 작업을 확인하고 있습니다…" />
+            ) : (
+              <>
+                {!!reviews.errors.length && (
+                  <p role="alert">
+                    {reviews.errors.join(", ")} 조회 실패{" "}
+                    <button onClick={() => setRefresh((v) => v + 1)}>
+                      다시 조회
+                    </button>
+                  </p>
+                )}
+                {!reviews.items.length ? (
+                  <p className="home-empty">
+                    조회 범위에 검토할 작업이 없습니다.
+                  </p>
+                ) : (
+                  <ul>
+                    {reviews.items.slice(0, 5).map((item) => (
+                      <li key={`${item.kind}:${item.id}`}>
+                        <Link to={item.href}>
+                          <strong>{item.title}</strong>
+                          <span>{item.state}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="operations-note">
+                  조회된 검토 범위 {reviews.items.length}개
+                  {reviews.limited ? " · 추가 항목은 전체 목록에서 확인" : ""}
+                </p>
+              </>
+            )}
+          </section>
+          <div className="home-executions">
+            {execution("실패한 실행", failed, errors.failed)}
+            {execution("최근 실행", recent, errors.recent)}
+          </div>
+        </>
+      )}
+      <footer className="home-service-status">
+        <Link to="/admin/data-catalog">
+          데이터 자산{" "}
           <strong>
             {total === null ? "—" : total.toLocaleString("ko-KR")}
           </strong>
-          <small>OpenMetadata 테이블</small>
+          개
         </Link>
-        <Link to="/admin/changes/review" className="overview-stat">
-          <span>검토 대기</span>
-          <strong>{pending?.length ?? "—"}</strong>
-          <small>
-            {principal ? "조회된 제안 기준" : "관리자 연결 후 확인"}
-          </small>
+        <Link to="/admin/operations">
+          메타데이터 연결 ·{" "}
+          {status?.available
+            ? "정상"
+            : status
+              ? status.enabled
+                ? "연결 확인 필요"
+                : "미설정"
+              : "확인 중"}
         </Link>
-        <Link
-          to="/admin/changes/review?status=failed"
-          className="overview-stat"
-        >
-          <span>적용 실패</span>
-          <strong>{failed?.length ?? "—"}</strong>
-          <small>
-            {principal ? "조회된 제안 기준" : "관리자 연결 후 확인"}
-          </small>
-        </Link>
-      </div>
-      {errors.map((message) => (
-        <p role="alert" className="workspace-error" key={message}>
-          {message}
-        </p>
-      ))}
-      <ModelOperationsOverview />
-      <div className="overview-columns">
-        <section className="workspace-card">
-          <h3>데이터·의미 관리</h3>
-          <Link to="/admin/data-catalog">
-            <strong>데이터 자산 확인</strong>
-            <span>기술·운영·의미·거버넌스 메타데이터 조회</span>
-          </Link>
-          <Link to="/admin/semantic-model/ontology">
-            <strong>의미 모델 관리</strong>
-            <span>업무 개념과 관계를 검토하고 버전으로 게시</span>
-          </Link>
-          <Link to="/admin/governance">
-            <strong>메타데이터 공백 확인</strong>
-            <span>설명·소유자·분류가 필요한 자산 확인</span>
-          </Link>
-          <Link to="/admin/changes/review">
-            <strong>제안 검토 및 적용</strong>
-            <span>대상과 근거를 확인하고 변경 승인</span>
-          </Link>
-        </section>
-        <section className="workspace-card">
-          <h3>최근 변경 제안</h3>
-          {!principal ? (
-            <>
-              <p>관리자 연결 후 검토·적용 이력을 확인할 수 있습니다.</p>
-              <button onClick={requestLogin}>관리자 연결</button>
-            </>
-          ) : items === null ? (
-            <p>이력을 조회하고 있습니다…</p>
-          ) : !items.length ? (
-            <p>등록된 제안이 없습니다.</p>
-          ) : (
-            [...items]
-              .sort((a, b) => b.created_at.localeCompare(a.created_at))
-              .slice(0, 5)
-              .map((item) => (
-                <Link
-                  key={item.suggestion_id}
-                  to={`/admin/changes/review?suggestion=${encodeURIComponent(item.suggestion_id)}`}
-                >
-                  <strong>{item.target_ref}</strong>
-                  <span>
-                    {item.suggestion_type} · {item.status} ·{" "}
-                    {new Date(item.created_at).toLocaleString("ko-KR")}
-                  </span>
-                </Link>
-              ))
-          )}
-        </section>
-      </div>
+        {(errors.metadata || errors.assets) && (
+          <span role="alert">{errors.metadata || errors.assets}</span>
+        )}
+      </footer>
     </div>
   );
 }
@@ -219,9 +289,7 @@ export function OperationsSettings() {
         <section className="workspace-card">
           <h3>워크플로</h3>
           <p>데이터 동기화·학습·배포의 실행과 예약은 Prefect가 관리합니다.</p>
-          {modelOperations.enabled && (
-            <Link to="/admin/workflows">파이프라인 조회·실행 →</Link>
-          )}
+          <Link to="/admin/workflows">파이프라인 조회·실행 →</Link>
           <p>
             전체 등록 작업과 상세 운영 정보는 Prefect에서 확인할 수 있습니다.
           </p>
