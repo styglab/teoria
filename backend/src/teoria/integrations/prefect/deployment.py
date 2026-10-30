@@ -1,4 +1,4 @@
-"""Register shared Prefect deployments and bounded execution policies."""
+"""Register feature-owned Flows using environment-specific execution policies."""
 
 from __future__ import annotations
 
@@ -10,24 +10,35 @@ from pathlib import Path
 
 import yaml
 
-from teoria.integrations.prefect.deployment_manifests import deployment_path
+from teoria.integrations.prefect.deployment_manifests import (
+    deployment_directory,
+    load_deployment_manifest,
+    load_execution_policy,
+)
 
 
-def kubernetes_job_template() -> dict:
+def pipeline_directory(pipeline_root: Path | None = None) -> Path:
+    return pipeline_root or Path(os.getenv("TEORIA_PIPELINE_PATH", "backend"))
+
+
+def kubernetes_job_template(
+    pipeline_root: Path | None = None, *, secret_name: str | None = None
+) -> dict:
     from prefect_kubernetes.worker import KubernetesWorker
 
+    path = (
+        deployment_directory(pipeline_directory(pipeline_root), "kubernetes")
+        / "execution.yaml"
+    )
+    policy = yaml.safe_load(path.read_text())
     template = KubernetesWorker.get_default_base_job_template()
     properties = template["variables"]["properties"]
-    defaults = {
-        "namespace": "teoria-pipelines",
-        "image": os.environ["TEORIA_PIPELINE_JOB_IMAGE"],
-        "cpu_request": os.getenv("TEORIA_JOB_CPU_REQUEST", "1"),
-        "cpu_limit": os.getenv("TEORIA_JOB_CPU_LIMIT", "2"),
-        "memory_request": os.getenv("TEORIA_JOB_MEMORY_REQUEST", "2Gi"),
-        "memory_limit": os.getenv("TEORIA_JOB_MEMORY_LIMIT", "4Gi"),
-        "finished_job_ttl": 3600,
-        "pod_watch_timeout_seconds": 600,
-    }
+    defaults = dict(policy["defaults"])
+    defaults.update(
+        namespace=policy["namespace"], image=os.environ[policy["image_env"]]
+    )
+    for key, variable in policy.get("overrides", {}).items():
+        defaults[key] = os.getenv(variable, defaults[key])
     for key, value in defaults.items():
         properties[key]["default"] = value
     job = template["job_configuration"]["job_manifest"]["spec"]
@@ -37,18 +48,12 @@ def kubernetes_job_template() -> dict:
         pod.pop(key, None)
         job[key] = 1
     pod["automountServiceAccountToken"] = False
-    pod["imagePullSecrets"] = [{"name": "teoria-registry"}]
+    pod["imagePullSecrets"] = [{"name": policy["image_pull_secret"]}]
     pod["containers"][0]["envFrom"] = [
-        {"secretRef": {"name": "teoria-pipeline-secrets"}}
+        {"secretRef": {"name": secret_name or policy["job_secret"]}}
     ]
-    template["job_configuration"]["env"] = {
-        "TEORIA_ENVIRONMENT": "production",
-        "TEORIA_PIPELINE_PATH": "/app/backend",
-        "PREFECT_API_URL": "http://prefect-server.teoria.svc.cluster.local:4200/api",
-        # Do not persist the dispatcher's auth value into the job manifest.
-        # The run receives it from the namespace's restricted Secret instead.
-        "PREFECT_API_AUTH_STRING": None,
-    }
+    # Never materialize the dispatcher's credentials into the Job declaration.
+    template["job_configuration"]["env"] = policy["environment"]
     return template
 
 
@@ -59,88 +64,77 @@ def positive_setting(name: str, default: int) -> int:
     return value
 
 
-async def configure_pool(client, *, backend: str, kind: str) -> str:
+async def configure_pool(
+    client, *, backend: str, kind: str, pipeline_root: Path | None = None
+) -> str:
     from prefect.client.schemas.actions import WorkPoolCreate, WorkPoolUpdate
     from prefect.exceptions import ObjectNotFound
     from prefect.workers.process import ProcessWorker
 
-    if kind == "model-operations":
-        if backend != "process":
-            raise ValueError("demo model deployment currently requires the Compose process backend")
-        for demo_pool in ("teoria-model-training", "teoria-model-deployment"):
-            template = ProcessWorker.get_default_base_job_template()
-            try:
-                await client.read_work_pool(demo_pool)
-            except ObjectNotFound:
-                await client.create_work_pool(WorkPoolCreate(name=demo_pool, type="process",
-                    base_job_template=template, concurrency_limit=1))
-        return "teoria-model-training"
-    if kind == "metadata":
-        pool_name, pool_type, concurrency = "teoria-metadata", "process", 1
-        template = ProcessWorker.get_default_base_job_template()
-        queues = [("default", 1, 1)]
-    elif kind == "legal-information":
-        pool_name = ("teoria-legal-information-k3s" if backend == "kubernetes"
-                     else "teoria-legal-information")
-        pool_type, concurrency = backend, 1
-        template = (kubernetes_job_template() if backend == "kubernetes"
-                    else ProcessWorker.get_default_base_job_template())
-        if backend == "kubernetes":
-            pod = template["job_configuration"]["job_manifest"]["spec"]["template"]["spec"]
-            pod["containers"][0]["envFrom"] = [
-                {"secretRef": {"name": "teoria-legal-information-secrets"}}
-            ]
-        queues = [("laws", 1, 1)]
-    else:
-        concurrency = positive_setting("TEORIA_PIPELINE_CONCURRENCY", 2)
-        pool_type = backend
-        pool_name = (
-            "teoria-specification-k3s" if backend == "kubernetes" else "teoria-specification"
+    root = pipeline_directory(pipeline_root)
+    policy = load_execution_policy(root, kind, backend)
+    for pool in policy["pools"]:
+        concurrency = (
+            positive_setting(pool["concurrency_limit_env"], pool["concurrency_limit"])
+            if pool.get("concurrency_limit_env")
+            else pool["concurrency_limit"]
         )
         template = (
-            kubernetes_job_template()
-            if backend == "kubernetes"
+            kubernetes_job_template(root, secret_name=pool["job_secret"])
+            if pool["type"] == "kubernetes"
             else ProcessWorker.get_default_base_job_template()
         )
-        queues = [("documents", 1, concurrency)]
-    try:
-        existing = await client.read_work_pool(pool_name)
-    except ObjectNotFound:
-        existing = None
-    if existing is not None and existing.type != pool_type:
-        raise ValueError(f"Work pool {pool_name} has incompatible type {existing.type}")
-    if existing is None:
-        await client.create_work_pool(
-            WorkPoolCreate(
-                name=pool_name,
-                type=pool_type,
-                base_job_template=template,
-                concurrency_limit=concurrency,
-            )
-        )
-    else:
-        await client.update_work_pool(
-            pool_name,
-            WorkPoolUpdate(
-                base_job_template=template,
-                concurrency_limit=concurrency,
-            ),
-        )
-    for name, priority, limit in queues:
+        pool_name = pool["name"]
         try:
-            queue = await client.read_work_queue_by_name(name, work_pool_name=pool_name)
+            existing = await client.read_work_pool(pool_name)
         except ObjectNotFound:
-            await client.create_work_queue(
-                name,
-                work_pool_name=pool_name,
-                priority=priority,
-                concurrency_limit=limit,
+            existing = None
+        if existing is not None and existing.type != pool["type"]:
+            raise ValueError(
+                f"Work pool {pool_name} has incompatible type {existing.type}"
             )
-        else:
-            await client.update_work_queue(
-                queue.id, priority=priority, concurrency_limit=limit
+        if existing is None:
+            await client.create_work_pool(
+                WorkPoolCreate(
+                    name=pool_name,
+                    type=pool["type"],
+                    base_job_template=template,
+                    concurrency_limit=concurrency,
+                )
             )
-    return pool_name
+        elif pool.get("update_existing", True):
+            await client.update_work_pool(
+                pool_name,
+                WorkPoolUpdate(
+                    base_job_template=template, concurrency_limit=concurrency
+                ),
+            )
+        for queue in pool.get("queues", []):
+            limit = (
+                positive_setting(
+                    queue["concurrency_limit_env"], queue["concurrency_limit"]
+                )
+                if queue.get("concurrency_limit_env")
+                else queue["concurrency_limit"]
+            )
+            try:
+                existing_queue = await client.read_work_queue_by_name(
+                    queue["name"], work_pool_name=pool_name
+                )
+            except ObjectNotFound:
+                await client.create_work_queue(
+                    queue["name"],
+                    work_pool_name=pool_name,
+                    priority=queue["priority"],
+                    concurrency_limit=limit,
+                )
+            else:
+                await client.update_work_queue(
+                    existing_queue.id,
+                    priority=queue["priority"],
+                    concurrency_limit=limit,
+                )
+    return policy["pools"][0]["name"]
 
 
 def register_deployments(
@@ -160,28 +154,41 @@ def register_deployments(
     }:
         raise ValueError("Unsupported deployment backend or kind")
     kinds = ("ingestion", "legal-information", "metadata") if kind == "all" else (kind,)
+    documents = {
+        item: load_deployment_manifest(pipeline_root, item, backend) for item in kinds
+    }
 
     async def configure() -> dict[str, str]:
         async with get_client() as client:
             return {
-                item: await configure_pool(client, backend=backend, kind=item)
+                item: await configure_pool(
+                    client, backend=backend, kind=item, pipeline_root=pipeline_root
+                )
                 for item in kinds
             }
 
     pools = asyncio.run(configure())
     with tempfile.TemporaryDirectory(prefix="teoria_prefect_") as directory:
         for item in kinds:
-            source = deployment_path(pipeline_root, item)
-            filename = source.name
-            document = yaml.safe_load(source.read_text())
+            document = documents[item]
+            filename = f"{item}.yaml"
             for deployment in document["deployments"]:
-                if item != "model-operations":
-                    deployment["work_pool"]["name"] = pools[item]
+                if (
+                    item != "model-operations"
+                    and deployment["work_pool"]["name"] != pools[item]
+                ):
+                    raise ValueError(
+                        "Deployment pool differs from configured environment pool"
+                    )
                 if item in {"ingestion", "legal-information"}:
                     queue = deployment["work_pool"]["work_queue_name"]
-                    if queue != ("laws" if item == "legal-information" else "documents"):
+                    if queue != (
+                        "laws" if item == "legal-information" else "documents"
+                    ):
                         raise ValueError(f"Unconfigured ingestion queue: {queue}")
-                elif item == "metadata" and (image := os.getenv("TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE")):
+                elif item == "metadata" and (
+                    image := os.getenv("TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE")
+                ):
                     deployment["parameters"]["image"] = image
             target = Path(directory) / filename
             target.write_text(yaml.safe_dump(document, allow_unicode=True))

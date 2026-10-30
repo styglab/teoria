@@ -64,14 +64,24 @@ def generate(
         "formats": sample["formats"],
         "splits": sample["splits"],
         "success": success,
+        "parser_exceptions": {
+            e: sum(
+                row["engines"][e].get("failure_kind") == "parser_exception" for row in benchmark["results"]
+            )
+            for e in ENGINES
+        },
         "timing_common_documents": len(common),
         "warm_median_sum_seconds": total,
         "reference_version": benchmark["reference_version"],
         "versions": versions,
-        "candidate_time_reduction_vs_baseline": 1 - total["candidate"] / total["baseline"],
-        "candidate_time_reduction_vs_kordoc": 1 - total["candidate"] / total["kordoc"],
+        "candidate_time_reduction_vs_baseline": 1 - total["candidate"] / total["baseline"]
+        if total["baseline"]
+        else None,
+        "candidate_time_reduction_vs_kordoc": 1 - total["candidate"] / total["kordoc"]
+        if total["kordoc"]
+        else None,
         "reference_agreement_mean_character_f1": {
-            e: statistics.mean(values) for e, values in agreement.items()
+            e: statistics.mean(values) if values else None for e, values in agreement.items()
         },
         "source_quality": quality["totals"],
         "source_reviewed_documents": quality["labelled_documents"],
@@ -113,14 +123,21 @@ def generate(
         )
     lines += [
         "",
-        f"Time reduction vs baseline: {report['candidate_time_reduction_vs_baseline']:.2%}; vs kordoc: {report['candidate_time_reduction_vs_kordoc']:.2%}.",
+        "Time reduction: "
+        + str(
+            {
+                k: report[k]
+                for k in ("candidate_time_reduction_vs_baseline", "candidate_time_reduction_vs_kordoc")
+            }
+        ),
         "Reference character multiset agreement (not independent accuracy): "
         + str(report["reference_agreement_mean_character_f1"]),
         "",
         f"Accepted: {acceptance['accepted']}; applied: {acceptance['applied']}; tests passed: {acceptance['tests_passed']}.",
         f"Changed sample documents: {acceptance['changed_documents']}; historical regression: {acceptance.get('historical_regression')}.",
         "",
-        "The seven PDF page checks belong to one reviewed cost-schedule document; they are not seven independent documents.",
+        "Parser exceptions remain in the success denominator and are excluded from common-success timing: "
+        + str(report["parser_exceptions"]),
     ]
     lines += [""] + ["- " + limit for limit in report["limitations"]]
     (output / "summary.md").write_text("\n".join(lines) + "\n")
@@ -151,7 +168,9 @@ def main():
     parser.add_argument("--sample", default="sample")
     parser.add_argument("--benchmark", default="benchmark")
     parser.add_argument("--quality", default="quality.json")
-    parser.add_argument("--labels", default="source_labels.json", help="Frozen labels filename within the cycle")
+    parser.add_argument(
+        "--labels", default="source_labels.json", help="Frozen labels filename within the cycle"
+    )
     parser.add_argument("--keep-intermediates", action="store_true")
     args = parser.parse_args()
     generate(

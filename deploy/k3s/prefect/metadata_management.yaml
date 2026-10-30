@@ -1,0 +1,15 @@
+pools:
+- name: teoria-metadata
+  type: process
+  concurrency_limit: 1
+  queues:
+  - name: default
+    priority: 1
+    concurrency_limit: 1
+deployments:
+- name: openmetadata-postgres-metadata-sync
+  work_pool:
+    name: teoria-metadata
+    work_queue_name: default
+  parameters:
+    image: teoria/ingestion:release

@@ -15,7 +15,7 @@ from .execution import run_process
 from .runner import PROJECT, sha, tree_digest, write_json
 
 PYTHON_WORKER = """
-import json,sys,time
+import json,sys,time,traceback
 from pathlib import Path
 from kory_parser import parse,ParseOptions
 from kory_parser.version import __version__
@@ -24,11 +24,18 @@ data=Path(c['source']).read_bytes()
 supported='recover_numbered_structure' in getattr(ParseOptions,'__dataclass_fields__',{})
 extra={'recover_numbered_structure':c.get('numbered_structure',False)} if supported else {}
 options=ParseOptions(ocr=c.get('ocr',False),images=False,**extra)
-parse(data,options)
+def parse_once():
+ try:
+  return parse(data,options)
+ except Exception as error:
+  traceback.print_exc()
+  Path(c['measurement']).write_text(json.dumps({'failure_kind':'parser_exception','exception_type':type(error).__name__,'version':__version__}))
+  sys.exit(0)
+parse_once()
 seconds=[]
 for _ in range(c['repetitions']):
  start=time.perf_counter()
- result=parse(data,options)
+ result=parse_once()
  seconds.append(time.perf_counter()-start)
 Path(c['output']).write_text(json.dumps(result.to_dict(),ensure_ascii=False))
 Path(c['measurement']).write_text(json.dumps({'seconds':seconds,'version':__version__,'options':{'ocr':options.ocr,'images':False,'numbered_structure_requested':c.get('numbered_structure',False),'numbered_structure_supported':supported}}))
@@ -36,7 +43,16 @@ Path(c['measurement']).write_text(json.dumps({'seconds':seconds,'version':__vers
 
 
 def benchmark(
-    manifest_path, baseline, reference, output, *, repetitions=3, timeout=90, candidate=PROJECT, ocr=False, numbered_structure=True
+    manifest_path,
+    baseline,
+    reference,
+    output,
+    *,
+    repetitions=3,
+    timeout=90,
+    candidate=PROJECT,
+    ocr=False,
+    numbered_structure=True,
 ):
     if repetitions < 1 or timeout <= 0:
         raise ValueError("Positive repetitions and timeout required")
@@ -47,6 +63,7 @@ def benchmark(
     source_hashes = {
         name: tree_digest(root / "src") for name, root in [("baseline", baseline), ("candidate", candidate)]
     }
+    evaluator_hash = tree_digest(PROJECT / "evaluations")
     reference_version = json.loads((reference / "package.json").read_text())["version"]
     rows = []
     for index, item in enumerate(documents):
@@ -98,9 +115,22 @@ def benchmark(
                     )
                 (directory / (engine + "_stderr.log")).write_text(run.stderr)
                 (directory / (engine + "_stdout.log")).write_text(run.stdout)
-                if run.returncode or not parsed.exists() or not measured.exists():
+                if run.returncode or not measured.exists():
                     raise RuntimeError("Benchmark worker failed")
                 measurement = json.loads(measured.read_text())
+                if engine != "kordoc" and measurement.get("failure_kind") == "parser_exception":
+                    if parsed.exists() or not measurement.get("exception_type"):
+                        raise RuntimeError("Inconsistent parser exception evidence")
+                    row["engines"][engine] = {
+                        **measurement,
+                        "success": False,
+                        "error_code": "PARSER_EXCEPTION",
+                        "execution_error": measurement["exception_type"],
+                        "median_seconds": None,
+                        "output_sha256": None,
+                    }
+                    row["engines"][engine]["worker_wall_seconds"] = time.monotonic() - started
+                    continue
                 actual = json.loads(parsed.read_text())
                 row["engines"][engine] = {
                     **measurement,
@@ -134,11 +164,14 @@ def benchmark(
         name: tree_digest(root / "src") for name, root in [("baseline", baseline), ("candidate", candidate)]
     }:
         raise ValueError("Benchmark sources changed during execution")
+    if evaluator_hash != tree_digest(PROJECT / "evaluations"):
+        raise ValueError("Benchmark evaluator changed during execution")
     report = {
         "schema_version": 1,
         "manifest_sha256": sha(manifest_path.read_bytes()),
         "manifest_path": str(manifest_path.resolve()),
         "source_hashes": source_hashes,
+        "evaluator_sha256": evaluator_hash,
         "reference_version": reference_version,
         "reference_package_sha256": tree_digest(reference),
         "repetitions": repetitions,

@@ -83,7 +83,7 @@ Codex Skill에서 허용된 샘플·프로파일을 추가 근거로 사용할 �
 Worker는 현재 원문 샘플을 모델 입력으로 사용하지 않는다. 샘플에서 미탐지한 것을 전체 테이블에 위험 정보가 없다는 뜻으로
 해석하지 않는다. 실제 원문 값을 모델에 전달할 범위는 Agent 실행 정책에서 정한다.
 
-버전별 호환성 검증 결과는 [OpenMetadata 업그레이드 검증](../../verification/openmetadata_upgrade_2026_10_13.md)을 참고한다.
+버전별 호환성 검증 결과는 [OpenMetadata 업그레이드 검증](../../../archive/documentation/verification/openmetadata_upgrade_2026_10_13.md)을 참고한다.
 
 ## 구현 위치
 

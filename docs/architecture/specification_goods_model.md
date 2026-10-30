@@ -116,8 +116,8 @@ Published 개념을 문서에 적용하는 규칙은 [정규화 프로파일](..
 | `DocumentGoodsGraph` 작성 계약 | [대표 예시](../../backend/authoring/specification_examples/four_sample_graphs.yaml)의 구조·참조 검사 가능 |
 | goods Draft의 전체 인스턴스 적재·게시·Runtime 조회 | 후속 작업 |
 
-[네 문서 평가](../verification/goods_relation_repair_2026_10_28.md)와
-[운영 Worker 확인](../verification/goods_relation_deployment_2026_10_28.md)을 구분해 읽는다.
+[네 문서 평가](../../archive/documentation/verification/goods_relation_repair_2026_10_28.md)와
+[운영 Worker 확인](../../archive/documentation/verification/goods_relation_deployment_2026_10_28.md)을 구분해 읽는다.
 현재 검증은 전체 정확도나 새 물품 검색·비교의 완성을 뜻하지 않는다.
 
 ## 설계 참고

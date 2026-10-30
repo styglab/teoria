@@ -6,7 +6,7 @@ Runtime은 Source record를 Mapping으로 Runtime Object·Link에 변환하고 C
 
 현재 활성 bundle `2026.10.25.1`에는 업무 Capability가 없다.
 과거 조달 실행은 제공하지 않으며 물품 검색·비교는 후속 구현이다.
-[배포 검증](../verification/goods_focus_deployment_2026_10_25.md)의 실제 상태를 따른다.
+[배포 검증](../../archive/documentation/verification/goods_focus_deployment_2026_10_25.md)의 실제 상태를 따른다.
 
 ## 요청이 처리되는 순서
 

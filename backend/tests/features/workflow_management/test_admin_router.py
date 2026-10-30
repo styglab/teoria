@@ -218,3 +218,23 @@ def test_prefect_immediate_cancelled_state_is_a_successful_stop_request():
             f"/v1/admin/workflows/runs/{RUN}/cancel", headers=HEADERS, json={}
         )
     assert result.status_code == 202
+
+
+def test_standard_management_accepts_operator_parameters_and_materializes_defaults():
+    calls=[]
+    original=fixture_handler(calls)
+    def handler(request):
+        if request.url.path.endswith('/deployments/filter'):
+            calls.append((request.method,request.url.path,json.loads(request.content or '{}')))
+            return httpx.Response(200,json=[{'id':'spec','name':'specification-standard-management','schedules':[]}])
+        return original(request)
+    with make_api(handler) as api:
+        response=api.post('/v1/admin/workflows/pipelines/specification-standard-management/runs',headers=HEADERS,
+            json={'idempotency_key':RUN,'manifest':{'classification_code':'4321150102'}})
+    assert response.status_code==202
+    sent=next(body for _,path,body in calls if path.endswith('/create_flow_run'))['parameters']['manifest']
+    assert sent['target_specifications']==30
+    assert sent['selection']['strategy']=='latest'
+    assert sent['management']['holdout_documents']==5
+    assert sent['management']['purpose']=='dictionary_management'
+    assert sent['management']['force_review'] is False

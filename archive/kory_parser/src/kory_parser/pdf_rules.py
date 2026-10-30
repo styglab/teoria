@@ -70,8 +70,93 @@ def open_sided_boundaries(vertical, horizontal, existing_grids=()):
     return inferred
 
 
+def paired_rule_groups(groups, axis):
+    """Collapse isolated matching stroke pairs, preserving the normal 1pt snap.
+
+    A pair must have matching segment extents and stroke style on both sides.
+    Nearby rules belonging to different tables or a chain of narrow partitions
+    do not establish a double border. Rectangles retain their original edges.
+    """
+    low, high = ("top", "bottom") if axis == "x0" else ("x0", "x1")
+    positions = [sum(e[axis] for e in group) / len(group) for group in groups]
+
+    def signatures(group):
+        if any(e.get("object_type") != "line" or e[high] - e[low] < 4 for e in group):
+            return None
+        return {
+            (e[low], e[high], round(e.get("linewidth", 0), 3), tuple(e.get("stroking_color") or ()))
+            for e in group
+        }
+
+    def matches(left, right):
+        return all(
+            any(
+                abs(a - c) <= 1.6 and abs(b - d) <= 1.6 and style == other_style
+                for c, d, *other_style in right
+            )
+            for a, b, *style in left
+        )
+
+    index = 0
+    while index < len(groups):
+        if (
+            index + 1 < len(groups)
+            and positions[index + 1] - positions[index] <= 1.6
+            and (index == 0 or positions[index] - positions[index - 1] > 1.6)
+            and (index + 2 == len(groups) or positions[index + 2] - positions[index + 1] > 1.6)
+        ):
+            left, right = signatures(groups[index]), signatures(groups[index + 1])
+            if left and right and matches(left, right) and matches(right, left):
+                yield (groups[index], groups[index + 1]), (positions[index] + positions[index + 1]) / 2
+                index += 2
+                continue
+        yield (groups[index],), positions[index]
+        index += 1
+
+
+def corroborated_rule_pairs(grouped, vertical_edges):
+    """Require a bounded internal divider crossing repeated double row rules.
+
+    Decorative frames and lone header separators keep their original geometry.
+    Once a grid is confirmed, connected outer stroke pairs belong to that grid.
+    """
+    pairs = {
+        axis: {i: item for i, item in enumerate(items) if len(item[0]) == 2}
+        for axis, items in grouped.items()
+    }
+
+    def crosses(vertical, horizontal):
+        vg, x = vertical
+        hg, y = horizontal
+        return any(e["top"] - 1.6 <= y <= e["bottom"] + 1.6 for group in vg for e in group) and any(
+            e["x0"] - 1.6 <= x <= e["x1"] + 1.6 for group in hg for e in group
+        )
+
+    links = {i: {j for j, h in pairs["h"].items() if crosses(v, h)} for i, v in pairs["v"].items()}
+    confirmed = {"v": set(), "h": set()}
+    for index, (parents, position) in pairs["v"].items():
+        if len(links[index]) < 2:
+            continue
+        top = min(e["top"] for group in parents for e in group)
+        bottom = max(e["bottom"] for group in parents for e in group)
+        bounds = [e["x0"] for e in vertical_edges if e["top"] <= top + 1.6 and e["bottom"] >= bottom - 1.6]
+        if any(x < position - 1.6 for x in bounds) and any(x > position + 1.6 for x in bounds):
+            confirmed["v"].add(index)
+            confirmed["h"].update(links[index])
+    changed = True
+    while changed:
+        changed = False
+        for index, neighbors in links.items():
+            if index not in confirmed["v"] and neighbors & confirmed["h"]:
+                confirmed["v"].add(index)
+                confirmed["h"].update(neighbors)
+                changed = True
+    return confirmed
+
+
 def ruled_grids(edges, options, existing_grids=()):
-    snapped = []
+    grouped = {}
+    originals = {}
     for orientation, axis in (("v", "x0"), ("h", "top")):
         own = [
             e
@@ -79,19 +164,30 @@ def ruled_grids(edges, options, existing_grids=()):
             if e.get("orientation") == orientation
             and e.get("width" if orientation == "h" else "height", 0) >= 1
         ]
-        for group in clusters(own, lambda e, axis=axis: e[axis], 1):
-            position = sum(e[axis] for e in group) / len(group)
-            for edge in group:
-                snapped.append(
-                    dict(
-                        edge,
-                        **(
-                            {"x0": position, "x1": position}
-                            if orientation == "v"
-                            else {"top": position, "bottom": position}
-                        ),
+        originals[orientation] = own
+        grouped[orientation] = list(paired_rule_groups(clusters(own, lambda e, axis=axis: e[axis], 1), axis))
+    confirmed = corroborated_rule_pairs(grouped, originals["v"])
+    snapped = []
+    for orientation, axis in (("v", "x0"), ("h", "top")):
+        for index, (parents, position) in enumerate(grouped[orientation]):
+            # A single decorative double rule is insufficient evidence of a
+            # double-bordered grid. Preserve its ordinary per-group snapping.
+            if len(parents) == 2 and index not in confirmed[orientation]:
+                choices = [(group, sum(e[axis] for e in group) / len(group)) for group in parents]
+            else:
+                choices = [([edge for group in parents for edge in group], position)]
+            for group, coordinate in choices:
+                for edge in group:
+                    snapped.append(
+                        dict(
+                            edge,
+                            **(
+                                {"x0": coordinate, "x1": coordinate}
+                                if orientation == "v"
+                                else {"top": coordinate, "bottom": coordinate}
+                            ),
+                        )
                     )
-                )
     group_key = lambda e: (e["orientation"], e["top"] if e["orientation"] == "h" else e["x0"])
     joined = []
     for (direction, _), group in groupby(sorted(snapped, key=group_key), key=group_key):

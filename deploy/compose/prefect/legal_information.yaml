@@ -1,0 +1,17 @@
+pools:
+- name: teoria-legal-information
+  type: process
+  concurrency_limit: 1
+  queues:
+  - name: laws
+    priority: 1
+    concurrency_limit: 1
+deployments:
+- name: moleg-law-daily
+  work_pool:
+    name: teoria-legal-information
+    work_queue_name: laws
+- name: moleg-law-weekly-reconciliation
+  work_pool:
+    name: teoria-legal-information
+    work_queue_name: laws

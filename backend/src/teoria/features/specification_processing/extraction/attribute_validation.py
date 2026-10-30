@@ -17,6 +17,8 @@ def fragment_context(document,fragment,*,context=None):
     headings=set(context.paths[node_id])
     cell=context.cells.get(node_id)
     selected=ancestors|headings
+    clause_nodes={id for group in document.get('document_assessment',{}).get('clause_groups',[]) if node_id in group for id in group}
+    selected.update(clause_nodes)
     if cell is not None:
         table=context.table_key(cell)
         selected.update(key for key in context.related_ids(node_id)
@@ -30,13 +32,28 @@ def fragment_context(document,fragment,*,context=None):
     selected.discard(node_id)
     rows=[n for n in document['nodes'] if n['node_id'] in selected and n['text'].strip()]
     # Retain the previous extraction context limits; full primary fragments stay unchanged.
-    rows=sorted(rows,key=lambda n:n['node_id'] not in headings)[:8]
+    rows=sorted(rows,key=lambda n:(n['node_id'] not in clause_nodes,n['node_id'] not in headings))[:8]
     return [[n['node_id'],n.get('row'),n.get('column'),n['text'][:1000]] for n in rows]
 
 
-def uncovered(chunks,attributes,additional_covered=()):
+def uncovered(chunks,attributes,additional_covered=(),*,graph=None):
     covered=set(additional_covered)|{a['evidence']['fragment_id'] for a in attributes if 'fragment_id' in a.get('evidence',{})}
-    return [f for chunk in chunks for f in chunk if is_spec(f['text']) and f['id'] not in covered]
+    entity_nodes={ev['node_id'] for e in (graph or {}).get('entities',[]) for ev in e.get('evidence',[]) if ev.get('node_id')}
+    labels={}
+    for entity in (graph or {}).get('entities',[]):
+        for ev in entity.get('evidence',[]):
+            if ev.get('node_id'):labels.setdefault(ev['node_id'],set()).add(re.sub(r'\s+','',entity.get('name') or ''))
+    def missing(f):
+        if f['id'] in covered:return False
+        bare=re.sub(r'^\s*\d+\s*[.)]\s*','',f['text']).strip()
+        # A grounded list label is entity coverage, not an absent property. Do not use this
+        # shortcut for obligations or text carrying a numeric/conditional requirement.
+        if f.get('expected_role')!='delivery_requirement' and not is_spec(bare) and re.sub(r'\s+','',bare) in labels.get(f['node_id'],set()):return False
+        # Bare target mentions expect an entity, not an invented property. Actual obligations
+        # still require observations; an entity name alone cannot cover a delivery requirement.
+        if f.get('expected_role')=='target_mention':return f['node_id'] not in entity_nodes
+        return f.get('expected_role') in {'technical_requirement','delivery_requirement'} or is_spec(f['text'])
+    return [f for chunk in chunks for f in chunk if missing(f)]
 
 
 def deduplicate_inventory(inventory,attributes):

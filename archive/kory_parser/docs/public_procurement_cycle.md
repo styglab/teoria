@@ -123,6 +123,15 @@ uv run --locked python -m evaluations.public_procurement.regression \
   --output "$TASK_RUN/regression"
 ```
 
+Python 파서가 결과를 반환하기 전에 예외를 던지면 worker는 결과 JSON을 만들지 않고
+별도 측정 파일에 `failure_kind: parser_exception`과 예외 타입을 남긴다.
+파일 읽기·import·프로세스 실행·timeout 실패와 구분하며 실패 원문과 로그는 보존한다.
+gate는 원문 검사에서 개선이 확인되고 후보가 성공한 대상 문서의 기존 파서 예외만
+복구로 인정한다. 후보·참조 구현의 실행 오류, 설명되지 않은 기존 실행 오류와
+정상 실행으로 기록했지만 결과 파일이 없는 경우는 명시적인 미채택 사유다.
+복구 대상은 `recovered_baseline_failures`로 보고하며, 실패를 성공으로 바꾸어 기록하거나
+실패한 기존 구현의 가상 결과 JSON을 만들지 않는다.
+
 원문 hash와 두 소스 hash를 확인하고 버전 표기를 제외한 출력을 비교한다. 두 소스 hash가
 완전히 같으면 한 번 실행한 출력을 재사용하고 그 사실을 보고한다. 이는 서로 다른 구현의
 비교 결과를 대신하는 것이 아니다. 예산 초과·불완전 실행·예상 밖 출력 변화는 실패다.

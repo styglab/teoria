@@ -48,6 +48,14 @@ class MappingProposal(Record):
     owner_concept_id: UUID | None = None
     relation: Literal['equivalent', 'related'] = 'equivalent'
     rationale: str = Field(min_length=10, max_length=4000)
+    scope_mode: Literal['classified','unclassified','independent'] | None = None
+
+    @model_validator(mode='after')
+    def explicit_scope(self):
+        self.scope_mode = self.scope_mode or ('classified' if self.classification_code else 'unclassified')
+        if (self.scope_mode=='classified') != (self.classification_code is not None):
+            raise ValueError('classified scope requires a code; other scopes cannot carry a code')
+        return self
 
 
 class MeaningResolution(Record):
@@ -70,6 +78,14 @@ class MappingChange(Record):
     owner_key: str | None = None
     classification_code: str | None = Field(default=None, pattern=r'^\d{10}$')
     rationale: str = Field(min_length=10, max_length=4000)
+    scope_mode: Literal['classified','unclassified','independent'] | None = None
+
+    @model_validator(mode='after')
+    def explicit_scope(self):
+        self.scope_mode = self.scope_mode or ('classified' if self.classification_code else 'unclassified')
+        if (self.scope_mode=='classified') != (self.classification_code is not None):
+            raise ValueError('invalid classification scope')
+        return self
 
 
 class DictionaryChangeSet(Record):
@@ -86,12 +102,18 @@ class DictionaryChangeSet(Record):
         if any(not re.fullmatch(r'[a-f0-9]{64}',value) for value in self.reviewed_source_sha256):
             raise ValueError('reviewed sources require SHA256 hashes')
         keys = [d.definition.key for d in self.definitions]
-        scopes = [(m.source_entry_id, m.classification_code) for m in self.mappings]
+        scopes = [(m.source_entry_id, m.classification_code,m.scope_mode) for m in self.mappings]
         if len(keys) != len(set(keys)) or len(scopes) != len(set(scopes)):
             raise ValueError('duplicate definition or source scope in changeset')
         if len(self.retire_concept_ids) != len(set(self.retire_concept_ids)):
             raise ValueError('duplicate retired concept')
         return self
+
+
+class RelatedMeaningContext(Record):
+    source_entry_ids: list[UUID] = Field(default_factory=list,max_length=5000)
+    concept_ids: list[UUID] = Field(default_factory=list,max_length=1000)
+    changes: DictionaryChangeSet | None = None
 
 
 class DictionarySnapshot(Record):
@@ -122,9 +144,34 @@ def snapshot_from_records(concepts, mappings, sources):
               ('sources', sources, ('entry_id','kind','owner_entry_id','status','preferred_name'))]
     body = {}
     for name, records, keys in fields:
-        values = [{k: r.get(k) for k in keys} for r in records]
+        values = [{**{k: r.get(k) for k in keys},
+                   **({'scope_mode':r['scope_mode']} if name=='mappings' and 'scope_mode' in r else {})} for r in records]
         body[name] = sorted(json.loads(json.dumps(values, default=str)), key=lambda row: dictionary_checksum(row))
     return DictionarySnapshot(checksum=dictionary_checksum(body), **body)
+
+
+def approved_dictionary_snapshot(snapshot):
+    """Unresolved source registrations do not create new semantic releases."""
+    snapshot=DictionarySnapshot.model_validate(snapshot)
+    concepts=[c for c in snapshot.concepts if c['status']=='approved']
+    revisions={c['revision_id'] for c in concepts}
+    mappings=[m for m in snapshot.mappings if m['status']=='approved' and m['target_revision_id'] in revisions]
+    ids={m['source_entry_id'] for m in mappings}
+    while True:
+        owners={s.get('owner_entry_id') for s in snapshot.sources if s['entry_id'] in ids}-{None}
+        if owners.issubset(ids):break
+        ids.update(owners)
+    return snapshot_from_records(concepts,mappings,[s for s in snapshot.sources if s['entry_id'] in ids])
+
+
+def scope_matches(mapping, classification_code, *, legacy=False):
+    mode=mapping.get('scope_mode')
+    if mode is None:
+        if legacy:
+            return mapping['classification_code'] in {None,classification_code}
+        mode='classified' if mapping['classification_code'] else 'unclassified'
+    return (mode=='independent' or (mode=='unclassified' and classification_code is None)
+            or (mode=='classified' and classification_code is not None and mapping['classification_code']==classification_code))
 
 
 def resolve_snapshot(snapshot, source_entry_ids, classification_code=None):
@@ -134,7 +181,7 @@ def resolve_snapshot(snapshot, source_entry_ids, classification_code=None):
     sources = {str(s['entry_id']): s for s in snapshot.sources}
     mappings = [m for m in snapshot.mappings if m['status']=='approved' and m['relation']=='equivalent'
                 and str(m['target_revision_id']) in concepts
-                and m['classification_code'] in {None, classification_code}]
+                and scope_matches(m,classification_code,legacy='scope_mode' not in m)]
     results = {}
     def resolve(entry_id, path=frozenset()):
         key = str(entry_id)

@@ -36,6 +36,7 @@ def assess(benchmark_dir, quality, policy, confirmation=None):
     changed = []
     totals = {"baseline": 0.0, "candidate": 0.0}
     warnings = []
+    recovered_baseline_failures = []
     targets = {item.split(":", 1)[0] for item in quality["improvements"]}
     reference = {r["document_id"]: r for r in confirmation["results"]} if confirmation else {}
     if confirmation and confirmation["source_hashes"] != benchmark["source_hashes"]:
@@ -44,13 +45,41 @@ def assess(benchmark_dir, quality, policy, confirmation=None):
         identifier = row["document_id"]
         engines = row["engines"]
         before, after = engines["baseline"], engines["candidate"]
-        if any(e.get("execution_error") for e in engines.values()):
+        # Only a source-checked recovery of an exception inside baseline parse()
+        # can lack baseline output. Startup, timeout and candidate/reference
+        # failures remain blockers; absent files never count as equal outputs.
+        recovered_exception = (
+            before.get("failure_kind") == "parser_exception"
+            and bool(before.get("exception_type"))
+            and bool(before.get("execution_error"))
+            and not before["success"]
+            and after["success"]
+            and not after.get("execution_error")
+            and identifier in targets
+        )
+        if any(
+            e.get("execution_error") and not (name == "baseline" and recovered_exception)
+            for name, e in engines.items()
+        ):
             failures.append(identifier + ":execution_error")
         if before["success"] and not after["success"]:
             failures.append(identifier + ":success_regression")
-        b = json.loads((benchmark_dir / identifier / "baseline.json").read_text())
-        c = json.loads((benchmark_dir / identifier / "candidate.json").read_text())
-        if canonical(b) != canonical(c):
+        outputs = {}
+        for name in ("baseline", "candidate"):
+            path = benchmark_dir / identifier / (name + ".json")
+            if name == "baseline" and recovered_exception:
+                if path.exists():
+                    failures.append(identifier + ":unexpected_baseline_output")
+                continue
+            try:
+                outputs[name] = json.loads(path.read_text())
+            except (OSError, ValueError):
+                failures.append(identifier + ":" + name + "_output_unavailable")
+        if recovered_exception:
+            recovered_baseline_failures.append(identifier)
+        if recovered_exception or (
+            len(outputs) == 2 and canonical(outputs["baseline"]) != canonical(outputs["candidate"])
+        ):
             changed.append(identifier)
             if identifier not in targets:
                 failures.append(identifier + ":unreviewed_output_change")
@@ -87,6 +116,7 @@ def assess(benchmark_dir, quality, policy, confirmation=None):
         "accepted": not failures,
         "failures": failures,
         "changed_documents": changed,
+        "recovered_baseline_failures": recovered_baseline_failures,
         "unresolved_timing_warnings": warnings,
         "successful_document_median_sum_seconds": totals,
         "candidate_to_baseline_time_ratio": ratio,

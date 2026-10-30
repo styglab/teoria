@@ -1,0 +1,28 @@
+pools:
+- name: teoria-model-training
+  type: process
+  concurrency_limit: 1
+  queues: []
+  update_existing: false
+- name: teoria-model-deployment
+  type: process
+  concurrency_limit: 1
+  queues: []
+  update_existing: false
+deployments:
+- name: demo-customer-churn-pipeline
+  work_pool:
+    name: teoria-model-training
+    work_queue_name: default
+- name: demo-seed-customers
+  work_pool:
+    name: teoria-model-training
+    work_queue_name: default
+- name: demo-train-customer-churn
+  work_pool:
+    name: teoria-model-training
+    work_queue_name: default
+- name: demo-deploy-customer-churn
+  work_pool:
+    name: teoria-model-deployment
+    work_queue_name: default

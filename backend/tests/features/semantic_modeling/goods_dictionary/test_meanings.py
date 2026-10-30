@@ -162,3 +162,17 @@ def test_meaning_http_uses_authenticated_actor_and_rejects_body_actor():
                           json=decision().model_dump(mode='json'))
         assert result.status_code==200 and result.json()['status']=='approved'
         assert all(e[3]=='system:authenticated' for e in repo.events)
+
+
+def test_missing_classification_has_a_separate_scope_and_pinned_legacy_semantics_survive():
+    from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import scope_matches
+    old_mapping={'classification_code':None}
+    assert scope_matches(old_mapping,None)
+    assert not scope_matches(old_mapping,'4321150102')
+    assert scope_matches(old_mapping,'4321150102',legacy=True)
+    assert not scope_matches({**old_mapping,'scope_mode':'unclassified'},'4321150102',legacy=True)
+    assert scope_matches({**old_mapping,'scope_mode':'independent'},'4321150102')
+    classified={'classification_code':'4321150102','scope_mode':'classified'}
+    assert scope_matches(classified,'4321150102')
+    assert not scope_matches(classified,None)
+    assert not scope_matches(classified,'4321150701')

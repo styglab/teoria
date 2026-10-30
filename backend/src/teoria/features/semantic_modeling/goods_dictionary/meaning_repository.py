@@ -43,10 +43,10 @@ class GoodsMeaningRepository(GoodsDictionaryRepository):
 
     async def add_mapping(self, conn, proposal, evidence, actor):
         return await (await conn.execute('''INSERT INTO goods.concept_mappings
-        (mapping_id,source_entry_id,target_revision_id,classification_code,owner_concept_id,relation,rationale,evidence,status,created_by)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s) RETURNING *''',
+        (mapping_id,source_entry_id,target_revision_id,classification_code,owner_concept_id,relation,rationale,evidence,status,created_by,scope_mode)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s) RETURNING *''',
         (uuid4(),proposal.source_entry_id,proposal.target_revision_id,proposal.classification_code,proposal.owner_concept_id,
-         proposal.relation,proposal.rationale,Jsonb(evidence),actor))).fetchone()
+         proposal.relation,proposal.rationale,Jsonb(evidence),actor,proposal.scope_mode))).fetchone()
 
     async def set_status(self, conn, kind, entity_id, status):
         if kind=='concept':

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import json
-
-import httpx
+import shutil
+import tempfile
+from pathlib import Path
 
 from teoria.features.metadata_management.intelligence.asset_assessment.prompts import (
     SYSTEM_INSTRUCTION,
 )
+from teoria.integrations.codex import CodexRunner
 
 
 class AssessmentError(RuntimeError):
@@ -15,81 +18,40 @@ class AssessmentError(RuntimeError):
         super().__init__(code)
 
 
+def assessment_model_identity(model: str | None) -> str:
+    """Persist the execution backend as well as the optional pinned model."""
+    return f"codex:{model or 'default'}"
+
+
 class AssessmentModelClient:
-    """Configured chat-completions gateway. No implicit external destination."""
+    """Schema-constrained Codex inference; no HTTP gateway or model fallback."""
 
-    def __init__(
-        self,
-        url: str,
-        model: str,
-        token: str | None,
-        *,
-        timeout: float = 90,
-        max_tokens: int = 6000,
-        client: httpx.AsyncClient | None = None,
-    ):
-        self.url, self.model, self.token, self.timeout = url, model, token, timeout
-        self.max_tokens = max_tokens
-
-        self._http_client = client
-        self._owns_http_client = False
-
-    async def __aenter__(self):
-        if self._http_client is None:
-            self._http_client = httpx.AsyncClient(timeout=self.timeout)
-            self._owns_http_client = True
-        return self
-
-    async def __aexit__(self, exc_type, exc, traceback):
-        if self._owns_http_client:
-            client, self._http_client = self._http_client, None
-            self._owns_http_client = False
-            await client.aclose()
-
-    async def _post(self, payload: dict, headers: dict):
-        if self._http_client is not None:
-            return await self._http_client.post(
-                self.url, json=payload, headers=headers, timeout=self.timeout
-            )
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            return await client.post(self.url, json=payload, headers=headers)
+    def __init__(self, *, model: str | None = None, timeout: int = 180, runner=None):
+        self.model = assessment_model_identity(model)
+        self.runner = runner or CodexRunner(model=model, concurrency=1, timeout=timeout)
 
     async def generate(self, *, instruction: str, context: dict, output_type):
-        system = SYSTEM_INSTRUCTION + instruction
-        payload = {
-            "model": self.model,
-            "temperature": 0,
-            "max_tokens": self.max_tokens,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": system},
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "context": context,
-                            "schema": output_type.model_json_schema(),
-                        },
-                        ensure_ascii=False,
-                        default=str,
-                    ),
-                },
-            ],
-        }
-        headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
+        directory = await asyncio.to_thread(
+            tempfile.mkdtemp, prefix="teoria_assessment_"
+        )
         try:
-            response = await self._post(payload, headers)
-            response.raise_for_status()
-            if len(response.content) > 200_000:
+            result = await self.runner.generate(
+                SYSTEM_INSTRUCTION + instruction,
+                context,
+                Path(directory) / "answer.json",
+                output_schema=output_type.model_json_schema(),
+            )
+            if len(json.dumps(result, ensure_ascii=False).encode()) > 200_000:
                 raise AssessmentError("model_response_too_large")
-            choice = response.json()["choices"][0]
-            if choice.get("finish_reason") == "length":
-                raise AssessmentError("model_output_truncated")
-            content = choice["message"]["content"]
-            return output_type.model_validate_json(content)
-        except httpx.TimeoutException:
+            return output_type.model_validate(result)
+        except TimeoutError:
             raise AssessmentError("model_timeout") from None
-        except httpx.HTTPError:
-            raise AssessmentError("model_unavailable") from None
-        except (ValueError, KeyError, IndexError, TypeError):
+        except (ValueError, TypeError):
             raise AssessmentError("model_output_invalid") from None
+        except (OSError, RuntimeError) as exc:
+            if isinstance(exc, AssessmentError):
+                raise
+            raise AssessmentError("model_unavailable") from None
+        finally:
+            # Temporary inference output and receipts never become metadata artifacts.
+            await asyncio.to_thread(shutil.rmtree, directory)

@@ -4,9 +4,7 @@
 규격서 처리 Worker와 Ontology·Binding·Runtime·OpenMetadata 기반을 조립한다.
 이전 조달·기업 분석과 조달 API 수집은 배포 대상이 아니다.
 법령 수집·조회는 별도 pool·Worker로 복구했다.
-환경변수는 [설정 안내](configuration.md), 규격서 실행은 [Prefect](../pipelines/prefect.md),
-현재 통합 백엔드 전환 결과는 [재배포 검증 기록](../verification/backend_consolidation_deployment_2026_10_25.md)을 따른다.
-계약 경로 변경 후 현재 운영 결과는 [최신 재배포 기록](../verification/backend_contract_structure_deployment_2026_10_26.md)을 따른다.
+환경변수는 [설정 안내](configuration.md), 실행·스케줄은 [Prefect 운영](../pipelines/prefect.md)을 따른다.
 EC2 K3s는 [별도 배포](k3s.md)이며 Compose 성공을 K3s 운영 성공으로 기록하지 않는다.
 
 ## Docker Compose
@@ -19,6 +17,15 @@ project name 변경은 새 볼륨을 선택하므로 데이터 이관 없이 바
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration --profile intelligence config --quiet
 ```
 
+환경 파일은 Compose의 보간 입력만 관리한다. `.env.example`은 지원 입력을 기능별로 안내하고,
+실제 `.env`는 계정·비밀번호, 검증한 이미지 태그와 필요한 override만 유지한다.
+MinIO 관리자 변수의 이전 이름 이관은 [환경 파일 관리](configuration.md#compose-환경-파일-관리)를 따른다.
+
+Prefect의 process Pool·Queue는 `deploy/compose/prefect/`가 소유한다.
+Flow·기본 파라미터·스케줄은 `backend/config/<feature>/prefect_deployments.yaml`에서 읽어 합성한다.
+등록 명령의 `--backend process`는 Compose 설정, `--backend kubernetes`는 K3s 설정을 선택한다.
+환경 파일을 통째로 복제하거나 기본 스케줄을 양쪽에서 관리하지 않는다.
+
 ## 기본 스택
 
 | 구성 | 역할 |
@@ -28,6 +35,7 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --p
 | OPA·Policy Control Plane | 서명 정책과 결정 로그 |
 | Prefect Server·Services·Redis | workflow 실행·예약·재시도 |
 | 법령 Worker | `teoria-legal-information` pool, 법제처 credential만 사용 |
+| MinIO·스토리지 초기화 | 규격서 원본·산출물의 기본 객체 저장소와 역할별 계정·권한 |
 | 규격서 Worker | `teoria-specification` pool의 명시 입력 작업 |
 | PostgreSQL 2개 | Data DB와 Application·Prefect·OpenMetadata DB 분리 |
 | OpenMetadata·검색 엔진·Metadata Worker | 카탈로그와 격리 ingestion Job |
@@ -44,7 +52,12 @@ Admin·Runtime·OPA는 별도 token, Prefect는 계정을 사용한다. 토큰 �
 | Admin API docs | `http://localhost:8081/admin-api/docs` |
 | Runtime API docs | `http://localhost:8081/runtime-api/docs` |
 | Prefect | `http://localhost:8081/prefect/` |
+| MinIO 객체 브라우저 | `http://localhost:8081/minio/` |
 | nginx health | `http://localhost:8081/health` |
+
+MinIO 객체 브라우저는 MinIO 계정으로 로그인한다. 관리 계정은 `.env`의 `TEORIA_MINIO_ROOT_USER`·`TEORIA_MINIO_ROOT_PASSWORD`를 사용한다.
+외부 도메인·HTTPS를 쓰면 `TEORIA_MINIO_BROWSER_REDIRECT_URL`을 해당 공개 주소의 `/minio/`로 설정한다.
+S3 API 9000과 브라우저 9001을 별도 호스트 포트로 공개하지 않고 nginx의 `/minio/`만 사용한다.
 
 OpenMetadata의 별도 접속 경로는 [배포 안내](openmetadata.md)를 따른다.
 MCP는 Runtime HTTP API를 사용하는 선택적 STDIO 프로세스다.
@@ -53,11 +66,15 @@ MCP는 Runtime HTTP API를 사용하는 선택적 STDIO 프로세스다.
 
 | volume | 컨테이너 경로 | 용도 |
 |---|---|---|
-| `specification-inputs` | `/app/specification_inputs` | 명시 입력 원본, Worker에서 읽기 전용 |
-| `specification-artifacts` | `/app/specification_artifacts` | 원문 보관·추출 JSON·표준 draft·Markdown |
+| MinIO `teoria-artifacts` bucket | `s3://teoria-artifacts` | 원본·추출·판정·사전 스냅샷·보고서·중간 진단 |
+| `model-objects` | MinIO `/data` | 객체 저장소의 영구 디스크. 기존 모델 bucket과 별도로 규격서 bucket 관리 |
 | `specification-model-auth` | `/home/teoria/.codex` | 모델 CLI 인증, 이미지와 분리 |
 
-manifest에는 컨테이너 기준 URI를 입력한다. S3를 사용할 때는 [파이프라인 설정](../procurement_specification_processing/pipeline.md)을 따른다.
+규격서 Admin API와 Worker에는 로컬 입력·산출물 volume을 마운트하지 않는다.
+MinIO는 기본 스택이며 별도 object-storage profile은 필요 없다.
+`minio-init` 이미지는 `deploy/compose/minio/`에서 빌드하고, 기본 bucket과 전용 계정을 준비한다.
+`.env.example`의 Worker/API 저장소 secret을 별도로 설정한다. Worker는 산출물 쓰기, API는 입력 쓰기와 산출물 읽기를 허용하며 삭제 권한은 부여하지 않는다.
+manifest에는 `s3://` URI를 입력한다. 자세한 설정은 [파이프라인 설정](../procurement_specification_processing/pipeline.md)을 따른다.
 모델 CLI는 이미지에 고정하지만 계정 인증은 별도 volume 또는 Secret으로 제공한다.
 인증 상태 검사는 credential 본문을 출력하지 않는다. 모델 인증이 없는 기동 성공을 AI 추출 성공으로 간주하지 않는다.
 
@@ -67,7 +84,7 @@ manifest에는 컨테이너 기준 URI를 입력한다. S3를 사용할 때는 [
 Metadata Worker를 지정할 때는 의존 서비스의 `metadata` profile도 활성화한다.
 
 ```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration build runtime-api admin-api nginx prefect-worker prefect-metadata-worker
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile metadata --profile metadata-orchestration build minio-init runtime-api admin-api nginx prefect-worker prefect-metadata-worker
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run --rm --no-deps postgres-migrate
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run --rm --no-deps prefect-deploy
 ```
@@ -88,12 +105,21 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml up 
 ```
 
 기존 법령·메타데이터·모델 Worker의 이미지를 함께 변경하지 않는다. 실행 중인 규격서 작업이 없을 때 교체하고,
-이전 이미지·볼륨·환경을 보존한다. [구성 관계 수정 배포](../verification/goods_relation_deployment_2026_10_28.md)는
-실제 원본 처리를 확인했다. 후속 [사전 의미 자동 승인 배포](../verification/goods_dictionary_deployment_2026_10_28.md)는
+이전 이미지·볼륨·환경을 보존한다. [구성 관계 수정 배포](../../archive/documentation/verification/goods_relation_deployment_2026_10_28.md)는
+실제 원본 처리를 확인했다. 후속 [사전 의미 자동 승인 배포](../../archive/documentation/verification/goods_dictionary_deployment_2026_10_28.md)는
 새 Worker heartbeat와 기존 원문 추출 부분집합의 실제 Codex·Admin API 승인·결과 저장을 확인했다.
 
 Admin HTTP만 별도 반영할 때는 `TEORIA_ADMIN_API_IMAGE`에 릴리스 태그를 지정하고
 `admin-api`만 재생성한다. 다른 authoring 역할 이미지에는 이 변수를 적용하지 않는다.
+
+## 데이터 자산 진단의 Codex 실행
+
+데이터 자산 상세의 진단 요청은 `metadata-assessment-worker`에서 Codex로 실행한다.
+HTTP 모델 URL·토큰·출력 토큰 설정은 제거했다. 모델 고정값과 개별 호출 제한시간은
+`TEORIA_ASSESSMENT_CODEX_MODEL`·`TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS`를 사용한다.
+Codex 로그인은 `metadata-model-auth` 전용 볼륨에 준비한다. 규격서 Worker의 실행·인증 볼륨은 변경하지 않는다.
+`TEORIA_ASSESSMENT_WORKER_IMAGE`로 이 Worker만 별도 배포할 수 있다.
+[진단 실행과 인증 준비](../platform/metadata/asset_assessment.md#설정과-실행)를 참고한다.
 
 ## 법령 기능 배포
 
@@ -107,7 +133,7 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --p
 ```
 
 법령 전용 pool·예약만 재개한다. Runtime bundle과 업무 Capability는 변경하지 않는다.
-[법령 복구 검증](../verification/law_recovery_2026_10_25.md)을 따른다.
+[법령 복구 검증](../../archive/documentation/verification/law_recovery_2026_10_25.md)을 따른다.
 
 ## Runtime bundle 전환
 

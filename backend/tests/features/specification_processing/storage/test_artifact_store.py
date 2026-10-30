@@ -43,3 +43,21 @@ async def test_s3_uses_signed_native_http_and_conditional_put():
         assert await store.put(first.key,b'canonical')==first
         with pytest.raises(ValueError,match='conflict'):await store.put(first.key,b'other')
     assert {r.method for r in calls}=={'PUT','GET'}
+
+
+async def test_s3_does_not_confirm_an_upload_with_wrong_persisted_bytes():
+    async def handle(request):
+        return httpx.Response(200,content=b'corrupted' if request.method=='GET' else b'')
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        store=S3ArtifactStore('s3://specifications',client,endpoint='http://localhost:9000',access_key='example',secret_key='example')
+        with pytest.raises(ValueError,match='checksum verification'):
+            await store.put('file.json',b'correct')
+
+
+async def test_production_storage_never_falls_back_to_local_files(tmp_path,monkeypatch):
+    from teoria.features.specification_processing.storage.artifact_store import artifact_store
+    monkeypatch.setenv('TEORIA_SPECIFICATION_REQUIRE_OBJECT_STORAGE','true')
+    with pytest.raises(ValueError,match='require S3'):
+        async with artifact_store(tmp_path.as_uri()):
+            pytest.fail('local artifact store must not open')
+    assert not list(tmp_path.iterdir())

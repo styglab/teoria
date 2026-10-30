@@ -1,6 +1,7 @@
 # Teoria 문서
 
-**사용 → 기능 이해 → 운영 → 개발** 순서로 찾는다. 현재 설명과 과거 실험 기록은 분리했다.
+처음에는 사용 안내를 읽고, 상세 설정이나 구현이 필요할 때 해당 참조 문서로 이동한다.
+과거 검증·실험은 보관함에서 찾는다.
 명령은 별도 안내가 없으면 저장소 루트에서 실행한다.
 
 ## 처음 읽을 문서
@@ -15,12 +16,12 @@
 
 | 기능 | 안내 |
 |---|---|
-| 규격서 분석 | [시작](procurement_specification_processing/index.md) · [단계와 Codex](procurement_specification_processing/pipeline.md) · [품질 평가](procurement_specification_processing/evaluation.md) |
+| 규격서 분석 | [입력·단계·Codex](procurement_specification_processing/pipeline.md) · [품질 평가](procurement_specification_processing/evaluation.md) |
 | 물품 의미 모델 | [물품·구성품·분류·속성](architecture/specification_goods_model.md) · [사전](platform/goods_dictionary.md) · [프로파일](procurement_specification_processing/normalization_profiles.md) |
 | Ontology·의미 연결 | [작성·승인·게시](platform/ontology.md) · [자산 맥락](platform/metadata/asset_context.md) · [변경 제안](platform/metadata/suggestions.md) |
 | 메타데이터 진단 | [자동 진단](platform/metadata/asset_assessment.md) · [법령 근거](platform/metadata/law_evidence.md) · [진단 Skill](skills/analyze_metadata_asset.md) |
 | Runtime·AI 연결 | [Registry](platform/registry/guide.md) · [Runtime](platform/runtime.md) · [Context](platform/context.md) · [MCP](mcp/gateway.md) |
-| 관리 화면 | [화면 사용·프런트엔드 개발](platform/admin_ui.md) |
+| 관리 화면 | [경로·제한·프런트엔드 개발](platform/admin_ui.md) |
 
 ## 설치와 운영
 
@@ -38,11 +39,11 @@
 [저장소 구조](architecture/repository-structure.md)에서 소유 기능을 먼저 확인한다.
 
 - [의미 모델·Runtime 개발](platform/development.md)
-- [수집·문서 처리 개발](pipelines/development.md) · [Flow 작성 위치](pipelines/writing_pipelines.md)
+- [수집·문서 처리·Flow 작성](pipelines/development.md)
 - [Source 작성](platform/registry/source_authoring.md) · [Connector 작성](pipelines/connectors.md)
 - [Provider 연결 모듈](packages/provider_api.md) · [Source 작성 Skill](skills/source-registry-author.md)
 
 ## 기록과 보관
 
-- [검증 기록](verification/index.md): 실제 실행·배포의 입력·버전·결과·한계.
+- [최근 검증](verification/index.md): 최근 실행의 입력·버전·결과·한계.
 - [과거 문서](../archive/documentation/index.md): 이전 설계·삭제한 실험·비활성 조달 업무. 현재 실행 안내로 사용하지 않는다.

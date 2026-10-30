@@ -1,8 +1,8 @@
 from pathlib import Path
 
-import yaml
 
 from teoria.integrations.prefect.deployment_docs import load_deployments
+from teoria.integrations.prefect.deployment_manifests import deployment_path, load_deployment_manifest
 from teoria.integrations.prefect.deployment_validation import validate_deployment_contracts
 from teoria.integrations.data_operations.loader import PipelineLoader
 
@@ -36,7 +36,7 @@ def test_active_jobs_include_only_owned_workflows_and_optional_synthetic_demo():
 
 def test_document_jobs_cannot_get_automatic_schedules():
     catalog = PipelineLoader(ROOT).load()
-    job = yaml.safe_load((ROOT.parent / "deploy/prefect/specification_processing.yaml").read_text())["deployments"][0]
+    job = load_deployment_manifest(ROOT, "ingestion")["deployments"][0]
     job["schedules"] = [{"cron": "0 * * * *", "timezone": "Asia/Seoul"}]
-    diagnostics = validate_deployment_contracts(catalog, [(ROOT.parent / "deploy/prefect/specification_processing.yaml", job)])
+    diagnostics = validate_deployment_contracts(catalog, [(deployment_path(ROOT, "ingestion"), job)])
     assert diagnostics[0].code == "invalid_specification_deployment"

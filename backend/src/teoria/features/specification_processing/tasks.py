@@ -31,7 +31,12 @@ async def each_document(workspace,request,operation):
         if entry.get('failure'):return
         async with slots:
             try:await operation(entry)
-            except Exception as exc:entry['failure']={'stage':operation.__name__,'reason':type(exc).__name__}
+            except Exception as exc:
+                from teoria.features.specification_processing.processing_errors import SpecificationProcessingError
+                entry['failure']={'stage':operation.__name__,'reason':type(exc).__name__}
+                if isinstance(exc,SpecificationProcessingError):
+                    entry['failure'].update(code=exc.code,details=exc.details)
+                await save(Path(workspace)/'processing'/entry['document_id']/'failure.json',entry['failure'])
     await asyncio.gather(*(one(e) for e in items))
     await save(path,items)
 
@@ -96,13 +101,21 @@ async def stage_original_documents(request:SpecificationRun,workspace:str):
     await save(Path(workspace)/'work.json',items)
     return checkpoint is not None
 
-@task(name='01 문서 파싱',**TASK_OPTIONS)
+@task(name='01 문서 파싱·본문 역할 분류',**TASK_OPTIONS)
 async def parse_documents(request:SpecificationRun,workspace:str):
     from teoria.features.specification_processing.parsing.document_parser import parse_document
+    model=runner(request)
     async def parse_one(entry):
         folder=Path(workspace)/'processing'/entry['document_id'];await asyncio.to_thread(folder.mkdir,parents=True,exist_ok=True)
         context=await parse_document(Path(entry['source_path']),folder/'native.json',entry['document_id'],request.parser_python)
+        from teoria.features.specification_processing.parsing.document_assessment import assess_document
+        assessment=await assess_document(context,model,folder)
+        context['document_assessment']=assessment
+        await save(folder/'document_assessment.json',assessment)
         await save(folder/'document.json',context)
+        if assessment['excluded']:
+            entry['failure']={'stage':'document_assessment','reason':'not_specification','disposition':'excluded',
+                              'details':{'document_kind':assessment['document_kind']}}
     await each_document(workspace,request,parse_one)
 
 @task(name='02 엔티티·계층·관계 추출',**TASK_OPTIONS)
@@ -135,7 +148,7 @@ async def resolve_attribute_semantics(request:SpecificationRun,workspace:str):
         summary['attributes']=len(graph['attributes'])
         summary['numeric_comparisons']=sum(a['normalized']['comparison_rule']=='numeric_requirement' for a in graph['attributes'])
         summary['unresolved_units']=sum(a['normalized']['unit_status']=='unmapped' for a in graph['attributes'])
-        if semantic['unresolved']:summary['status']='partial'
+        if semantic['unresolved'] or semantic.get('unresolved_scope',0):summary['status']='partial'
         await save(out/'attribute_graph.json',graph);await save(out/'summary.json',summary)
     await each_document(workspace,request,resolve_one)
 
@@ -165,10 +178,12 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                 'parser':{'name':'kory_parser','version':context['parser_version'],'ocr':False},
                 'entities':graph['entities'],'relations':graph['relations'],'held_relations':graph.get('held_relations',[]),'inventory_ids':graph.get('inventory_ids',[]),
                 'declared_quantities':graph.get('declared_quantities',[]),'attributes':attributes,
-                'extraction_status':'partial' if summary['status']=='partial' or graph.get('held_relations') else 'extracted',
+                'extraction_status':'partial' if summary['status']=='partial' or graph.get('held_relations') or context.get('document_assessment',{}).get('status')=='needs_review' else 'extracted',
                 'attribute_input_coverage':summary['input_coverage'],
                 'unresolved_extraction':{**{k:summary[k] for k in ['failed_chunks','uncovered_spec_fragments','semantic_resolution','recovery_passes']},
-                                         'held_relations':len(graph.get('held_relations',[]))}})
+                                         'held_relations':len(graph.get('held_relations',[])),
+                                         'coverage_by_kind':summary.get('coverage_by_kind',{}),
+                                         'held_relations_by_kind':summary.get('held_relations_by_kind',{})}})
         corpus={'schema_version':'specification_extraction_v1','classification_code':request.classification_code,'documents':documents,'unavailable_documents':failed,
             'extraction_policy':'all_text_nodes_forwarded_with_bounded_recovery_and_semantic_resolution'}
     validate_checkpoint(corpus,request,items)
@@ -176,21 +191,15 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
     async with artifact_store(request.artifact_root) as store:
         return (await store.put(run_key(request,'extracted.json'),await asyncio.to_thread((Path(workspace)/'extracted.json').read_bytes))).model_dump()
 
-@task(name='06 원문 표현 조회·자동 등록·재사용',**TASK_OPTIONS)
+@task(name='06 표준 사전 관리·연결',**TASK_OPTIONS)
 async def resolve_dictionary(request:SpecificationRun,workspace:str,extraction_ref:dict):
     from teoria.features.specification_processing.normalization.dictionary_alignment import align_dictionary
+    corpus=await load(Path(workspace)/'extracted.json')
     maintenance=None
-    if request.dictionary_reconcile:
-        from teoria.features.specification_processing.normalization.dictionary_maintenance import maintain_dictionary
-        maintenance=await maintain_dictionary({
-            'batch_id':'run_'+request.run_id[:40]+'_'+hashlib.sha256(request.run_id.encode()).hexdigest()[:8],
-            'artifact_root':request.artifact_root,'model':request.model,
-            'classification_code':request.classification_code,'model_timeout_seconds':request.model_timeout_seconds,
-            'auto_apply':request.dictionary_meaning_auto_approve,
-            'extractions':[{'uri':extraction_ref['uri'],'sha256':extraction_ref['sha256']},
-                           *[r.model_dump(mode='json') for r in request.dictionary_corpus]],
-            'validation_extractions':[r.model_dump(mode='json') for r in request.dictionary_validation_corpus]})
-    return await align_dictionary(request,await load(Path(workspace)/'extracted.json'),extraction_ref,maintenance=maintenance)
+    if request.mode=='standard_management' and corpus['documents']:
+        from teoria.features.specification_processing.normalization.dictionary_incremental import update_standard_dictionary
+        maintenance=await update_standard_dictionary(request,corpus,extraction_ref)
+    return await align_dictionary(request,corpus,extraction_ref,maintenance=maintenance)
 
 
 def attach_source_term_alignment(normalized,dictionary):

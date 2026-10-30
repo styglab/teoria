@@ -13,7 +13,10 @@ def make_chunks(graph,document,target_chars=2200,fragment_chars=1100):
         for evidence in entity.get('evidence',[]):
             owners.setdefault(evidence['node_id'],[]).append(entity['id'])
     # Source completeness does not depend on whether an upstream graph used a cell as a label/list.
+    from teoria.features.specification_processing.parsing.document_assessment import extraction_node_ids
+    eligible=extraction_node_ids(document)
     for node_id,node in nodes.items():
+        if node_id not in eligible:continue
         text=node['text']
         if not text.strip() or node.get('kind')=='image':continue
         offset=0;start=0;size=0;parts=[]
@@ -24,6 +27,7 @@ def make_chunks(graph,document,target_chars=2200,fragment_chars=1100):
         if offset>start:parts.append((start,offset))
         for index,(a,b) in enumerate(parts):
             if text[a:b].strip():fragments.append({'id':f'{node_id}_f{index:02}','node_id':node_id,'start':a,'end':b,'text':text[a:b],
+                                                 'expected_role':document.get('document_assessment',{}).get('node_roles',{}).get(node_id,'unknown'),
                                                  'suggested_subject_ids':list(dict.fromkeys(owners.get(node_id,[])))})
     return pack_fragments(fragments,DocumentContext(document),target_chars)
 

@@ -24,6 +24,9 @@ nodes는 해당 절·표·상위 문맥을 선택한 원문이며 문서 전체�
 특히 표의 같은 행 이름, 열 머리글, 상위 품목, 주변 문장과 물품 계층을 함께 확인한다.
 상위 장비가 지원하는 대상·용량·성능과 실제 납품하는 하위 대상의 요구조건을 구분한다.
 기보유 제품은 existing_reference, 지원 가능·확장 한도는 supported_capability다.
+납품 대상 자체의 정격·허용 성능 요구와 다른 장치·옵션을 지원하는 능력은 다르다.
+속성명에 허용·최대·최소 또는 문장에 가능이 있다는 이유만으로 supported_capability/support_limit로 정하지 않는다.
+원문 속성명과 연산자, 같은 대상의 납품 문맥을 함께 확인한다. 자체 성능의 요구조건이면 requirement_candidate와 해당 대상 범위를 사용한다.
 속성명에 최대·최소가 있다는 이유만으로 지원 역할이나 연산 방향을 결정하지 않는다. 원문 문맥을 확인한다.
 기존 대상 ID만 사용한다. 정확한 하위 대상이 없으면 지원 능력을 가진 본체 ID로 연결할 수 있다. 귀속이 불명확하면 subject_ids=[],role=unknown으로 둔다.
 단순 제목·표 레이아웃은 구성품이 아니다. scope를 원문에서 판단할 수 없으면 unknown이다.
@@ -62,7 +65,7 @@ async def resolve_attribute_semantics(document,graph,attributes,runner,out):
         lookup={a['id']:a for a in part}
         request={'entities':[[e['id'],e['name'],e['kind'],e.get('document_roles',[])] for e in graph['entities']],
             'relations':[[r['source_id'],r['kind'],r['target_id']] for r in graph['relations']],
-            'attributes':[{**{k:a.get(k) for k in ['id','subject_ids','property_key','value_raw','unit_raw','operator_raw','qualifiers_raw','evidence']},
+            'attributes':[{**{k:a.get(k) for k in ['id','subject_ids','property_key','property_raw','data_type','operator','value_raw','unit_raw','operator_raw','qualifiers_raw','evidence']},
                            'context_group':context.group_key(a.get('evidence',{}).get('node_id'))} for a in part],
             'output_schema':Batch.model_json_schema()}
         accepted={};retry_ids=[];recovered=0;input_nodes=0;input_chars=0
@@ -109,4 +112,6 @@ async def resolve_attribute_semantics(document,graph,attributes,runner,out):
         'batches':len(batches),
         'resolved':sum(a.get('semantic_role')!='unknown' for a in pending),
         'unresolved':sum(a.get('semantic_role')=='unknown' for a in pending),
+        'unresolved_scope':sum(a.get('semantic_scope')=='unknown' for a in pending),
+        'unassigned_subjects':sum(not a.get('subject_ids') for a in pending),
         'reassigned':sum(a['subject_ids']!=a['extraction_subject_ids'] for a in pending)}

@@ -1,0 +1,18 @@
+pools:
+- name: teoria-legal-information-k3s
+  type: kubernetes
+  concurrency_limit: 1
+  job_secret: teoria-legal-information-secrets
+  queues:
+  - name: laws
+    priority: 1
+    concurrency_limit: 1
+deployments:
+- name: moleg-law-daily
+  work_pool:
+    name: teoria-legal-information-k3s
+    work_queue_name: laws
+- name: moleg-law-weekly-reconciliation
+  work_pool:
+    name: teoria-legal-information-k3s
+    work_queue_name: laws

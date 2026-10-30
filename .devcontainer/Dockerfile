@@ -21,19 +21,19 @@ RUN install -m 0755 -d /etc/apt/keyrings \
  && apt-get install -y docker-ce-cli \
  && rm -rf /var/lib/apt/lists/*
 
-# non-root user (VSCode 권장)
-RUN useradd -ms /bin/bash vscode
+# node 사용자는 기본 이미지에 존재하며 UID 1000을 사용
+RUN groupadd -f docker \
+ && usermod -aG docker,sudo node \
+ && echo "node ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/node \
+ && chmod 0440 /etc/sudoers.d/node
 
-# docker 그룹 권한 추가
-RUN groupadd -f docker && usermod -aG docker vscode
-
-USER vscode
+USER node
 
 # npm 전역 설치 위치를 사용자 홈으로 변경
-RUN mkdir -p /home/vscode/.npm-global \
- && npm config set prefix /home/vscode/.npm-global
+RUN mkdir -p /home/node/.npm-global \
+ && npm config set prefix /home/node/.npm-global
 
-ENV PATH="/home/vscode/.npm-global/bin:${PATH}"
+ENV PATH="/home/node/.npm-global/bin:${PATH}"
 ENV UV_LINK_MODE=copy
 
 # Codex CLI

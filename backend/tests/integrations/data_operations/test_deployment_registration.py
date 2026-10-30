@@ -6,6 +6,7 @@ import yaml
 from prefect.client.schemas.objects import FlowRun
 from prefect.settings import PREFECT_API_AUTH_STRING, temporary_settings
 from teoria.integrations.prefect import deployment
+from teoria.integrations.prefect.deployment_manifests import load_deployment_manifest
 
 ROOT = (Path(__file__).resolve().parents[4])
 
@@ -69,10 +70,7 @@ async def test_job_resources_and_secrets_survive_prefect_render(monkeypatch):
 @pytest.mark.parametrize("backend", ["process", "kubernetes"])
 @pytest.mark.parametrize("kind", ["ingestion", "legal-information", "metadata"])
 def test_registration_preserves_shared_flow_contract(monkeypatch, backend, kind):
-    source = ROOT / "backend"
-    filename = {"ingestion": "specification_processing.yaml", "legal-information": "legal_information.yaml", "metadata": "metadata_management.yaml"}[kind]
-    source = ROOT / "deploy" / "prefect"
-    original = yaml.safe_load((source / filename).read_text())
+    original = load_deployment_manifest(ROOT / "backend", kind, backend)
     monkeypatch.setenv(
         "TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE", "ghcr.io/example/ingestion:test"
     )
@@ -101,7 +99,7 @@ def test_registration_preserves_shared_flow_contract(monkeypatch, backend, kind)
             assert after["parameters"]["image"] == "ghcr.io/example/ingestion:test"
             after["parameters"]["image"] = before["parameters"]["image"]
         assert after == before
-    assert yaml.safe_load((source / filename).read_text()) == original
+    assert load_deployment_manifest(ROOT / "backend", kind, backend) == original
 
 
 @pytest.mark.parametrize("total", ["0", "-1"])
@@ -118,10 +116,8 @@ async def test_invalid_concurrency_is_rejected_before_pool_mutation(
 
 @pytest.mark.asyncio
 async def test_legal_kubernetes_jobs_use_only_the_dedicated_secret(monkeypatch):
-    template = {'job_configuration': {'job_manifest': {'spec': {'template': {
-        'spec': {'containers': [{'envFrom': [{'secretRef': {'name': 'teoria-pipeline-secrets'}}]}]}
-    }}}}}
-    monkeypatch.setattr(deployment, 'kubernetes_job_template', lambda: template)
+    pytest.importorskip("prefect_kubernetes")
+    monkeypatch.setenv("TEORIA_PIPELINE_JOB_IMAGE", "ghcr.io/example/law-worker:test")
     client = AsyncMock()
     client.read_work_pool.return_value.type = 'kubernetes'
     pool = await deployment.configure_pool(client, backend='kubernetes', kind='legal-information')

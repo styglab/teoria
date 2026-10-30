@@ -4,7 +4,6 @@ import hashlib
 import json
 from collections import Counter
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from pydantic import Field, model_validator
 from urllib.parse import urlsplit
@@ -20,6 +19,14 @@ from teoria.features.specification_processing.normalization.dictionary_candidate
 from teoria.features.specification_processing.normalization.dictionary_semantics import observation_context
 from teoria.features.specification_processing.storage.artifact_store import artifact_store, read_uri
 from teoria.integrations.codex import CodexRunner
+from teoria.features.specification_processing.storage.processing_workspace import processing_workspace
+
+
+class DictionaryProposalError(ValueError):
+    """A deterministic proposal rule failed; the code contains no model/source content."""
+    def __init__(self, code):
+        self.code=code
+        super().__init__(code)
 
 
 class ExtractionInput(StandardReference):
@@ -74,6 +81,8 @@ concepts after merging/splitting and remapping ALL affected expressions. A minor
 the concept key; a different meaning requires a new key. Never change an existing concept's kind.
 Only map source IDs in the supplied groups, using the classification_code of their occurrences.
 Different codes are different mapping scopes; null means no supplied classification, never guess it. Omitted/uncertain
+Use classified scope for a supplied code, unclassified scope for a missing code. Creating independent
+scope is reserved for separate governance; do not broaden unknown classification into global applicability.
 expressions must be held, never guessed. An incomplete impact migration will be rejected. Do not
 retire a concept solely because it is absent from this corpus. Do not claim an official standard.
 Work only on the requested kind. For characteristics use supplied stable item concept IDs and
@@ -117,14 +126,14 @@ async def load_corpus(inputs, classification_code):
     return {'documents':documents,'classification_code':classification_code,'unavailable_documents':[]},seen,families
 
 
-async def register_corpus(api, corpus, operation_prefix):
+async def register_corpus(api, corpus, operation_prefix, *, auto_approve=True):
     candidates,decisions = [],[]
     operation_number = 0
     # Source registration is bounded; it does not approve standard definitions or change mappings.
     async def register(documents):
         nonlocal operation_number
         try:
-            submission = submission_from_corpus({'documents':documents})
+            submission = submission_from_corpus({'documents':documents},auto_approve=auto_approve)
         except ValueError:
             if len(documents)==1:
                 raise
@@ -162,6 +171,7 @@ def source_groups(corpus, candidates, decisions):
             observation = context['observation']
             occurrences.append({'document_id':doc_id,'origin_ref':candidate['origin_ref'],
                 'classification_code':classifications[doc_id],
+                'context_node_ids':[n['node_id'] for n in context['source_context']],
                 'name':candidate['preferred_name'],'value_kind':candidate['value_kind'],
                 'value_raw':observation.get('value_raw'),'unit_raw':observation.get('unit_raw'),
                 'role':observation.get('semantic_role'),'scope':observation.get('semantic_scope'),
@@ -171,40 +181,54 @@ def source_groups(corpus, candidates, decisions):
     return groups,list(nodes.values()),entries
 
 
+def nodes_for_groups(groups, nodes):
+    """Keep every observed context of this kind, without unrelated source nodes."""
+    required={(o['document_id'],node_id) for g in groups for o in g['occurrences']
+              for node_id in o['context_node_ids']}
+    return [n for n in nodes if (n['document_id'],n['node_id']) in required]
+
+
 def validate_corpus_plan(plan, kind, groups, baseline, item_definitions):
     available = {g['source_entry_id']:g for g in groups if g['kind']==kind}
     if len({(str(m.source_entry_id),m.classification_code) for m in plan.mappings})!=len(plan.mappings):
-        raise ValueError('duplicate source mappings')
+        raise DictionaryProposalError('duplicate_source_mappings')
     if any(str(m.source_entry_id) not in available for m in plan.mappings):
-        raise ValueError('plan references an unprovided expression')
+        raise DictionaryProposalError('plan_references_an_unprovided_expression')
+    for mapping in plan.mappings:
+        if mapping.scope_mode=='independent' and not any(
+            str(old['source_entry_id'])==str(mapping.source_entry_id) and old.get('scope_mode')=='independent'
+            and old['status']=='approved' for old in baseline.mappings):
+            raise DictionaryProposalError('independent_scope_requires_explicit_governance')
     if set(plan.held_source_ids)-available.keys() or set(plan.held_source_ids)&{str(m.source_entry_id) for m in plan.mappings}:
-        raise ValueError('invalid held expressions')
+        raise DictionaryProposalError('invalid_held_expressions')
     scopes={(id,o['classification_code']) for id,g in available.items() for o in g['occurrences']}
     covered={(str(m.source_entry_id),m.classification_code) for m in plan.mappings}
     covered.update(scope for scope in scopes if scope[0] in plan.held_source_ids)
     if scopes-covered:
-        raise ValueError('every expression scope requires a mapping or explicit hold')
+        raise DictionaryProposalError('every_expression_scope_requires_a_mapping_or_explicit_hold')
     if any(d.definition.kind!=kind for d in plan.definitions):
-        raise ValueError('plan changed a different kind')
+        raise DictionaryProposalError('plan_changed_a_different_kind')
     retired = {str(x) for x in plan.retire_concept_ids}
     existing = {str(c['concept_id']):c for c in baseline.concepts if c['status']=='approved'}
     if any(id not in existing or existing[id]['kind']!=kind for id in retired):
-        raise ValueError('plan retires an unknown or different kind')
+        raise DictionaryProposalError('plan_retires_an_unknown_or_different_kind')
     approved = {c['concept_key']:c['content'] for c in baseline.concepts if c['status']=='approved' and str(c['concept_id']) not in retired}
     approved.update(item_definitions)
     approved.update({d.definition.key:d.definition.model_dump(mode='json') for d in plan.definitions})
     for mapping in plan.mappings:
+        if mapping.target_key not in approved:
+            raise DictionaryProposalError('mapping_target_not_defined')
         definition = ConceptDefinition.model_validate(approved[mapping.target_key])
         if definition.kind!=kind:
-            raise ValueError('mapping kind mismatch')
+            raise DictionaryProposalError('mapping_kind_mismatch')
         if kind=='characteristic':
             occurrences = [o for o in available[str(mapping.source_entry_id)]['occurrences']
                            if o['classification_code']==mapping.classification_code]
             if {o['value_kind'] for o in occurrences}!={definition.value_kind}:
-                raise ValueError('mapping changes observed value kind')
+                raise DictionaryProposalError('mapping_changes_observed_value_kind')
             units = {o['unit_raw'] for o in occurrences}-{None,''}
             if definition.allowed_units and not units.issubset(set(definition.allowed_units)):
-                raise ValueError('mapping loses observed units')
+                raise DictionaryProposalError('mapping_loses_observed_units')
     for change in plan.definitions:
         if change.definition.kind!='characteristic':
             continue
@@ -213,7 +237,7 @@ def validate_corpus_plan(plan, kind, groups, baseline, item_definitions):
                  if o['classification_code']==m.classification_code}-{None,''}
         old = next((c['content'] for c in baseline.concepts if str(c['revision_id'])==str(change.base_revision_id)),{})
         if not units.issubset(set(change.definition.allowed_units)) or set(change.definition.allowed_units)-units-set(old.get('allowed_units',[])):
-            raise ValueError('definition invents or loses an observed unit policy')
+            raise DictionaryProposalError('definition_invents_or_loses_an_observed_unit_policy')
     return approved
 
 
@@ -224,7 +248,7 @@ def definitions_with_source_refs(plan, entries):
         references = sorted({'source:'+e.source_sha256+'#'+e.locator for source_id in source_ids
                              for candidate in entries[source_id] for e in candidate.evidence})[:30]
         if not references:
-            raise ValueError('definition has no mapped source evidence')
+            raise DictionaryProposalError('definition_has_no_mapped_source_evidence')
         definition = ConceptDefinition.model_validate({**change.definition.model_dump(mode='json'),'references':references})
         definitions.append(DefinitionChange(base_revision_id=change.base_revision_id,definition=definition))
     return definitions
@@ -272,11 +296,14 @@ async def maintain_dictionary(request, *, api=None, runner=None):
     prefix = 'specification_processing/dictionary_maintenance/'+request.batch_id+'/'
     async with artifact_store(request.artifact_root) as store:
         artifacts = []
+        working = None
         async def save(name, body):
             raw=body.encode() if name.endswith('.md') else (json.dumps(body,ensure_ascii=False,indent=2,default=str)+'\n').encode()
             ref = await store.put(prefix+name,raw,'text/markdown' if name.endswith('.md') else 'application/json')
             artifacts.append(ref.model_dump());return ref
         async def finish(result):
+            if working is not None:
+                artifacts.extend(await working.publish())
             await save('result.json',result)
             lines=['# 사전 일괄 구축·개정 결과','',f"상태: {result['status']}",'',
                 '기존 추출을 재사용한 사전 관리 결과입니다. 원문 재추출·Published Ontology 게시 결과가 아닙니다.','',
@@ -299,25 +326,28 @@ async def maintain_dictionary(request, *, api=None, runner=None):
         plans,checks = [],[]
         item_definitions = {}
         item_mappings = []
-        with TemporaryDirectory(prefix='teoria_dictionary_maintenance_') as workspace:
+        async with processing_workspace(request.artifact_root,'dictionary_maintenance/'+request.batch_id,'dictionary') as working:
+            workspace=str(working.path)
             for kind in ['item_type','characteristic']:
                 selected = [g for g in groups if g['kind']==kind]
                 if not selected:
                     continue
                 context = {'kind':kind,'classification_code':request.classification_code,'groups':selected,
-                    'source_nodes':nodes,'concepts':baseline.concepts,'staged_item_definitions':item_definitions,
+                    'source_nodes':nodes_for_groups(selected,nodes),'concepts':baseline.concepts,'staged_item_definitions':item_definitions,
                     'item_concept_ids':{key:next((str(c['concept_id']) for c in baseline.concepts if c['concept_key']==key),
                                                str(concept_id_for_key(key))) for key in item_definitions},
                     'item_mappings':item_mappings}
-                if len(json.dumps(context,ensure_ascii=False))>request.max_context_characters:
-                    raise ValueError('dictionary context budget exceeded; partition the input corpus')
+                size=len(json.dumps(context,ensure_ascii=False))
+                if size>request.max_context_characters:
+                    return await finish({'status':'held','reason':'dictionary_context_budget_exceeded',
+                        'stage':kind,'context_characters':size,'max_context_characters':request.max_context_characters})
                 for attempt in range(2):
                     suffix='' if attempt==0 else '_repair_1'
                     plan = CorpusPlan.model_validate(await runner.generate(PLAN_PROMPT,context,
                         Path(workspace)/(kind+suffix+'_plan.json'),output_schema=CorpusPlan.model_json_schema()))
                     scopes = {(g['source_entry_id'],o['classification_code']) for g in selected for o in g['occurrences']}
                     if any((str(m.source_entry_id),m.classification_code) not in scopes for m in plan.mappings):
-                        raise ValueError('plan invented classification scope')
+                        raise DictionaryProposalError('plan_invented_classification_scope')
                     approved = validate_corpus_plan(plan,kind,groups,baseline,item_definitions)
                     # Source-backed references are assigned by code before verification and persistence.
                     plan.definitions = definitions_with_source_refs(plan,entries)
@@ -361,8 +391,10 @@ async def maintain_dictionary(request, *, api=None, runner=None):
                 context={'groups':validation_groups,'source_nodes':validation_nodes,
                     'baseline':baseline.model_dump(mode='json'),'candidate':preview['snapshot'],
                     'plan':changes.model_dump(mode='json')}
-                if len(json.dumps(context,ensure_ascii=False))>request.max_context_characters:
-                    raise ValueError('validation context budget exceeded; partition the input corpus')
+                size=len(json.dumps(context,ensure_ascii=False))
+                if size>request.max_context_characters:
+                    return await finish({'status':'held','reason':'validation_context_budget_exceeded',
+                        'stage':'validation','context_characters':size,'max_context_characters':request.max_context_characters})
                 validation_check=CorpusCheck.model_validate(await runner.generate(CHECK_PROMPT,context,
                     Path(workspace)/'validation_check.json',output_schema=CorpusCheck.model_json_schema()))
                 await save('validation_check.json',validation_check.model_dump(mode='json'))
@@ -378,9 +410,10 @@ async def maintain_dictionary(request, *, api=None, runner=None):
                 applied=await api.dictionary_meaning('POST','/maintenance/maintenance_'+request.batch_id,changes.model_dump(mode='json'))
                 result.update(status='applied',application=applied)
                 # Export the exact snapshot captured in the committing transaction, not a later live read.
-                current=DictionarySnapshot.model_validate(applied['snapshot'])
-                if current.checksum!=applied['snapshot_checksum']:
+                committed=DictionarySnapshot.model_validate(applied['snapshot'])
+                if committed.checksum!=applied['snapshot_checksum']:
                     raise ValueError('committed dictionary snapshot checksum mismatch')
+                current=DictionarySnapshot.model_validate(applied.get('release_snapshot',applied['snapshot']))
                 reference=await save('dictionary_standard.json',current.model_dump(mode='json'))
                 result['dictionary_standard']={'uri':reference.uri,'sha256':reference.sha256}
             return await finish(result)

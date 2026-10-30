@@ -17,7 +17,7 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - Pipeline 실행 코드에서 Capability 또는 Mapping Runtime을 직접 호출하지 않는다. 표준관리 Flow의 의미 작성 요청은 인증된 Admin HTTP API를 사용한다.
 - Provider wire 계약·요청·응답·HTTP 실행은 `integrations/provider_api/`, Codex subprocess 추론은 `integrations/codex/`, Prefect 배포·pool·queue 정책은 `integrations/prefect/`가 소유한다.
 - 실행 계약은 `backend/contracts/runtime/`, 수집 계약은 `backend/contracts/ingestion/`, 운영 입력은 `backend/config/`, 작성 입력·이관은 `backend/authoring/`에 둔다.
-- Prefect Flow·Task는 소유 기능에 두고 schedule·pool·배포 선언은 `deploy/prefect/`에 둔다.
+- Prefect Flow·Task는 소유 기능에 둔다. 공통 Flow 등록 정보·기본 파라미터·스케줄은 `backend/config/<feature>/prefect_deployments.yaml`, 환경별 pool·queue·Job 정책은 `deploy/compose/prefect/`와 `deploy/k3s/prefect/`에 둔다.
 - Python 의존성은 `backend/pyproject.toml`, 잠금은 `backend/uv.lock` 한곳에서 관리한다. API·MCP·각 Worker는 별도 이미지와 역할별 의존성·권한을 유지한다.
 - 별도 설치형 `packages/`는 둘 이상의 독립 프로젝트가 실제 소비할 때만 추가한다. 현재 통합한 내부 코드를 다시 패키지로 분리하거나 `common`, `shared`, `utils` 묶음을 만들지 않는다.
 - 프런트엔드는 `frontend/src/`에 두며 앱 조립은 `app/`, 업무 화면은 `features/`에 둔다.

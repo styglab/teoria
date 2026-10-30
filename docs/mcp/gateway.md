@@ -3,7 +3,7 @@
 현재 배포된 Runtime은 업무 Capability를 노출하지 않으므로 Tool 목록은 비어 있다.
 기존 조달 Tool을 다시 노출하지 않는다. Gateway는 시작할 때 discovery를 고정하므로
 Runtime bundle 변경 뒤 MCP 프로세스와 클라이언트 연결을 재시작한다.
-[배포 검증](../verification/goods_focus_deployment_2026_10_25.md)에서 실제 STDIO 초기화와 빈 Tool 목록을 확인했다.
+[배포 검증](../../archive/documentation/verification/goods_focus_deployment_2026_10_25.md)에서 실제 STDIO 초기화와 빈 Tool 목록을 확인했다.
 
 MCP는 Runtime API의 공개 Capability discovery를 MCP Tool로 노출한다.
 Tool 이름은 Capability ID이며 입력 schema는 배포된 Runtime discovery 응답에서 받는다.

@@ -51,6 +51,29 @@ fallback이 최종 실행값을 결정한다. 다음 차이를 먼저 확인한�
 Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할 때는 공개 nginx
 주소를 사용한다. 토큰과 암호를 포함한 설정 전체를 로그에 출력하지 않는다.
 
+### Compose 환경 파일 관리
+
+`deploy/compose/.env`에는 Compose가 실제로 참조하는 인증정보·계정, 배포 이미지 태그와
+의도적인 override만 둔다. `.env.example`은 같은 이름·기능별 구분으로 지원 입력과 기본값을 안내한다.
+예시의 모든 항목을 운영 `.env`에 남길 필요는 없다. 컨테이너 내부 경로·주소·인증 모드는
+`compose.yaml`이 소유하며 `.env`의 임의 변수가 자동으로 컨테이너에 전달되지는 않는다.
+호스트 직접 실행용 Settings와 비활성 Provider credential을 Compose 파일에 섞지 않는다.
+
+| 입력 | 의미 |
+|---|---|
+| `TEORIA_MINIO_ROOT_USER` / `TEORIA_MINIO_ROOT_PASSWORD` | MinIO 관리자 로그인과 초기화 계정; 현재 로컬 MLflow 저장 연결에도 사용 |
+| `TEORIA_SPECIFICATION_WORKER_STORAGE_ACCESS_KEY` / `TEORIA_SPECIFICATION_WORKER_STORAGE_SECRET_KEY` | 규격서 원본·산출물 쓰기 계정 |
+| `TEORIA_SPECIFICATION_API_STORAGE_ACCESS_KEY` / `TEORIA_SPECIFICATION_API_STORAGE_SECRET_KEY` | 규격서 Admin API의 조회 계정 |
+| `TEORIA_RUNTIME_API_IMAGE` | Runtime API 이미지 선택 |
+| `TEORIA_ADMIN_API_IMAGE` | Admin HTTP 이미지 선택 |
+| `TEORIA_SPECIFICATION_WORKER_IMAGE` | 규격서 Worker 이미지 선택 |
+
+이전 MinIO `TEORIA_MINIO_ACCESS_KEY` / `TEORIA_MINIO_SECRET_KEY`는 각각
+`TEORIA_MINIO_ROOT_USER` / `TEORIA_MINIO_ROOT_PASSWORD`로 이름을 바꿨다.
+기존 `.env`를 사용하는 다른 배포에서는 값을 그대로 새 이름으로 옮긴다. 계정·암호를 변경하는 작업은 아니다.
+이미지 태그를 생략하면 Compose의 `latest` 기본값을 사용한다. 기존에 검증한 릴리스 태그는
+유지하고 명시적인 배포 때 변경한다. 태그 변경이나 `.env` 편집 자체가 빌드·재배포를 실행하지는 않는다.
+
 ### 공통·경로
 
 | 변수 | 기본값 | 의미 |
@@ -175,12 +198,12 @@ DB URL도 설정해야 한다. Compose 내부 DB 포트를 기본 공개하지 �
 | 변수 | 기본값 | 의미 |
 |---|---|---|
 | `TEORIA_ASSESSMENT_ENABLED` | `false` | 진단 요청 활성화 |
-| `TEORIA_ASSESSMENT_MODEL_URL` | 없음 | gateway의 전체 chat-completions endpoint |
-| `TEORIA_ASSESSMENT_MODEL_NAME` | 없음 | 사용할 모델 ID |
-| `TEORIA_ASSESSMENT_MODEL_TOKEN` | 없음 | gateway 인증정보, Worker에만 전달 |
-| `TEORIA_ASSESSMENT_MODEL_TIMEOUT_SECONDS` | `90` | 모델 요청 제한시간 |
-| `TEORIA_ASSESSMENT_MODEL_MAX_TOKENS` | `6000` | 출력 한도, 모델 문맥 크기에 맞게 조정 |
+| `TEORIA_ASSESSMENT_CODEX_MODEL` | 없음 | Codex 모델 고정값; 비우면 로그인한 CLI의 설정 사용 |
+| `TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS` | `180` | 개별 Codex 호출 제한시간, 최대 360초 |
+| `TEORIA_ASSESSMENT_WORKER_IMAGE` | `teoria-platform-authoring:latest` | Compose 진단 Worker만 선택하는 이미지 태그 |
 
+이전 HTTP 모델 주소·이름·토큰·출력 토큰 설정은 사용하지 않는다. Codex 인증은 Compose의
+`metadata-model-auth` 전용 볼륨에 두며 `.env`에 저장하지 않는다.
 요청·응답 계약과 시작 방법은 [자산 진단](../platform/metadata/asset_assessment.md)을 따른다.
 
 ## Secret 규칙

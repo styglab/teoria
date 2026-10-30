@@ -31,6 +31,8 @@ def undecorated(monkeypatch):
     for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','resolve_dictionary','select_and_map_standard','persist_report']:
         monkeypatch.setattr(tasks,name,getattr(tasks,name).fn)
     from teoria.features.specification_processing.normalization import dictionary_alignment
+    from teoria.features.specification_processing.normalization import dictionary_incremental
+    monkeypatch.setattr(dictionary_incremental,'update_standard_dictionary',AsyncMock(return_value=None))
     class DictionaryAPI:
         async def __aenter__(self):return self
         async def __aexit__(self,*args):pass
@@ -154,3 +156,19 @@ def test_retired_dictionary_mode_and_graph_entry_are_rejected(tmp_path):
     assert SpecificationRun.model_validate(body).dictionary_auto_approve is True
     body['dictionary_graphs']={'uri':'file:///tmp/legacy.yaml','sha256':'a'*64}
     with pytest.raises(ValueError):SpecificationRun.model_validate(body)
+
+
+async def test_all_excluded_sources_are_not_reported_as_failed_extraction(tmp_path,undecorated):
+    req=inputs(tmp_path)
+    checkpoint=Path(req.extraction_checkpoint.uri.removeprefix('file://'))
+    data=json.loads(checkpoint.read_text());document=data['documents'][0]
+    data['documents']=[];data['unavailable_documents']=[{
+        **{k:document.get(k) for k in ('document_id','notice_number','source')},
+        'stage':'document_assessment','reason':'not_specification','disposition':'excluded'}]
+    raw=json.dumps(data).encode();checkpoint.write_bytes(raw)
+    req=SpecificationRun.model_validate({**req.model_dump(mode='json'),'extraction_checkpoint':{
+        'uri':checkpoint.as_uri(),'sha256':hashlib.sha256(raw).hexdigest()}})
+    result=await flows.execute_specification_run(req)
+    assert result.status=='completed'
+    assert result.summary['failed_documents']==0 and result.summary['excluded_documents']==1
+    assert result.document_results[0]['status']=='excluded'

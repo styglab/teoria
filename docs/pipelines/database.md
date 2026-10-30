@@ -44,8 +44,8 @@ uv run --locked --project backend \
 
 `101_goods_notice_evidence.sql`은 다음 네 테이블을 추가한다. 2026-10-28 운영 Data DB에
 물품 공고 758,443건·첨부 참조 1,848,691건을 복원했다.
-[운영 복원 기록](../verification/goods_notice_production_restore_2026_10_28.md)과
-[격리 검증 기록](../verification/goods_notice_restore_validation_2026_10_28.md)은 구분한다.
+[운영 복원 기록](../../archive/documentation/verification/goods_notice_production_restore_2026_10_28.md)과
+[격리 검증 기록](../../archive/documentation/verification/goods_notice_restore_validation_2026_10_28.md)은 구분한다.
 
 | 테이블 | 저장 책임 |
 |---|---|

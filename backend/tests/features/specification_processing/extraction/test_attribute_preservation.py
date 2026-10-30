@@ -184,3 +184,26 @@ async def test_unusable_batch_gets_one_bounded_retry(tmp_path,first_answer):
     assert len(runner.requests)==2
     assert summary['retried_attributes']==2 and summary['recovered_attributes']==2
     assert summary['resolved']==2
+
+
+async def test_semantic_judgment_receives_source_property_type_and_operator(tmp_path):
+    import json
+    from pathlib import Path
+    fixture=json.loads((Path(__file__).parent/'fixtures/vehicle_load_capacity_source.json').read_text())
+    document={'nodes':[{**fixture['node'],'node_id':'load'}]}
+    graph={'entities':[{'id':'table','name':'이동형 진료대','kind':'equipment','evidence':[{'node_id':'load'}]}],'relations':[]}
+    attribute={'id':'load_1','subject_ids':['table'],'property_key':'load_capacity','property_raw':'허용하중',
+        'data_type':'number','operator':'gte','operator_raw':'이상','value_raw':'200','unit_raw':'kg','qualifiers_raw':[],
+        'evidence':{'node_id':'load'}}
+    class Judge:
+        async def generate(self,prompt,request,*args,**kwargs):
+            actual=request['attributes'][0]
+            assert actual['property_raw']=='허용하중'
+            assert actual['data_type']=='number' and actual['operator']=='gte'
+            assert actual['value_raw']=='200' and actual['operator_raw']=='이상'
+            assert '이동형 진료대 설치·비치' in request['nodes'][0][6]
+            return {'resolutions':[{'attribute_id':'load_1','subject_ids':['table'],'role':'requirement_candidate',
+                'scope':'per_component','evidence_node_ids':['load']}]}
+    await resolve_attribute_semantics(document,graph,[attribute],Judge(),tmp_path)
+    assert attribute['semantic_role']=='requirement_candidate'
+    assert attribute['value_raw']=='200' and attribute['unit_raw']=='kg' and attribute['operator']=='gte'

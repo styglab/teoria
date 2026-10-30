@@ -21,7 +21,8 @@
 | `frontend/src/features/` | 업무 화면 |
 | `frontend/src/api/` | HTTP 계약 |
 | `frontend/src/components/`, `frontend/src/lib/` | 프런트엔드에서 실제 공유하는 구성 |
-| `deploy/prefect/` | Flow 배포·pool·queue·schedule 선언 |
+| `backend/config/<feature>/prefect_deployments.yaml` | 공통 Flow 등록 정보·기본 파라미터·기본 schedule |
+| `deploy/compose/prefect/`, `deploy/k3s/prefect/` | 환경별 Prefect pool·queue·실행 Job 정책 |
 | `deploy/compose/`, `deploy/k3s/` | 환경별 배포 설정 |
 | `docs/` | 현재 안내·문서용 예제·검증 기록 |
 | `tests/documentation/` | 문서 링크·목차 검증 코드 |
@@ -110,6 +111,10 @@ python3 -m tests.documentation.check_docs
 uv run --project backend --locked --all-extras --group orchestration pytest tests/documentation
 ```
 
+현재 사용·설계·운영·개발 안내는 주제별 기준 문서 하나를 갱신하고 같은 설명을 여러 페이지에 복제하지 않는다.
+일반 변경의 테스트 결과마다 새 검증 문서를 만들지 않는다. 장기 추적이 필요한 배포·이관·품질 관측만
+입력·버전·결과·한계와 함께 기록하고, 지난 기록은 `archive/documentation/verification/`에 보존한다.
+
 테스트는 소유 프로젝트에 둔다. 루트 tests에는 저장소 공통·프로젝트 간 계약 검사를 둔다.
 적용된 SQL·게시 artifact·이관 이력은 수정하지 않는다. 실제 실행 전에는 템플릿 검증을 배포 성공으로 기록하지 않는다.
 
@@ -123,7 +128,8 @@ Source는 Runtime 직접 호출, Connector는 Pipeline 전용 호출 계약이�
 Provider reference의 registry 경로는 backend 기준이며 원본 wire 이름은 보존한다.
 Runtime Mapping과 Semantic Binding을 혼용하지 않는다. 이전 codec은 호환 영역에만 두며 은퇴 업무를 재활성화하지 않는다.
 
-Flow·Task는 소유 기능, schedule·pool·배포는 deploy/prefect에 둔다.
+Flow·Task는 소유 기능에 둔다. 공통 등록 정보·기본 파라미터·스케줄은 backend/config/<feature>/prefect_deployments.yaml,
+환경별 pool·queue·Job 정책은 deploy/compose/prefect와 deploy/k3s/prefect에 둔다.
 Compose는 로컬 배포, K3s와 GitHub 자동 배포는 deploy/k3s와 .github/workflows/deploy_k3s.yaml이 맡는다.
 프런트엔드 빌드는 frontend/Dockerfile이 소유한다.
 

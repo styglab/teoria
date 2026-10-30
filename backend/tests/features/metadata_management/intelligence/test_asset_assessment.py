@@ -1,9 +1,7 @@
 from types import SimpleNamespace
-import json
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
-import httpx
 import pytest
 
 from teoria.features.metadata_management.intelligence.asset_assessment.model_client import (
@@ -274,96 +272,59 @@ def test_korean_law_lookup_does_not_depend_on_model_translating_english_columns(
 
 
 @pytest.mark.asyncio
-async def test_model_gateway_uses_structured_json_and_configured_token(monkeypatch):
-    captured = []
+async def test_codex_uses_typed_schema_and_discards_temporary_output():
+    paths = []
 
-    async def handler(request):
-        captured.append(request)
-        return httpx.Response(
-            200,
-            json={
-                "choices": [{"message": {"content": '{"changes":[],"findings":[]}'}}]
-            },
-        )
+    async def generate(instruction, context, output, *, output_schema):
+        assert "synthetic instruction" in instruction
+        assert context == {"source": "synthetic"}
+        assert "changes" in output_schema["properties"]
+        assert "findings" in output_schema["properties"]
+        assert output.parent.exists()
+        paths.append(output)
+        output.write_text("synthetic temporary output")
+        return {"changes": [], "findings": []}
 
-    original = httpx.AsyncClient
-    monkeypatch.setattr(
-        httpx,
-        "AsyncClient",
-        lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs),
-    )
-    model = AssessmentModelClient(
-        "http://model.invalid/chat/completions",
-        "synthetic",
-        "synthetic-secret",
-        max_tokens=2048,
-    )
-    assert (
-        await model.generate(
-            instruction="test", context={}, output_type=AssessmentOutput
-        )
-        == AssessmentOutput()
-    )
-    assert captured[0].headers["Authorization"] == "Bearer synthetic-secret"
-    assert json.loads(captured[0].content)["max_tokens"] == 2048
+    runner = SimpleNamespace(generate=generate)
+    model = AssessmentModelClient(model="synthetic", runner=runner)
+    result = await model.generate(instruction="synthetic instruction", context={"source": "synthetic"}, output_type=AssessmentOutput)
+    assert result == AssessmentOutput()
+    assert model.model == "codex:synthetic"
+    assert not paths[0].parent.exists()
 
 
-@pytest.mark.parametrize("fail", [False, True])
-async def test_model_context_reuses_connections_and_closes_owned_client(
-    monkeypatch, fail
-):
-    from unittest.mock import Mock
-
-    async def handler(request):
-        if fail:
-            raise httpx.ReadTimeout("synthetic timeout", request=request)
-        return httpx.Response(
-            200,
-            json={
-                "choices": [{"message": {"content": '{"changes":[],"findings":[]}'}}]
-            },
-        )
-
-    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    factory = Mock(return_value=client)
-    monkeypatch.setattr(httpx, "AsyncClient", factory)
-    model = AssessmentModelClient("http://model.invalid/chat", "synthetic", None)
-    if fail:
-        with pytest.raises(AssessmentError, match="model_timeout"):
-            async with model:
-                await model.generate(
-                    instruction="test", context={}, output_type=AssessmentOutput
-                )
-    else:
-        async with model:
-            for _ in range(2):
-                await model.generate(
-                    instruction="test", context={}, output_type=AssessmentOutput
-                )
-    factory.assert_called_once_with(timeout=90)
-    assert client.is_closed
+@pytest.mark.parametrize("failure,code", [
+    (TimeoutError("private provider text"), "model_timeout"),
+    (RuntimeError("private provider text"), "model_unavailable"),
+    (ValueError("private incomplete JSON"), "model_output_invalid"),
+])
+async def test_codex_failures_expose_only_stable_codes_and_do_not_fallback(failure, code):
+    runner = SimpleNamespace(generate=AsyncMock(side_effect=failure))
+    model = AssessmentModelClient(runner=runner)
+    with pytest.raises(AssessmentError, match=code) as error:
+        await model.generate(instruction="test", context={}, output_type=AssessmentOutput)
+    assert "private" not in str(error.value)
+    runner.generate.assert_awaited_once()
 
 
-async def test_model_context_keeps_borrowed_client_open():
-    async with httpx.AsyncClient(
-        transport=httpx.MockTransport(
-            lambda request: httpx.Response(
-                200,
-                json={
-                    "choices": [
-                        {"message": {"content": '{"changes":[],"findings":[]}'}}
-                    ]
-                },
-            )
-        )
-    ) as client:
-        async with AssessmentModelClient(
-            "http://model.invalid/chat", "synthetic", None, client=client
-        ) as model:
-            await model.generate(
-                instruction="test", context={}, output_type=AssessmentOutput
-            )
-        assert not client.is_closed
+async def test_codex_rejects_invalid_schema_and_oversized_output():
+    for output, code in [({"unknown": True}, "model_output_invalid"), ({"large": "x" * 200001}, "model_response_too_large")]:
+        model = AssessmentModelClient(runner=SimpleNamespace(generate=AsyncMock(return_value=output)))
+        with pytest.raises(AssessmentError, match=code):
+            await model.generate(instruction="test", context={}, output_type=AssessmentOutput)
+
+
+async def test_codex_cancellation_propagates_and_removes_temporary_files():
+    import asyncio
+    paths = []
+    async def generate(instruction, context, output, **kwargs):
+        paths.append(output)
+        output.write_text("synthetic")
+        raise asyncio.CancelledError
+    model = AssessmentModelClient(runner=SimpleNamespace(generate=generate))
+    with pytest.raises(asyncio.CancelledError):
+        await model.generate(instruction="test", context={}, output_type=AssessmentOutput)
+    assert not paths[0].parent.exists()
 
 
 @pytest.mark.asyncio
@@ -383,13 +344,3 @@ async def test_law_context_budget_limits_documents_without_dropping_provenance()
     assert reader.get_document.await_count == 1
     assert reader.get_document.call_args.kwargs["max_chars"] == 1000
     assert evidence["law:1"]["provenance"]["snapshot_id"] == str(identifiers[0])
-
-
-@pytest.mark.asyncio
-async def test_truncated_model_output_is_never_accepted_as_a_diagnosis():
-    async def handler(request):
-        return httpx.Response(200,json={"choices":[{"finish_reason":"length","message":{"content":'{"queries":[]}'}}]})
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
-        model=AssessmentModelClient('http://configured-gateway/chat','configured-model',None,client=http)
-        with pytest.raises(AssessmentError,match='model_output_truncated'):
-            await model.generate(instruction='keywords',context={},output_type=LawQueries)

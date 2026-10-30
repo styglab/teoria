@@ -61,7 +61,11 @@ class SpecificationRun(Record):
     dictionary_auto_approve: bool = True
     dictionary_meaning_auto_approve: bool = True
     dictionary_standard: StandardReference | None = None
+    dictionary_baseline: StandardReference | None = None
+    dictionary_require_validation: bool = False
+    dictionary_max_held_source_ids: int | None = Field(default=None,ge=0)
     dictionary_reconcile: bool = False
+    dictionary_evidence_corpus: list[StandardReference] = Field(default_factory=list,max_length=1000)
     dictionary_corpus: list[StandardReference] = Field(default_factory=list,max_length=1000)
     dictionary_validation_corpus: list[StandardReference] = Field(default_factory=list,max_length=1000)
     documents: list[SourceDocument] = Field(min_length=1,max_length=100)
@@ -80,9 +84,11 @@ class SpecificationRun(Record):
             raise ValueError('duplicate document_id')
         if self.mode=='document_processing' and self.standard is None:
             raise ValueError('document processing requires a pinned standard URI and checksum')
-        if self.dictionary_reconcile or self.dictionary_corpus or self.dictionary_validation_corpus:
-            if self.mode!='standard_management' or not self.dictionary_reconcile or not self.model or self.dictionary_standard:
-                raise ValueError('corpus reconciliation requires standard_management, dictionary_reconcile and a pinned model without dictionary_standard')
+        if self.dictionary_reconcile or self.dictionary_corpus or self.dictionary_validation_corpus or self.dictionary_evidence_corpus:
+            if self.mode!='standard_management' or self.dictionary_standard:
+                raise ValueError('corpus reconciliation requires standard_management without dictionary_standard')
+        if self.dictionary_standard and self.mode=='standard_management':
+            raise ValueError('dictionary_standard is read-only; use document_processing')
         SourceDocument.safe_uri(self.artifact_root)
         if urlsplit(self.artifact_root).scheme not in {'file','s3'} or urlsplit(self.artifact_root).query:
             raise ValueError('artifact_root must use file:// or s3://')

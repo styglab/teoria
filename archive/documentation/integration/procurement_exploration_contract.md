@@ -118,7 +118,7 @@ cursor는 조회 조건 fingerprint와 offset을 포함한다. 다른 질의에 
 
 기존 제안 P95 목표는 자동완성 200ms, 네트워크 cache hit 1초, miss 2초다.
 합의·검증한 SLA가 아니며 데이터량·동시 요청·기간·depth·payload·cache 조건을 고정해
-측정해야 한다. [2026-10-13 단회 관측](../../../docs/verification/procurement_exploration_2026_10_13.md)은
+측정해야 한다. [2026-10-13 단회 관측](../verification/procurement_exploration_2026_10_13.md)은
 해당 목표의 달성 증거가 아니다.
 
 인덱스·ledger 생성·갱신과 Data DB migration은 Pipelines, 조회·집계·캐시·Capability는

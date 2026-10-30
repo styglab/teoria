@@ -5,7 +5,7 @@ Python 프로젝트는 하나지만 실행 권한과 데이터 책임은 [저장
 
 ## 코드와 설정
 
-아래 경로는 `backend/` 기준이다. Prefect 배포 선언은 저장소 루트의 `deploy/prefect/`에 둔다.
+아래 경로는 `backend/` 기준이다. 공통 Flow 등록 정보는 `backend/config/<feature>/prefect_deployments.yaml`, 환경별 실행 선언은 `deploy/compose/prefect/`와 `deploy/k3s/prefect/`에 둔다.
 
 | 위치 | 책임 |
 |---|---|
@@ -17,7 +17,8 @@ Python 프로젝트는 하나지만 실행 권한과 데이터 책임은 [저장
 | `src/teoria/integrations/provider_api/` | Provider wire 계약과 HTTP 실행 |
 | `migrations/data/` | Data DB schema와 적용 이력 |
 | `contracts/ingestion/`, `config/` | 수집 계약·대상·업무 입력 |
-| `../deploy/prefect/*.yaml` | 기능별 배포 선언 |
+| `config/<feature>/prefect_deployments.yaml` | 공통 Flow 등록·파라미터·기본 스케줄 |
+| `../deploy/compose/prefect/*.yaml`, `../deploy/k3s/prefect/*.yaml` | 환경별 Pool·Queue·실행 정책 |
 
 규격서는 [파이프라인 계약](../procurement_specification_processing/pipeline.md)과 manifest를 먼저 읽고
 `flows.py`·`tasks.py`에서 순서를 확인한다. 세부 변경 위치는 `parsing/`, `extraction/`,
@@ -26,6 +27,14 @@ Python 프로젝트는 하나지만 실행 권한과 데이터 책임은 [저장
 
 공고·계약·기업 분석과 구형 첨부 자동 수집은 `archive/`에 보관한다. 활성 Flow·Registry·이미지로
 다시 연결하지 않는다. 현재 활성 Connector는 법령 수집용 `moleg_law_api`다.
+
+## Flow·Task 작성 기준
+
+Flow는 실행 순서를 읽을 수 있게 유지하고, 실패 지점·재시도가 중요한 단계는 이름 있는 Task로 만든다.
+HTTP·DB I/O는 native async와 `await`로 연결한다. 정규화·계산·검증은 일반 함수로 유지한다.
+DB 연결·transaction을 Task 사이에 공유하지 않고, 재실행해도 안전한 단위로 재시도한다.
+Provider API 수집을 추가할 때만 [Connector 계약](connectors.md)을 작성한다.
+기능 변경은 해당 테스트, 배포 변경은 환경별 등록 선언과 [운영 절차](prefect.md)를 함께 확인한다.
 
 ## 실행과 권한
 

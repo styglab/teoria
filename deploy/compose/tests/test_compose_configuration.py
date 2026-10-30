@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -58,6 +59,61 @@ class ComposeConfigurationTests(unittest.TestCase):
         result = self.config(project)
         self.assertEqual(result.returncode, 0, "Compose configuration must resolve")
         return json.loads(result.stdout)
+
+    def test_env_example_has_unique_inputs_consumed_by_compose(self):
+        keys = [
+            line.split("=", 1)[0]
+            for line in (COMPOSE_ROOT / ".env.example").read_text().splitlines()
+            if line and not line.startswith("#") and "=" in line
+        ]
+        consumed = set(
+            re.findall(r"\$\{([A-Z][A-Z0-9_]*)", (COMPOSE_ROOT / "compose.yaml").read_text())
+        )
+        self.assertEqual(len(keys), len(set(keys)), "Duplicate environment inputs")
+        self.assertFalse(set(keys) - consumed, "Template contains unused inputs")
+
+    def test_assessment_codex_auth_and_image_are_isolated_from_specification_worker(self):
+        before = self.resolved("teoria-test-assessment-codex")["services"]
+        self.environment["TEORIA_ASSESSMENT_WORKER_IMAGE"] = "teoria-platform-authoring:test-assessment"
+        self.environment["TEORIA_ASSESSMENT_CODEX_MODEL"] = "synthetic-codex-model"
+        after = self.resolved("teoria-test-assessment-codex")["services"]
+        self.assertEqual(after["metadata-assessment-worker"]["image"], "teoria-platform-authoring:test-assessment")
+        for name, service in before.items():
+            if name != "metadata-assessment-worker":
+                self.assertEqual(service.get("image"), after[name].get("image"), name)
+        for name in ("admin-api", "metadata-assessment-worker"):
+            environment = after[name]["environment"]
+            self.assertEqual(environment["TEORIA_ASSESSMENT_CODEX_MODEL"], "synthetic-codex-model")
+            self.assertFalse(any(key.startswith("TEORIA_ASSESSMENT_MODEL_") for key in environment))
+        auth = lambda name: next(v["source"] for v in after[name]["volumes"] if v["target"] == "/home/teoria/.codex")
+        self.assertNotEqual(auth("metadata-assessment-worker"), auth("prefect-worker"))
+
+    def test_minio_admin_login_is_distinct_from_specification_service_credentials(self):
+        self.environment.update(
+            TEORIA_MINIO_ROOT_USER="synthetic_storage_admin",
+            TEORIA_MINIO_ROOT_PASSWORD="synthetic_admin_password",
+            TEORIA_SPECIFICATION_WORKER_STORAGE_ACCESS_KEY="synthetic_worker",
+            TEORIA_SPECIFICATION_WORKER_STORAGE_SECRET_KEY="synthetic_worker_password",
+            TEORIA_SPECIFICATION_API_STORAGE_ACCESS_KEY="synthetic_reader",
+            TEORIA_SPECIFICATION_API_STORAGE_SECRET_KEY="synthetic_reader_password",
+        )
+        services = self.resolved("teoria-test-storage-credentials")["services"]
+        for name in ("minio", "minio-init"):
+            environment = services[name]["environment"]
+            self.assertEqual(environment["MINIO_ROOT_USER"], "synthetic_storage_admin")
+            self.assertEqual(environment["MINIO_ROOT_PASSWORD"], "synthetic_admin_password")
+        self.assertEqual(
+            services["mlflow"]["environment"]["AWS_ACCESS_KEY_ID"],
+            "synthetic_storage_admin",
+        )
+        self.assertEqual(
+            services["prefect-worker"]["environment"]["TEORIA_SPECIFICATION_S3_ACCESS_KEY"],
+            "synthetic_worker",
+        )
+        self.assertEqual(
+            services["admin-api"]["environment"]["TEORIA_SPECIFICATION_S3_ACCESS_KEY"],
+            "synthetic_reader",
+        )
 
     def test_gateway_serves_ui_without_a_separate_ui_service(self):
         services = self.resolved("teoria-test-gateway")["services"]
@@ -126,18 +182,21 @@ class ComposeConfigurationTests(unittest.TestCase):
         )
         self.assertEqual(environment["TEORIA_OPENMETADATA_ENABLED"], "true")
 
-    def test_document_input_storage_is_only_writable_from_admin_and_readonly_for_worker(self):
+    def test_document_inputs_and_artifacts_use_object_storage_without_shared_file_mounts(self):
         services = self.resolved("teoria-test-specification-input")["services"]
         admin = services["admin-api"]
+        worker = services["prefect-worker"]
         self.assertEqual(admin["environment"]["TEORIA_SPECIFICATION_UPLOAD_ENABLED"], "true")
-        inputs = next(v for v in admin["volumes"] if v["target"] == "/app/specification_inputs")
-        artifacts = next(v for v in admin["volumes"] if v["target"] == "/app/specification_artifacts")
-        worker_inputs = next(v for v in services["prefect-worker"]["volumes"] if v["target"] == "/app/specification_inputs")
-        self.assertEqual(inputs["source"], worker_inputs["source"])
-        self.assertFalse(inputs.get("read_only", False))
-        self.assertTrue(worker_inputs["read_only"])
-        self.assertTrue(artifacts["read_only"])
-        self.assertFalse(any(v["target"] == "/app/specification_inputs" for v in services["model-deployment-worker"]["volumes"]))
+        for service in (admin, worker):
+            environment = service["environment"]
+            self.assertEqual(environment["TEORIA_SPECIFICATION_REQUIRE_OBJECT_STORAGE"], "true")
+            self.assertEqual(environment["TEORIA_SPECIFICATION_ARTIFACT_ROOT"], "s3://teoria-artifacts")
+            self.assertEqual(environment["TEORIA_SPECIFICATION_S3_ENDPOINT"], "http://minio:9000")
+        for name in ("admin-api", "prefect-worker", "model-deployment-worker"):
+            self.assertFalse(any(
+                volume["target"] in {"/app/specification_inputs", "/app/specification_artifacts"}
+                for volume in services[name].get("volumes", [])
+            ))
 
     def test_admin_mlflow_connection_uses_server_static_prefix(self):
         services = self.resolved("teoria-test-mlflow")["services"]
@@ -181,17 +240,16 @@ class ComposeConfigurationTests(unittest.TestCase):
             "/opt/kory_parser/bin/python",
         )
 
-    def test_runtime_can_read_specification_evidence_without_worker_write_or_model_access(self):
-        services = self.resolved("teoria-test-evidence")["services"]
-        runtime = services["runtime-api"]
-        worker = services["prefect-worker"]
-        target = "/app/specification_artifacts"
-        runtime_mount = next(v for v in runtime["volumes"] if v["target"] == target)
-        worker_mount = next(v for v in worker["volumes"] if v["target"] == target)
-        self.assertEqual(runtime_mount["source"], worker_mount["source"])
-        self.assertTrue(runtime_mount["read_only"])
-        self.assertFalse(worker_mount.get("read_only", False))
-        self.assertFalse(any(v["target"] == "/home/teoria/.codex" for v in runtime["volumes"]))
+    def test_runtime_has_no_specification_storage_credentials_or_model_access(self):
+        runtime = self.resolved("teoria-test-evidence")["services"]["runtime-api"]
+        self.assertFalse(any(
+            name.startswith("TEORIA_SPECIFICATION_S3_")
+            for name in runtime["environment"]
+        ))
+        self.assertFalse(any(
+            volume["target"] in {"/app/specification_artifacts", "/app/specification_inputs", "/home/teoria/.codex"}
+            for volume in runtime["volumes"]
+        ))
 
     def test_law_credentials_are_isolated_from_document_worker(self):
         services = self.resolved("teoria-test-law")["services"]

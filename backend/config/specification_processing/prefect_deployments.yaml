@@ -1,0 +1,59 @@
+name: teoria-specification-processing
+prefect-version: 3.8.1
+build: null
+push: null
+pull: null
+deployments:
+- name: specification-standard-management
+  version: 1.2.0
+  description: 품목분류·목표 규격서 수로 문서를 선정하고 사전을 관리하거나 고정 사전의 품질을 평가한다.
+  entrypoint: teoria.features.specification_processing.flows.standard_management_flow
+  tags:
+  - domain:public_procurement
+  - feature:specification_processing
+  concurrency_limit:
+    limit: 1
+    collision_strategy: ENQUEUE
+  parameters:
+    classification_code: null
+    target_specifications: 30
+    selection:
+      strategy: latest
+      lookback_days: 365
+      max_notices_to_scan: 300
+    management:
+      purpose: dictionary_management
+      auto_apply: true
+      force_review: false
+      holdout_documents: 5
+      minimum_development_documents: 5
+      max_held_source_ids: 0
+    execution:
+      concurrency: 2
+      model_concurrency: 4
+      model_timeout_seconds: 180
+  schedules: []
+- name: specification-document-processing
+  version: 1.0.0
+  description: 명시적으로 입력한 규격서에 고정된 표준 버전을 적용하고 결과와 근거를 보존한다.
+  entrypoint: teoria.features.specification_processing.flows.document_processing_flow
+  tags:
+  - domain:public_procurement
+  - feature:specification_processing
+  concurrency_limit:
+    limit: 1
+    collision_strategy: ENQUEUE
+  parameters: {}
+  schedules: []
+- name: specification-standard-workflow
+  version: 1.0.0
+  description: 추출·Platform 의미 판정·승인 상태 확인·고정 표준 저장·재적용을 연결하고 체크포인트에서 재개한다.
+  entrypoint: teoria.features.specification_processing.standard_workflow.standard_workflow_flow
+  tags:
+  - domain:public_procurement
+  - feature:specification_processing
+  concurrency_limit:
+    limit: 1
+    collision_strategy: ENQUEUE
+  parameters: {}
+  schedules: []

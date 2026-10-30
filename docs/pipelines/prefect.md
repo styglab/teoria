@@ -2,7 +2,7 @@
 
 현재 Prefect는 명시적으로 입력한 규격서의 두 작업, 법령 전용 수집과 OpenMetadata 동기화를 관리한다.
 이전 공고·계약·낙찰·개찰·업종 수집과 Backfill은 중단 상태다. 법령 작업은 독립 pool로 재개했다.
-저장소의 선언값은 [배포 목록](deployments.md), 실제 운영 확인은 [배포 검증 기록](../verification/goods_focus_deployment_2026_10_25.md)을 따른다.
+저장소의 선언값은 [배포 목록](deployments.md), 실제 운영 확인은 [배포 검증 기록](../../archive/documentation/verification/goods_focus_deployment_2026_10_25.md)을 따른다.
 
 ## 실행할 Deployment 찾기
 
@@ -34,7 +34,10 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run
 ```
 
 등록 명령의 `--kind ingestion`은 기존 CLI 호환 이름이다. 현재는 규격서 작업만 등록한다.
-등록 설정은 `deploy/prefect/specification_processing.yaml`, Metadata는 `deploy/prefect/metadata_management.yaml`이다.
+공통 등록 정보는 `backend/config/specification_processing/prefect_deployments.yaml`과
+`backend/config/metadata_management/prefect_deployments.yaml`이다. 환경별 Pool·Queue는
+`deploy/compose/prefect/`와 `deploy/k3s/prefect/`에서 선택한다. 등록 명령은 공통 선언과 환경 설정을
+합성한 Prefect YAML을 만들어 실제 `prefect deploy`에 전달한다. 원본 설정 파일은 수정하지 않는다.
 자동화 등록은 과거 수집 pool을 재개하지 않는다.
 
 Prefect UI의 규격서 Deployment에서 `manifest` 객체를 입력해 실행하거나,

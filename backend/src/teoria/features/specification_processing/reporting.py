@@ -9,8 +9,10 @@ def render_report(corpus,normalized,standard_version,candidates=None):
     authority=('승인된 프로파일의 Published Ontology 참조를 적용한 문서별 관찰이며 Ontology 게시가 아닙니다.'
                if normalized.get('artifact_kind')=='goods_normalized_observations' else
                '자동 채택 결과는 로컬 추출 표준이며 Published Ontology가 아닙니다.')
+    excluded=sum(d.get('disposition')=='excluded' for d in corpus['unavailable_documents'])
+    failed=len(corpus['unavailable_documents'])-excluded
     lines=['# 규격 정보 처리 결과','',f"표준 버전: `{standard_version}`. {authority}",'',
-        f"문서 {len(corpus['documents'])}개 처리, {len(corpus['unavailable_documents'])}개 실패. 속성 {sum(len(d['attributes']) for d in corpus['documents'])}개. "
+        f"문서 {len(corpus['documents'])}개 처리, {failed}개 실패, {excluded}개 대상 제외. 속성 {sum(len(d['attributes']) for d in corpus['documents'])}개. "
         f"표준 적용 {normalized['summary'].get('applied',0)}개, 자동 보류 {normalized['summary'].get('automatically_deferred',0)}개.",'',
         '[표준화 전 결과](extracted.json) · [표준 적용 결과](normalized.json)','','보류와 partial은 사람 승인 대기가 아닌 자동 처리 결과입니다. 원문 근거가 맞아도 의미 정확도를 보장하지 않습니다.','']
     if candidates is not None:lines+=['[표준 의미 후보](meaning_candidates.json)','']
@@ -75,5 +77,7 @@ def render_report(corpus,normalized,standard_version,candidates=None):
             evidence=a['evidence'];position=evidence.get('node_id') or ', '.join(evidence.get('source_node_ids',[]))
             lines.append(f"| {cell(subjects)} | {cell(a['property_key'])} | {cell(raw)} | {cell(a.get('semantic_role','unknown'))} / {cell(a.get('semantic_scope','unknown'))} | {cell(position)} / {cell(a['id'])} |")
         lines.append('')
-    for d in corpus['unavailable_documents']:lines.append(f"- {cell(d['document_id'])}: 처리 실패 — {cell(d['reason'])}")
+    for d in corpus['unavailable_documents']:
+        label='대상 아님' if d.get('disposition')=='excluded' else '처리 실패'
+        lines.append(f"- {cell(d['document_id'])}: {label} — {cell(d.get('code',d['reason']))}")
     return '\n'.join(lines)+'\n'

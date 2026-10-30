@@ -3,6 +3,7 @@ from uuid import UUID, uuid5
 
 from teoria.features.semantic_modeling.goods_dictionary.contracts import dictionary_checksum
 from teoria.features.semantic_modeling.goods_dictionary.meaning_repository import GoodsMeaningRepository
+from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import scope_matches
 
 NAMESPACE = UUID('3b790e06-dd7b-4fc3-b1d8-8832380578e9')
 
@@ -11,7 +12,7 @@ def eligible_mapping(mapping, concepts, classification_code):
     target=concepts.get(str(mapping['target_revision_id']))
     return (mapping['status']=='approved' and mapping['relation']=='equivalent' and target is not None
             and target['status']=='approved' and
-            (mapping['classification_code'] is None or mapping['classification_code']==classification_code))
+            scope_matches(mapping,classification_code))
 
 
 class GoodsMeaningService:
@@ -23,6 +24,32 @@ class GoodsMeaningService:
         async with self.repository.transaction() as conn:
             await self.repository.lock(conn)
             return (await repository_snapshot(self.repository,conn)).model_dump(mode='json')
+
+    async def related_context(self, request):
+        from teoria.features.semantic_modeling.goods_dictionary.change_service import repository_snapshot, affected_scopes
+        async with self.repository.transaction() as conn:
+            await self.repository.lock(conn)
+            snapshot=await repository_snapshot(self.repository,conn)
+            entries={str(id) for id in request.source_entry_ids}
+            concepts={str(id) for id in request.concept_ids}
+            if request.changes:
+                if request.changes.baseline_checksum!=snapshot.checksum:
+                    return {'status':'stale','baseline_checksum':snapshot.checksum,'source_entry_ids':[],'documents':[]}
+                entries.update(scope[0] for scope in affected_scopes(snapshot,request.changes))
+            targets={str(c['revision_id']):str(c['concept_id']) for c in snapshot.concepts if c['status']=='approved'}
+            while True:
+                before=(len(entries),len(concepts))
+                for mapping in snapshot.mappings:
+                    cid=targets.get(str(mapping['target_revision_id']))
+                    if mapping['status']=='approved' and cid and (str(mapping['source_entry_id']) in entries
+                        or cid in concepts or str(mapping.get('owner_concept_id')) in concepts):
+                        entries.add(str(mapping['source_entry_id']));concepts.add(cid)
+                if before==(len(entries),len(concepts)):break
+                if len(entries)>5000:
+                    return {'status':'held','reason':'related_context_budget_exceeded','source_entry_ids':[],'documents':[]}
+            documents=await self.repository.affected_documents(conn,entries)
+            return {'status':'ready','baseline_checksum':snapshot.checksum,'source_entry_ids':sorted(entries),
+                    'concept_ids':sorted(concepts),'documents':documents}
 
     async def apply_changes(self, operation_id, changes, *, actor):
         from teoria.features.semantic_modeling.goods_dictionary.change_service import apply_change_set

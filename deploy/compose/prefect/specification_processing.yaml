@@ -1,0 +1,23 @@
+pools:
+- name: teoria-specification
+  type: process
+  concurrency_limit: 2
+  concurrency_limit_env: TEORIA_PIPELINE_CONCURRENCY
+  queues:
+  - name: documents
+    priority: 1
+    concurrency_limit: 2
+    concurrency_limit_env: TEORIA_PIPELINE_CONCURRENCY
+deployments:
+- name: specification-standard-management
+  work_pool:
+    name: teoria-specification
+    work_queue_name: documents
+- name: specification-document-processing
+  work_pool:
+    name: teoria-specification
+    work_queue_name: documents
+- name: specification-standard-workflow
+  work_pool:
+    name: teoria-specification
+    work_queue_name: documents

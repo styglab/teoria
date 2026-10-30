@@ -25,11 +25,9 @@ async def run():
         settings.assessment_enabled
         and settings.app_database_url
         and settings.openmetadata_enabled
-        and settings.assessment_model_url
-        and settings.assessment_model_name
     ):
         raise ValueError(
-            "Configure the assessment model, Application DB and OpenMetadata before starting the Worker"
+            "Configure assessment, Application DB and OpenMetadata before starting the Worker"
         )
     repository = AssessmentRepository(settings.app_database_url)
     async with (
@@ -39,14 +37,11 @@ async def run():
             timeout_seconds=settings.openmetadata_timeout_seconds,
             verify_ssl=settings.openmetadata_verify_ssl,
         ) as metadata_client,
-        AssessmentModelClient(
-            settings.assessment_model_url,
-            settings.assessment_model_name,
-            settings.assessment_model_token,
-            timeout=settings.assessment_model_timeout_seconds,
-            max_tokens=settings.assessment_model_max_tokens,
-        ) as model_client,
     ):
+        model_client = AssessmentModelClient(
+            model=settings.assessment_codex_model,
+            timeout=settings.assessment_codex_timeout_seconds,
+        )
         service = AssetAssessmentService(
             repository,
             metadata_client,

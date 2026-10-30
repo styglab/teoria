@@ -33,7 +33,8 @@ GitHub main → CI → GHCR의 commit SHA 이미지 → EC2 SSH → deploy.sh
 
 Kustomize는 `kubectl`에 포함된 기능만 사용한다. Helmfile이나 별도 GitOps 서버는 필요하지 않다.
 MLflow·Argo CD·Harbor·GPU Operator·MinIO·S3는 이 초기 구성에 추가하지 않는다.
-모델 진단은 외부 모델 gateway를 호출하며 기본적으로 비활성화한다.
+규격서 MinIO 기본 저장소는 현재 Compose에 반영돼 있으며 K3s 연결·배포 검증은 별도다.
+모델 진단은 Codex subprocess를 사용하며 기본적으로 비활성화한다.
 
 ## EC2 최초 준비
 
@@ -155,14 +156,18 @@ bash deploy/k3s/deploy.sh ghcr.io/owner/repository COMMIT_SHA teoria.example.com
 ```
 
 API와 Worker는 단일 replica·Recreate 방식이므로 갱신 중 잠깐 중단될 수 있다.
-진단 Worker를 사용하려면 Secret의 모델 설정을 채우고
-`application/platform.yaml`의 `metadata-assessment-worker` replica를 1로 바꾼다.
+진단 Worker를 사용하려면 `metadata-model-auth` PVC에 Codex 로그인을 먼저 준비한다.
+같은 PVC를 마운트한 관리용 Pod에서 UID/GID 10001로 `codex login --device-auth`를 수행한다.
+Secret의 `TEORIA_ASSESSMENT_CODEX_MODEL`은 선택 사항이고 개별 호출 timeout의 기본값은 180초다.
+그 후 `TEORIA_ASSESSMENT_ENABLED=true`와 `application/platform.yaml`의
+`metadata-assessment-worker` replica 1을 적용한다. 이 템플릿 갱신은 실제 EC2 배포 검증이 아니다.
 OpenMetadata ingestion schedule과 retry는 Prefect가 소유하고 실제 실행은 한 번짜리
 Kubernetes Job이다. Docker socket·Docker daemon·Airflow를 요구하지 않는다.
 
 ## 정해진 자원 안에서 파이프라인 병렬 실행
 
-수집 Flow·Task와 `deploy/prefect/specification_processing.yaml`은 Compose와 K3s가 함께 사용한다.
+수집 Flow·Task와 `backend/config/specification_processing/prefect_deployments.yaml`의 기본 파라미터·스케줄은 공통이다.
+K3s Pool·Queue는 `deploy/k3s/prefect/`, namespace·자원·Secret 주입 정책은 그 안의 `execution.yaml`에서 읽는다.
 Compose는 기존 `teoria-ingestion` Process Worker 내부에서 실행한다. K3s는 등록 시
 work pool만 `teoria-ingestion-k3s`로 바꾸고, Kubernetes Worker가 실행마다 별도 Job을 만든다.
 Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.

@@ -6,6 +6,8 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
+import httpx
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from uuid import uuid4
@@ -16,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from teoria.features.access_control.auth import AdminAuthorizer, AdminPrincipal
 from teoria.features.specification_processing.models import SourceDocument
 from teoria.integrations.data_operations.persistence.connection import connect
+from teoria.features.specification_processing.storage.artifact_store import artifact_store, object_key
 
 
 logger = logging.getLogger(__name__)
@@ -69,29 +72,39 @@ class ProcessingWorkspaceRepository:
             return {"run": row, "documents": documents, "artifacts": artifacts}
 
 
-async def verified_artifact(reference: dict, root: Path) -> dict:
-    if reference["size_bytes"] > 5 * 1024 * 1024:
-        raise HTTPException(413, "artifact_preview_too_large")
-    parsed = urlsplit(reference["uri"])
-    if parsed.scheme != "file" or parsed.netloc not in {"", "localhost"}:
-        raise HTTPException(422, "artifact_preview_requires_local_storage")
-
-    def read():
-        path = Path(unquote(parsed.path)).resolve()
-        if not path.is_relative_to(root.resolve()) or not path.is_file():
-            raise HTTPException(404, "artifact_not_available")
-        with path.open("rb") as stream:
-            raw = stream.read(5 * 1024 * 1024 + 1)
-        if len(raw) > 5 * 1024 * 1024:
-            raise HTTPException(413, "artifact_preview_too_large")
-        if hashlib.sha256(raw).hexdigest() != reference["sha256"]:
-            raise HTTPException(409, "artifact_checksum_mismatch")
-        try:
-            return json.loads(raw)
-        except (ValueError, UnicodeError):
-            raise HTTPException(422, "artifact_is_not_json") from None
-
-    return await asyncio.to_thread(read)
+async def verified_artifact(reference: dict, root: Path, object_root: str | None = None) -> dict:
+    limit=5*1024*1024
+    if reference['size_bytes']>limit:raise HTTPException(413,'artifact_preview_too_large')
+    uri=reference['uri'];parsed=urlsplit(uri)
+    if parsed.scheme=='file':
+        path=Path(unquote(parsed.path)).resolve()
+        if parsed.netloc not in {'','localhost'} or not path.is_relative_to(root.resolve()):
+            raise HTTPException(404,'artifact_not_available')
+    try:
+        if parsed.scheme=='s3':
+            trusted=urlsplit(object_root or '')
+            prefix=trusted.path.strip('/')
+            key=parsed.path.lstrip('/')
+            if trusted.scheme!='s3' or trusted.netloc!=parsed.netloc or (prefix and not key.startswith(prefix+'/')):
+                raise HTTPException(404,'artifact_not_available')
+            relative=key[len(prefix)+1:] if prefix else key
+            try:object_key(relative)
+            except ValueError:raise HTTPException(404,'artifact_not_available') from None
+            async with artifact_store(object_root) as store:
+                raw=await store.get(relative,max_bytes=limit)
+        elif parsed.scheme=='file':
+            def read():
+                if not path.is_file():raise FileNotFoundError(path)
+                with path.open('rb') as stream:return stream.read(limit+1)
+            raw=await asyncio.to_thread(read)
+        else:raise HTTPException(422,'unsupported_artifact_storage')
+    except FileNotFoundError:raise HTTPException(404,'artifact_not_available') from None
+    except httpx.HTTPError:raise HTTPException(503,'artifact_storage_unavailable') from None
+    except ValueError:raise HTTPException(413,'artifact_preview_too_large') from None
+    if len(raw)>limit:raise HTTPException(413,'artifact_preview_too_large')
+    if hashlib.sha256(raw).hexdigest()!=reference['sha256']:raise HTTPException(409,'artifact_checksum_mismatch')
+    try:return json.loads(raw)
+    except (ValueError,UnicodeError):raise HTTPException(422,'artifact_is_not_json') from None
 
 
 def create_processing_workspace_router(
@@ -101,6 +114,7 @@ def create_processing_workspace_router(
     input_root: Path = Path("/app/specification_inputs"),
     artifact_root: Path = Path("/app/specification_artifacts"),
     repository=None,
+    object_root: str | None = None,
     uploads_enabled: bool = False,
 ):
     router = APIRouter(
@@ -109,6 +123,9 @@ def create_processing_workspace_router(
     repo = repository or (
         ProcessingWorkspaceRepository(database_url) if database_url else None
     )
+    object_root = object_root or os.getenv("TEORIA_SPECIFICATION_ARTIFACT_ROOT",'s3://teoria-artifacts')
+    if os.getenv('TEORIA_SPECIFICATION_REQUIRE_OBJECT_STORAGE')=='true' and urlsplit(object_root).scheme!='s3':
+        raise ValueError('production specification storage requires an S3 root')
     upload_slots = asyncio.Semaphore(2)
     preview_slots = asyncio.Semaphore(4)
 
@@ -129,29 +146,41 @@ def create_processing_workspace_router(
         except ValueError:
             raise HTTPException(422, "unsupported_document_filename") from None
         document_id = "doc_" + uuid4().hex
-        path = input_root / (document_id + Path(filename).suffix.lower())
         digest = hashlib.sha256()
         size = 0
         async with upload_slots:
-            stream = None
-            try:
-                await asyncio.to_thread(input_root.mkdir, parents=True, exist_ok=True)
-                stream = await asyncio.to_thread(path.open, "xb")
+            if object_root and urlsplit(object_root).scheme=='s3':
+                data=bytearray()
                 async for chunk in request.stream():
-                    size += len(chunk)
-                    if size > 40 * 1024 * 1024:
-                        raise HTTPException(413, "document_size_limit_40mb")
-                    digest.update(chunk)
-                    await asyncio.to_thread(stream.write, chunk)
-                if size == 0:
-                    raise HTTPException(422, "empty_document")
-                await asyncio.to_thread(stream.close)
+                    size+=len(chunk)
+                    if size>40*1024*1024:raise HTTPException(413,'document_size_limit_40mb')
+                    digest.update(chunk);data.extend(chunk)
+                if not data:raise HTTPException(422,'empty_document')
+                key='specification_inputs/'+document_id+Path(filename).suffix.lower()
+                try:
+                    async with artifact_store(object_root) as store:
+                        reference=await store.put(key,bytes(data),'application/octet-stream')
+                except (httpx.HTTPError,ValueError,OSError):
+                    raise HTTPException(503,'document_storage_unavailable') from None
+                source_uri=reference.uri
+            else:
+                path = input_root / (document_id + Path(filename).suffix.lower())
                 stream = None
-            except BaseException:
-                if stream is not None:
-                    await asyncio.to_thread(stream.close)
-                await asyncio.to_thread(path.unlink, missing_ok=True)
-                raise
+                try:
+                    await asyncio.to_thread(input_root.mkdir, parents=True, exist_ok=True)
+                    stream = await asyncio.to_thread(path.open, 'xb')
+                    async for chunk in request.stream():
+                        size += len(chunk)
+                        if size > 40 * 1024 * 1024:raise HTTPException(413,'document_size_limit_40mb')
+                        digest.update(chunk)
+                        await asyncio.to_thread(stream.write, chunk)
+                    if size == 0:raise HTTPException(422,'empty_document')
+                    await asyncio.to_thread(stream.close);stream = None
+                except BaseException:
+                    if stream is not None:await asyncio.to_thread(stream.close)
+                    await asyncio.to_thread(path.unlink, missing_ok=True)
+                    raise
+                source_uri=path.as_uri()
         logger.info(
             "specification_input_uploaded actor=%s document_id=%s sha256=%s",
             principal.actor,
@@ -161,7 +190,7 @@ def create_processing_workspace_router(
         return {
             "document_id": document_id,
             "filename": filename,
-            "source_uri": path.as_uri(),
+            "source_uri": source_uri,
             "sha256": digest.hexdigest(),
         }
 
@@ -203,6 +232,6 @@ def create_processing_workspace_router(
         if reference is None:
             raise HTTPException(404, "artifact_not_found")
         async with preview_slots:
-            return await verified_artifact(reference, artifact_root)
+            return await verified_artifact(reference, artifact_root, object_root)
 
     return router

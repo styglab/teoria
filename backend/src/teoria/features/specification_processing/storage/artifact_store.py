@@ -83,8 +83,8 @@ class S3ArtifactStore:
         self.client=client
         self.region=region or os.getenv('AWS_REGION','us-east-1')
         self.endpoint=(endpoint or os.getenv('TEORIA_SPECIFICATION_S3_ENDPOINT') or f'https://s3.{self.region}.amazonaws.com').rstrip('/')
-        self.access_key=access_key or os.getenv('AWS_ACCESS_KEY_ID')
-        self.secret_key=secret_key or os.getenv('AWS_SECRET_ACCESS_KEY')
+        self.access_key=access_key or os.getenv('TEORIA_SPECIFICATION_S3_ACCESS_KEY') or os.getenv('AWS_ACCESS_KEY_ID')
+        self.secret_key=secret_key or os.getenv('TEORIA_SPECIFICATION_S3_SECRET_KEY') or os.getenv('AWS_SECRET_ACCESS_KEY')
         self.session_token=session_token or os.getenv('AWS_SESSION_TOKEN')
         if not self.access_key or not self.secret_key:raise ValueError('S3 credentials are not configured')
         self._slots=asyncio.Semaphore(4)
@@ -100,22 +100,35 @@ class S3ArtifactStore:
         async with self._slots:
             return await self.client.request(method,url,content=data,headers=headers)
 
-    async def get(self,key):
-        response=await self.request('GET',key)
-        if response.status_code==404:raise FileNotFoundError(key)
-        response.raise_for_status();return response.content
+    async def get(self,key,*,max_bytes=None):
+        url=self.url(key)
+        headers=signed_headers('GET',url,b'',access_key=self.access_key,secret_key=self.secret_key,
+            region=self.region,session_token=self.session_token)
+        async with self._slots:
+            async with self.client.stream('GET',url,headers=headers) as response:
+                if response.status_code==404:raise FileNotFoundError(key)
+                response.raise_for_status();data=bytearray()
+                async for chunk in response.aiter_bytes():
+                    data.extend(chunk)
+                    if max_bytes is not None and len(data)>max_bytes:raise ValueError('artifact exceeds read limit')
+                return bytes(data)
 
     async def put(self,key,data,media_type='application/json'):
         response=await self.request('PUT',key,data,{'if-none-match':'*','content-type':media_type})
         if response.status_code==412:
             if await self.get(key)!=data:raise ValueError('immutable S3 artifact conflict')
-        else:response.raise_for_status()
+        else:
+            response.raise_for_status()
+            if hashlib.sha256(await self.get(key)).digest()!=hashlib.sha256(data).digest():
+                raise ValueError('S3 upload checksum verification failed')
         return ArtifactRef(key=key,uri=self.root_uri+'/'+object_key(key),sha256=hashlib.sha256(data).hexdigest(),size_bytes=len(data),media_type=media_type)
 
 @asynccontextmanager
 async def artifact_store(root_uri,*,transport=None):
     parsed=urlsplit(root_uri)
     if parsed.scheme=='file':
+        if os.getenv('TEORIA_SPECIFICATION_REQUIRE_OBJECT_STORAGE')=='true':
+            raise ValueError('production specification artifacts require S3 storage')
         if parsed.netloc not in {'','localhost'}:raise ValueError('remote file URI is unsupported')
         from urllib.parse import unquote
         yield FileArtifactStore(unquote(parsed.path))

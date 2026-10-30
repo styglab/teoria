@@ -38,7 +38,8 @@ COPY --chown=teoria:teoria backend/config ./backend/config
 COPY --chown=teoria:teoria backend/references ./backend/references
 COPY --chown=teoria:teoria backend/verification_cases ./backend/verification_cases
 COPY --chown=teoria:teoria backend/migrations/data ./backend/migrations/data
-COPY --chown=teoria:teoria deploy/prefect ./deploy/prefect
+COPY --chown=teoria:teoria deploy/compose/prefect ./deploy/compose/prefect
+COPY --chown=teoria:teoria deploy/k3s/prefect ./deploy/k3s/prefect
 ENV TEORIA_PIPELINE_PATH=/app/backend
 
 FROM data-operations AS law-worker

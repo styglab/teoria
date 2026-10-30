@@ -43,7 +43,7 @@ ingestion은 쓰기 bot을 사용하고, Teoria Admin에는 조회·승인된 �
 새 버전은 운영 DB를 복원한 격리 환경에서 먼저 검증한다. DB migration, 전체 검색
 재색인, 자산 ID·FQN·설명·소유자·태그·Glossary·Binding 참조 보존, Teoria API 연계와
 재수집을 확인한다. 기존 버전 복원도 검증한다. 1.12.6에서 2.0.5로 전환한 결과는
-[2026-10-13 검증 기록](../verification/openmetadata_upgrade_2026_10_13.md)에 있다.
+[2026-10-13 검증 기록](../../archive/documentation/verification/openmetadata_upgrade_2026_10_13.md)에 있다.
 
 검증한 버전을 운영에 반영할 때는 다음 순서를 따른다.
 

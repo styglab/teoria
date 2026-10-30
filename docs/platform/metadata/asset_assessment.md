@@ -62,7 +62,7 @@ PostgreSQL `SKIP LOCKED` 선점, claim token과 10분 lease를 사용한다. 진
 만료된 Worker는 결과를 저장할 수 없다. 강제 종료 후 재실행은 모델 호출 비용을
 중복시킬 수 있지만 제안 저장은 실행권과 트랜잭션으로 보호한다.
 
-모델은 서버가 고정한 gateway만 호출한다. 메타데이터·법령의 텍스트는 비신뢰 입력으로
+모델은 기존 Codex 실행 어댑터를 통해 JSON Schema가 지정된 일시적 subprocess로 실행한다. 메타데이터·법령의 텍스트는 비신뢰 입력으로
 취급하며 모델에 임의 Tool 실행이나 외부 쓰기를 허용하지 않는다. 모델은 변경 후보와
 근거 ID만 반환한다. 서버는 선택 범위·컬럼·게시된 Concept 후보·근거 ID를 검증하고
 제안의 적용 payload를 직접 구성한다. 분석 전후 자산 version이 다르면 저장하지 않는다.
@@ -77,28 +77,29 @@ Worker는 승인·태깅·게시를 실행하지 않는다. DB에는 원천 자�
 
 ```dotenv
 TEORIA_ASSESSMENT_ENABLED=true
-TEORIA_ASSESSMENT_MODEL_URL=<full chat-completions endpoint>
-TEORIA_ASSESSMENT_MODEL_NAME=<model identifier>
-TEORIA_ASSESSMENT_MODEL_TOKEN=<secret if required>
-TEORIA_ASSESSMENT_MODEL_MAX_TOKENS=6000
+TEORIA_ASSESSMENT_CODEX_MODEL=
+TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS=180
 ```
 
-gateway는 `messages`, `model`, `temperature`, `max_tokens`,
-`response_format: {"type":"json_object"}` 요청과
-`choices[0].message.content` JSON 문자열 응답을 지원해야 한다. 모델 토큰은
-Worker에만 주입하며 기본 외부 endpoint나 모델을 임의로 선택하지 않는다.
-출력 토큰 한도는 모델의 실제 문맥 한도에 맞춘다. 입력 메타데이터·법령과 출력 토큰의 합이 모델의 문맥 한도를 넘지 않도록 설정한다.
-작은 문맥 모델은 소수 컬럼부터 진단하고, 대량 컬럼은 입력 분할이나 더 큰 문맥이 필요하다.
+진입 경로는 **데이터 자산 → 자산 상세 → 진단 요청 → 자산 진단 → 진단 실행**이다.
+규격서 분석과 같은 `integrations/codex` 어댑터를 사용한다. 모델을 비우면 로그인한 CLI의
+설정을 사용하고, 명시하면 해당 모델만 사용한다. HTTP gateway나 Qwen으로 fallback하지 않는다.
+임시 응답·receipt는 호출 완료·실패·취소 후 정리한다. 모델 원문은 DB나 객체 저장소에 보존하지 않는다.
+개별 호출은 180초, 작업 전체는 기존 8분 제한을 유지한다.
 
-Application DB migration을 적용하고 새 authoring·UI 이미지를 빌드한 뒤 시작한다.
+Compose의 `metadata-model-auth`는 규격서 인증 볼륨과 분리한다. 최초 운영자는
+해당 전용 볼륨에 Codex 로그인을 준비한 뒤 진단 Worker를 시작한다. 로그인은 다음 명령으로 수행한다.
 
 ```bash
-docker compose -f deploy/compose/compose.yaml --profile metadata --profile intelligence \
-  up -d --build admin-api admin-ui metadata-assessment-worker
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile intelligence \
+  run --rm --no-deps --entrypoint codex metadata-assessment-worker login --device-auth
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile intelligence \
+  up -d --build admin-api metadata-assessment-worker
 ```
 
-Compose의 `app-postgres-migrate`가 신규 migration을 적용한다. 모델 설정이 비어 있으면
-Admin API는 `asset_assessment_not_configured`를 반환하며 Worker도 시작하지 않는다.
+Admin API와 Worker는 실행 식별자를 `codex:<model>` 또는 `codex:default`로 일치시킨다.
+이전 모델로 대기하던 요청을 새 모델로 조용히 처리하지 않고 `assessment_model_changed`로 실패 처리한다.
+기존 진단 이력은 유지하고 새 요청으로 실행한다. 기존 조회·제안·검토·승인 정책은 바꾸지 않는다.
 운영 Admin API는 `bearer`와 별도 관리자 토큰을 사용한다.
 
 ## 내부 작업과 API 응답 계약
@@ -129,4 +130,4 @@ Admin API는 `asset_assessment_not_configured`를 반환하며 Worker도 시작�
 - [자산 맥락과 샘플·프로파일](asset_context.md)
 - [법령 근거 검색](law_evidence.md)
 - [Codex 진단 Skills](../../skills/analyze_metadata_asset.md)
-- [2026-10-15 실행 검증](../../verification/asset_assessment_2026_10_15.md)
+- [2026-10-15 실행 검증](../../../archive/documentation/verification/asset_assessment_2026_10_15.md)

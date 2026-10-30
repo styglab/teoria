@@ -391,7 +391,11 @@ def main() -> int:
         )
 
         diagnostics.extend(
-            validate_deployment_contracts(pipeline_catalog, load_deployments(args.path))
+            diagnostic
+            for backend in ("process", "kubernetes")
+            for diagnostic in validate_deployment_contracts(
+                pipeline_catalog, load_deployments(args.path, backend)
+            )
         )
     for diagnostic in diagnostics:
         print(diagnostic)

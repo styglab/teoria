@@ -6,7 +6,7 @@
 [goods.yaml](../../../backend/authoring/ontology_blueprints/goods.yaml)이다.
 객체 17개·속성 93개·관계 50개를 정의한다. 원문 명칭 사전의 자동 승인·저장·재사용 경로를 추가했다.
 Published 모델·표준 동의어/동등성 확정·새 Runtime 조회 Capability의 완료를 의미하지 않는다.
-실제 Draft 반영과 검사 결과는 [검증 기록](../../../docs/verification/goods_model_revision_2026_10_27.md)에 둔다.
+실제 Draft 반영과 검사 결과는 [검증 기록](../verification/goods_model_revision_2026_10_27.md)에 둔다.
 
 
 후속 검토: 서버 외 기존 샘플 4개를 대조한 결과는 아래 **샘플 4개 기반 재제안**에 기록했다.
@@ -494,7 +494,7 @@ Application DB의 `goods.dictionary_entries`는 승인 항목을, `dictionary_de
 같은 입력을 새 작업 ID로 재처리했을 때 신규 승인 0개·재사용 46개·보류 2개이며 사전 항목은 45개로 유지됐다.
 이번 실행은 기존 대표 그래프와 원본 재파싱을 사용했다. 신규 LLM 추출·전체 정확도 평가로 표시하지 않는다.
 
-[자동 승인 검증 기록](../../../docs/verification/goods_dictionary_auto_approval_2026_10_27.md)을 따른다.
+[자동 승인 검증 기록](../verification/goods_dictionary_auto_approval_2026_10_27.md)을 따른다.
 
 
 ## 원문 사전과 표준 사전의 구분
@@ -525,4 +525,4 @@ Palantir 인터페이스 기능을 Teoria가 구현했다는 의미는 아니며
 
 표준 정의·개정·승인 매핑과 기존 파이프라인의 재사용 경로는 [물품 사전](../../../docs/platform/goods_dictionary.md)에 구현 상태를 기록한다. 기존 원문 등록 45개와 표준 정의 2개는 별도다.
 
-네 규격서 새 전체 실행 후 원문 등록은 319개, 표준 정의·매핑은 각각 2개다. [실제 결과 및 관계·표현 정렬 문제](../../../docs/verification/goods_four_sample_pipeline_2026_10_27.md)를 참고한다.
+네 규격서 새 전체 실행 후 원문 등록은 319개, 표준 정의·매핑은 각각 2개다. [실제 결과 및 관계·표현 정렬 문제](../verification/goods_four_sample_pipeline_2026_10_27.md)를 참고한다.

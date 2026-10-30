@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from teoria.features.metadata_management.intelligence.asset_assessment.model_client import assessment_model_identity
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -295,9 +297,8 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
             services.authorizer,
             enabled=bool(
                 services.settings.assessment_enabled
-                and services.settings.assessment_model_url
             ),
-            model_name=services.settings.assessment_model_name,
+            model_name=assessment_model_identity(services.settings.assessment_codex_model),
         )
     )
     app.include_router(

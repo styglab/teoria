@@ -6,8 +6,14 @@ from uuid import UUID, uuid5
 from teoria.features.semantic_modeling.goods_dictionary.contracts import dictionary_checksum
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import (
     ConceptDefinition, DictionaryChangeSet, DictionarySnapshot, MappingProposal,
-    concept_id_for_key, resolve_snapshot, snapshot_from_records,
+    concept_id_for_key, resolve_snapshot, snapshot_from_records, approved_dictionary_snapshot,
 )
+
+
+def mapping_scope(mapping):
+    row=mapping.model_dump(mode='json') if hasattr(mapping,'model_dump') else mapping
+    mode=row.get('scope_mode') or ('classified' if row['classification_code'] else 'unclassified')
+    return (str(row['source_entry_id']),row['classification_code'],mode)
 
 
 def affected_scopes(before, changes):
@@ -29,8 +35,8 @@ def affected_scopes(before, changes):
         if children.issubset(impacted):
             break
         impacted.update(children)
-    scopes = {(str(m.source_entry_id),m.classification_code) for m in changes.mappings}
-    scopes.update((str(m['source_entry_id']),m['classification_code']) for m in before.mappings
+    scopes = {mapping_scope(m) for m in changes.mappings}
+    scopes.update(mapping_scope(m) for m in before.mappings
                   if m['status']=='approved' and str(m['source_entry_id']) in impacted)
     return scopes
 
@@ -39,13 +45,13 @@ def change_impact(before, after, changes):
     rows = []
     scopes = affected_scopes(before,changes)
     # A global replacement must also remain compatible with existing classified mappings.
-    touched = {s for s,_ in scopes}
-    scopes.update((str(m['source_entry_id']),m['classification_code']) for m in after.mappings
+    touched = {s for s,_,_ in scopes}
+    scopes.update(mapping_scope(m) for m in after.mappings
                   if m['status']=='approved' and str(m['source_entry_id']) in touched)
-    for source,classification in sorted(scopes,key=lambda pair:(pair[0],pair[1] or '')):
+    for source,classification,mode in sorted(scopes,key=lambda pair:(pair[0],pair[1] or '',pair[2])):
         old = resolve_snapshot(before,[source],classification)['items'][0]
         new = resolve_snapshot(after,[source],classification)['items'][0]
-        rows.append({'source_entry_id':source,'classification_code':classification,
+        rows.append({'source_entry_id':source,'classification_code':classification,'scope_mode':mode,
                      'before':old,'after':new})
     return rows
 
@@ -67,7 +73,7 @@ def preview_change_set(snapshot, changes):
     data = deepcopy(before.content())
     concepts,mappings,sources = data['concepts'],data['mappings'],data['sources']
     source_by_id = {str(s['entry_id']):s for s in sources}
-    supplied = {(str(m.source_entry_id),m.classification_code) for m in changes.mappings}
+    supplied = {mapping_scope(m) for m in changes.mappings}
     required = affected_scopes(before,changes)
     if not required.issubset(supplied):
         raise ValueError('affected_source_mappings_require_reassessment')
@@ -126,17 +132,17 @@ def preview_change_set(snapshot, changes):
         elif not owner or owner['kind']!='item_type' or str(owner['concept_id']) not in target['content']['applicable_item_type_ids']:
             raise ValueError('mapping_owner_not_applicable')
         for old in mappings:
-            if str(old['source_entry_id'])==str(change.source_entry_id) and old['classification_code']==change.classification_code and old['status']=='approved':
+            if mapping_scope(old)==mapping_scope(change) and old['status']=='approved':
                 if str(old['target_revision_id'])!=str(target['revision_id']) or old['relation']!='equivalent' or str(old.get('owner_concept_id'))!=(str(owner['concept_id']) if owner else 'None'):
                     old['status']='deprecated'
-        if any(str(m['source_entry_id'])==str(change.source_entry_id) and m['classification_code']==change.classification_code
+        if any(mapping_scope(m)==mapping_scope(change)
                and m['status']=='approved' and str(m['target_revision_id'])==str(target['revision_id'])
                and str(m.get('owner_concept_id'))==(str(owner['concept_id']) if owner else 'None') for m in mappings):
             continue
         mappings.append({'mapping_id':str(uuid5(UUID(str(target['concept_id'])),dictionary_checksum(change))),
             'source_entry_id':str(change.source_entry_id),'target_revision_id':str(target['revision_id']),
             'owner_concept_id':str(owner['concept_id']) if owner else None,
-            'classification_code':change.classification_code,'relation':'equivalent','status':'approved'})
+            'classification_code':change.classification_code,'scope_mode':change.scope_mode,'relation':'equivalent','status':'approved'})
     after = snapshot_from_records(concepts,mappings,sources)
     impact = change_impact(before,after,changes)
     if any(row['after']['status']!='resolved' for row in impact):
@@ -191,7 +197,7 @@ async def apply_change_set(repo, operation_id, changes, *, actor):
             kept = False
             owner_id = targets[change.owner_key]['concept_id'] if change.owner_key else None
             for old in await repo.mappings(conn):
-                if str(old['source_entry_id'])==str(change.source_entry_id) and old['classification_code']==change.classification_code and old['status']=='approved':
+                if mapping_scope(old)==mapping_scope(change) and old['status']=='approved':
                     if str(old['target_revision_id'])==str(targets[change.target_key]['revision_id']) and old['relation']=='equivalent' and str(old.get('owner_concept_id'))==str(owner_id):
                         kept = True
                         continue
@@ -200,7 +206,7 @@ async def apply_change_set(repo, operation_id, changes, *, actor):
             if kept:
                 continue
             proposal = MappingProposal(source_entry_id=change.source_entry_id,
-                target_revision_id=targets[change.target_key]['revision_id'],classification_code=change.classification_code,
+                target_revision_id=targets[change.target_key]['revision_id'],classification_code=change.classification_code,scope_mode=change.scope_mode,
                 owner_concept_id=targets[change.owner_key]['concept_id'] if change.owner_key else None,rationale=change.rationale)
             row = await repo.add_mapping(conn,proposal,evidence,actor)
             await repo.meaning_event(conn,'mapping',row['mapping_id'],'proposed',actor,change.rationale)
@@ -208,7 +214,7 @@ async def apply_change_set(repo, operation_id, changes, *, actor):
             await repo.meaning_event(conn,'mapping',row['mapping_id'],'approve',actor,change.rationale)
         after = await repository_snapshot(repo,conn)
         result = {'operation_id':operation_id,'status':'applied','baseline_checksum':before.checksum,
-                  'snapshot_checksum':after.checksum,'snapshot':after.model_dump(mode='json'),
+                  'snapshot_checksum':after.checksum,'snapshot':after.model_dump(mode='json'),'release_snapshot':approved_dictionary_snapshot(after).model_dump(mode='json'),
                   'impact':change_impact(before,after,changes)}
         result['affected_documents'] = documents
         # UUID values must be JSON-safe before recording the idempotent operation result.

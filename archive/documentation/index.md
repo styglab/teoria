@@ -3,6 +3,10 @@
 이곳은 비활성 업무·이전 설계·실험 기록이다. **현재 실행 방법은 [문서 목차](../../docs/index.md)를 따른다.**
 날짜·건수·“현재”라는 표현은 작성 당시의 상태다. 보관한 명령으로 은퇴한 기능을 다시 연결하지 않는다.
 
+## 운영·검증 이력
+
+[날짜별 검증 기록](verification/index.md)에서 이전 배포·복원·실험의 결과와 한계를 찾는다.
+
 ## 보관 자료
 
 ### 물품 모델 설계 이력
@@ -61,52 +65,5 @@
 
 ## 이동·삭제 기준
 
-고유한 설계·실행 관측은 보존했다. 실행 코드가 삭제된 경로를 다시 안내하는 중복 문서는 제거하고 관련 내부 링크를 정리했다.
-현재 Pipeline·물품 모델 경로는 유지했으며 이전 상세 설명은 날짜가 붙은 보관 기록으로 분리했다.
-
-| 이전 위치 | 현재 위치 |
-|---|---|
-| `docs/architecture/specification_goods_model.md` | [specification_goods_model_2026_10_27.md](architecture/specification_goods_model_2026_10_27.md) |
-| `docs/integration/bid-check-service.md` | [bid-check-service.md](integration/bid-check-service.md) |
-| `docs/integration/bid_check_capabilities.yaml` | [bid_check_capabilities.yaml](integration/bid_check_capabilities.yaml) |
-| `docs/integration/procurement_exploration_contract.md` | [procurement_exploration_contract.md](integration/procurement_exploration_contract.md) |
-| `docs/pipelines/domains/public_procurement.md` | [public_procurement.md](pipelines/domains/public_procurement.md) |
-| `docs/platform/domains/public_procurement/activity_aggregation.md` | [activity_aggregation.md](platform/domains/public_procurement/activity_aggregation.md) |
-| `docs/platform/domains/public_procurement/contract_aggregation.md` | [contract_aggregation.md](platform/domains/public_procurement/contract_aggregation.md) |
-| `docs/platform/domains/public_procurement/market_analysis.md` | [market_analysis.md](platform/domains/public_procurement/market_analysis.md) |
-| `docs/platform/domains/public_procurement/notice_status.md` | [notice_status.md](platform/domains/public_procurement/notice_status.md) |
-| `docs/platform/domains/public_procurement/procurement_classification.md` | [procurement_classification.md](platform/domains/public_procurement/procurement_classification.md) |
-| `docs/procurement_specification_processing/attribute_registry.md` | [attribute_registry.md](procurement_specification_processing/attribute_registry.md) |
-| `docs/procurement_specification_processing/codex_analysis_2026_10_20.md` | [codex_analysis_2026_10_20.md](procurement_specification_processing/codex_analysis_2026_10_20.md) |
-| `docs/procurement_specification_processing/component_review_2026_10_20.md` | [component_review_2026_10_20.md](procurement_specification_processing/component_review_2026_10_20.md) |
-| `docs/procurement_specification_processing/computer_server_validation.md` | [computer_server_validation.md](procurement_specification_processing/computer_server_validation.md) |
-| `docs/procurement_specification_processing/document_parsing.md` | [document_parsing.md](procurement_specification_processing/document_parsing.md) |
-| `docs/procurement_specification_processing/domain_model.md` | [domain_model.md](procurement_specification_processing/domain_model.md) |
-| `docs/procurement_specification_processing/evaluation_2026_10_20.md` | [evaluation_2026_10_20.md](procurement_specification_processing/evaluation_2026_10_20.md) |
-| `docs/procurement_specification_processing/ie_library_comparison.md` | [ie_library_comparison.md](procurement_specification_processing/ie_library_comparison.md) |
-| `docs/procurement_specification_processing/overview.md` | [overview.md](procurement_specification_processing/overview.md) |
-| `docs/procurement_specification_processing/parser_evaluation_2026_10_20.md` | [parser_evaluation_2026_10_20.md](procurement_specification_processing/parser_evaluation_2026_10_20.md) |
-| `docs/procurement_specification_processing/parser_evaluation_criteria.md` | [parser_evaluation_criteria.md](procurement_specification_processing/parser_evaluation_criteria.md) |
-| `docs/procurement_specification_processing/pipeline.md` | [pipeline_2026_10_27.md](procurement_specification_processing/pipeline_2026_10_27.md) |
-| `docs/procurement_specification_processing/requirement_consolidation_2026_10_20.md` | [requirement_consolidation_2026_10_20.md](procurement_specification_processing/requirement_consolidation_2026_10_20.md) |
-| `docs/procurement_specification_processing/requirement_extraction_2026_10_20.md` | [requirement_extraction_2026_10_20.md](procurement_specification_processing/requirement_extraction_2026_10_20.md) |
-| `docs/procurement_specification_processing/verification/artifact_cleanup_2026_10_24.md` | [artifact_cleanup_2026_10_24.md](procurement_specification_processing/verification/artifact_cleanup_2026_10_24.md) |
-| `docs/procurement_specification_processing/verification/composition_review_2026_10_20.md` | [composition_review_2026_10_20.md](procurement_specification_processing/verification/composition_review_2026_10_20.md) |
-| `docs/procurement_specification_processing/verification/composition_tree_pipeline_2026_10_22.md` | [composition_tree_pipeline_2026_10_22.md](procurement_specification_processing/verification/composition_tree_pipeline_2026_10_22.md) |
-| `docs/procurement_specification_processing/verification/dictionary_bootstrap_2026_10_20.md` | [dictionary_bootstrap_2026_10_20.md](procurement_specification_processing/verification/dictionary_bootstrap_2026_10_20.md) |
-| `docs/procurement_specification_processing/verification/item_first_pipeline_2026_10_22.md` | [item_first_pipeline_2026_10_22.md](procurement_specification_processing/verification/item_first_pipeline_2026_10_22.md) |
-| `docs/procurement_specification_processing/verification/pipeline_cleanup_2026_10_20.md` | [pipeline_cleanup_2026_10_20.md](procurement_specification_processing/verification/pipeline_cleanup_2026_10_20.md) |
-| `docs/procurement_specification_processing/verification/retired_search_evaluation.md` | [retired_search_evaluation.md](procurement_specification_processing/verification/retired_search_evaluation.md) |
-| `docs/procurement_specification_processing/verification/retired_semantic_batch.md` | [retired_semantic_batch.md](procurement_specification_processing/verification/retired_semantic_batch.md) |
-| `docs/procurement_specification_processing/verification/search_experiment_2026_10_20.md` | [search_experiment_2026_10_20.md](procurement_specification_processing/verification/search_experiment_2026_10_20.md) |
-| `docs/procurement_specification_processing/verification/semantic_batch_2026_10_21.md` | [semantic_batch_2026_10_21.md](procurement_specification_processing/verification/semantic_batch_2026_10_21.md) |
-| `docs/procurement_specification_processing/verification/semantic_readiness_2026_10_21.md` | [semantic_readiness_2026_10_21.md](procurement_specification_processing/verification/semantic_readiness_2026_10_21.md) |
-| `docs/procurement_specification_processing/verification/server_dictionary_bootstrap_2026_10_20.md` | [server_dictionary_bootstrap_2026_10_20.md](procurement_specification_processing/verification/server_dictionary_bootstrap_2026_10_20.md) |
-| `docs/procurement_specification_processing/verification/server_dictionary_build_2026_10_21.md` | [server_dictionary_build_2026_10_21.md](procurement_specification_processing/verification/server_dictionary_build_2026_10_21.md) |
-| `docs/procurement_specification_processing/verification/server_dictionary_reuse_2026_10_21.md` | [server_dictionary_reuse_2026_10_21.md](procurement_specification_processing/verification/server_dictionary_reuse_2026_10_21.md) |
-| `docs/procurement_specification_processing/verification/server_extraction_replication_2026_10_21.md` | [server_extraction_replication_2026_10_21.md](procurement_specification_processing/verification/server_extraction_replication_2026_10_21.md) |
-| `docs/procurement_specification_processing/verification/server_single_extraction_2026_10_21.md` | [server_single_extraction_2026_10_21.md](procurement_specification_processing/verification/server_single_extraction_2026_10_21.md) |
-
-삭제한 중복 안내: `experimental_k3s.md`, `codex_analysis.md`, `component_identification.md`, `composition_analysis.md`, `dictionary_building_pipeline.md`, `document_identification.md`, `document_qualification.md`, `line_item_identification.md`, `requirement_consolidation.md`, `requirement_extraction.md`, `selection_evaluation_2026_10_20.md`, `server_capabilities.md`.
-
-원본 규격서·객체 저장소 산출물·DB·백업·적용 migration·게시 artifact는 정리 대상이 아니다.
+고유한 설계·실행 관측은 보존하고 중복 사용 안내는 현재 문서로 합쳤다.
+이전 경로는 Git 이력으로 추적한다. 이곳의 실행 명령·건수·“현재” 표현은 작성 당시 기준이다.

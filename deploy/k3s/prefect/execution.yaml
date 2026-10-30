@@ -1,0 +1,21 @@
+namespace: teoria-pipelines
+image_env: TEORIA_PIPELINE_JOB_IMAGE
+job_secret: teoria-pipeline-secrets
+defaults:
+  cpu_request: '1'
+  cpu_limit: '2'
+  memory_request: 2Gi
+  memory_limit: 4Gi
+  finished_job_ttl: 3600
+  pod_watch_timeout_seconds: 600
+overrides:
+  cpu_request: TEORIA_JOB_CPU_REQUEST
+  cpu_limit: TEORIA_JOB_CPU_LIMIT
+  memory_request: TEORIA_JOB_MEMORY_REQUEST
+  memory_limit: TEORIA_JOB_MEMORY_LIMIT
+image_pull_secret: teoria-registry
+environment:
+  TEORIA_ENVIRONMENT: production
+  TEORIA_PIPELINE_PATH: /app/backend
+  PREFECT_API_URL: http://prefect-server.teoria.svc.cluster.local:4200/api
+  PREFECT_API_AUTH_STRING: null

@@ -160,18 +160,18 @@ async def test_existing_task_06_calls_corpus_maintenance_and_reuses_the_same_ali
     from unittest.mock import AsyncMock
     from teoria.features.specification_processing import tasks
     from teoria.features.specification_processing.models import SpecificationRun
-    from teoria.features.specification_processing.normalization import dictionary_alignment,dictionary_maintenance
+    from teoria.features.specification_processing.normalization import dictionary_alignment,dictionary_incremental
     corpus_path=tmp_path/'extracted.json';corpus_path.write_text(json.dumps(corpus('허용하중')))
     request=SpecificationRun(run_id='existing_task_fixture',mode='standard_management',model='fixture',
         dictionary_reconcile=True,artifact_root=tmp_path.as_uri(),documents=[{'document_id':'fixture','source_uri':corpus_path.as_uri(),'filename':'fixture.pdf'}],
         dictionary_corpus=[{'uri':corpus_path.as_uri(),'sha256':'a'*64}])
     maintenance={'status':'held','reason':'coverage_missing','artifacts':[]}
     maintain=AsyncMock(return_value=maintenance);align=AsyncMock(return_value={'summary':{}})
-    monkeypatch.setattr(dictionary_maintenance,'maintain_dictionary',maintain)
+    monkeypatch.setattr(dictionary_incremental,'update_standard_dictionary',maintain)
     monkeypatch.setattr(dictionary_alignment,'align_dictionary',align)
     await tasks.resolve_dictionary.fn(request,str(tmp_path),{'uri':corpus_path.as_uri(),'sha256':'b'*64})
     payload=maintain.await_args.args[0]
-    assert len(payload['extractions'])==2 and payload['auto_apply'] is True
+    assert len(payload.dictionary_corpus)==1 and payload.dictionary_meaning_auto_approve is True
     assert align.await_args.kwargs['maintenance']==maintenance
 
 
@@ -206,3 +206,38 @@ async def test_candidate_unit_policy_is_checked_against_separate_source_observat
     groups=[{'source_entry_id':source['entry_id'],'kind':'characteristic','occurrences':[
         {'classification_code':None,'document_id':'separate_case','value_kind':'number','unit_raw':'kW'}]}]
     assert validate_observation_policies(snapshot,groups)[0]['reason']=='value_kind_or_unit_regression'
+
+
+async def test_context_budget_is_an_explicit_hold_without_model_or_meaning_writes(tmp_path):
+    manifest=request(tmp_path)
+    manifest['extractions']=[input_file(tmp_path,'large','4'*64,'X'*20000)]
+    manifest['max_context_characters']=10000
+    api=API();runner=Runner()
+    result=await maintain_dictionary(manifest,api=api,runner=runner)
+    assert result['status']=='held' and result['reason']=='dictionary_context_budget_exceeded'
+    assert result['context_characters']>result['max_context_characters']==10000
+    assert not runner.calls and not api.repo.definitions and not api.repo.links
+    assert any(a['key'].endswith('/result.json') for a in result['artifacts'])
+
+
+def test_group_context_keeps_all_occurrences_and_excludes_other_nodes():
+    from teoria.features.specification_processing.normalization.dictionary_maintenance import nodes_for_groups
+    groups=[{'occurrences':[{'document_id':'a','context_node_ids':['1','2']},
+                            {'document_id':'b','context_node_ids':['1']}]}]
+    nodes=[{'document_id':d,'node_id':n} for d,n in [('a','1'),('a','2'),('b','1'),('a','3')]]
+    assert nodes_for_groups(groups,nodes)==nodes[:3]
+
+
+async def test_unknown_mapping_target_reports_a_safe_rule_instead_of_key_error(tmp_path):
+    from teoria.features.specification_processing.normalization.dictionary_maintenance import DictionaryProposalError
+    class UnknownTarget(Runner):
+        async def generate(self,*args,**kwargs):
+            result=await super().generate(*args,**kwargs)
+            if 'mappings' in result:
+                result['mappings'][0]['target_key']='undefined_target'
+            return result
+    api=API()
+    with pytest.raises(DictionaryProposalError) as error:
+        await maintain_dictionary(request(tmp_path),api=api,runner=UnknownTarget())
+    assert error.value.code=='mapping_target_not_defined'
+    assert not api.repo.definitions and not api.repo.links

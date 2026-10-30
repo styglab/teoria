@@ -1,4 +1,5 @@
 import hashlib
+import os
 from pathlib import Path
 import httpx
 from fastapi import FastAPI
@@ -44,6 +45,7 @@ def api(tmp_path, *, roles="metadata_admin", reference=None, enabled=True):
             database_url=None,
             input_root=tmp_path / "inputs",
             artifact_root=tmp_path / "artifacts",
+            object_root=os.getenv('TEORIA_SPECIFICATION_ARTIFACT_ROOT',(tmp_path/'artifacts').as_uri()),
             repository=Repository(reference),
             uploads_enabled=enabled,
         )
@@ -200,3 +202,34 @@ def test_artifact_cannot_escape_storage_via_symlink(tmp_path):
             ).status_code
             == 404
         )
+
+
+def test_minio_upload_and_preview_do_not_need_local_files(tmp_path,monkeypatch):
+    from contextlib import asynccontextmanager
+    import teoria.features.specification_processing.workspace_router as router
+    from teoria.features.specification_processing.storage.artifact_store import artifact_store
+    objects={}
+    def handler(request):
+        if request.method=='PUT':objects[request.url.path]=request.content;return httpx.Response(200)
+        return httpx.Response(200,content=objects[request.url.path]) if request.url.path in objects else httpx.Response(404)
+    @asynccontextmanager
+    async def factory(root):
+        async with artifact_store(root,transport=httpx.MockTransport(handler)) as store:yield store
+    monkeypatch.setenv('TEORIA_SPECIFICATION_ARTIFACT_ROOT','s3://teoria-artifacts')
+    monkeypatch.setenv('TEORIA_SPECIFICATION_S3_ENDPOINT','http://minio:9000')
+    monkeypatch.setenv('TEORIA_SPECIFICATION_S3_ACCESS_KEY','fixture')
+    monkeypatch.setenv('TEORIA_SPECIFICATION_S3_SECRET_KEY','fixture')
+    monkeypatch.setattr(router,'artifact_store',factory)
+    with api(tmp_path) as client:
+        response=client.post('/v1/admin/specification-processing/documents?filename=doc.pdf',headers=HEADERS,content=b'%PDF-example')
+    assert response.status_code==201
+    assert response.json()['source_uri'].startswith('s3://teoria-artifacts/specification_inputs/')
+    assert not (tmp_path/'inputs').exists()
+    raw=b'{"documents":[]}'
+    objects['/teoria-artifacts/specification_processing/test/result.json']=raw
+    ref={'key':'result.json','uri':'s3://teoria-artifacts/specification_processing/test/result.json','sha256':hashlib.sha256(raw).hexdigest(),'size_bytes':len(raw)}
+    with api(tmp_path,reference=ref) as client:
+        assert client.get('/v1/admin/specification-processing/runs/test_run/artifact?key=result.json',headers=HEADERS).json()=={'documents':[]}
+    ref['uri']='s3://another-bucket/result.json'
+    with api(tmp_path,reference=ref) as client:
+        assert client.get('/v1/admin/specification-processing/runs/test_run/artifact?key=result.json',headers=HEADERS).status_code==404

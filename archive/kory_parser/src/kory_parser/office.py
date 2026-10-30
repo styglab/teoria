@@ -371,6 +371,7 @@ def compact_xls_table(sheet, options: ParseOptions):
 
 
 def parse_xls(data: bytes, options: ParseOptions) -> ParseResult:
+    from .xls_drawing_text import read_value_sheet
     from .xls_workbook import open_value_workbook
 
     result = ParseResult(True, "xls", page_mode="sheet")
@@ -396,7 +397,14 @@ def parse_xls(data: bytes, options: ParseOptions) -> ParseResult:
         for index in range(book.nsheets):
             if options.pages is not None and index + 1 not in options.pages:
                 continue
-            sheet = book.sheet_by_index(index)
+            sheet, recovered_drawing_text = read_value_sheet(book, index)
+            if recovered_drawing_text:
+                result.warnings.append(
+                    Diagnostic(
+                        "XLS_DRAWING_TEXT_PADDING",
+                        "Surplus drawing-text run bytes ignored; cached cells preserved",
+                    )
+                )
             if not sheet.nrows or not sheet.ncols:
                 continue
             if sheet.nrows * sheet.ncols > options.max_cells:

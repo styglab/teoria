@@ -1,26 +1,15 @@
-# 실행·검증 기록
+# 최근 실행·검증 기록
 
-현재 방법은 [문서 목차](../index.md)를 따른다. 이곳은 특정 입력·버전·환경에서 확인한 결과와 한계를 보존한다.
-실행 성공·코드 검사·업무 의미 정확도를 구분한다. 날짜가 지난 결과를 현재 기능·건수·배포 상태로 사용하지 않는다.
+현재 사용법은 [사용 안내](../platform-guide.md), 구현 범위와 한계는 [로드맵](../roadmap.md)을 따른다.
+아래 문서는 특정 입력·코드·환경에서 확인한 관측이다. 테스트 통과·운영 반영·업무 의미 정확도를 구분한다.
 
-## 현재 기능을 이해할 때 참고할 기록
-
-| 기록 | 확인한 범위 |
+| 기록 | 확인할 내용 |
 |---|---|
-| [사전 일괄 구축·개정·버전 고정](goods_dictionary_maintenance_2026_10_28.md) | 개정·영향 매핑·스냅샷·운영 반영과 실제 부분집합 검증 |
-| [물품 공고 운영 DB 복원](goods_notice_production_restore_2026_10_28.md) | migration 101·공고 758,443건·첨부 1,848,691건 운영 반영·기존 20개 테이블 보존 |
-| [물품 공고 근거 스키마·격리 복원](goods_notice_restore_validation_2026_10_28.md) | 공고 758,443건·첨부 1,848,691건 복원·기존 20개 테이블 보존·운영 미적용 |
-| [표준 의미 자동 작성·승인의 운영 Worker 반영](goods_dictionary_deployment_2026_10_28.md) | Worker 교체·Codex 의미 판단·로컬 사전 승인 경로 |
-| [구성 관계·방향 검증의 운영 Worker 반영](goods_relation_deployment_2026_10_28.md) | 운영 Worker 교체·실제 LC-MS 처리·구성·보류 |
-| [구성 관계·작업 방향 검증 수정](goods_relation_repair_2026_10_28.md) | 고정 네 원본의 전후 비교·관계 규칙과 평가 한계 |
-| [네 규격서의 전체 파이프라인 실행·품질 점검](goods_four_sample_pipeline_2026_10_27.md) | 네 규격서 전체 처리와 사전 후보 문제 |
-| [물품 표준 정의·매핑 적용 검증](goods_meaning_dictionary_2026_10_27.md) | 원문 표현·표준 정의·매핑 분리 |
-| [Data DB의 이전 조달 스키마 객체 정리 — 2026-10-28](data_schema_cleanup_2026_10_28.md) | 이전 조달 저장 객체 정리와 보존 범위 |
-| [미사용 ingestion 구조 정리와 보존 기준 — 2026-10-28](ingestion_cleanup_2026_10_28.md) | 공통 ingestion 정리와 보존 기준 |
+| [규격서 처리 재점검 — 10월 30일](specification_processing_recheck_2026_10_30.md) | 원문·중간 결과·품질 판정의 대조와 남은 문제 |
+| [MinIO 저장 전환 — 10월 30일](specification_minio_storage_2026_10_30.md) | 저장소·계정 분리·산출물 보관·검증 범위 |
+| [사전 관리 목적 통합 — 10월 30일](specification_dictionary_management_unified_2026_10_30.md) | 사전 관리와 고정 사전 평가의 입력·정책 |
+| [실행 파라미터 반영 — 10월 30일](specification_management_parameters_2026_10_30.md) | 입력·기본값을 등록한 당시의 관측 |
+| [사전 증분 관리 — 10월 29일](goods_dictionary_incremental_2026_10_29.md) | 문맥 재사용·영향 검증·보류 경로 |
 
-## 전체 이력
-
-[날짜별 기록](history.md)에서 이전 배포·설계 이관·초기화·기능별 실행 증적을 찾는다.
-폐기한 규격서 실험과 비활성 업무 설명은 [보관 문서](../../archive/documentation/index.md)에 있다.
-
-새 기록은 입력·환경·버전·방법·결과·한계를 명시하고 실제 credential·개인정보·비공개 응답을 넣지 않는다.
+이전 배포·DB 복원·설계 이관·실험은 [날짜별 보관 기록](../../archive/documentation/verification/index.md)에서 찾는다.
+과거 건수·모델·설정은 현재 운영 상태로 해석하지 않는다. 새 기록은 입력·버전·방법·결과·한계를 남긴다.

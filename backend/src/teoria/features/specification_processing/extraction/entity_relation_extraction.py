@@ -250,8 +250,17 @@ def materialize(inventory,details,document,held_relations=()):
             'issues':inventory.issues+details.issues,'review_status':'needs_review','ontology_mapping_enabled':False}
 
 
+def safe_rules(errors):
+    # Our deterministic validator messages contain rule names/IDs, never source text.
+    # Pydantic string errors may contain full input; persist a generic schema rule instead.
+    return [e if '\n' not in e and len(e)<180 else 'model_output_schema_invalid' for e in errors[:30]]
+
+
 async def extract_entity_relations(document,out,runner):
-    started=time.monotonic();nodes=[[n['node_id'],n['kind'],n['parent_id'],n['row'],n['column'],n['row_span'],n['column_span'],n['text']] for n in document['nodes'] if n['text'].strip() and n['kind']!='image']
+    from teoria.features.specification_processing.parsing.document_assessment import extraction_node_ids
+    from teoria.features.specification_processing.processing_errors import SpecificationProcessingError
+    eligible=extraction_node_ids(document,headings=True)
+    started=time.monotonic();nodes=[[n['node_id'],n['kind'],n['parent_id'],n['row'],n['column'],n['row_span'],n['column_span'],n['text']] for n in document['nodes'] if n['node_id'] in eligible and n['text'].strip() and n['kind']!='image']
     save(out/'document.json',document);save(out/'status.json',{'stage':'inventory','state':'running'})
     inventory_request={'document_id':document['document_id'],'nodes':nodes,'output_schema':Inventory.model_json_schema()}
     for inventory_attempt in range(2):
@@ -261,7 +270,8 @@ async def extract_entity_relations(document,out,runner):
         except ValueError as exc:errors=[str(exc)]
         if not errors:break
         inventory_request.update({'previous_prediction':raw,'validation_errors':errors,'repair_instruction':'원문 근거와 스키마를 지키면서 오류만 수정한다. 검사를 우회하지 않는다.'})
-    if errors:raise ValueError(json.dumps(errors,ensure_ascii=False))
+    if errors:
+        raise SpecificationProcessingError('inventory_validation_failed',details={'rules':safe_rules(errors)})
     save(out/'inventory.json',inventory.model_dump());save(out/'inventory_validation.json',{'errors':errors})
     save(out/'status.json',{'stage':'specification_alignment','state':'running','frozen_primary_items':len(inventory.items)})
     detail_request={'document_id':document['document_id'],'nodes':nodes,'root_id':'root','inventory':inventory.model_dump(),'output_schema':Details.model_json_schema()}
@@ -277,10 +287,10 @@ async def extract_entity_relations(document,out,runner):
             errors=[str(exc)]
         if not errors:break
         detail_request.update({'previous_prediction':raw,'validation_errors':errors,'repair_instruction':'고정된 root/items를 유지한다. 원문에 없는 이름·물리적 관계를 만들지 말고 오류만 수정한다.'})
-    if details is None:raise ValueError(json.dumps(errors,ensure_ascii=False))
+    if details is None:raise SpecificationProcessingError('details_schema_invalid',details={'rules':safe_rules(errors)})
     details,held=review_relations(details,inventory,document)
     errors=validate_details(details,inventory,document)
-    if errors:raise ValueError(json.dumps(errors,ensure_ascii=False))
+    if errors:raise SpecificationProcessingError('details_validation_failed',details={'rules':safe_rules(errors)})
     save(out/'identifier_projection.json',{'aliases':alias,'reason':'Frozen root node reference to canonical entity ID; no semantic edits'})
     save(out/'details.json',details.model_dump());save(out/'details_validation.json',{'errors':errors})
     save(out/'held_relations.json',held)

@@ -117,6 +117,13 @@ async def align_dictionary(request, corpus, extraction_ref, *, maintenance=None)
                         resolution_items.extend(resolved['items'])
                     resolution={'policy_version':'approved_scoped_equivalence_v1','items':resolution_items}
             documents = aligned_observations(corpus,submission,result)
+            blocked=set(maintenance.get('blocked_source_ids',[])) if maintenance else set()
+            for meaning in resolution['items']:
+                if meaning['source_entry_id'] in blocked:
+                    source_id=meaning['source_entry_id']
+                    meaning.clear()
+                    # Never fall back to an old approved interpretation after its new context was held.
+                    meaning.update(source_entry_id=source_id,status='held',reason='incremental_review_pending')
         else:
             result={'operation_id':operation_id,'status':'skipped','policy_version':'source_literal_v1',
                     'approval_mode':'automatic_policy','summary':{'approved':0,'reused':0,'held':0,'proposed':0},'decisions':[]}
@@ -135,4 +142,6 @@ async def align_dictionary(request, corpus, extraction_ref, *, maintenance=None)
             ref=await store.put(f'specification_processing/{request.run_id}/{leaf}',(json.dumps(body,ensure_ascii=False,indent=2)+'\n').encode())
             artifacts.append(ref.model_dump())
             if leaf=='source_term_alignment.json':alignment_ref=ref.model_dump()
-    return {'result':result,'summary':{**result['summary'],'semantic_authoring':semantic_authoring.get('summary',{})},'alignment_ref':alignment_ref,'artifacts':artifacts,'meaning_summary':payload['concept_alignment']['summary'],'meaning_alignment':payload['concept_alignment']}
+    from teoria.features.specification_processing.normalization.dictionary_incremental import context_stamps
+    stamps=context_stamps(corpus,submission,result,payload['concept_alignment']) if corpus['documents'] else []
+    return {'result':result,'summary':{**result['summary'],'semantic_authoring':semantic_authoring.get('summary',{})},'alignment_ref':alignment_ref,'artifacts':artifacts,'meaning_summary':payload['concept_alignment']['summary'],'meaning_alignment':payload['concept_alignment'],'context_stamps':stamps}

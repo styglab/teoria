@@ -23,7 +23,7 @@ OpenMetadata의 데이터 자산을 탐색하고, Ontology와 의미 연결을 �
 |---|---|
 | `backend/src/teoria/` | API·업무 기능·외부 연결·Prefect 실행 |
 | `frontend/` | 관리 화면과 규격서 분석 앱 |
-| `deploy/` | Compose·K3s·Prefect 배포 설정 |
+| `deploy/` | Compose·K3s의 서비스·Prefect 실행 정책 |
 | `docs/` | 현재 사용·설계·개발·운영 안내 |
 | `archive/` | 비활성 코드와 [과거 문서](archive/documentation/index.md) |
 

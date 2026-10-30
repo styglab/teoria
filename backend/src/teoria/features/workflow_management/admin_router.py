@@ -284,6 +284,9 @@ def create_workflow_router(
                 request = StandardWorkflow.model_validate(manifest)
                 extraction = request.extraction
             else:
+                if pipeline_id == 'specification-standard-management' and 'mode' not in manifest:
+                    from teoria.features.specification_processing.management_parameters import StandardManagementParameters
+                    return StandardManagementParameters.model_validate(manifest).model_dump(mode='json',exclude_none=True)
                 request = SpecificationRun.model_validate(manifest)
                 extraction = request
                 expected = (

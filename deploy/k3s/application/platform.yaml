@@ -171,16 +171,12 @@ spec:
             secretKeyRef:
               name: teoria-secrets
               key: TEORIA_ASSESSMENT_ENABLED
-        - name: TEORIA_ASSESSMENT_MODEL_URL
+        - name: TEORIA_ASSESSMENT_CODEX_MODEL
           valueFrom:
             secretKeyRef:
               name: teoria-secrets
-              key: TEORIA_ASSESSMENT_MODEL_URL
-        - name: TEORIA_ASSESSMENT_MODEL_NAME
-          valueFrom:
-            secretKeyRef:
-              name: teoria-secrets
-              key: TEORIA_ASSESSMENT_MODEL_NAME
+              key: TEORIA_ASSESSMENT_CODEX_MODEL
+              optional: true
         command:
         - teoria-admin-api
         ports:
@@ -292,6 +288,14 @@ spec:
       labels:
         app: metadata-assessment-worker
     spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      volumes:
+      - name: metadata-model-auth
+        persistentVolumeClaim:
+          claimName: metadata-model-auth
       containers:
       - name: metadata-assessment-worker
         image: teoria/authoring:release
@@ -329,31 +333,21 @@ spec:
             secretKeyRef:
               name: teoria-secrets
               key: TEORIA_ASSESSMENT_ENABLED
-        - name: TEORIA_ASSESSMENT_MODEL_URL
+        - name: TEORIA_ASSESSMENT_CODEX_MODEL
           valueFrom:
             secretKeyRef:
               name: teoria-secrets
-              key: TEORIA_ASSESSMENT_MODEL_URL
-        - name: TEORIA_ASSESSMENT_MODEL_NAME
+              key: TEORIA_ASSESSMENT_CODEX_MODEL
+              optional: true
+        - name: TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS
           valueFrom:
             secretKeyRef:
               name: teoria-secrets
-              key: TEORIA_ASSESSMENT_MODEL_NAME
-        - name: TEORIA_ASSESSMENT_MODEL_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: teoria-secrets
-              key: TEORIA_ASSESSMENT_MODEL_TOKEN
-        - name: TEORIA_ASSESSMENT_MODEL_TIMEOUT_SECONDS
-          valueFrom:
-            secretKeyRef:
-              name: teoria-secrets
-              key: TEORIA_ASSESSMENT_MODEL_TIMEOUT_SECONDS
-        - name: TEORIA_ASSESSMENT_MODEL_MAX_TOKENS
-          valueFrom:
-            secretKeyRef:
-              name: teoria-secrets
-              key: TEORIA_ASSESSMENT_MODEL_MAX_TOKENS
+              key: TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS
+              optional: true
+        volumeMounts:
+        - name: metadata-model-auth
+          mountPath: /home/teoria/.codex
         command:
         - teoria-metadata-assessment-worker
       imagePullSecrets:

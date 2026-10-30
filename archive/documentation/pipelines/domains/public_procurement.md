@@ -39,7 +39,7 @@ Raw 본문은 hash 기준으로 한 번 보관하고 실행별 관찰은 별도 
 
 첨부파일 다운로드·파싱·입찰요건 추출과 참가 가능성 판단은 보류했다.
 해당 기능은 현재 배포와 수집 큐에 포함하지 않는다. 당시 보류·제거 범위는
-[검증 기록](../../../../docs/verification/bid_document_archive_2026_10_16.md)을 따른다.
+[검증 기록](../../verification/bid_document_archive_2026_10_16.md)을 따른다.
 파일 보관본은 현재 저장소에서 제거되었으며, 당시 기존 DB와 객체는 보존했다.
 
 ## 최신·보정·과거 수집의 구분
@@ -117,4 +117,4 @@ Incremental은 지연 반영을 고려해 최근 3일을 중복 조회하며 정
 
 실행·수동 재시도는 [Prefect](../../../../docs/pipelines/prefect.md), 의미 기준은
 [Platform 조달 집계](../../platform/domains/public_procurement/contract_aggregation.md)를 참고한다.
-과거 데이터 결손의 시점별 점검은 [수집 점검 기록](../../../../docs/verification/procurement_collection_2026_10_12.md)에 보존한다.
+과거 데이터 결손의 시점별 점검은 [수집 점검 기록](../../verification/procurement_collection_2026_10_12.md)에 보존한다.

@@ -1,4 +1,4 @@
-"""Worker cancellation closes both long-lived HTTP clients."""
+"""Worker cancellation closes the metadata connection; inference uses Codex."""
 
 import asyncio
 from types import SimpleNamespace
@@ -10,7 +10,7 @@ import pytest
 from teoria.entrypoints import asset_assessment_worker as worker
 
 
-async def test_worker_cancellation_closes_metadata_and_model_connections(monkeypatch):
+async def test_worker_cancellation_closes_metadata_connection(monkeypatch):
     settings = SimpleNamespace(
         assessment_enabled=True,
         assessment_law_max_documents=5,
@@ -21,11 +21,8 @@ async def test_worker_cancellation_closes_metadata_and_model_connections(monkeyp
         openmetadata_auth_token=None,
         openmetadata_timeout_seconds=5,
         openmetadata_verify_ssl=True,
-        assessment_model_url="http://model.invalid/chat",
-        assessment_model_name="synthetic",
-        assessment_model_token=None,
-        assessment_model_timeout_seconds=7,
-        assessment_model_max_tokens=100,
+        assessment_codex_model="synthetic",
+        assessment_codex_timeout_seconds=7,
         admin_data_database_url=None,
     )
     monkeypatch.setattr(worker, "bootstrap_settings", lambda: settings)
@@ -49,5 +46,5 @@ async def test_worker_cancellation_closes_metadata_and_model_connections(monkeyp
     monkeypatch.setattr(httpx, "AsyncClient", create_client)
     with pytest.raises(asyncio.CancelledError):
         await worker.run()
-    assert len(clients) == 2
+    assert len(clients) == 1
     assert all(client.is_closed for client in clients)

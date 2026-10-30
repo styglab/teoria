@@ -42,11 +42,8 @@ class Settings(BaseSettings):
     assessment_law_max_documents: int = Field(default=5, ge=1, le=5)
     assessment_law_max_chars: int = Field(default=12000, ge=1000, le=12000)
     assessment_enabled: bool = False
-    assessment_model_url: str | None = None
-    assessment_model_name: str | None = None
-    assessment_model_token: str | None = None
-    assessment_model_timeout_seconds: float = Field(default=90, ge=1, le=120)
-    assessment_model_max_tokens: int = Field(default=6000, ge=256, le=16000)
+    assessment_codex_model: str | None = None
+    assessment_codex_timeout_seconds: int = Field(default=180, ge=1, le=360)
     openmetadata_enabled: bool = False
     openmetadata_base_url: str = "http://localhost:8585/api"
     openmetadata_auth_token: str | None = None

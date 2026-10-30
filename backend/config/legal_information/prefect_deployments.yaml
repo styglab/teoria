@@ -1,0 +1,44 @@
+name: teoria-legal-information
+prefect-version: 3.8.1
+build: null
+push: null
+pull: null
+deployments:
+- name: moleg-law-daily
+  version: 1.0.0
+  description: 지정 법령의 전체 버전 목록을 확인하고 신규·변경·현행·시행예정 본문을 수집한다. 독립 법령 pool에서 실행하며 조달
+    Backfill은 재개하지 않는다.
+  entrypoint: teoria.features.legal_information.collection.flows.sync_moleg_laws
+  tags:
+  - domain:legal_information
+  - pipeline:moleg_law_ingestion
+  concurrency_limit:
+    limit: 1
+    collision_strategy: CANCEL_NEW
+  parameters:
+    pipeline_root: /app/backend
+    reconcile_all: false
+    requests_per_second: 1
+  schedules:
+  - cron: 15 4 * * 1-6
+    timezone: Asia/Seoul
+    active: true
+- name: moleg-law-weekly-reconciliation
+  version: 1.0.0
+  description: 지정 법령의 모든 연혁 본문을 재조회해 기존 식별자의 원문 정정도 보존한다. 독립 법령 pool에서 실행하며 조달 Backfill은
+    재개하지 않는다.
+  entrypoint: teoria.features.legal_information.collection.flows.sync_moleg_laws
+  tags:
+  - domain:legal_information
+  - pipeline:moleg_law_ingestion
+  concurrency_limit:
+    limit: 1
+    collision_strategy: CANCEL_NEW
+  parameters:
+    pipeline_root: /app/backend
+    reconcile_all: true
+    requests_per_second: 1
+  schedules:
+  - cron: 15 4 * * 0
+    timezone: Asia/Seoul
+    active: true

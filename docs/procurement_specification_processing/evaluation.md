@@ -104,6 +104,6 @@ finish/abort는 평가용 파싱·청크·모델 응답·전체 그래프·로�
 누적 `.artifacts/specification_improvement/state.json`·`index.md`에는 입력·코드·사례·환경 해시,
 노출 이력·전후 수치·판정·정리 용량을 남긴다. 게시 Ontology나 authoritative metadata를 변경하지 않는다.
 
-[기존 네 원본 평가](../verification/goods_relation_repair_2026_10_28.md)는
+[기존 네 원본 평가](../../archive/documentation/verification/goods_relation_repair_2026_10_28.md)는
 고정 사례 점수와 구성 규칙의 동작 확인이 다른 검증임을 보여준다.
 원문 사례의 회귀 계약은 `backend/tests/features/specification_processing/evaluation/`에 있다.
