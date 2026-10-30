@@ -13,7 +13,7 @@
 | 의미 연결 | `/admin/semantic-model/bindings` | 자산·용어·개념 연결 |
 | 검토함 | `/admin/changes/review` | 제안·Binding·Ontology의 소유 검토 화면으로 이동 |
 | 파이프라인 | `/admin/workflows` | 허용된 실행·스케줄·취소 요청·이력 |
-| 앱 → 규격서 분석 | `/admin/specifications` | 문서 입력·실행·저장 결과·원문 근거 |
+| 앱 → FormatID | `/admin/specifications` | 문서 입력·실행·저장 결과·원문 근거 |
 | 모델 레지스트리 | `/admin/models` | 선택형 모델·버전·평가·학습 이력 |
 | 추론 서비스 | `/admin/serving` | 선택형 배포 버전·추론 테스트·이력 |
 | 연결 및 설정 | `/admin/operations` | 연결·관리자 인증·실행 도구 |
@@ -28,7 +28,7 @@
 조회 실패를 빈 값으로 처리하지 않는다. [자산 맥락](metadata/asset_context.md) ·
 [Codex 진단](metadata/asset_assessment.md) · [제안·적용](metadata/suggestions.md)을 참고한다.
 
-## 규격서 분석
+## FormatID
 
 앱은 저장된 문서 추출 결과와 표준 매핑을 구분한다. 행 선택·키보드 Enter로 속성과 원문 근거를 함께 강조한다.
 구매 범위·해석·보류·순환·복수 부모 관계를 물리적 구성으로 확정하지 않는다.

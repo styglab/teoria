@@ -7,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { capabilityApi } from "../api/capability";
 import { registryApi } from "../api/registry";
 import { metadataApi } from "../api/metadata";
@@ -15,6 +15,14 @@ import { authApi } from "../api/auth";
 import { workflowsApi } from "../api/workflows";
 import { modelOperationsApi } from "../api/model_operations";
 import { App } from "./App";
+import { deploymentApi } from "../features/access/DeploymentAvailability";
+beforeEach(() => {
+  vi.spyOn(deploymentApi, "status").mockResolvedValue({
+    semantic: true,
+    formatid: true,
+    mlops: true,
+  });
+});
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

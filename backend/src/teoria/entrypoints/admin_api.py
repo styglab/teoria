@@ -76,6 +76,15 @@ def create_admin_app(
         response.headers["Cache-Control"] = "no-store"
         return {"actor": principal.actor, "roles": sorted(principal.roles)}
 
+    @app.get("/v1/admin/deployment", tags=["deployment"])
+    async def deployment(response: Response) -> dict[str, bool]:
+        response.headers["Cache-Control"] = "no-store"
+        return {
+            "semantic": services.settings.semantic_modeling_enabled,
+            "formatid": services.settings.formatid_enabled,
+            "mlops": services.settings.model_operations_enabled,
+        }
+
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}

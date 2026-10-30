@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from teoria.features.metadata_management.intelligence.asset_assessment.model_client import assessment_model_identity
+from teoria.features.metadata_management.intelligence.asset_assessment.model_client import (
+    assessment_model_identity,
+)
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -8,12 +10,20 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI
-from teoria.features.specification_processing.workspace_router import create_processing_workspace_router
+from teoria.features.specification_processing.workspace_router import (
+    create_processing_workspace_router,
+)
 from teoria.features.model_operations.admin_router import create_model_operations_router
 from teoria.features.workflow_management.admin_router import create_workflow_router
-from teoria.features.semantic_modeling.goods_dictionary.admin_router import create_goods_dictionary_router
-from teoria.features.semantic_modeling.goods_dictionary.service import GoodsDictionaryService
-from teoria.features.semantic_modeling.goods_dictionary.meaning_service import GoodsMeaningService
+from teoria.features.semantic_modeling.goods_dictionary.admin_router import (
+    create_goods_dictionary_router,
+)
+from teoria.features.semantic_modeling.goods_dictionary.service import (
+    GoodsDictionaryService,
+)
+from teoria.features.semantic_modeling.goods_dictionary.meaning_service import (
+    GoodsMeaningService,
+)
 
 from teoria.features.metadata_management.intelligence.asset_assessment.admin_router import (
     create_asset_assessment_router,
@@ -147,7 +157,11 @@ def create_admin_services(
         if resolved_settings.app_database_url
         else None
     )
-    if resolved_metadata_service is None and resolved_settings.openmetadata_enabled:
+    if (
+        resolved_metadata_service is None
+        and resolved_settings.semantic_modeling_enabled
+        and resolved_settings.openmetadata_enabled
+    ):
         resolved_metadata_service = OpenMetadataService(
             OpenMetadataClient(
                 resolved_settings.openmetadata_base_url,
@@ -160,7 +174,11 @@ def create_admin_services(
         )
         resources.append(resolved_metadata_service.client)
     context_runtime_client = None
-    if context_engine is None and resolved_settings.context_runtime_api_token:
+    if (
+        resolved_settings.semantic_modeling_enabled
+        and context_engine is None
+        and resolved_settings.context_runtime_api_token
+    ):
         context_runtime_client = ContextRuntimeClient(
             resolved_settings.context_runtime_api_url,
             resolved_settings.context_runtime_api_token,
@@ -168,15 +186,19 @@ def create_admin_services(
         )
         resources.append(context_runtime_client)
     runtime_context_repository = (
-        BundleContextRepository.from_path(resolved_settings.runtime_artifact_path)
-        if resolved_settings.runtime_artifact_path is not None
-        else BundleContextRepository.from_store(
-            resolved_settings.runtime_artifact_store
+        None
+        if not resolved_settings.semantic_modeling_enabled
+        else (
+            BundleContextRepository.from_path(resolved_settings.runtime_artifact_path)
+            if resolved_settings.runtime_artifact_path is not None
+            else BundleContextRepository.from_store(
+                resolved_settings.runtime_artifact_store
+            )
+            if resolved_settings.runtime_artifact_store is not None
+            else ContextRepository(resolved_settings.app_database_url)
+            if resolved_settings.app_database_url
+            else None
         )
-        if resolved_settings.runtime_artifact_store is not None
-        else ContextRepository(resolved_settings.app_database_url)
-        if resolved_settings.app_database_url
-        else None
     )
     resolved_context_engine = context_engine or (
         ContextEngine(
@@ -255,52 +277,90 @@ def create_admin_services(
 def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
     model_client = httpx.AsyncClient(timeout=15)
     services.resources.append(model_client)
-    app.include_router(create_model_operations_router(authorizer=services.authorizer, client=model_client,
-        enabled=services.settings.model_operations_enabled,
-        prefect_url=services.settings.model_prefect_url, prefect_auth=services.settings.model_prefect_auth,
-        mlflow_url=services.settings.model_mlflow_url, inference_url=services.settings.model_inference_url,
-        inference_token=services.settings.demo_inference_token))
-    app.include_router(create_workflow_router(authorizer=services.authorizer, client=model_client,
-        prefect_url=services.settings.model_prefect_url, prefect_auth=services.settings.model_prefect_auth,
-        mlops_enabled=services.settings.model_operations_enabled,
-        inference_token=services.settings.demo_inference_token))
-    app.include_router(create_processing_workspace_router(authorizer=services.authorizer, database_url=services.settings.admin_data_database_url, uploads_enabled=services.settings.specification_upload_enabled))
-    profiles = (
-        NormalizationProfileService(
-            services.settings.app_database_url,
-            ontology_authoring=services.ontology_authoring_service,
+    app.include_router(
+        create_model_operations_router(
+            authorizer=services.authorizer,
+            client=model_client,
+            enabled=services.settings.model_operations_enabled,
+            prefect_url=services.settings.model_prefect_url,
+            prefect_auth=services.settings.model_prefect_auth,
+            mlflow_url=services.settings.model_mlflow_url,
+            inference_url=services.settings.model_inference_url,
+            inference_token=services.settings.demo_inference_token,
         )
-        if services.settings.app_database_url
-        else None
-    )
-    operations = (
-        SemanticOperationService(
-            profiles,
-            SemanticOperationRepository(services.settings.app_database_url),
-            services.ontology_authoring_service,
-        )
-        if profiles
-        else None
     )
     app.include_router(
-        create_normalization_profile_router(profiles, services.authorizer, operations)
-    )
-    app.include_router(create_goods_dictionary_router(
-        GoodsDictionaryService(services.settings.app_database_url) if services.settings.app_database_url else None,
-        services.authorizer,
-        GoodsMeaningService(services.settings.app_database_url) if services.settings.app_database_url else None,
-    ))
-    app.include_router(
-        create_asset_assessment_router(
-            services.assessment_repository,
-            getattr(services.metadata_service, "client", None),
-            services.authorizer,
-            enabled=bool(
-                services.settings.assessment_enabled
-            ),
-            model_name=assessment_model_identity(services.settings.assessment_codex_model),
+        create_workflow_router(
+            authorizer=services.authorizer,
+            client=model_client,
+            prefect_url=services.settings.model_prefect_url,
+            prefect_auth=services.settings.model_prefect_auth,
+            mlops_enabled=services.settings.model_operations_enabled,
+            semantic_enabled=services.settings.semantic_modeling_enabled,
+            formatid_enabled=services.settings.formatid_enabled,
+            legal_enabled=services.settings.legal_information_enabled,
+            inference_token=services.settings.demo_inference_token,
         )
     )
+    app.include_router(
+        create_processing_workspace_router(
+            authorizer=services.authorizer,
+            database_url=services.settings.admin_data_database_url
+            if services.settings.formatid_enabled
+            else None,
+            uploads_enabled=services.settings.formatid_enabled
+            and services.settings.specification_upload_enabled,
+        )
+    )
+    if (
+        services.settings.semantic_modeling_enabled
+        or services.settings.formatid_enabled
+    ):
+        profiles = (
+            NormalizationProfileService(
+                services.settings.app_database_url,
+                ontology_authoring=services.ontology_authoring_service,
+            )
+            if services.settings.app_database_url
+            else None
+        )
+        operations = (
+            SemanticOperationService(
+                profiles,
+                SemanticOperationRepository(services.settings.app_database_url),
+                services.ontology_authoring_service,
+            )
+            if profiles
+            else None
+        )
+        app.include_router(
+            create_normalization_profile_router(
+                profiles, services.authorizer, operations
+            )
+        )
+        app.include_router(
+            create_goods_dictionary_router(
+                GoodsDictionaryService(services.settings.app_database_url)
+                if services.settings.app_database_url
+                else None,
+                services.authorizer,
+                GoodsMeaningService(services.settings.app_database_url)
+                if services.settings.app_database_url
+                else None,
+            )
+        )
+    if services.settings.semantic_modeling_enabled:
+        app.include_router(
+            create_asset_assessment_router(
+                services.assessment_repository,
+                getattr(services.metadata_service, "client", None),
+                services.authorizer,
+                enabled=bool(services.settings.assessment_enabled),
+                model_name=assessment_model_identity(
+                    services.settings.assessment_codex_model
+                ),
+            )
+        )
     app.include_router(
         create_metadata_router(
             services.metadata_service,
@@ -309,9 +369,15 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
             public_read=services.settings.admin_metadata_public_read,
         )
     )
-    app.include_router(
-        create_law_search_router(services.law_search_reader, services.authorizer)
-    )
+    if services.settings.legal_information_enabled:
+        app.include_router(
+            create_law_search_router(services.law_search_reader, services.authorizer)
+        )
+    if not (
+        services.settings.semantic_modeling_enabled
+        or services.settings.formatid_enabled
+    ):
+        return
     app.include_router(create_property_context_router(services.binding_repository))
     app.include_router(
         create_binding_router(
@@ -329,6 +395,8 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
             services.authorizer,
         )
     )
+    if not services.settings.semantic_modeling_enabled:
+        return
     app.include_router(
         create_context_router(services.context_engine, services.authorizer)
     )

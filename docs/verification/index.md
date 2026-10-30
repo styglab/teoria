@@ -5,6 +5,7 @@
 
 | 기록 | 확인할 내용 |
 |---|---|
+| [Compose 모듈 실행 — 10월 30일](compose_modules_2026_10_30.md) | 단독·전체 구성, 중지·재시작, 실제 Flow와 이미지 정리 |
 | [규격서 처리 재점검 — 10월 30일](specification_processing_recheck_2026_10_30.md) | 원문·중간 결과·품질 판정의 대조와 남은 문제 |
 | [MinIO 저장 전환 — 10월 30일](specification_minio_storage_2026_10_30.md) | 저장소·계정 분리·산출물 보관·검증 범위 |
 | [사전 관리 목적 통합 — 10월 30일](specification_dictionary_management_unified_2026_10_30.md) | 사전 관리와 고정 사전 평가의 입력·정책 |

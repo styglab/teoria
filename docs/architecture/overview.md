@@ -1,6 +1,6 @@
 # 시스템 아키텍처
 
-Teoria는 데이터 자산·업무 의미·AI 실행을 연결한다. 첫 업무 앱은 규격서 분석이다.
+Teoria는 데이터 자산·업무 의미·AI 실행을 연결한다. 첫 업무 앱은 FormatID(규격서 기반 물품 구조화·분석)다.
 코드는 한 저장소에 두고 API·Runtime·MCP·각 Worker는 역할별로 실행한다.
 구체적인 코드 위치는 [저장소 구조](repository-structure.md)를 따른다.
 

@@ -1,4 +1,8 @@
-# 규격서 파이프라인과 Codex 사용
+# FormatID 파이프라인과 Codex 사용
+
+**FormatID — 규격서 기반 물품 구조화·분석**은 물품·구성품·구성 관계·규격·속성·조건을 원문 근거와 함께 추출·분석하는 업무 서비스다.
+서비스 식별 표기는 `formatid`다. 현재 코드 소유 경로 `specification_processing`,
+API 경로와 Prefect Flow·배포 ID는 기존 실행 계약을 유지한다.
 
 원본 입력부터 결과 저장까지 아래 순서로 처리한다. 실행은 Prefect, 원문 해석은 파서와 Codex,
 표준관리에서는 미해결 사전 의미도 Codex가 판단한다. 검증·승인 정책·표준 적용·저장은 코드가 담당한다.
@@ -205,7 +209,7 @@ Data DB에는 실행·문서별 요약·URI·checksum만 저장한다. [저장�
 
 ## 실행 방법
 
-화면 사용은 [규격서 분석 안내](../platform-guide.md#규격서를-처리하려면)를 따른다. CLI는 다음과 같다.
+화면 사용은 [FormatID 사용 안내](../platform-guide.md#규격서를-처리하려면)를 따른다. CLI는 다음과 같다.
 실행 전에 Data DB·Prefect·Codex 인증·파서 Python·Admin 작성 API를 [환경 설정](../deployment/configuration.md)대로 준비한다.
 
 ```json

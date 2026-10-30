@@ -22,7 +22,7 @@ it("groups task navigation separately from platform administration", () => {
   const groups = within(primary).getAllByRole("button");
   expect(groups.at(-1)).toBe(apps);
   fireEvent.click(apps);
-  expect(within(primary).getByRole("link", { name: "규격서 분석" })).toBeTruthy();
+  expect(within(primary).getByRole("link", { name: "FormatID" })).toBeTruthy();
   expect(
     within(primary)
       .getByRole("link", { name: "모델 레지스트리" })

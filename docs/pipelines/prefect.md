@@ -30,7 +30,7 @@ Metadata는 별도 `teoria-metadata` pool에서 동시 실행 1개다.
 ## 등록과 실행
 
 ```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml run --rm --no-deps prefect-deploy
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml -f deploy/compose/compose_formatid.yaml run --rm --no-deps prefect-deploy
 ```
 
 등록 명령의 `--kind ingestion`은 기존 CLI 호환 이름이다. 현재는 규격서 작업만 등록한다.
@@ -65,7 +65,7 @@ Worker 교체 → heartbeat·기동 검사 → 원래 pool 상태 복원 순서�
 기존 작업을 종료한 증거 없이 DB 상태나 checkpoint를 강제로 진행시키지 않는다.
 
 ```bash
-docker compose -f deploy/compose/compose.yaml logs --tail 100 prefect-worker
+docker compose -f deploy/compose/compose.yaml -f deploy/compose/compose_formatid.yaml logs --tail 100 prefect-worker
 uv run --locked --project backend teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
 ```
 

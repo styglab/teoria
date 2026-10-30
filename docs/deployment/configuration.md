@@ -22,7 +22,7 @@ API·MCP extra와 Worker별 dependency group으로 실행 환경을 구분한다
 | Pipelines | `backend/src/teoria/integrations/data_operations/settings.py` |
 | DB 연결 상한 | Platform `persistence/postgres.py`, Pipelines `persistence/connection.py`의 환경변수 |
 | MCP | `backend/src/teoria/entrypoints/mcp/settings.py` |
-| Compose 서비스·포트·이미지·필수 인증 | `deploy/compose/compose.yaml`, `.env.example` |
+| Compose 서비스·포트·이미지·필수 인증 | `deploy/compose/compose*.yaml`, `.env.example` |
 | EC2 K3s·GitHub CD | `deploy/k3s/`, `.github/workflows/deploy_k3s.yaml` |
 
 쉘 환경변수가 env 파일보다 우선한다. Compose 밖의 실행은 `TEORIA_ENV_FILE`로 파일을
@@ -33,18 +33,20 @@ API·MCP extra와 Worker별 dependency group으로 실행 환경을 구분한다
 
 아래 표의 기본값은 Python 설정 모델 기준이다. Compose 전용 변수는 배포 정의의
 기본값을 표시한다. `.env.example`은 설정 예이며 실제 환경변수와 Compose의 고정값·
-fallback이 최종 실행값을 결정한다. 다음 차이를 먼저 확인한다.
+fallback이 최종 실행값을 결정한다. `mlops`·`semantic`·`formatid` 모듈은 해당 Compose 파일이
+API 기능 flag를 함께 설정한다. `.env`의 예전 `TEORIA_MODEL_OPERATIONS_ENABLED`만으로 모듈을 켜지 않는다.
+다음 차이를 먼저 확인한다.
 
 | 설정 | Python 기본값 | 현재 Compose 주입 |
 |---|---|---|
 | `TEORIA_ENVIRONMENT` | `development` | Platform 서비스 `production` |
 | `TEORIA_ADMIN_AUTH_MODE` | `disabled` | `bearer`; Admin token 필수 |
 | `TEORIA_POLICY_MODE` | `disabled` | Runtime·Admin에 `opa` |
-| `TEORIA_OPENMETADATA_ENABLED` | `false` | Admin·진단 Worker에서 기본 `true` |
+| `TEORIA_OPENMETADATA_ENABLED` | `false` | `semantic` 선택 시 Admin·진단 Worker에서 기본 `true`; 기본 구성은 `false` |
 | `TEORIA_OPENMETADATA_BASE_URL` | `http://localhost:8585/api` | 기본 `http://openmetadata-server:8585/api` |
 | `TEORIA_OPENMETADATA_AUTH_TOKEN` | 없음 | 명시 token이 없으면 ingestion bot token fallback |
-| `TEORIA_RUNTIME_ARTIFACT_STORE` | 없음 | Runtime·Admin의 `/app/runtime_artifacts` |
-| `TEORIA_CONTEXT_RUNTIME_API_URL` | `http://localhost:8000` | Admin의 `http://runtime-api:8000` |
+| `TEORIA_RUNTIME_ARTIFACT_STORE` | 없음 | `semantic` 선택 시 Runtime·Admin의 `/app/runtime_artifacts` |
+| `TEORIA_CONTEXT_RUNTIME_API_URL` | `http://localhost:8000` | `semantic` 선택 시 Admin의 `http://runtime-api:8000` |
 | `TEORIA_CONTEXT_RUNTIME_API_TOKEN` | 없음 | Runtime service token 주입 |
 | Data DB URL | Python 설정값 없음 | 외부 URL 또는 내부 PostgreSQL의 역할별 URL |
 
@@ -67,6 +69,12 @@ Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할
 | `TEORIA_RUNTIME_API_IMAGE` | Runtime API 이미지 선택 |
 | `TEORIA_ADMIN_API_IMAGE` | Admin HTTP 이미지 선택 |
 | `TEORIA_SPECIFICATION_WORKER_IMAGE` | 규격서 Worker 이미지 선택 |
+| `TEORIA_MINIO_MC_BUILD_CONTEXT` | 선택형 MinIO 클라이언트 빌드 원본; 기본은 공식 이미지 |
+| `TEORIA_OPENMETADATA_INGESTION_BUILD_CONTEXT` | 선택형 OpenMetadata ingestion 빌드 원본; 기본은 공식 이미지 |
+
+두 빌드 원본 입력은 실행 컨테이너나 저장소 설정이 아니다. 레지스트리 장애 시 검증한 동일 버전의
+로컬 OCI 이미지(`oci-layout:///절대경로:태그`)를 지정할 수 있다. 이 경로는 빌드하는 머신에 있어야 한다.
+기본 공식 이미지에 접근할 수 있으면 값을 비워 둔다. 서버별 캐시를 새 환경에서 그대로 참조하지 않는다.
 
 이전 MinIO `TEORIA_MINIO_ACCESS_KEY` / `TEORIA_MINIO_SECRET_KEY`는 각각
 `TEORIA_MINIO_ROOT_USER` / `TEORIA_MINIO_ROOT_PASSWORD`로 이름을 바꿨다.

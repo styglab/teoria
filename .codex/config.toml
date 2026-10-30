@@ -1,10 +1,12 @@
 [mcp_servers.teoria]
+  # Enable explicitly when the Semantic Runtime and MCP image are available.
+  enabled = false
   command = "uv"
   args = ["run", "--project", "backend", "--locked", "--extra", "mcp", "python", ".codex/run_teoria_mcp.py"]
   cwd = "/workspace"
   startup_timeout_sec = 30
   tool_timeout_sec = 150
-  required = true
+  required = false
 
 [mcp_servers.teoria.tools.get_business_registration_status]
 approval_mode = "approve"

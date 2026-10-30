@@ -20,10 +20,22 @@ INTERNAL_PIPELINES = {
 }
 
 
-def workflow_catalog(mlops_enabled: bool, include_internal: bool = False):
+def workflow_catalog(
+    mlops_enabled: bool,
+    include_internal: bool = False,
+    *,
+    semantic_enabled: bool = True,
+    formatid_enabled: bool = True,
+    legal_enabled: bool = True,
+):
     items = {**PIPELINES, **(INTERNAL_PIPELINES if include_internal else {})}
     return {
         key: value
         for key, value in items.items()
-        if mlops_enabled or value[1] != "모델"
+        if {
+            "모델": mlops_enabled,
+            "메타데이터": semantic_enabled,
+            "규격서": formatid_enabled,
+            "법령": legal_enabled,
+        }.get(value[1], False)
     }

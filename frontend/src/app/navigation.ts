@@ -20,6 +20,7 @@ export type NavigationItem = {
   icon: LucideIcon;
   group: string;
   modelOperations?: boolean;
+  module?: "semantic" | "formatid" | "mlops";
   placement?: "footer";
 };
 export const navigationItems: NavigationItem[] = [
@@ -32,6 +33,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: "/admin/data-catalog",
+    module: "semantic",
     label: "데이터 자산",
     description: "데이터 탐색과 자산별 AI 진단",
     icon: Database,
@@ -39,6 +41,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: "/admin/semantic-model/ontology",
+    module: "semantic",
     label: "온톨로지",
     description: "업무 개념·관계·버전 관리",
     icon: Boxes,
@@ -46,6 +49,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: "/admin/semantic-model/bindings",
+    module: "semantic",
     label: "의미 연결",
     description: "업무 개념과 자산·용어 연결",
     icon: GitFork,
@@ -53,6 +57,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: "/admin/changes/review",
+    module: "semantic",
     label: "검토함",
     description: "제안·의미 연결·온톨로지 검토",
     icon: Inbox,
@@ -67,6 +72,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: "/admin/models",
+    module: "mlops",
     label: "모델 레지스트리",
     description: "등록 버전·평가 지표·학습 데이터",
     icon: Layers,
@@ -75,6 +81,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: "/admin/serving",
+    module: "mlops",
     label: "추론 서비스",
     description: "배포 버전·엔드포인트·추론 테스트",
     icon: Rocket,
@@ -83,8 +90,9 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: "/admin/specifications",
-    label: "규격서 분석",
-    description: "문서 입력·처리 실행·결과와 근거 확인",
+    module: "formatid",
+    label: "FormatID",
+    description: "규격서 기반 물품 구조화·분석",
     icon: FileText,
     group: "앱",
   },
@@ -98,6 +106,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: "/admin/developer/capabilities",
+    module: "semantic",
     label: "개발 도구",
     description: "Capability·Runtime 개발 도구",
     icon: Braces,

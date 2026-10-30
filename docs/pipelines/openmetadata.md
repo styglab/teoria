@@ -32,7 +32,7 @@ Server와 동일한 `OPENMETADATA_VERSION`으로 이미지를 빌드한다. 현�
 
 ```bash
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml \
-  --profile metadata --profile metadata-ingestion build openmetadata-ingestion-job
+  -f deploy/compose/compose_semantic.yaml build openmetadata-ingestion-job
 ```
 
 `TEORIA_METADATA_DB_PASSWORD`와 `OPENMETADATA_INGESTION_BOT_TOKEN`을 배포 환경에
@@ -44,7 +44,7 @@ Worker는 allowlist가 다른 이미지를 실행하지 않는다.
 
 ```bash
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml \
-  --profile metadata --profile metadata-ingestion \
+  -f deploy/compose/compose_semantic.yaml \
   run --rm openmetadata-ingestion-job
 ```
 
@@ -55,17 +55,15 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml \
 ## Prefect로 실행하기
 
 ```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml \
-  --profile metadata --profile metadata-orchestration \
-  up -d --build prefect-metadata-worker
+bash deploy/compose/deploy.sh deploy --modules semantic
 
 docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml \
-  --profile metadata --profile metadata-orchestration \
+  -f deploy/compose/compose_semantic.yaml \
   exec prefect-metadata-worker prefect deployment run \
   'OpenMetadata PostgreSQL 메타데이터 동기화/openmetadata-postgres-metadata-sync' --watch
 ```
 
-Work pool 생성·Deployment 등록 서비스도 같은 metadata profile의 코드와 이미지를
+Work pool 생성·Deployment 등록 작업도 같은 semantic 구성의 코드와 이미지를
 사용한다. 예약 시각·활성 상태는 [배포 목록](deployments.md), 운영 등록 상태와 실패
 Task는 Prefect UI에서 확인한다. OpenMetadata UI에서 ingestion을 생성·예약·재시도하지 않는다.
 

@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     admin_data_database_url: str | None = None
     app_database_url: str | None = None
     specification_upload_enabled: bool = False
+    # Legacy API/K3s callers keep their existing routes; Compose sets these explicitly.
+    semantic_modeling_enabled: bool = True
+    formatid_enabled: bool = True
+    legal_information_enabled: bool = True
     model_operations_enabled: bool = False
     model_prefect_url: str = "http://prefect-server:4200/api"
     model_prefect_auth: str = ""

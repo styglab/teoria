@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import signal
 
 
 from teoria.features.semantic_modeling.binding.repository import BindingRepository
@@ -19,7 +20,12 @@ from teoria.integrations.openmetadata import OpenMetadataClient
 from teoria.settings import bootstrap_settings
 
 
-async def run():
+async def run(stop_event: asyncio.Event | None = None):
+    if stop_event is None:
+        stop_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(signum, stop_event.set)
     settings = bootstrap_settings()
     if not (
         settings.assessment_enabled
@@ -53,7 +59,7 @@ async def run():
             law_max_documents=settings.assessment_law_max_documents,
             law_max_chars=settings.assessment_law_max_chars,
         )
-        while True:
+        while not stop_event.is_set():
             try:
                 job = await repository.claim()
                 if job:
@@ -63,7 +69,10 @@ async def run():
                 logging.error(
                     "Asset assessment worker iteration failed; waiting before retry"
                 )
-            await asyncio.sleep(5)
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=5)
+            except TimeoutError:
+                pass
 
 
 def main():

@@ -29,6 +29,8 @@ class ComposeConfigurationTests(unittest.TestCase):
             "TEORIA_PREFECT_USERNAME",
             "TEORIA_PREFECT_PASSWORD",
             "TEORIA_LOCAL_RUNTIME_DB_PASSWORD",
+            "TEORIA_MINIO_ROOT_USER",
+            "TEORIA_MINIO_ROOT_PASSWORD",
         ):
             self.environment[key] = "synthetic-validation-value"
 
@@ -41,6 +43,9 @@ class ComposeConfigurationTests(unittest.TestCase):
                 str(self.env_file),
                 "-f",
                 str(COMPOSE_ROOT / "compose.yaml"),
+                "-f", str(COMPOSE_ROOT / "compose_mlops.yaml"),
+                "-f", str(COMPOSE_ROOT / "compose_semantic.yaml"),
+                "-f", str(COMPOSE_ROOT / "compose_formatid.yaml"),
                 "-p",
                 project,
                 "--profile",
@@ -67,7 +72,7 @@ class ComposeConfigurationTests(unittest.TestCase):
             if line and not line.startswith("#") and "=" in line
         ]
         consumed = set(
-            re.findall(r"\$\{([A-Z][A-Z0-9_]*)", (COMPOSE_ROOT / "compose.yaml").read_text())
+            re.findall(r"\$\{([A-Z][A-Z0-9_]*)", "\n".join(path.read_text() for path in [COMPOSE_ROOT / "compose.yaml", *COMPOSE_ROOT.glob("compose_*.yaml")]))
         )
         self.assertEqual(len(keys), len(set(keys)), "Duplicate environment inputs")
         self.assertFalse(set(keys) - consumed, "Template contains unused inputs")
@@ -198,6 +203,17 @@ class ComposeConfigurationTests(unittest.TestCase):
                 for volume in services[name].get("volumes", [])
             ))
 
+    def test_mlflow_shares_platform_instance_with_a_dedicated_database(self):
+        services = self.resolved("teoria-test-mlflow-storage")["services"]
+        self.assertNotIn("mlflow-postgres", services)
+        self.assertIn("@platform-postgres:5432/mlflow", services["mlflow"]["environment"]["MLFLOW_BACKEND_STORE_URI"])
+        self.assertIn("platform-postgres", services["mlflow"]["depends_on"])
+        init = services["mlflow-postgres-init"]
+        self.assertEqual(init["profiles"], ["jobs"])
+        self.assertEqual(init["environment"]["PGDATABASE"], "postgres")
+        self.assertIn("NOSUPERUSER NOCREATEDB NOCREATEROLE", init["command"][-1])
+        self.assertNotIn("mlflow-postgres-init", services["mlflow"]["depends_on"])
+
     def test_admin_mlflow_connection_uses_server_static_prefix(self):
         services = self.resolved("teoria-test-mlflow")["services"]
         self.assertEqual(
@@ -239,6 +255,8 @@ class ComposeConfigurationTests(unittest.TestCase):
             worker["environment"]["TEORIA_SPECIFICATION_PARSER_PYTHON"],
             "/opt/kory_parser/bin/python",
         )
+        self.assertEqual(worker["build"]["target"], "worker")
+        self.assertEqual(registration["build"]["target"], "worker")
 
     def test_runtime_has_no_specification_storage_credentials_or_model_access(self):
         runtime = self.resolved("teoria-test-evidence")["services"]["runtime-api"]
@@ -282,6 +300,31 @@ class ComposeConfigurationTests(unittest.TestCase):
         for name, service in before.items():
             if name != "admin-api":
                 self.assertEqual(service.get("image"), after[name].get("image"), name)
+
+    def test_each_module_combination_is_valid_and_has_no_job_dependencies(self):
+        from itertools import combinations
+        for size in range(4):
+            for modules in combinations(("mlops", "semantic", "formatid"), size):
+                command = ["docker", "compose", "--env-file", str(self.env_file),
+                           "-p", "teoria-test-modules", "-f", str(COMPOSE_ROOT / "compose.yaml")]
+                for module in modules:
+                    command += ["-f", str(COMPOSE_ROOT / f"compose_{module}.yaml")]
+                result = subprocess.run(command + ["--profile", "jobs", "config", "--format", "json"],
+                                        env=self.environment, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, str(modules))
+                services = json.loads(result.stdout)["services"]
+                active = {name for name, service in services.items() if not service.get("profiles")}
+                self.assertEqual("runtime-api" in active, "semantic" in modules)
+                self.assertEqual("openmetadata-server" in active, "semantic" in modules)
+                self.assertEqual("prefect-worker" in active, "formatid" in modules)
+                self.assertEqual("mlflow" in active, "mlops" in modules)
+                self.assertEqual("demo-inference" in active, "mlops" in modules)
+                for name in active:
+                    self.assertTrue(set(services[name].get("depends_on", {})) <= active, name)
+                env = services["admin-api"]["environment"]
+                self.assertEqual(env["TEORIA_SEMANTIC_MODELING_ENABLED"], str("semantic" in modules).lower())
+                self.assertEqual(env["TEORIA_FORMATID_ENABLED"], str("formatid" in modules).lower())
+                self.assertEqual(env["TEORIA_MODEL_OPERATIONS_ENABLED"], str("mlops" in modules).lower())
 
 
 if __name__ == "__main__":

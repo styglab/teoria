@@ -16,7 +16,7 @@
 
 | 기능 | 안내 |
 |---|---|
-| 규격서 분석 | [입력·단계·Codex](procurement_specification_processing/pipeline.md) · [품질 평가](procurement_specification_processing/evaluation.md) |
+| FormatID — 물품 구조화·분석 | [입력·단계·Codex](procurement_specification_processing/pipeline.md) · [품질 평가](procurement_specification_processing/evaluation.md) |
 | 물품 의미 모델 | [물품·구성품·분류·속성](architecture/specification_goods_model.md) · [사전](platform/goods_dictionary.md) · [프로파일](procurement_specification_processing/normalization_profiles.md) |
 | Ontology·의미 연결 | [작성·승인·게시](platform/ontology.md) · [자산 맥락](platform/metadata/asset_context.md) · [변경 제안](platform/metadata/suggestions.md) |
 | 메타데이터 진단 | [자동 진단](platform/metadata/asset_assessment.md) · [법령 근거](platform/metadata/law_evidence.md) · [진단 Skill](skills/analyze_metadata_asset.md) |
@@ -28,7 +28,7 @@
 | 작업 | 안내 |
 |---|---|
 | 환경 설정·인증 | [설정 기준](deployment/configuration.md) |
-| 로컬 실행·Worker 반영 | [Compose](deployment/compose.md) |
+| Compose 구성 선택·배포·종료·이미지 정리 | [Compose](deployment/compose.md) |
 | EC2 배포 구성 | [K3s](deployment/k3s.md) — 구성 검증과 실제 배포 성공은 별도 |
 | OpenMetadata | [서버 배포](deployment/openmetadata.md) · [메타데이터 수집](pipelines/openmetadata.md) |
 | 파이프라인 운영 | [Prefect](pipelines/prefect.md) · [선언된 배포 목록](pipelines/deployments.md) · [Data DB](pipelines/database.md) |

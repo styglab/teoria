@@ -17,17 +17,22 @@ USER teoria
 ENV TEORIA_REGISTRY_PATH=/app/backend/contracts/runtime
 CMD ["teoria-runtime-api"]
 
-FROM runtime AS authoring
-USER root
-COPY --from=model_cli /usr/local/bin/node /usr/local/bin/node
-COPY --from=model_cli /usr/local/lib/node_modules/@openai /opt/codex/node_modules/@openai
-RUN ln -s /opt/codex/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex && \
-    mkdir -p /home/teoria/.codex /app/specification_inputs /app/specification_artifacts && chown teoria:teoria /home/teoria/.codex /app/specification_inputs /app/specification_artifacts
+FROM runtime AS admin
+COPY --chown=teoria:teoria backend/config ./backend/config
+COPY --chown=teoria:teoria deploy/compose/prefect ./deploy/compose/prefect
 COPY --chown=teoria:teoria backend/authoring/ontology_migrations ./backend/authoring/ontology_migrations
 COPY --chown=teoria:teoria backend/authoring/ontology_blueprints ./backend/authoring/ontology_blueprints
 COPY --chown=teoria:teoria backend/authoring/normalization_profiles ./backend/authoring/normalization_profiles
 COPY --chown=teoria:teoria backend/references ./backend/references
 COPY --chown=teoria:teoria backend/migrations/application ./backend/migrations/application
+CMD ["teoria-admin-api"]
+
+FROM admin AS authoring
+USER root
+COPY --from=model_cli /usr/local/bin/node /usr/local/bin/node
+COPY --from=model_cli /usr/local/lib/node_modules/@openai /opt/codex/node_modules/@openai
+RUN ln -s /opt/codex/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex && \
+    mkdir -p /home/teoria/.codex /app/specification_inputs /app/specification_artifacts && chown teoria:teoria /home/teoria/.codex /app/specification_inputs /app/specification_artifacts
 USER teoria
 CMD ["teoria-admin-api"]
 
@@ -42,10 +47,12 @@ COPY --chown=teoria:teoria deploy/compose/prefect ./deploy/compose/prefect
 COPY --chown=teoria:teoria deploy/k3s/prefect ./deploy/k3s/prefect
 ENV TEORIA_PIPELINE_PATH=/app/backend
 
-FROM data-operations AS law-worker
+FROM data-operations AS operations
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --locked --no-dev --group orchestration --no-editable
 USER teoria
+
+FROM operations AS law-worker
 CMD ["teoria-pipelines", "worker", "--pool", "teoria-legal-information"]
 
 FROM data-operations AS worker

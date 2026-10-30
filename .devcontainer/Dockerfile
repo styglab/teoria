@@ -4,7 +4,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.12.0 /uv /uvx /usr/local/bin/
 
 # 기본 패키지 + Docker CLI
 RUN apt-get update && apt-get install -y \
-    git curl bash sudo \
+    git curl bash sudo bubblewrap \
     python3 python3-pip \
     ca-certificates gnupg \
     && rm -rf /var/lib/apt/lists/*

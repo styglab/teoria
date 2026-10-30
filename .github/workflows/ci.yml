@@ -151,7 +151,7 @@ jobs:
           bash -n deploy/k3s/deploy.sh
       - name: Test Compose volume isolation and authentication
         run: python3 -m unittest discover -s deploy/compose/tests -v
-      - name: Validate OpenMetadata Compose profile
+      - name: Validate Semantic Compose module
         env:
           TEORIA_ADMIN_API_TOKEN: validation
           TEORIA_LOCAL_RUNTIME_DB_PASSWORD: validation
@@ -162,5 +162,5 @@ jobs:
         run: >-
           docker compose
           -f deploy/compose/compose.yaml
-          --profile metadata
+          -f deploy/compose/compose_semantic.yaml
           config --quiet

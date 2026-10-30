@@ -8,6 +8,7 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import { Link, NavLink, useLocation } from "react-router-dom";
+import { useDeploymentModules } from "../features/access/DeploymentAvailability";
 import { navigationItems, type NavigationItem } from "./navigation";
 
 export function WorkspaceSidebar({
@@ -22,6 +23,7 @@ export function WorkspaceSidebar({
   onNavigate?: () => void;
 }) {
   const location = useLocation();
+  const modules = useDeploymentModules();
   const [groups, setGroups] = useState<Record<string, boolean>>({});
   const activeGroup = navigationItems.find((item) =>
     location.pathname.startsWith(item.path),
@@ -31,7 +33,9 @@ export function WorkspaceSidebar({
       setGroups((previous) => ({ ...previous, [activeGroup]: true }));
   }, [activeGroup]);
   const items = navigationItems.filter(
-    (item) => !item.modelOperations || modelOperationsEnabled,
+    (item) =>
+      (!item.module || modules[item.module]) &&
+      (!item.modelOperations || modelOperationsEnabled),
   );
   const main = items.filter((item) => item.placement !== "footer");
   const footer = items.filter((item) => item.placement === "footer");

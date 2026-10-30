@@ -13,9 +13,12 @@ import {
 import { useAdminAccess } from "../access/AdminAccess";
 import { stateLabels, dateLabel } from "../model_operations/presentation";
 
+import { useDeploymentModules } from "../access/DeploymentAvailability";
+
 type HomeRun = ModelRun & { pipeline_label?: string };
 
 export function Overview() {
+  const modules = useDeploymentModules();
   const { principal, requestLogin } = useAdminAccess();
   const [refresh, setRefresh] = useState(0);
   const [status, setStatus] = useState<MetadataStatus | null>(null);
@@ -32,25 +35,30 @@ export function Overview() {
     const fail = (key: string, message: string) => {
       if (active) setErrors((previous) => ({ ...previous, [key]: message }));
     };
-    metadataApi
-      .metadataStatus()
-      .then((value) => {
-        if (active) setStatus(value);
-      })
-      .catch(() => fail("metadata", "메타데이터 연결을 확인하지 못했습니다."));
-    metadataApi
-      .metadataTables({ limit: 1 })
-      .then((value) => {
-        if (active) setTotal(value.total);
-      })
-      .catch(() => fail("assets", "자산 수를 조회하지 못했습니다."));
+    if (modules.semantic) {
+      metadataApi
+        .metadataStatus()
+        .then((value) => {
+          if (active) setStatus(value);
+        })
+        .catch(() =>
+          fail("metadata", "메타데이터 연결을 확인하지 못했습니다."),
+        );
+      metadataApi
+        .metadataTables({ limit: 1 })
+        .then((value) => {
+          if (active) setTotal(value.total);
+        })
+        .catch(() => fail("assets", "자산 수를 조회하지 못했습니다."));
+    }
     setReviews(null);
     setRecent(null);
     setFailed(null);
     if (principal) {
-      loadReviewWork().then((value) => {
-        if (active) setReviews(value);
-      });
+      if (modules.semantic)
+        loadReviewWork().then((value) => {
+          if (active) setReviews(value);
+        });
       workflowsApi
         .pipelines({ size: 25 })
         .then((value) => {
@@ -83,7 +91,7 @@ export function Overview() {
     return () => {
       active = false;
     };
-  }, [principal?.actor, refresh]);
+  }, [principal?.actor, refresh, modules.semantic]);
   const execution = (
     title: string,
     items: HomeRun[] | null,
@@ -140,15 +148,21 @@ export function Overview() {
         }
       />
       <div className="home-shortcuts">
-        <Link to="/admin/data-catalog">
-          데이터 자산 찾기 <ArrowRight size={13} />
-        </Link>
-        <Link to="/admin/specifications">
-          규격서 분석 시작 <ArrowRight size={13} />
-        </Link>
-        <Link to="/admin/semantic-model/ontology">
-          의미 모델 탐색 <ArrowRight size={13} />
-        </Link>
+        {modules.semantic && (
+          <Link to="/admin/data-catalog">
+            데이터 자산 찾기 <ArrowRight size={13} />
+          </Link>
+        )}
+        {modules.formatid && (
+          <Link to="/admin/specifications">
+            FormatID 시작 <ArrowRight size={13} />
+          </Link>
+        )}
+        {modules.semantic && (
+          <Link to="/admin/semantic-model/ontology">
+            의미 모델 탐색 <ArrowRight size={13} />
+          </Link>
+        )}
       </div>
       {!principal ? (
         <section className="home-work-section">
@@ -160,76 +174,80 @@ export function Overview() {
         </section>
       ) : (
         <>
-          <section className="home-work-section">
-            <header>
-              <h3>검토 대기</h3>
-              <Link to="/admin/changes/review">
-                검토함 열기 <ArrowRight size={12} />
-              </Link>
-            </header>
-            {!reviews ? (
-              <PageState loading title="검토할 작업을 확인하고 있습니다…" />
-            ) : (
-              <>
-                {!!reviews.errors.length && (
-                  <p role="alert">
-                    {reviews.errors.join(", ")} 조회 실패{" "}
-                    <button onClick={() => setRefresh((v) => v + 1)}>
-                      다시 조회
-                    </button>
+          {modules.semantic && (
+            <section className="home-work-section">
+              <header>
+                <h3>검토 대기</h3>
+                <Link to="/admin/changes/review">
+                  검토함 열기 <ArrowRight size={12} />
+                </Link>
+              </header>
+              {!reviews ? (
+                <PageState loading title="검토할 작업을 확인하고 있습니다…" />
+              ) : (
+                <>
+                  {!!reviews.errors.length && (
+                    <p role="alert">
+                      {reviews.errors.join(", ")} 조회 실패{" "}
+                      <button onClick={() => setRefresh((v) => v + 1)}>
+                        다시 조회
+                      </button>
+                    </p>
+                  )}
+                  {!reviews.items.length ? (
+                    <p className="home-empty">
+                      조회 범위에 검토할 작업이 없습니다.
+                    </p>
+                  ) : (
+                    <ul>
+                      {reviews.items.slice(0, 5).map((item) => (
+                        <li key={`${item.kind}:${item.id}`}>
+                          <Link to={item.href}>
+                            <strong>{item.title}</strong>
+                            <span>{item.state}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="operations-note">
+                    조회된 검토 범위 {reviews.items.length}개
+                    {reviews.limited ? " · 추가 항목은 전체 목록에서 확인" : ""}
                   </p>
-                )}
-                {!reviews.items.length ? (
-                  <p className="home-empty">
-                    조회 범위에 검토할 작업이 없습니다.
-                  </p>
-                ) : (
-                  <ul>
-                    {reviews.items.slice(0, 5).map((item) => (
-                      <li key={`${item.kind}:${item.id}`}>
-                        <Link to={item.href}>
-                          <strong>{item.title}</strong>
-                          <span>{item.state}</span>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <p className="operations-note">
-                  조회된 검토 범위 {reviews.items.length}개
-                  {reviews.limited ? " · 추가 항목은 전체 목록에서 확인" : ""}
-                </p>
-              </>
-            )}
-          </section>
+                </>
+              )}
+            </section>
+          )}
           <div className="home-executions">
             {execution("실패한 실행", failed, errors.failed)}
             {execution("최근 실행", recent, errors.recent)}
           </div>
         </>
       )}
-      <footer className="home-service-status">
-        <Link to="/admin/data-catalog">
-          데이터 자산{" "}
-          <strong>
-            {total === null ? "—" : total.toLocaleString("ko-KR")}
-          </strong>
-          개
-        </Link>
-        <Link to="/admin/operations">
-          메타데이터 연결 ·{" "}
-          {status?.available
-            ? "정상"
-            : status
-              ? status.enabled
-                ? "연결 확인 필요"
-                : "미설정"
-              : "확인 중"}
-        </Link>
-        {(errors.metadata || errors.assets) && (
-          <span role="alert">{errors.metadata || errors.assets}</span>
-        )}
-      </footer>
+      {modules.semantic && (
+        <footer className="home-service-status">
+          <Link to="/admin/data-catalog">
+            데이터 자산{" "}
+            <strong>
+              {total === null ? "—" : total.toLocaleString("ko-KR")}
+            </strong>
+            개
+          </Link>
+          <Link to="/admin/operations">
+            메타데이터 연결 ·{" "}
+            {status?.available
+              ? "정상"
+              : status
+                ? status.enabled
+                  ? "연결 확인 필요"
+                  : "미설정"
+                : "확인 중"}
+          </Link>
+          {(errors.metadata || errors.assets) && (
+            <span role="alert">{errors.metadata || errors.assets}</span>
+          )}
+        </footer>
+      )}
     </div>
   );
 }
@@ -268,9 +286,11 @@ export function OperationsSettings() {
               <p>
                 OpenMetadata ·{" "}
                 {status
-                  ? status.available
-                    ? "정상 연결"
-                    : "연결 확인 필요"
+                  ? !status.enabled
+                    ? "현재 구성에서 사용하지 않음"
+                    : status.available
+                      ? "정상 연결"
+                      : "연결 확인 필요"
                   : "확인 중"}
               </p>
               <p>데이터 서비스: {status?.database_service || "—"}</p>

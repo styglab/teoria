@@ -309,3 +309,6 @@ backend/references/**
 # Frontend source helpers are application code, not Python build output.
 !frontend/src/lib/
 !frontend/src/lib/utils.ts
+
+# Compose lifecycle state, pause snapshots and private initialization logs.
+/deploy/compose/.state/

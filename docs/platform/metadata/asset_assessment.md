@@ -88,13 +88,14 @@ TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS=180
 개별 호출은 180초, 작업 전체는 기존 8분 제한을 유지한다.
 
 Compose의 `metadata-model-auth`는 규격서 인증 볼륨과 분리한다. 최초 운영자는
-해당 전용 볼륨에 Codex 로그인을 준비한 뒤 진단 Worker를 시작한다. 로그인은 다음 명령으로 수행한다.
+기존 배포 선택에 `semantic`이 포함된 상태에서 해당 전용 볼륨에 Codex 로그인을 준비한다.
+`.env`의 `TEORIA_ASSESSMENT_ENABLED=true`를 확인하고 같은 저장된 구성으로 반영한다.
 
 ```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile intelligence \
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml -f deploy/compose/compose_semantic.yaml \
   run --rm --no-deps --entrypoint codex metadata-assessment-worker login --device-auth
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml --profile intelligence \
-  up -d --build admin-api metadata-assessment-worker
+bash deploy/compose/deploy.sh build
+bash deploy/compose/deploy.sh deploy
 ```
 
 Admin API와 Worker는 실행 식별자를 `codex:<model>` 또는 `codex:default`로 일치시킨다.

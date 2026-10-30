@@ -40,17 +40,25 @@ import {
 import { WorkspaceFrame } from "../components/workspace/WorkspaceLayout";
 import { OntologyAuthoring } from "../features/ontology/OntologyAuthoring";
 
+import {
+  DeploymentAvailability,
+  useDeploymentModules,
+} from "../features/access/DeploymentAvailability";
+
 export function App() {
   return (
-    <AdminAccessProvider>
-      <ModelOperationsAvailability>
-        <AdminWorkspace />
-      </ModelOperationsAvailability>
-    </AdminAccessProvider>
+    <DeploymentAvailability>
+      <AdminAccessProvider>
+        <ModelOperationsAvailability>
+          <AdminWorkspace />
+        </ModelOperationsAvailability>
+      </AdminAccessProvider>
+    </DeploymentAvailability>
   );
 }
 
 function AdminWorkspace() {
+  const modules = useDeploymentModules();
   const { enabled: modelOperationsEnabled } = useModelOperationsAvailability();
   const [compact, setCompact] = useState(() => window.innerWidth < 1000);
   const [sidebarOpen, setSidebarOpen] = useState(
@@ -81,7 +89,11 @@ function AdminWorkspace() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!location.pathname.startsWith("/admin/developer/capabilities")) return;
+    if (
+      !modules.semantic ||
+      !location.pathname.startsWith("/admin/developer/capabilities")
+    )
+      return;
     const requests = [
       {
         label: "기능",
@@ -125,7 +137,7 @@ function AdminWorkspace() {
           );
       },
     );
-  }, [location.pathname]);
+  }, [location.pathname, modules.semantic]);
 
   const current = currentNavigation(location.pathname);
   const wideSidebar = sidebarOpen && !compact;
@@ -196,176 +208,192 @@ function AdminWorkspace() {
       </header>
 
       <main className="workspace-main h-screen pt-16">
-        <Routes>
-          <Route path="/" element={<Navigate to="/admin/overview" replace />} />
-          <Route
-            path="/admin"
-            element={<Navigate to="/admin/overview" replace />}
-          />
-          <Route
-            path="/admin/overview"
-            element={
-              <WorkspaceFrame>
-                <Overview />
-              </WorkspaceFrame>
-            }
-          />
-          <Route
-            path="/admin/governance"
-            element={
-              <WorkspaceFrame>
-                <Navigate to="/admin/data-catalog?filter=description" replace />
-              </WorkspaceFrame>
-            }
-          />
-          <Route
-            path="/admin/specifications"
-            element={
-              <AdminAccess>
+        {current.module && !modules[current.module] ? (
+          <div className="workspace-empty">
+            <h2>{current.label}</h2>
+            <p>현재 실행 구성에서 사용하지 않는 기능입니다.</p>
+          </div>
+        ) : (
+          <Routes>
+            <Route
+              path="/"
+              element={<Navigate to="/admin/overview" replace />}
+            />
+            <Route
+              path="/admin"
+              element={<Navigate to="/admin/overview" replace />}
+            />
+            <Route
+              path="/admin/overview"
+              element={
                 <WorkspaceFrame>
-                  <SpecificationWorkspace />
+                  <Overview />
                 </WorkspaceFrame>
-              </AdminAccess>
-            }
-          />
-          <Route
-            path="/admin/workflows"
-            element={
-              <AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/governance"
+              element={
                 <WorkspaceFrame>
-                  <Pipelines />
+                  <Navigate
+                    to="/admin/data-catalog?filter=description"
+                    replace
+                  />
                 </WorkspaceFrame>
-              </AdminAccess>
-            }
-          />
-          <Route
-            path="/admin/models"
-            element={
-              <AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/specifications"
+              element={
+                <AdminAccess>
+                  <WorkspaceFrame>
+                    <SpecificationWorkspace />
+                  </WorkspaceFrame>
+                </AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/workflows"
+              element={
+                <AdminAccess>
+                  <WorkspaceFrame>
+                    <Pipelines />
+                  </WorkspaceFrame>
+                </AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/models"
+              element={
+                <AdminAccess>
+                  <WorkspaceFrame>
+                    <ModelOperations view="models" />
+                  </WorkspaceFrame>
+                </AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/serving"
+              element={
+                <AdminAccess>
+                  <WorkspaceFrame>
+                    <ModelOperations view="serving" />
+                  </WorkspaceFrame>
+                </AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/model-operations"
+              element={<LegacyModelRoute />}
+            />
+            <Route
+              path="/admin/operations"
+              element={
                 <WorkspaceFrame>
-                  <ModelOperations view="models" />
+                  <OperationsSettings />
                 </WorkspaceFrame>
-              </AdminAccess>
-            }
-          />
-          <Route
-            path="/admin/serving"
-            element={
-              <AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/developer/capabilities"
+              element={
                 <WorkspaceFrame>
-                  <ModelOperations view="serving" />
+                  <div>
+                    {error && (
+                      <p role="alert" className="workspace-error">
+                        {error}
+                      </p>
+                    )}
+                  </div>
+                  <CapabilityStudio
+                    capabilities={capabilities}
+                    sources={sources}
+                    mappings={mappings}
+                    lineage={lineage}
+                    validation={validation}
+                    onOpenBindings={() =>
+                      navigate("/admin/semantic-model/bindings")
+                    }
+                  />
                 </WorkspaceFrame>
-              </AdminAccess>
-            }
-          />
-          <Route
-            path="/admin/model-operations"
-            element={<LegacyModelRoute />}
-          />
-          <Route
-            path="/admin/operations"
-            element={
-              <WorkspaceFrame>
-                <OperationsSettings />
-              </WorkspaceFrame>
-            }
-          />
-          <Route
-            path="/admin/developer/capabilities"
-            element={
-              <WorkspaceFrame>
-                <div>
-                  {error && (
-                    <p role="alert" className="workspace-error">
-                      {error}
-                    </p>
-                  )}
-                </div>
-                <CapabilityStudio
-                  capabilities={capabilities}
-                  sources={sources}
-                  mappings={mappings}
-                  lineage={lineage}
-                  validation={validation}
-                  onOpenBindings={() =>
-                    navigate("/admin/semantic-model/bindings")
-                  }
-                />
-              </WorkspaceFrame>
-            }
-          />
-          <Route
-            path="/admin/data-catalog"
-            element={
-              <WorkspaceFrame>
-                <MetadataExplorer />
-              </WorkspaceFrame>
-            }
-          />
-          <Route
-            path="/admin/data-catalog/assets/:fqn"
-            element={
-              <WorkspaceFrame>
-                <MetadataAssetPage />
-              </WorkspaceFrame>
-            }
-          />
-          <Route
-            path="/admin/changes/review"
-            element={
-              <AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/data-catalog"
+              element={
                 <WorkspaceFrame>
-                  <ReviewInbox />
+                  <MetadataExplorer />
                 </WorkspaceFrame>
-              </AdminAccess>
-            }
-          />
-          <Route
-            path="/admin/semantic-model/bindings"
-            element={
-              <AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/data-catalog/assets/:fqn"
+              element={
                 <WorkspaceFrame>
-                  <BindingManager />
+                  <MetadataAssetPage />
                 </WorkspaceFrame>
-              </AdminAccess>
-            }
-          />
-          <Route
-            path="/admin/semantic-model/ontology"
-            element={
-              <AdminAccess>
-                <WorkspaceFrame>
-                  <OntologyAuthoring />
-                </WorkspaceFrame>
-              </AdminAccess>
-            }
-          />
-          <Route
-            path="/admin/settings"
-            element={<Navigate to="/admin/operations" replace />}
-          />
-          <Route
-            path="/admin/ask"
-            element={<Navigate to="/admin/developer/capabilities" replace />}
-          />
-          <Route
-            path="/admin/capabilities"
-            element={<Navigate to="/admin/developer/capabilities" replace />}
-          />
-          <Route
-            path="/admin/review-queue"
-            element={<Navigate to="/admin/changes/review" replace />}
-          />
-          <Route
-            path="/admin/semantic-bindings"
-            element={<Navigate to="/admin/semantic-model/bindings" replace />}
-          />
-          <Route
-            path="/admin/business-concepts"
-            element={<Navigate to="/admin/semantic-model/ontology" replace />}
-          />
-          <Route path="*" element={<Navigate to="/admin/overview" replace />} />
-        </Routes>
+              }
+            />
+            <Route
+              path="/admin/changes/review"
+              element={
+                <AdminAccess>
+                  <WorkspaceFrame>
+                    <ReviewInbox />
+                  </WorkspaceFrame>
+                </AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/semantic-model/bindings"
+              element={
+                <AdminAccess>
+                  <WorkspaceFrame>
+                    <BindingManager />
+                  </WorkspaceFrame>
+                </AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/semantic-model/ontology"
+              element={
+                <AdminAccess>
+                  <WorkspaceFrame>
+                    <OntologyAuthoring />
+                  </WorkspaceFrame>
+                </AdminAccess>
+              }
+            />
+            <Route
+              path="/admin/settings"
+              element={<Navigate to="/admin/operations" replace />}
+            />
+            <Route
+              path="/admin/ask"
+              element={<Navigate to="/admin/developer/capabilities" replace />}
+            />
+            <Route
+              path="/admin/capabilities"
+              element={<Navigate to="/admin/developer/capabilities" replace />}
+            />
+            <Route
+              path="/admin/review-queue"
+              element={<Navigate to="/admin/changes/review" replace />}
+            />
+            <Route
+              path="/admin/semantic-bindings"
+              element={<Navigate to="/admin/semantic-model/bindings" replace />}
+            />
+            <Route
+              path="/admin/business-concepts"
+              element={<Navigate to="/admin/semantic-model/ontology" replace />}
+            />
+            <Route
+              path="*"
+              element={<Navigate to="/admin/overview" replace />}
+            />
+          </Routes>
+        )}
       </main>
     </div>
   );

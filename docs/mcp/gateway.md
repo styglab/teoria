@@ -77,10 +77,11 @@ MCP는 클라이언트 연결마다 STDIO 프로세스를 실행한다. 상시 `
 Codex bridge는 `teoria-mcp-session-<id>` 이름과 client-session label을 사용하며 종료 후 `--rm`으로 제거한다.
 열린 클라이언트 연결 하나당 세션 컨테이너 하나가 실행될 수 있다.
 
-Docker 실행:
+Docker 실행은 먼저 `semantic` 구성을 배포해 Runtime이 실행 중인 상태에서 수행한다.
 
 ```bash
-docker compose -f deploy/compose/compose.yaml --profile mcp run --rm mcp
+docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml \
+  -f deploy/compose/compose_semantic.yaml run --rm --no-deps mcp
 ```
 
 ## 검증

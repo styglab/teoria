@@ -41,7 +41,11 @@ data_database psql -Atc 'show server_version' \
   > "$staging_dir/teoria_data_postgresql_version.txt" \
   2>> "$staging_dir/teoria_data.stderr.log"
 
-for database in teoria_app prefect openmetadata_db; do
+platform_databases=(teoria_app prefect openmetadata_db)
+if [ "$("${compose[@]}" exec -T platform-postgres psql -U platform_admin -d postgres -Atc "SELECT 1 FROM pg_database WHERE datname = 'mlflow'")" = "1" ]; then
+  platform_databases+=(mlflow)
+fi
+for database in "${platform_databases[@]}"; do
   "${compose[@]}" exec -T platform-postgres \
     pg_dump -U platform_admin -d "$database" -Fc > "$staging_dir/$database.dump" \
     2> "$staging_dir/$database.stderr.log"
@@ -51,7 +55,7 @@ done
   > "$staging_dir/platform_postgresql_version.txt"
 
 # Check that every archive can be read before marking the whole backup complete.
-for database in teoria_data teoria_app prefect openmetadata_db; do
+for database in teoria_data "${platform_databases[@]}"; do
   "${compose[@]}" exec -T postgres pg_restore --list \
     < "$staging_dir/$database.dump" > /dev/null \
     2>> "$staging_dir/$database.stderr.log"

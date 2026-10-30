@@ -1,13 +1,17 @@
 # Teoria 사용 안내
 
 Teoria는 데이터 자산과 업무 의미를 연결하고, AI 변경안을 검토하며, 업무 앱에서 활용하는 플랫폼이다.
-현재 첫 업무 앱은 규격서 분석이다. 구현 범위와 다음 작업은 [로드맵](roadmap.md)을 따른다.
+현재 첫 업무 앱은 **FormatID — 규격서 기반 물품 구조화·분석**이다. 구현 범위와 다음 작업은 [로드맵](roadmap.md)을 따른다.
 
 ## 시작하기
 
 1. [환경 설정](deployment/configuration.md)에 따라 인증정보를 준비한다.
-2. [Compose](deployment/compose.md)로 필요한 서비스를 실행한다.
+2. [Compose](deployment/compose.md)에서 MLOps·Metadata/Ontology·FormatID 구성을 선택해 실행한다.
+   MLOps는 모델 서빙을 포함하며 OpenMetadata·Semantic Runtime을 요구하지 않는다.
+   MLflow는 Platform PostgreSQL의 전용 DB·계정을 사용하고 모델 파일은 객체 저장소에 둔다.
 3. 기본 주소 `http://localhost:8081/`에서 관리자로 연결한다.
+
+로컬 모듈별 실행과 대표 Flow의 확인 범위는 [Compose 검증 기록](verification/compose_modules_2026_10_30.md)을 참고한다.
 
 EC2 배포는 [K3s 안내](deployment/k3s.md)를 따른다. 화면 경로·권한과 프런트엔드 개발 정보는
 [관리 화면 참조](platform/admin_ui.md), 시스템별 책임은 [아키텍처](architecture/overview.md)에 있다.
@@ -22,7 +26,7 @@ EC2 배포는 [K3s 안내](deployment/k3s.md)를 따른다. 화면 경로·권�
 | 검토함 | AI 제안·의미 연결·Ontology 변경안 검토 |
 | 파이프라인 | 수동 실행·스케줄·취소 요청·이력 확인 |
 | 모델 운영 | 선택 기능: 모델 버전·평가·추론 서비스 관리 |
-| 앱 → 규격서 분석 | 문서 입력·분석 요청·구성품·속성·원문 근거 확인 |
+| 앱 → FormatID | 문서 입력·분석 요청·구성품·속성·원문 근거 확인 |
 | 연결 및 설정·개발 도구 | 관리자 인증·외부 연결·Runtime 개발 기능 |
 
 홈과 검토함의 건수는 화면에서 조회한 범위다. 전체 누적 건수나 개인 할당 작업 수를 뜻하지 않는다.
@@ -40,7 +44,7 @@ EC2 배포는 [K3s 안내](deployment/k3s.md)를 따른다. 화면 경로·권�
 
 ## 규격서를 처리하려면
 
-1. **앱 → 규격서 분석**에서 문서를 입력하고 처리 방식을 선택한다.
+1. **앱 → FormatID**에서 문서를 입력하고 처리 방식을 선택한다.
 2. 표준관리는 문서에서 사전을 관리하고, 문서처리는 지정한 고정 표준·프로파일을 적용한다.
 3. 실행 상태와 로그는 파이프라인에서 확인한다.
 4. 저장된 결과에서는 구성품을 선택하고 속성 행을 눌러 원문 근거를 비교한다.

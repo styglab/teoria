@@ -55,6 +55,9 @@ def create_workflow_router(
     prefix: str = "/v1/admin/workflows",
     include_internal: bool = False,
     inference_token: str | None = None,
+    semantic_enabled: bool = True,
+    formatid_enabled: bool = True,
+    legal_enabled: bool = True,
 ):
     router = APIRouter(prefix=prefix, tags=["workflows"])
     prefect = (
@@ -62,7 +65,13 @@ def create_workflow_router(
         if prefect_auth
         else None
     )
-    catalog = workflow_catalog(mlops_enabled, include_internal)
+    catalog = workflow_catalog(
+        mlops_enabled,
+        include_internal,
+        semantic_enabled=semantic_enabled,
+        formatid_enabled=formatid_enabled,
+        legal_enabled=legal_enabled,
+    )
     PIPELINES = {key: item[0] for key, item in catalog.items()}
 
     def require_enabled():
@@ -284,9 +293,17 @@ def create_workflow_router(
                 request = StandardWorkflow.model_validate(manifest)
                 extraction = request.extraction
             else:
-                if pipeline_id == 'specification-standard-management' and 'mode' not in manifest:
-                    from teoria.features.specification_processing.management_parameters import StandardManagementParameters
-                    return StandardManagementParameters.model_validate(manifest).model_dump(mode='json',exclude_none=True)
+                if (
+                    pipeline_id == "specification-standard-management"
+                    and "mode" not in manifest
+                ):
+                    from teoria.features.specification_processing.management_parameters import (
+                        StandardManagementParameters,
+                    )
+
+                    return StandardManagementParameters.model_validate(
+                        manifest
+                    ).model_dump(mode="json", exclude_none=True)
                 request = SpecificationRun.model_validate(manifest)
                 extraction = request
                 expected = (

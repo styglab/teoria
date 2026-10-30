@@ -1,0 +1,204 @@
+# Service modules are composed by deploy.sh; jobs run explicitly with --rm.
+services:
+  mlflow-postgres-init:
+    image: postgres:17
+    cpus: 0.5
+    mem_limit: 256m
+    profiles:
+    - jobs
+    restart: 'no'
+    command:
+    - sh
+    - -ec
+    - |
+      psql --set=ON_ERROR_STOP=1 --set=mlflow_password="$${TEORIA_MLFLOW_DB_PASSWORD}" <<'SQL'
+      SELECT format('CREATE ROLE mlflow LOGIN PASSWORD %L', :'mlflow_password')
+      WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'mlflow')
+      \gexec
+      ALTER ROLE mlflow NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'mlflow_password';
+      SELECT 'CREATE DATABASE mlflow OWNER mlflow'
+      WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'mlflow')
+      \gexec
+      REVOKE CONNECT ON DATABASE mlflow FROM PUBLIC;
+      GRANT CONNECT ON DATABASE mlflow TO mlflow, platform_admin;
+      SQL
+    environment:
+      PGHOST: platform-postgres
+      PGPORT: 5432
+      PGDATABASE: postgres
+      PGUSER: platform_admin
+      PGPASSWORD: ${TEORIA_LOCAL_PLATFORM_DB_PASSWORD:-platform_local}
+      TEORIA_MLFLOW_DB_PASSWORD: ${TEORIA_MLFLOW_DB_PASSWORD:-}
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+  mlflow:
+    image: teoria-model-worker:latest
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+      target: model-worker
+      labels:
+        io.teoria.project: teoria
+        io.teoria.role: model-worker
+    cpus: 1
+    mem_limit: 2g
+    restart: unless-stopped
+    command:
+    - mlflow
+    - server
+    - --host
+    - 0.0.0.0
+    - --port
+    - '5000'
+    - --workers
+    - '1'
+    - --static-prefix
+    - /mlflow
+    - --serve-artifacts
+    - --artifacts-destination
+    - s3://teoria-models
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:${TEORIA_MLFLOW_DB_PASSWORD:-}@platform-postgres:5432/mlflow
+      MLFLOW_S3_ENDPOINT_URL: ${TEORIA_MODEL_S3_ENDPOINT:-http://minio:9000}
+      AWS_ACCESS_KEY_ID: ${TEORIA_MINIO_ROOT_USER:-}
+      AWS_SECRET_ACCESS_KEY: ${TEORIA_MINIO_ROOT_PASSWORD:-}
+      MLFLOW_SERVER_ALLOWED_HOSTS: mlflow:5000,mlflow,localhost:5000,127.0.0.1:5000
+    depends_on:
+      platform-postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request;urllib.request.urlopen('http://localhost:5000/mlflow/health')
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  model-register:
+    image: teoria-model-worker:latest
+    cpus: 0.5
+    mem_limit: 512m
+    command:
+    - teoria-pipelines
+    - register
+    - --backend
+    - process
+    - --kind
+    - model-operations
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    profiles:
+    - jobs
+  model-training-worker:
+    image: teoria-model-worker:latest
+    cpus: 2
+    mem_limit: 2g
+    restart: unless-stopped
+    command:
+    - prefect
+    - worker
+    - start
+    - --pool
+    - teoria-model-training
+    - --limit
+    - '1'
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
+      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
+      MLFLOW_TRACKING_URI: http://mlflow:5000/mlflow
+    depends_on:
+      mlflow:
+        condition: service_healthy
+  model-deployment-worker:
+    image: teoria-model-worker:latest
+    user: root
+    cpus: 1
+    mem_limit: 1g
+    restart: unless-stopped
+    command:
+    - prefect
+    - worker
+    - start
+    - --pool
+    - teoria-model-deployment
+    - --limit
+    - '1'
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
+      MLFLOW_TRACKING_URI: http://mlflow:5000/mlflow
+      TEORIA_DEMO_RELEASE_DIRECTORY: /app/model_release
+      TEORIA_DEMO_INFERENCE_TOKEN: ${TEORIA_DEMO_INFERENCE_TOKEN:-}
+    volumes:
+    - model-release:/app/model_release
+    - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      mlflow:
+        condition: service_healthy
+  demo-inference:
+    image: teoria-model-worker:latest
+    cpus: 1
+    mem_limit: 1g
+    restart: unless-stopped
+    command:
+    - teoria-demo-inference
+    labels:
+      io.teoria.role: demo-inference
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000/mlflow
+      TEORIA_DEMO_RELEASE_DIRECTORY: /app/model_release
+      TEORIA_DEMO_INFERENCE_TOKEN: ${TEORIA_DEMO_INFERENCE_TOKEN:-}
+    volumes:
+    - model-release:/app/model_release:ro
+    healthcheck:
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request;urllib.request.urlopen('http://localhost:8003/health')
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  model-storage-init:
+    image: teoria-storage-init:latest
+    build:
+      context: ./minio
+      additional_contexts:
+        minio_client: ${TEORIA_MINIO_MC_BUILD_CONTEXT:-docker-image://quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z}
+      args:
+        MINIO_CLIENT_IMAGE: minio_client
+      labels:
+        io.teoria.project: teoria
+        io.teoria.role: storage-init
+    profiles:
+    - jobs
+    cpus: 0.5
+    mem_limit: 512m
+    entrypoint:
+    - /bin/sh
+    - -ec
+    command:
+    - |-
+      mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
+      mc mb --ignore-existing local/teoria-models >/dev/null
+    environment:
+      MINIO_ROOT_USER: ${TEORIA_MINIO_ROOT_USER:?set TEORIA_MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${TEORIA_MINIO_ROOT_PASSWORD:?set TEORIA_MINIO_ROOT_PASSWORD}
+    depends_on:
+      minio:
+        condition: service_healthy
+  admin-api:
+    environment:
+      TEORIA_MODEL_OPERATIONS_ENABLED: 'true'
+      TEORIA_MODEL_MLFLOW_URL: http://mlflow:5000/mlflow
+      TEORIA_MODEL_PREFECT_AUTH: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
+      TEORIA_DEMO_INFERENCE_TOKEN: ${TEORIA_DEMO_INFERENCE_TOKEN:-}

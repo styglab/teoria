@@ -1,7 +1,7 @@
 # OpenMetadata Server 배포와 업그레이드
 
 OpenMetadata는 기술·거버넌스·Semantic Metadata의 권위 저장소다.
-Compose의 `metadata` profile로 Server, 검색엔진과 schema migration을 실행한다.
+Compose의 `semantic` 모듈로 Server, 검색엔진과 schema migration을 실행한다.
 수집 일정·재시도는 Prefect가 담당하고 [별도 ingestion Job](../pipelines/openmetadata.md)으로
 실행한다. 기본 배포에 Airflow를 추가하지 않는다.
 
@@ -10,8 +10,7 @@ Compose의 `metadata` profile로 Server, 검색엔진과 schema migration을 실
 [Compose 환경 설정](configuration.md)을 준비하고 실행한다.
 
 ```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml \
-  --profile metadata up -d
+bash deploy/compose/deploy.sh deploy --modules semantic
 ```
 
 | 구성 | 역할 |

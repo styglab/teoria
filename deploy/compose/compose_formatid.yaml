@@ -1,0 +1,110 @@
+# Service modules are composed by deploy.sh; jobs run explicitly with --rm.
+services:
+  minio-init:
+    image: teoria-storage-init:latest
+    build:
+      context: ./minio
+      additional_contexts:
+        minio_client: ${TEORIA_MINIO_MC_BUILD_CONTEXT:-docker-image://quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z}
+      args:
+        MINIO_CLIENT_IMAGE: minio_client
+      labels:
+        io.teoria.project: teoria
+        io.teoria.role: storage-init
+    cpus: 0.5
+    mem_limit: 512m
+    environment:
+      MINIO_ROOT_USER: ${TEORIA_MINIO_ROOT_USER:-}
+      MINIO_ROOT_PASSWORD: ${TEORIA_MINIO_ROOT_PASSWORD:-}
+      SPECIFICATION_WORKER_USER: ${TEORIA_SPECIFICATION_WORKER_STORAGE_ACCESS_KEY:-teoria_specification_worker}
+      SPECIFICATION_WORKER_PASSWORD: ${TEORIA_SPECIFICATION_WORKER_STORAGE_SECRET_KEY:-}
+      SPECIFICATION_API_USER: ${TEORIA_SPECIFICATION_API_STORAGE_ACCESS_KEY:-teoria_specification_api}
+      SPECIFICATION_API_PASSWORD: ${TEORIA_SPECIFICATION_API_STORAGE_SECRET_KEY:-}
+    depends_on:
+      minio:
+        condition: service_healthy
+    profiles:
+    - jobs
+  prefect-deploy:
+    image: teoria-pipelines:latest
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+      target: worker
+      labels:
+        io.teoria.project: teoria
+        io.teoria.role: worker
+    cpus: 0.5
+    mem_limit: 512m
+    command:
+    - teoria-pipelines
+    - register
+    - --backend
+    - process
+    - --kind
+    - ingestion
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      TEORIA_PIPELINE_CONCURRENCY: ${TEORIA_PIPELINE_CONCURRENCY:-2}
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    profiles:
+    - jobs
+  prefect-worker:
+    image: ${TEORIA_SPECIFICATION_WORKER_IMAGE:-teoria-pipelines:latest}
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+      target: worker
+      labels:
+        io.teoria.project: teoria
+        io.teoria.role: worker
+    restart: unless-stopped
+    cpus: ${TEORIA_PIPELINE_WORKER_CPUS:-4}
+    mem_limit: ${TEORIA_PIPELINE_WORKER_MEMORY:-8g}
+    command:
+    - teoria-pipelines
+    - worker
+    - --pool
+    - teoria-specification
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      TEORIA_PIPELINE_CONCURRENCY: ${TEORIA_PIPELINE_CONCURRENCY:-2}
+      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+      TEORIA_PIPELINE_PATH: /app/backend
+      TEORIA_SPECIFICATION_PARSER_PYTHON: /opt/kory_parser/bin/python
+      TEORIA_SPECIFICATION_REQUIRE_OBJECT_STORAGE: 'true'
+      TEORIA_SPECIFICATION_ARTIFACT_ROOT: ${TEORIA_SPECIFICATION_ARTIFACT_ROOT:-s3://teoria-artifacts}
+      TEORIA_SPECIFICATION_S3_ENDPOINT: ${TEORIA_SPECIFICATION_S3_ENDPOINT:-http://minio:9000}
+      TEORIA_SPECIFICATION_S3_ACCESS_KEY: ${TEORIA_SPECIFICATION_WORKER_STORAGE_ACCESS_KEY:-teoria_specification_worker}
+      TEORIA_SPECIFICATION_S3_SECRET_KEY: ${TEORIA_SPECIFICATION_WORKER_STORAGE_SECRET_KEY:-}
+      TEORIA_SPECIFICATION_AUTHORING_API_URL: ${TEORIA_SPECIFICATION_AUTHORING_API_URL:-http://admin-api:8001}
+      TEORIA_SPECIFICATION_AUTHORING_API_TOKEN: ${TEORIA_SPECIFICATION_AUTHORING_API_TOKEN:-${TEORIA_ADMIN_API_TOKEN:?set TEORIA_ADMIN_API_TOKEN}}
+      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
+      TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT:-10}
+      TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS: ${TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS:-30}
+      TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS: ${TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS:-5}
+      TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS: ${TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS:-60}
+    volumes:
+    - specification-model-auth:/home/teoria/.codex
+  admin-api:
+    environment:
+      TEORIA_FORMATID_ENABLED: 'true'
+      TEORIA_SPECIFICATION_UPLOAD_ENABLED: 'true'
+      TEORIA_SPECIFICATION_REQUIRE_OBJECT_STORAGE: 'true'
+      TEORIA_SPECIFICATION_ARTIFACT_ROOT: ${TEORIA_SPECIFICATION_ARTIFACT_ROOT:-s3://teoria-artifacts}
+      TEORIA_SPECIFICATION_S3_ENDPOINT: ${TEORIA_SPECIFICATION_S3_ENDPOINT:-http://minio:9000}
+      TEORIA_SPECIFICATION_S3_ACCESS_KEY: ${TEORIA_SPECIFICATION_API_STORAGE_ACCESS_KEY:-teoria_specification_api}
+      TEORIA_SPECIFICATION_S3_SECRET_KEY: ${TEORIA_SPECIFICATION_API_STORAGE_SECRET_KEY:-}
+    volumes:
+    - specification-model-auth:/home/teoria/.codex
+    image: ${TEORIA_ADMIN_API_IMAGE:-teoria-platform-authoring:latest}
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+      target: authoring
+      labels:
+        io.teoria.project: teoria
+        io.teoria.role: authoring

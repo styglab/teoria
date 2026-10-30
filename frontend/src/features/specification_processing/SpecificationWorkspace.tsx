@@ -190,8 +190,8 @@ export function SpecificationWorkspace() {
       className={`workspace-page specification-workspace ${run && !creating ? "specification-analysis-result" : ""}`}
     >
       <PageHeader
-        title="규격서 분석"
-        description="문서의 구성품 구조와 속성을 탐색하고 원문 근거를 확인합니다."
+        title="FormatID"
+        description="규격서 기반 물품 구조화·분석. 물품·구성품의 관계와 규격·속성을 탐색하고 원문 근거를 확인합니다."
         actions={
           <>
             {!creating && (
