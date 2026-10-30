@@ -45,24 +45,41 @@ def render_report(corpus,normalized,standard_version,candidates=None):
                 lines.append(f"| {cell(document['document_id'])} | {cell(a['property_stable_key'])} | {cell(text)} | {cell(a['operator'])} | {cell(a['role'])} / {cell(a['semantic_scope'])} | {cell(a['evidence_ref'])} |")
         lines.append('')
     for d in corpus['documents']:
-        entities={e['id']:e for e in d['entities']};children=defaultdict(dict)
+        entities={e['id']:e for e in d['entities']}
         relation_labels={'in_procurement_scope':'범위','component_of':'구성','physical_part_of':'물리적 포함',
-                         'specification_for':'상세 명세','service_for':'작업'}
+                         'specification_for':'상세 명세','ingredient_of':'원재료','material_of':'재질',
+                         'packaging_for':'포장재','pack_unit_of':'포장 단위','installed_on':'설치',
+                         'firmware_for':'펌웨어','depends_on':'의존','supports':'지원',
+                         'software_for':'소프트웨어 제공','service_for':'작업','document_for':'문서',
+                         'compatible_with':'호환','sends_data_to':'데이터 전달','same_target_as':'동일 대상 후보'}
+        lines += [f"## {cell(d['document_id'])} — {cell(d.get('extraction_status','extracted'))}",'',
+                  f"[원본]({d['source']['path']})",'','### 분석 대상','',
+                  '| ID | 원문 명칭 | 유형 | 문서상 역할 |','|---|---|---|---|']
+        for e in entities.values():
+            roles=', '.join(e.get('document_roles',[]))
+            lines.append(f"| {cell(e['id'])} | {cell(e['name'])} | {cell(e.get('kind','unknown'))} | {cell(roles)} |")
+        lines += ['','### 대상 간 관계','',
+                  '구매 범위·부품·원재료·포장·설치·지원 관계를 구별합니다. 같은 표에 있다는 사실만으로 구성을 확정하지 않습니다.','',
+                  '| 출발 ID | 관계 | 도착 ID | 구분 | 판단 | 근거 |','|---|---|---|---|---|---|']
+        grouped=defaultdict(list)
         for r in d['relations']:
-            if r['kind'] in relation_labels:
-                labels=children[r['target_id']].setdefault(r['source_id'],[])
-                if relation_labels[r['kind']] not in labels:labels.append(relation_labels[r['kind']])
-        lines += [f"## {cell(d['document_id'])} — {cell(d.get('extraction_status','extracted'))}",'',f"[원본]({d['source']['path']})",'','```text']
-        seen=set()
-        def branch(eid,prefix='',path=frozenset(),labels=()):
-            label='['+'·'.join(labels)+'] ' if labels else ''
-            lines.append(prefix+label+entities[eid]['name'].replace('\n',' ').replace('`','ˋ')+f' [{eid}]');seen.add(eid)
-            if eid in path:return
-            for child,labels in children[eid].items():branch(child,prefix+'  └─ ',path|{eid},labels)
-        if 'root' in entities:branch('root')
-        for eid in entities:
-            if eid not in seen:branch(eid)
-        lines += ['```','']
+            grouped[(r['source_id'],r['target_id'])].append(r)
+        for (source,target),relations in grouped.items():
+            labels='['+'·'.join(dict.fromkeys(relation_labels.get(r['kind'],r['kind']) for r in relations))+']'
+            for r in relations:
+                refs=' / '.join(e.get('native_ref',e.get('node_id','')) for e in r.get('evidence',[]))
+                lines.append(f"| {cell(source)} | {cell(r['kind'])} | {cell(target)} | {cell(labels)} | {cell(r.get('basis','unknown'))} | {cell(refs)} |")
+        lines.append('')
+        clauses=[r for r in d.get('requirements',[]) if r.get('observation_type')=='source_clause'
+                 and r.get('subject_ids')]
+        if clauses:
+            lines+=['### 대상별 원문 요구조건','',
+                    '원문 요구조건이며 이행 완료를 뜻하지 않습니다.','',
+                    '| 대상 ID | 원문 조건 | 근거 |','|---|---|---|']
+            for clause in clauses:
+                refs=' / '.join(e.get('native_ref',e.get('node_id','')) for e in clause.get('evidence',[]))
+                lines.append(f"| {cell(', '.join(clause.get('subject_ids',[])))} | {cell(clause['text'])} | {cell(refs)} |")
+            lines.append('')
         if d.get('held_relations'):
             lines+=['### 보류한 관계','','| 출발 | 관계 | 도착 | 보류 사유 | 근거 |','|---|---|---|---|---|']
             for relation in d['held_relations']:

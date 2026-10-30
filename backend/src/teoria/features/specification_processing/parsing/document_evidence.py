@@ -28,6 +28,7 @@ class EvidenceNode:
     row_span: int | None = None
     column_span: int | None = None
     source_table_id: str | None = None
+    heading_level: int | None = None
 
 
 @dataclass(frozen=True)
@@ -73,10 +74,10 @@ def build_document_evidence(
     def walk(blocks, ref="/blocks", parent=None, inherited_page=None):
         for i, block in enumerate(blocks):
             path = f"{ref}/{i}"
-            page = block.get("pageNumber", inherited_page)
+            page = block.get("pageNumber") or (block.get("source") or {}).get("page") or inherited_page
             kind = block.get("type", "unknown")
             # Parent cell text is a flattened duplicate when nested blocks exist.
-            node = add(kind, block.get("text") or "", path, parent, page)
+            node = add(kind, block.get("text") or "", path, parent, page, heading_level=block.get("level"))
             if kind == "image":
                 unreadable.append(path)
             table = block.get("table")
@@ -85,12 +86,14 @@ def build_document_evidence(
                     for ci, cell in enumerate(row):
                         cp = f"{path}/table/cells/{ri}/{ci}"
                         nested = cell.get("blocks") or []
+                        cell_page = (cell.get("source") or {}).get("page") or page
                         cell_id = add(
-                            "cell", "" if nested else cell.get("text", ""), cp, node, page,
-                            row=ri, column=ci, row_span=cell.get("rowSpan", 1),
-                            column_span=cell.get("colSpan", 1), source_table_id=table.get("sourceId"),
+                            "cell", "" if nested else cell.get("text", ""), cp, node, cell_page,
+                            row=ri, column=ci, row_span=cell.get("row_span", cell.get("rowSpan", 1)),
+                            column_span=cell.get("col_span", cell.get("colSpan", 1)),
+                            source_table_id=table.get("source_id", table.get("sourceId")),
                         )
-                        walk(nested, cp + "/blocks", cell_id, page)
+                        walk(nested, cp + "/blocks", cell_id, cell_page)
             walk(block.get("children") or [], path + "/children", node, page)
             walk(block.get("footnoteBlocks") or [], path + "/footnoteBlocks", node, page)
             if table:

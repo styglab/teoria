@@ -12,6 +12,8 @@ const label = (value: unknown) =>
       ? JSON.stringify(value)
       : String(value);
 const kindNames: Record<string, string> = {
+  product: "물품",
+  material: "원재료·재질",
   equipment: "장비",
   software: "소프트웨어",
   activity: "작업",
@@ -25,6 +27,16 @@ const relationNames: Record<string, string> = {
   specification_for: "상세 규격 대상",
   in_procurement_scope: "구매 범위",
   service_for: "작업 대상",
+  software_for: "소프트웨어 구성 대상",
+  document_for: "문서 대상",
+  ingredient_of: "원재료 구성",
+  material_of: "재질",
+  packaging_for: "포장재",
+  pack_unit_of: "포장 단위",
+  installed_on: "설치 대상",
+  firmware_for: "펌웨어 대상",
+  depends_on: "의존 대상",
+  supports: "지원 대상",
   compatible_with: "호환",
   sends_data_to: "데이터 전달",
   same_target_as: "동일 대상 후보",
@@ -42,12 +54,20 @@ function refs(item: Row): string[] {
 }
 
 /** Only evidence-backed explicit composition forms the tree; other relations remain visible separately. */
-export function composition(document: Row) {
+export function composition(document: Row, mode = "composition") {
   const entities = rows(document.entities);
   const ids = new Set(entities.map((e) => String(e.id)));
+  const physical = (id: unknown) => {
+    const kind = entities.find((e) => e.id === id)?.kind;
+    return kind == null || ["product", "equipment", "group"].includes(String(kind));
+  };
+  const software = (id: unknown) => entities.find((e) => e.id === id)?.kind === "software";
   const candidates = rows(document.relations).filter(
     (r) =>
-      ["component_of", "physical_part_of"].includes(String(r.kind)) &&
+      (mode === "packaging" ? r.kind === "pack_unit_of" :
+        ["component_of", "physical_part_of"].includes(String(r.kind))) &&
+      ((physical(r.source_id) && physical(r.target_id)) ||
+        (mode === "composition" && r.kind === "component_of" && software(r.source_id) && software(r.target_id))) &&
       r.basis === "explicit" &&
       r.review_status !== "held" &&
       refs(r).length &&
@@ -110,7 +130,7 @@ export function AnalysisExplorer({
   if (!document)
     return (
       <div>
-        <p>이 산출물에는 구성품 분석 데이터가 없습니다.</p>
+        <p>이 산출물에는 대상 분석 데이터가 없습니다.</p>
         <details>
           <summary>산출물 원문</summary>
           <pre>{JSON.stringify(value, null, 2)}</pre>
@@ -159,9 +179,11 @@ function DocumentAnalysis({
   normalization?: Row | null;
   mappingStatus: MappingStatus;
 }) {
-  const graph = useMemo(() => composition(document), [document]);
+  const [navigation, setNavigation] = useState("list");
+  const [kindFilter, setKindFilter] = useState("all");
+  const graph = useMemo(() => composition(document, navigation), [document, navigation]);
   const [selected, setSelected] = useState(
-    String(graph.roots[0]?.id || graph.unclassified[0]?.id || ""),
+    String((Array.isArray(document.inventory_ids) && document.inventory_ids[0]) || graph.entities[0]?.id || ""),
   );
   const [query, setQuery] = useState("");
   const [closed, setClosed] = useState<Set<string>>(new Set());
@@ -217,10 +239,23 @@ function DocumentAnalysis({
     (r) => r.source_id === selected || r.target_id === selected,
   );
   const held = rows(document.held_relations);
+  const inPurchaseScope = (e: Row) =>
+    (Array.isArray(document.inventory_ids) && document.inventory_ids.includes(e.id)) ||
+    (Array.isArray(e.document_roles) && (e.document_roles.includes("supply_target") ||
+      (e.document_roles.includes("procurement_scope") && ["product", "equipment", "software"].includes(String(e.kind)))));
+  const matches = (e: Row) =>
+    label(e.name).toLowerCase().includes(query.toLowerCase()) &&
+    (kindFilter === "all" || (kindFilter === "purchase" ?
+      inPurchaseScope(e) :
+      String(e.kind ?? "unknown") === kindFilter));
+  const clauses = rows(document.requirements).filter(
+    (r) => r.observation_type === "source_clause" &&
+      Array.isArray(r.subject_ids) && r.subject_ids.includes(selected),
+  );
   const ancestry: Row[] = [];
   let ancestor = selected;
   const parentOf = new Map(
-    [...graph.children].flatMap(([parent, children]) =>
+    (navigation === "list" ? [] : [...graph.children]).flatMap(([parent, children]) =>
       children.map((child) => [child, parent] as const),
     ),
   );
@@ -297,7 +332,7 @@ function DocumentAnalysis({
   }
   const itemRow = (id: string, depth = 0) => {
     const item = graph.entities.find((e) => String(e.id) === id)!;
-    const children = graph.children.get(id);
+    const children = navigation === "list" || query || kindFilter !== "all" ? undefined : graph.children.get(id);
     return (
       <div
         key={id}
@@ -381,64 +416,71 @@ function DocumentAnalysis({
         data-mobile-detail={mobileDetail}
         data-view={view}
       >
-        <aside className="analysis-tree" aria-label="구성품 탐색">
+        <aside className="analysis-tree" aria-label="분석 대상 탐색">
           <h3>
-            구성품 구조 <small>{graph.entities.length}개 대상</small>
+            분석 대상 <small>{graph.entities.length}개 대상</small>
           </h3>
           <input
-            aria-label="구성품 검색"
-            placeholder="구성품 이름 검색"
+            aria-label="분석 대상 검색"
+            placeholder="대상 이름 검색"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <div className="analysis-tree-tools">
+          <label>대상 유형
+            <select aria-label="대상 유형" value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}>
+              <option value="all">전체</option>
+              <option value="purchase">구매 범위 항목</option>
+              {Object.entries(kindNames).map(([key, name]) => <option key={key} value={key}>{name}</option>)}
+            </select>
+          </label>
+          <label>탐색 방식
+            <select aria-label="탐색 방식" value={navigation} onChange={(event) => {
+              setNavigation(event.target.value); setClosed(new Set());
+            }}>
+              <option value="list">대상 목록</option>
+              <option value="composition">구성 관계</option>
+              <option value="packaging">포장 단위 관계</option>
+            </select>
+          </label>
+          {navigation !== "list" && <div className="analysis-tree-tools">
             <button onClick={() => setClosed(new Set())}>전체 펼치기</button>
             <button onClick={() => setClosed(new Set(graph.children.keys()))}>
               전체 접기
             </button>
-          </div>
-          {query ? (
+          </div>}
+          {navigation === "list" || query || kindFilter !== "all" ? (
             <>
-              <h4>검색 결과</h4>
+              <h4>{query ? "검색 결과" : "대상 목록"}</h4>
               {graph.entities
-                .filter((e) =>
-                  label(e.name).toLowerCase().includes(query.toLowerCase()),
-                )
+                .filter(matches)
                 .map((e) => itemRow(String(e.id)))}
-              {!graph.entities.some((e) =>
-                label(e.name).toLowerCase().includes(query.toLowerCase()),
-              ) && <p>일치하는 구성품이 없습니다.</p>}
+              {!graph.entities.some(matches) && <p>일치하는 대상이 없습니다.</p>}
             </>
           ) : (
             <>
+              {!!visible.length && <h4>{navigation === "packaging" ? "포장 단위 관계" : "구성 관계"}</h4>}
               {visible.map(({ id, depth }) => itemRow(id, depth))}
               {!graph.roots.length && (
                 <p className="operations-note">확인된 구성 계층이 없습니다.</p>
               )}
-              {!!graph.unclassified.length && (
-                <>
-                  <h4>미분류 항목 · {graph.unclassified.length}</h4>
-                  <p className="operations-note">
-                    구성 관계가 확인되지 않은 구매 대상·작업·문서 등을
-                    포함합니다.
-                  </p>
-                  {graph.unclassified.map((e) => itemRow(String(e.id)))}
-                </>
-              )}
+              {!!graph.unclassified.length && <>
+                <h4>이 계층에 포함되지 않은 대상 · {graph.unclassified.length}</h4>
+                {graph.unclassified.map((e) => itemRow(String(e.id)))}
+              </>}
             </>
           )}
         </aside>
-        <section className="analysis-properties" aria-label="구성품 상세">
+        <section className="analysis-properties" aria-label="분석 대상 상세">
           <button
             type="button"
             className="analysis-mobile-back operations-link"
             onClick={() => setMobileDetail(false)}
           >
-            ← 구성품 목록
+            ← 분석 대상 목록
           </button>
           {entity ? (
             <>
-              <nav className="analysis-breadcrumb" aria-label="구성품 경로">
+              <nav className="analysis-breadcrumb" aria-label="선택한 관계 경로">
                 {ancestry.map((item) => (
                   <button
                     key={String(item.id)}
@@ -603,7 +645,7 @@ function DocumentAnalysis({
               )}
               {!attributes.length && (
                 <p className="operations-note">
-                  이 대상에 연결된 속성이 없습니다. 다른 구성품을 선택하거나
+                  이 대상에 연결된 속성이 없습니다. 다른 대상을 선택하거나
                   대상 미지정 속성을 확인하세요.
                 </p>
               )}
@@ -613,15 +655,15 @@ function DocumentAnalysis({
                   {relations.map((r, i) => (
                     <div key={i} className="analysis-relation">
                       <span>
-                        {label(
+                        <button type="button" className="operations-link" onClick={() => choose(String(r.source_id))}>{label(
                           graph.entities.find((e) => e.id === r.source_id)
                             ?.name || r.source_id,
-                        )}{" "}
+                        )}</button>{" "}
                         →{" "}
-                        {label(
+                        <button type="button" className="operations-link" onClick={() => choose(String(r.target_id))}>{label(
                           graph.entities.find((e) => e.id === r.target_id)
                             ?.name || r.target_id,
-                        )}{" "}
+                        )}</button>{" "}
                         · {relationNames[String(r.kind)] || label(r.kind)} ·{" "}
                         {r.basis === "explicit"
                           ? "명시"
@@ -630,6 +672,18 @@ function DocumentAnalysis({
                             : "불명확"}
                       </span>
                       {nodeButton(r)}
+                    </div>
+                  ))}
+                </details>
+              )}
+              {!!clauses.length && (
+                <details>
+                  <summary>대상별 원문 요구조건 · {clauses.length}</summary>
+                  <p>제출 의무·시점 등 원문 조건입니다. 이행 완료를 뜻하지 않습니다.</p>
+                  {clauses.map((clause, index) => (
+                    <div key={String(clause.id ?? index)}>
+                      <p>{label(clause.text)}</p>
+                      {nodeButton(clause)}
                     </div>
                   ))}
                 </details>

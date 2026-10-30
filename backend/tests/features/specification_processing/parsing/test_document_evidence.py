@@ -50,3 +50,26 @@ def test_duplicate_document_identities_are_rejected():
     d = document([{"type": "paragraph", "text": "RAM 16GB이상"}])
     with pytest.raises(ValueError, match="duplicate document"):
         validate_evidence([quote("RAM")], [d, d])
+
+
+def test_current_parser_fields_preserve_heading_levels_pages_and_merged_cells():
+    # Field names emitted by Kory Parser 0.9.15 on the existing XLSX/HWPX/PDF samples.
+    parsed = document([
+        {'type': 'heading', 'text': '제품 규격', 'level': 1, 'source': {'page': 2}},
+        {'type': 'heading', 'text': '원재료 및 포장', 'level': 2, 'source': {'page': 3}},
+        {'type': 'table', 'source': {'page': 3}, 'table': {'source_id': 't1', 'cells': [[
+            {'text': '원산지', 'row_span': 2, 'col_span': 3,
+             'blocks': [{'type': 'paragraph', 'text': '국산'}]},
+        ]]}},
+    ])
+    top, sub, table, cell, text = parsed.nodes
+    assert top.heading_level == 1 and sub.heading_level == 2
+    assert sub.page == cell.page == text.page == 3
+    assert (cell.row_span, cell.column_span, cell.source_table_id) == (2, 3, 't1')
+    assert text.parent_id == cell.node_id
+    from teoria.features.specification_processing.extraction.document_context import DocumentContext
+    context = DocumentContext(parsed.context())
+    assert context.paths[text.node_id] == (top.node_id, sub.node_id)
+    structure = context.extraction_structure({text.node_id})
+    assert structure['section_paths'][text.node_id] == [top.node_id, sub.node_id]
+    assert structure['table_cells'][0] == [text.node_id, table.node_id, 0, 0, 2, 3]

@@ -40,7 +40,7 @@ const document = {
 it("selects a nested component and shows its own properties and original evidence", () => {
   render(<AnalysisExplorer value={{ documents: [document] }} />);
   fireEvent.click(screen.getByRole("button", { name: /프로세서 1개 속성/ }));
-  const detail = screen.getByRole("region", { name: "구성품 상세" });
+  const detail = screen.getByRole("region", { name: "분석 대상 상세" });
   expect(within(detail).getByText("코어 수")).toBeTruthy();
   expect(within(detail).getByText("2 개", { exact: true })).toBeTruthy();
   expect(within(detail).getByText("32", { exact: true })).toBeTruthy();
@@ -48,8 +48,8 @@ it("selects a nested component and shows its own properties and original evidenc
     within(detail).getAllByRole("button", { name: "원문 근거 n1" })[0],
   );
   expect(screen.getByText("프로세서는 32코어 이상")).toBeTruthy();
-  expect(screen.getByText(/미분류 항목 · 1/)).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("구성품 검색"), {
+  expect(screen.getByRole("heading", { name: "대상 목록" })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("분석 대상 검색"), {
     target: { value: "설치" },
   });
   expect(
@@ -212,4 +212,72 @@ it("filters missing source evidence without losing the full property count", () 
     screen.getByText("이 산출물에서 해당 원문 노드를 찾지 못했습니다."),
   ).toBeTruthy();
   expect(screen.getByRole("heading", { name: "문서 속성 · 1" })).toBeTruthy();
+});
+
+it("separates software, support and submitted documents from the physical tree even for legacy composition", () => {
+  const value = {
+    ...document,
+    entities: [
+      { id: "root", name: "서버", kind: "equipment" },
+      { id: "cpu", name: "프로세서", kind: "equipment" },
+      { id: "task", name: "설치 작업", kind: "activity" },
+      { id: "sw", name: "Docker", kind: "software" },
+      { id: "manual", name: "HW/SW 설치 및 사용 매뉴얼", kind: "document" },
+    ],
+    relations: [
+      relation("cpu", "root"), relation("task", "root", "service_for"),
+      relation("sw", "root", "software_for"), relation("manual", "root", "document_for"),
+      relation("manual", "root"), relation("sw", "root"),
+    ],
+    requirements: [{ id: "clause", subject_ids: ["manual"], observation_type: "source_clause",
+      text: "설치 작업의 종료와 함께 다음의 문서를 제출하여야 한다.", evidence }],
+  };
+  const graph = composition(value);
+  expect(graph.children.get("root")).toEqual(["cpu"]);
+  render(<AnalysisExplorer value={{ documents: [value] }} />);
+  fireEvent.change(screen.getByLabelText("대상 유형"), { target: { value: "software" } });
+  expect(screen.getByRole("button", { name: /Docker 0개 속성/ })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /설치 작업 0개 속성/ })).toBeNull();
+  fireEvent.change(screen.getByLabelText("대상 유형"), { target: { value: "all" } });
+  fireEvent.click(screen.getByRole("button", { name: /HW\/SW 설치 및 사용 매뉴얼 0개 속성/ }));
+  expect(screen.getByText(/문서 대상 · 명시/)).toBeTruthy();
+  expect(screen.getByText("설치 작업의 종료와 함께 다음의 문서를 제출하여야 한다.")).toBeTruthy();
+  expect(screen.queryByText(/미분류 항목/)).toBeNull();
+});
+
+it("starts with independent food items and offers packaging separately from composition", () => {
+  const milk = { document_id: "milk", inventory_ids: ["large", "small"],
+    entities: [
+      { id: "scope", name: "급식 물품", kind: "group" },
+      { id: "large", name: "우유/대", kind: "product" },
+      { id: "small", name: "우유/소", kind: "product" },
+      { id: "box", name: "상자", kind: "product" },
+      { id: "paper", name: "종이", kind: "material" },
+    ], relations: [relation("large", "scope", "in_procurement_scope"),
+      relation("small", "scope", "in_procurement_scope"),
+      relation("large", "box", "pack_unit_of"), relation("paper", "large", "packaging_for")],
+    attributes: [],
+  };
+  expect(composition(milk).children.size).toBe(0);
+  expect(composition(milk, "packaging").children.get("box")).toEqual(["large"]);
+  render(<AnalysisExplorer value={{ documents: [milk] }} />);
+  expect((screen.getByRole("combobox", { name: "탐색 방식" }) as HTMLSelectElement).value).toBe("list");
+  expect(screen.getByRole("heading", { name: "대상 목록" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "우유/대" })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("대상 유형"), { target: { value: "purchase" } });
+  expect(screen.getByRole("button", { name: /우유\/소 0개 속성/ })).toBeTruthy();
+  expect(screen.queryByRole("button", { name: /상자 0개 속성/ })).toBeNull();
+  fireEvent.change(screen.getByLabelText("대상 유형"), { target: { value: "all" } });
+  fireEvent.change(screen.getByLabelText("탐색 방식"), { target: { value: "packaging" } });
+  expect(screen.getByRole("heading", { name: "포장 단위 관계" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "상자 접기" })).toBeTruthy();
+});
+
+it("keeps a standalone software purchase visible without manufacturing hardware or inventory children", () => {
+  render(<AnalysisExplorer value={{ documents: [{ document_id: "cad", inventory_ids: [],
+    entities: [{ id: "root", name: "CAD 소프트웨어", kind: "software", document_roles: ["procurement_scope"] }],
+    relations: [], attributes: [] }] }} />);
+  fireEvent.change(screen.getByLabelText("대상 유형"), { target: { value: "purchase" } });
+  expect(screen.getByRole("button", { name: /CAD 소프트웨어 0개 속성/ })).toBeTruthy();
+  expect(screen.queryByText(/확인된 구성 계층/)).toBeNull();
 });

@@ -4,7 +4,7 @@ import re
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-Role=Literal['technical_requirement','delivery_requirement','target_mention','heading','procedure','template','other','unknown']
+Role=Literal['technical_requirement','delivery_requirement','target_mention','heading','table_of_contents','procedure','template','other','unknown']
 
 class PassageGroup(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -27,6 +27,10 @@ Group every supplied node exactly once. technical_requirement is a product/compo
 delivery_requirement is an actual delivery/service/document obligation. target_mention names a target
 without asserting an additional condition. heading is a section, column or property label WITHOUT its value/condition, never a substantive condition.
 A numbered inventory item name alone is target_mention; its separate quantity/value cell is a requirement.
+Food, clothing, materials and standalone software are also procurement targets, not only equipment.
+Ingredients, composition ratios, packaging, origin, sizes, licence terms and storage conditions can be technical requirements.
+table_of_contents is navigation listing section titles/page references, not an actual supply list.
+Do not mistake a numbered purchase list or table of food items for a table of contents.
 Do not label a bare property name as technical_requirement just because its neighboring cell has a value.
 procedure is tender participation, scoring or administration; template is blank fields or instructions
 for filling a form. other is clearly non-requirement content such as a contact block. Preserve genuine
@@ -76,7 +80,7 @@ async def assess_document(document,runner,out):
             if re.fullmatch(r'(?:단위|unit)\s*[:：]?',previous,re.I) and re.fullmatch(r'(?:식|대|개|set|system|ea|unit)',text,re.I):
                 metadata_values.add(node['node_id'])
         technical={id for id,role in roles.items() if role=='technical_requirement'}-metadata_values
-        excluded=(result.document_kind=='template' and all(role in {'heading','procedure','template','other','target_mention'} for role in roles.values())) or (
+        excluded=(result.document_kind=='template' and all(role in {'heading','table_of_contents','procedure','template','other','target_mention'} for role in roles.values())) or (
             result.document_kind=='procurement_notice' and not technical and 'unknown' not in roles.values())
         return {'document_kind':result.document_kind,'node_roles':roles,'excluded':excluded,
                 'status':'needs_review' if 'unknown' in roles.values() or result.document_kind=='unknown' or (not excluded and not any(r in {'technical_requirement','delivery_requirement'} for r in roles.values())) else 'classified',
@@ -87,5 +91,5 @@ async def assess_document(document,runner,out):
 
 def extraction_node_ids(document,*,headings=False):
     roles=document.get('document_assessment',{}).get('node_roles',{})
-    excluded={'procedure','template','other'} | (set() if headings else {'heading'})
+    excluded={'procedure','template','other','table_of_contents'} | (set() if headings else {'heading'})
     return {n['node_id'] for n in document['nodes'] if roles.get(n['node_id'],'unknown') not in excluded}

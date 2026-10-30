@@ -8,7 +8,8 @@ def section_rank(node):
     """Recognize presentation boundaries, not domain entity types."""
     text=unicodedata.normalize('NFKC',node.get('text','')).strip()
     if node.get('kind') in {'heading','title','section_title'}:
-        return 1
+        level=node.get('heading_level')
+        return level if isinstance(level,int) and level>0 else 1
     if node.get('kind')!='paragraph' or len(text.splitlines()[0] if text else '')>160:
         return None
     if re.match(r'^[IVXLCDM]+[.)]\s+',text):
@@ -33,7 +34,8 @@ class DocumentContext:
         stack=[]
         for node in self.nodes:
             node_id=node['node_id']
-            rank=section_rank(node)
+            rank=(None if document.get('document_assessment',{}).get('node_roles',{}).get(node_id)=='table_of_contents'
+                  else section_rank(node))
             # Numbered content inside a table cell is not a document heading.
             cell=next((n for n in self.ancestors(node_id) if n.get('kind')=='cell' or n.get('row') is not None),None)
             if rank is not None and cell is None:
@@ -74,6 +76,21 @@ class DocumentContext:
             return ('section',path)
         node=self.lookup.get(node_id,{})
         return ('parent',node.get('parent_id'))
+
+    def extraction_structure(self,node_ids):
+        """Transmit section paths and effective cell coordinates, including nested cell text."""
+        cells=[]
+        for node in self.nodes:
+            key=node['node_id']
+            cell=self.cells.get(key)
+            if key not in node_ids or cell is None:
+                continue
+            table=self.table_key(cell)
+            if table is not None:
+                cells.append([key,table[1],cell.get('row'),cell.get('column'),
+                              cell.get('row_span') or 1,cell.get('column_span') or 1])
+        return {'section_paths':{key:list(path) for key,path in self.paths.items() if key in node_ids and path},
+                'table_cells':cells}
 
     @staticmethod
     def overlaps(a,b,axis):

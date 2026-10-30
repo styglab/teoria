@@ -11,12 +11,15 @@ from teoria.features.specification_processing.extraction.attribute_extraction im
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def inventory_attributes(graph):
     result=[]
+    kinds={e['id']:e['kind'] for e in graph.get('entities',[])}
     for q in graph.get('declared_quantities',[]):
         raw_unit=q.get('unit_raw');value=q['value_raw']
         result.append({'id':'attribute_'+q['requirement_id'],'subject_ids':[q['entity_id']],'property_key':'quantity','property_raw':None,'data_type':'number',
                        'operator':'eq','operator_raw':None,'value_raw':value,'unit_raw':raw_unit,'qualifiers_raw':[],
                        'normalized':normalize_fact('quantity','number','eq',value,raw_unit),'ontology_property_id':None,'review_status':'needs_review',
-                       'origin':'validated_inventory_quantity','evidence':{'source_node_ids':q['source_node_ids'],'scope':'explicit inventory target only'}})
+                'origin':'validated_inventory_quantity',
+                **({'semantic_role':'requirement_candidate','semantic_scope':'batch_total'} if kinds.get(q['entity_id'])=='product' else {}),
+                'evidence':{'source_node_ids':q['source_node_ids'],'scope':'explicit inventory target only'}})
     return result
 
 

@@ -70,7 +70,7 @@ class RequirementRule(Record):
     property_concept_id: UUID
     source_property_keys: list[str] = Field(min_length=1)
     roles: list[Literal['requirement_candidate','supported_capability','existing_reference','recommended','optional']] = Field(min_length=1)
-    scopes: list[Literal['per_component','system_total','per_module','per_processor','support_limit','service']] = Field(min_length=1)
+    scopes: list[Literal['per_item','per_package','per_reference_quantity','batch_total','per_component','system_total','per_module','per_processor','support_limit','service']] = Field(min_length=1)
     value_type: Literal['number','text','identifier']
     units: list[UnitRule] = Field(default_factory=list)
 

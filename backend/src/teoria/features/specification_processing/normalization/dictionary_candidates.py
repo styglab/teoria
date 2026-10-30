@@ -29,7 +29,7 @@ def submission_from_corpus(corpus, *, auto_approve=True):
                 locator=n.get('native_ref') or 'node:'+n['node_id'],text=n['text']) for n in raw_nodes if n['text'].strip()])
         sources.append(source)
         nodes = {n['node_id']:n.get('native_ref') or 'node:'+n['node_id'] for n in raw_nodes}
-        owners = {e['id']:e for e in document['entities'] if e.get('kind') in {'equipment','software'}}
+        owners = {e['id']:e for e in document['entities'] if e.get('kind') in {'product','material','equipment','software'}}
         for item in owners.values():
             evidence_nodes={e['node_id'] for e in item.get('evidence',[]) if e.get('node_id') in nodes}
             locators={nodes[n] for n in evidence_nodes} if evidence_nodes else None

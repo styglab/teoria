@@ -9,7 +9,7 @@ class Resolution(BaseModel):
     attribute_id:str
     subject_ids:list[str]
     role:Literal['requirement_candidate','supported_capability','existing_reference','recommended','optional','unknown']
-    scope:Literal['per_component','system_total','per_module','per_processor','support_limit','service','unknown']
+    scope:Literal['per_item','per_package','per_reference_quantity','batch_total','per_component','system_total','per_module','per_processor','support_limit','service','unknown']
     evidence_node_ids:list[str]
 
 class Batch(BaseModel):
@@ -30,6 +30,8 @@ nodes는 해당 절·표·상위 문맥을 선택한 원문이며 문서 전체�
 속성명에 최대·최소가 있다는 이유만으로 지원 역할이나 연산 방향을 결정하지 않는다. 원문 문맥을 확인한다.
 기존 대상 ID만 사용한다. 정확한 하위 대상이 없으면 지원 능력을 가진 본체 ID로 연결할 수 있다. 귀속이 불명확하면 subject_ids=[],role=unknown으로 둔다.
 단순 제목·표 레이아웃은 구성품이 아니다. scope를 원문에서 판단할 수 없으면 unknown이다.
+독립 물품 자체의 사양은 per_item, 포장 한 단위당은 per_package, 100mL당 등 명시된 기준량당은 per_reference_quantity, 구매 행/로트의 전체 물량은 batch_total이다.
+영양/혼용/함량의 기준과 총 구매량을 부품당 수량으로 바꾸지 않는다. 기준량·포장·로트 조건은 기존 원문 qualifiers를 유지한다. 장비 내부의 부품·프로세서·모듈 범위는 기존 구체 scope를 사용한다.
 모든 입력 attribute_id를 정확히 한 번 출력하고, 판단 근거의 원문 node ID들을 지정한다. 없는 ID를 만들지 않는다.'''
 
 

@@ -157,10 +157,12 @@ async def test_held_relations_survive_extraction_storage_and_mark_partial(tmp_pa
     ref=await persist_extraction.fn(request,str(workspace),False)
     result=json.loads((workspace/'extracted.json').read_text())['documents'][0]
     assert result['held_relations']==graph['held_relations']
+    assert result['requirements']==graph['requirements']
     assert result['extraction_status']=='partial'
     assert result['unresolved_extraction']['held_relations']==1
     stored=json.loads(Path(ref['uri'].removeprefix('file://')).read_text())
     assert stored['documents'][0]['held_relations']==graph['held_relations']
+    assert stored['documents'][0]['requirements']==graph['requirements']
 
 
 def test_report_combines_scope_and_composition_without_duplicating_the_item():
@@ -171,7 +173,9 @@ def test_report_combines_scope_and_composition_without_duplicating_the_item():
                   'reasons':['service_for source must be an activity'],'review_status':'held'}]}
     report=render_report({'documents':[document],'unavailable_documents':[]},{'summary':{}},'fixture')
     assert report.count('용매 운반용 펌프')==1
-    assert '[범위·구성]' in report
+    assert '범위·구성' in report
+    assert '| pump | in_procurement_scope | root |' in report
+    assert '| pump | component_of | root |' in report
     assert '보류한 관계' in report and 'service_for source must be an activity' in report
 
 
@@ -184,3 +188,69 @@ def test_an_old_checkpoint_cannot_bypass_work_direction_checks():
     with pytest.raises(ValueError,match='relation type'):
         validate_checkpoint({'classification_code':None,'documents':[document],'unavailable_documents':[]},
             SimpleNamespace(classification_code=None),[{'document_id':'regression','source':{'sha256':'a'*64}}])
+
+
+def workstation_deliverables():
+    # Frozen source excerpts from the existing workstation original, SHA256
+    # 1ac38ddda29a1fc7806ac93fa04baa93d6beff66621896f3b434a6c9840d01c5.
+    texts = {
+        'root_node': '지식관리시스템 AI 서비스 검증용 워크스테이션',
+        'software': 'Windows 11 , Ubuntu 26.04 LTS(WSL2), NVIDIA Driver, CUDA Toolkit, cuDNN, Docker, Python, PyTorch, Ollama, Open WebUI,\njupyterLab,GPU Matatrix Test등 SW 설치 및  환경 구축',
+        'submission': '설치 작업의 종료와 함께 다음의 문서를 제출하여야 한다.',
+        'manual': '- HW/SW 설치 및 사용 매뉴얼',
+        'support': '- 제조사 정품공급 및 기술지원 확약서',
+    }
+    doc = {'document_id': 'workstation', 'nodes': [
+        {'node_id': key, 'text': text, 'native_ref': '/' + key, 'kind': 'paragraph',
+         'parent_id': None, 'row': None, 'column': None, 'row_span': None, 'column_span': None}
+        for key, text in texts.items()]}
+    inventory = Inventory(root=('root_node', texts['root_node'], None, None, ['root_node']),
+        basis='technical_sections', basis_node_ids=['root_node'], items=[],
+        integrated_scope=False, scope_evidence_node_ids=[], issues=[])
+    details = Details(additional=[('sw', 'software', 'Docker'),
+        ('manual', 'manual', 'HW/SW 설치 및 사용 매뉴얼'),
+        ('pledge', 'support', '제조사 정품공급 및 기술지원 확약서')],
+        types=[('root', 'equipment', 'required'), ('sw', 'software', 'required'),
+               ('manual', 'document', 'required'), ('pledge', 'document', 'required')],
+        relations=[('sw', 'root', 'software_for', 'explicit', ['software']),
+                   ('manual', 'root', 'document_for', 'interpreted', ['submission', 'manual']),
+                   ('pledge', 'root', 'document_for', 'interpreted', ['submission', 'support'])],
+        scopes=[('manual', ['submission', 'manual']), ('pledge', ['submission', 'support'])], issues=[])
+    return doc, inventory, details
+
+
+async def test_workstation_documents_and_software_keep_typed_targets_and_submission_clause(tmp_path):
+    doc, inventory, details = workstation_deliverables()
+    await extract_entity_relations(doc, tmp_path, Predictions(inventory, details))
+    graph = json.loads((tmp_path / 'graph.json').read_text())
+    assert {r['kind'] for r in graph['relations']} == {'document_for', 'software_for'}
+    assert graph['held_relations'] == []
+    clause = next(r for r in graph['requirements'] if r['id'] == 'clause_submission')
+    assert set(clause['subject_ids']) == {'manual', 'pledge'}
+    assert clause['text'] == '설치 작업의 종료와 함께 다음의 문서를 제출하여야 한다.'
+    assert all(e['delivery_status'] == 'not_established' for e in graph['entities'])
+
+
+@pytest.mark.parametrize('source,kind', [('sw', 'document_for'), ('manual', 'software_for'),
+                                       ('sw', 'component_of'), ('manual', 'physical_part_of')])
+def test_typed_deliverables_reject_incorrect_roles_without_relabeling(source, kind):
+    from teoria.features.specification_processing.extraction.entity_relation_extraction import review_relations
+    doc, inventory, details = workstation_deliverables()
+    details.relations = [(source, 'root', kind, 'explicit', ['software', 'manual'])]
+    reviewed, held = review_relations(details, inventory, doc)
+    assert not reviewed.relations and len(held) == 1
+    assert held[0]['relation'][0:3] == (source, 'root', kind)
+
+
+def test_workstation_report_lists_typed_targets_and_relations_without_a_forced_tree():
+    from teoria.features.specification_processing.reporting import render_report
+    doc, inventory, details = workstation_deliverables()
+    graph = materialize(inventory, details, doc)
+    report = render_report({'documents': [{**graph, 'source': {'path': 'source.hwp'}, 'attributes': []}],
+        'unavailable_documents': []}, {'summary': {}}, 'fixture')
+    assert '```text' not in report
+    assert '| sw | Docker | software |' in report
+    assert '| manual | HW/SW 설치 및 사용 매뉴얼 | document |' in report
+    assert '### 분석 대상' in report and '### 대상 간 관계' in report
+    assert '| manual | document_for | root |' in report
+    assert '설치 작업의 종료와 함께 다음의 문서를 제출하여야 한다.' in report

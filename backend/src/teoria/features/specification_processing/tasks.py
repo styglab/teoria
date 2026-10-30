@@ -178,6 +178,7 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                 'parser':{'name':'kory_parser','version':context['parser_version'],'ocr':False},
                 'entities':graph['entities'],'relations':graph['relations'],'held_relations':graph.get('held_relations',[]),'inventory_ids':graph.get('inventory_ids',[]),
                 'declared_quantities':graph.get('declared_quantities',[]),'attributes':attributes,
+                'requirements':graph.get('requirements',[]),
                 'extraction_status':'partial' if summary['status']=='partial' or graph.get('held_relations') or context.get('document_assessment',{}).get('status')=='needs_review' else 'extracted',
                 'attribute_input_coverage':summary['input_coverage'],
                 'unresolved_extraction':{**{k:summary[k] for k in ['failed_chunks','uncovered_spec_fragments','semantic_resolution','recovery_passes']},
