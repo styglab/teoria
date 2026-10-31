@@ -37,12 +37,12 @@ async def extract_requirements(sid,source,out,runner,source_root,verified_parse_
     from teoria.features.specification_processing.extraction.document_context import DocumentContext,pack_fragments
     context=DocumentContext(document)
     from teoria.features.specification_processing.parsing.document_assessment import extraction_node_ids
-    eligible=extraction_node_ids(document)
+    eligible=extraction_node_ids(document,specifications_only=True)
     chunks=make_chunks(graph,document);save(out/'chunks.json',chunks)
     save(out/'input_manifest.json',{'source_graph_path':str((source/'graph.json').resolve()),'source_document_path':str((source/'document.json').resolve()),
          'source_graph_sha256':sha(source/'graph.json'),'source_document_sha256':sha(source/'document.json'),
          'source_verified_path':str(original) if original_available else None,'source_sha256':document['source_sha256'],'original_file_reverified':original_available,'saved_parse_hash_verified':True,'chunks':len(chunks),'graph_entities_changed':False,
-         'source_code_sha256':{p.name:sha(p) for p in [ROOT/'attribute_extraction.py',ROOT/'attribute_chunking.py',ROOT/'document_context.py',ROOT/'value_normalization.py',Path(__file__)]},'retries':0,'human_reviewed':False})
+         'source_code_sha256':{p.name:sha(p) for p in [ROOT/'attribute_extraction.py',ROOT/'attribute_chunking.py',ROOT/'document_context.py',ROOT/'value_normalization.py',ROOT/'attribute_validation.py',ROOT/'requirement_clauses.py',Path(__file__)]},'retries':0,'human_reviewed':False})
     entities=[[e['id'],e['name'],e['kind']] for e in graph['entities']]
     async def one(index,chunk,recovery=False):
         path=out/('recovery' if recovery else 'inference')/f'chunk_{index:02}.json';before=time.monotonic();cache_hit=path.exists()
@@ -50,7 +50,7 @@ async def extract_requirements(sid,source,out,runner,source_root,verified_parse_
             from teoria.features.specification_processing.extraction.attribute_validation import fragment_context
             contexts={f['id']:fragment_context(document,f,context=context) for f in chunk}
             context_texts={row[0]:row[3] for rows in contexts.values() for row in rows}
-            request={'document_id':sid,'entities':entities,'fragments':[[f['id'],f['node_id'],f['suggested_subject_ids'],f['text']] for f in chunk],
+            request={'document_id':sid,'entities':entities,'entity_aliases':{e['id']:[a['name'] for a in e.get('aliases',[])] for e in graph['entities'] if e.get('aliases')},'fragments':[[f['id'],f['node_id'],f['suggested_subject_ids'],f['text']] for f in chunk],
                      'fragment_groups':{f['id']:f['context_group'] for f in chunk},
                      'node_context':{key:[row[0] for row in rows] for key,rows in contexts.items()},
                      'context_nodes':[[n['node_id'],n['kind'],n.get('parent_id'),n.get('source_table_id'),n.get('row'),n.get('column'),n.get('row_span'),n.get('column_span'),context_texts[n['node_id']]]
@@ -69,7 +69,7 @@ async def extract_requirements(sid,source,out,runner,source_root,verified_parse_
         save(out/'batches'/f'chunk_{index:02}.json',result)
         return result
     batches=await asyncio.gather(*(one(index,chunk) for index,chunk in enumerate(chunks)))
-    from teoria.features.specification_processing.extraction.attribute_validation import uncovered,deduplicate_inventory
+    from teoria.features.specification_processing.extraction.attribute_validation import uncovered,deduplicate_inventory,fragment_coverage
     initial_attributes=[a for b in batches for a in b['attributes']]
     gaps=uncovered(chunks,initial_attributes,graph=graph)
     recovery_chunks=pack_fragments(gaps,context)
@@ -86,11 +86,11 @@ async def extract_requirements(sid,source,out,runner,source_root,verified_parse_
         semantic=await resolve_attribute_semantics(document,graph,attributes,runner,out)
     quarantined=[a for b in batches for a in b['quarantined']]
     unresolved=[a for b in batches for a in b['unresolved']]
-    extracted_fragments={a['evidence']['fragment_id'] for a in attributes if 'fragment_id' in a['evidence']}
-    all_fragments=[f for chunk in chunks for f in chunk]
-    coverage=[{'fragment_id':f['id'],'node_id':f['node_id'],'status':'attributes_returned' if f['id'] in extracted_fragments else 'no_attribute_returned',
-               'contains_digits':any(c.isdigit() for c in f['text'])} for f in all_fragments]
-    summary={'document_id':sid,'status':'partial' if quarantined or remaining or semantic['unresolved'] or semantic.get('unresolved_scope',0) or (bool(chunks) and not extracted) or any(b['status']=='failed' for b in batches) else 'needs_review',
+    coverage=[{'fragment_id':f['id'],'node_id':f['node_id'],'status':f['coverage_status'],
+               'contains_digits':any(c.isdigit() for c in f['text'])}
+              for f in fragment_coverage(chunks,attributes,[d['evidence']['fragment_id'] for d in duplicates],
+                                         graph=graph)]
+    summary={'document_id':sid,'status':'partial' if quarantined or remaining or semantic['unresolved'] or semantic.get('unresolved_scope',0) or (bool(chunks) and not extracted and any(f['status'] not in {'repeated_target_mention','entity_returned'} for f in coverage)) or any(b['status']=='failed' for b in batches) else 'needs_review',
              'attributes':len(attributes),'inventory_quantity_attributes':len(inventory_attributes(graph)),'new_model_attributes':sum(len(b['attributes']) for b in batches),
              'input_coverage':{'excluded_node_ids':[n['node_id'] for n in document['nodes'] if n['node_id'] not in eligible],'available_nodes':sum(n['node_id'] in eligible and bool(n['text'].strip()) and n['kind']!='image' for n in document['nodes']),'forwarded_nodes':len({f['node_id'] for c in chunks for f in c}),'missing_node_ids':[n['node_id'] for n in document['nodes'] if n['node_id'] in eligible and n['text'].strip() and n['kind']!='image' and n['node_id'] not in {f['node_id'] for c in chunks for f in c}]},'quarantined':len(quarantined),'recovery_passes':int(bool(recovery_chunks)),'recovery_chunks':len(recovery_chunks),'uncovered_spec_fragments':len(remaining),'zero_detail_attributes':not bool(extracted),'semantic_resolution':semantic,'inventory_quantity_duplicates':len(duplicates),'failed_chunks':sum(b['status']=='failed' for b in batches),'chunks':len(chunks),
              'numeric_comparisons':sum(a['normalized']['comparison_rule']=='numeric_requirement' for a in attributes),
@@ -99,7 +99,10 @@ async def extract_requirements(sid,source,out,runner,source_root,verified_parse_
              'seconds':previous.get('seconds',round(time.monotonic()-started,2)) if all(b['cache_hit'] for b in batches) else round(time.monotonic()-started,2),
              'postprocess_seconds':round(time.monotonic()-started,2),'human_reviewed':False}
     from collections import Counter
+    summary['coverage_reasons']=dict(Counter(f['status'] for f in coverage if f['status'] in {'missing_requirement','unresolved_target_mention'}))
+    summary['repeated_target_mentions']=sum(f['status']=='repeated_target_mention' for f in coverage)
     summary['coverage_by_kind']=dict(Counter(f.get('expected_role','unknown') for f in remaining))
+    summary['other_requirement_clauses']=sum(r.get('category')=='other' for r in graph.get('requirements',[]) if r.get('observation_type')=='source_clause')
     summary['held_relations_by_kind']=dict(Counter(r['kind'] for r in graph.get('held_relations',[])))
     save(out/'attributes.json',attributes);save(out/'quarantined.json',quarantined);save(out/'unresolved.json',unresolved)
     save(out/'coverage.json',{'fragments':coverage,'uncovered_spec_fragment_ids':[f['id'] for f in remaining],'inventory_duplicates':duplicates,'remaining_by_kind':summary['coverage_by_kind'],'is_recall_measure':False});save(out/'summary.json',summary)

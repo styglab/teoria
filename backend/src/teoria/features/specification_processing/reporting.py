@@ -1,6 +1,7 @@
 """Readable output from canonical extraction/normalization, without HTML/debug copies."""
 from collections import defaultdict
 import html
+from teoria.features.specification_processing.extraction.requirement_clauses import is_other_requirement,other_requirements
 
 def cell(value):return html.escape(str(value)).replace('|','&#124;').replace('\n','<br>').replace('`','&#96;').replace('[','&#91;').replace(']','&#93;')
 
@@ -54,10 +55,19 @@ def render_report(corpus,normalized,standard_version,candidates=None):
                          'compatible_with':'호환','sends_data_to':'데이터 전달','same_target_as':'동일 대상 후보'}
         lines += [f"## {cell(d['document_id'])} — {cell(d.get('extraction_status','extracted'))}",'',
                   f"[원본]({d['source']['path']})",'','### 분석 대상','',
-                  '| ID | 원문 명칭 | 유형 | 문서상 역할 |','|---|---|---|---|']
+                  '| ID | 대상명 | 유형 | 문서상 역할 |','|---|---|---|---|']
         for e in entities.values():
             roles=', '.join(e.get('document_roles',[]))
             lines.append(f"| {cell(e['id'])} | {cell(e['name'])} | {cell(e.get('kind','unknown'))} | {cell(roles)} |")
+        named=[e for e in entities.values() if e.get('name_raw') or e.get('aliases') or e.get('descriptions')]
+        if named:
+            lines+=['','<details><summary>원문 명칭·다른 표현</summary>','',
+                    '| ID | 원문 명칭 | 다른 표현·설명 |','|---|---|---|']
+            for e in named:
+                observations=[(a['name'],a.get('evidence',[])) for a in e.get('aliases',[])]+[(d['text'],d.get('evidence',[])) for d in e.get('descriptions',[])]
+                text=' / '.join(value+' ('+', '.join(ref.get('node_id','') for ref in evidence)+')' for value,evidence in observations)
+                lines.append(f"| {cell(e['id'])} | {cell(e.get('name_raw',e['name']))} | {cell(text)} |")
+            lines+=['','</details>','']
         lines += ['','### 대상 간 관계','',
                   '구매 범위·부품·원재료·포장·설치·지원 관계를 구별합니다. 같은 표에 있다는 사실만으로 구성을 확정하지 않습니다.','',
                   '| 출발 ID | 관계 | 도착 ID | 구분 | 판단 | 근거 |','|---|---|---|---|---|---|']
@@ -71,7 +81,7 @@ def render_report(corpus,normalized,standard_version,candidates=None):
                 lines.append(f"| {cell(source)} | {cell(r['kind'])} | {cell(target)} | {cell(labels)} | {cell(r.get('basis','unknown'))} | {cell(refs)} |")
         lines.append('')
         clauses=[r for r in d.get('requirements',[]) if r.get('observation_type')=='source_clause'
-                 and r.get('subject_ids')]
+                 and r.get('subject_ids') and not is_other_requirement(r,d)]
         if clauses:
             lines+=['### 대상별 원문 요구조건','',
                     '원문 요구조건이며 이행 완료를 뜻하지 않습니다.','',
@@ -80,6 +90,15 @@ def render_report(corpus,normalized,standard_version,candidates=None):
                 refs=' / '.join(e.get('native_ref',e.get('node_id','')) for e in clause.get('evidence',[]))
                 lines.append(f"| {cell(', '.join(clause.get('subject_ids',[])))} | {cell(clause['text'])} | {cell(refs)} |")
             lines.append('')
+        other=other_requirements(d)
+        if other:
+            lines+=['<details><summary>기타 요구사항</summary>','',
+                    '납품·설치·보증·제출·일반 준수사항의 원문과 근거입니다.','',
+                    '| 원문 | 근거 |','|---|---|']
+            for clause in other:
+                refs=' / '.join(e.get('native_ref') or e.get('node_id','') for e in clause.get('evidence',[]))
+                lines.append(f"| {cell(clause['text'])} | {cell(refs)} |")
+            lines+=['','</details>','']
         if d.get('held_relations'):
             lines+=['### 보류한 관계','','| 출발 | 관계 | 도착 | 보류 사유 | 근거 |','|---|---|---|---|---|']
             for relation in d['held_relations']:

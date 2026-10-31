@@ -78,3 +78,57 @@ test("explains insufficient permission without treating it as a connection failu
   );
   expect(window.sessionStorage.getItem("teoria-admin-token")).toBeNull();
 });
+
+test("removes protected content when a request discovers an expired session", async () => {
+  window.sessionStorage.setItem("teoria-admin-token", "synthetic-token");
+  vi.spyOn(authApi, "session").mockResolvedValue({
+    actor: "reviewer",
+    roles: ["metadata_admin"],
+  });
+  render(
+    <AdminAccessProvider>
+      <AdminAccess>
+        <p>승인 작업</p>
+      </AdminAccess>
+    </AdminAccessProvider>,
+  );
+  expect(await screen.findByText("승인 작업")).toBeInTheDocument();
+  const { getJson } = await import("../../api/http_client");
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ detail: "만료" }), { status: 401 }),
+      ),
+  );
+  try {
+    await expect(getJson("/ontology")).rejects.toMatchObject({ status: 401 });
+    await waitFor(() =>
+      expect(screen.queryByText("승인 작업")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("조회 모드")).toBeInTheDocument();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test("focuses the shared login, traps Tab and returns focus on Escape", async () => {
+  render(
+    <AdminAccessProvider>
+      <p>화면</p>
+    </AdminAccessProvider>,
+  );
+  const trigger = screen.getByRole("button", { name: "관리자 연결" });
+  trigger.focus();
+  fireEvent.click(trigger);
+  const input = screen.getByLabelText("관리자 토큰");
+  expect(input).toHaveFocus();
+  fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+  expect(screen.getByRole("button", { name: "취소" })).toHaveFocus();
+  fireEvent.keyDown(document, { key: "Tab" });
+  expect(input).toHaveFocus();
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});

@@ -70,7 +70,12 @@ class SpecificationRepository:
                 (run_id,input_fingerprint,mode,classification_code,artifact_root,status)
                 VALUES (%s,%s,%s,%s,%s,'running') ON CONFLICT DO NOTHING RETURNING run_id''',
                 (request.run_id,fingerprint,request.mode,request.classification_code,request.artifact_root))).fetchone()
-            if inserted:return None
+            if inserted:
+                for document in request.documents:
+                    await connection.execute("""INSERT INTO public_procurement.specification_processing_inputs
+                        (run_id,document_id,filename,source_uri,source_sha256,notice_number) VALUES (%s,%s,%s,%s,%s,%s)""",
+                        (request.run_id,document.document_id,document.filename,document.source_uri,document.sha256,document.notice_number))
+                return None
             row=await(await connection.execute('SELECT * FROM public_procurement.specification_processing_runs WHERE run_id=%s FOR UPDATE',(request.run_id,))).fetchone()
             if row['input_fingerprint']!=fingerprint:raise ValueError('run_id already belongs to different inputs or processing code')
             if row['status'] in {'completed','partial'} or (row['status']=='failed' and row['summary']):

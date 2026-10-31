@@ -9,16 +9,14 @@ afterEach(() => {
 test("preserves structured errors even when the server omits a message", async () => {
   vi.stubGlobal(
     "fetch",
-    vi
-      .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            detail: { code: "asset_assessment_not_configured" },
-          }),
-          { status: 503 },
-        ),
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: { code: "asset_assessment_not_configured" },
+        }),
+        { status: 503 },
       ),
+    ),
   );
   try {
     await postJson("/intelligence/asset-assessments", {});
@@ -35,16 +33,14 @@ test("preserves structured errors even when the server omits a message", async (
 test("keeps HTTP status when authentication errors have a human message", async () => {
   vi.stubGlobal(
     "fetch",
-    vi
-      .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            detail: { code: "unauthorized", message: "인증 실패" },
-          }),
-          { status: 401 },
-        ),
+    vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: { code: "unauthorized", message: "인증 실패" },
+        }),
+        { status: 401 },
       ),
+    ),
   );
   await expect(getJson("/auth/session")).rejects.toMatchObject({
     status: 401,
@@ -85,4 +81,23 @@ test("preserves string validation errors and passes session credentials", async 
   expect(fetch.mock.calls[0][1].headers.Authorization).toBe(
     "Bearer synthetic-test-token",
   );
+});
+
+test("invalidates only the session whose credential was rejected", async () => {
+  window.sessionStorage.setItem("teoria-admin-token", "old-token");
+  let resolve!: (response: Response) => void;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      () =>
+        new Promise<Response>((done) => {
+          resolve = done;
+        }),
+    ),
+  );
+  const pending = getJson("/metadata/status");
+  window.sessionStorage.setItem("teoria-admin-token", "new-token");
+  resolve(new Response("{}", { status: 401 }));
+  await expect(pending).rejects.toMatchObject({ status: 401 });
+  expect(window.sessionStorage.getItem("teoria-admin-token")).toBe("new-token");
 });

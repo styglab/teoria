@@ -115,7 +115,43 @@ export type MetadataTableProfile = {
   reason: string | null;
 };
 
+export type CatalogFilter = "all" | "description" | "owner" | "tags";
+export type CatalogCounts = Record<CatalogFilter, number>;
+export type CatalogSearch = {
+  databaseSchema?: string;
+  query?: string;
+  missing?: CatalogFilter;
+  sort?: "asc" | "desc";
+  offset?: number;
+  limit?: number;
+};
+function searchParams(options: CatalogSearch) {
+  const params = new URLSearchParams();
+  if (options.databaseSchema)
+    params.set("database_schema", options.databaseSchema);
+  if (options.query) params.set("q", options.query);
+  if (options.missing) params.set("missing", options.missing);
+  if (options.sort) params.set("sort", options.sort);
+  if (options.offset !== undefined)
+    params.set("offset", String(options.offset));
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  return params;
+}
+
 export const metadataApi = {
+  searchTables: (options: CatalogSearch, signal?: AbortSignal) =>
+    getJson<MetadataPage>(
+      `/metadata/table-search?${searchParams(options)}`,
+      signal,
+    ),
+  tableCounts: (
+    options: Pick<CatalogSearch, "databaseSchema" | "query">,
+    signal?: AbortSignal,
+  ) =>
+    getJson<CatalogCounts>(
+      `/metadata/table-search/counts?${searchParams(options)}`,
+      signal,
+    ),
   metadataStatus: () => getJson<MetadataStatus>("/metadata/status"),
   metadataTables: (options?: {
     databaseSchema?: string;

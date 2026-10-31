@@ -106,7 +106,9 @@ def propose_candidates(bundles, profile, ontology):
             score = max(SequenceMatcher(None, _text(alias), _text(label)).ratio()
                         for alias in row['aliases'] for label in labels if label)
             matches.append({'concept_id': concept['concept_id'], 'stable_key': concept['stable_key'],
-                'name': concept.get('name', ''), 'lexical_score': round(score, 4),
+                'name': concept.get('name', ''), 'unit': concept.get('unit'),
+                'source_concept_id': concept.get('source'), 'target_concept_id': concept.get('target'),
+                'lexical_score': round(score, 4),
                 'basis': 'lexical_retrieval_with_context_filters_not_semantic_equivalence'})
         matches.sort(key=lambda m: (-m['lexical_score'], m['stable_key']))
         matches = [m for m in matches if m['lexical_score'] >= 0.45][:5]

@@ -57,6 +57,13 @@ def validate_checkpoint(corpus,request,source_items):
         for relation in d['relations']:
             errors=relation_type_errors(relation['kind'],kinds[relation['source_id']],kinds[relation['target_id']])
             if errors:raise ValueError('invalid relation type: '+'; '.join(errors))
+        from teoria.features.specification_processing.extraction.requirement_clauses import validate_legacy_obligation
+        for requirement in d.get('requirements',[]):
+            if requirement.get('observation_type')=='obligation':
+                validate_legacy_obligation(requirement,ids,d['parsed_document'])
+        from teoria.features.specification_processing.extraction.target_names import validate_materialized_names
+        for entity in d['entities']:
+            validate_materialized_names(entity,d['parsed_document'])
         attribute_ids=set()
         for a in d['attributes']:
             if a['id'] in attribute_ids or not set(a['subject_ids'])<=ids:raise ValueError('invalid attribute ID or subject')
@@ -145,6 +152,7 @@ async def resolve_attribute_semantics(request:SpecificationRun,workspace:str):
         graph=await load(out/'attribute_graph.json');summary=await load(out/'summary.json')
         semantic=await resolve(await load(folder/'document.json'),graph,graph['attributes'],model,out)
         summary['semantic_resolution']=semantic
+        summary['other_requirement_clauses']=sum(r.get('category')=='other' for r in graph.get('requirements',[]) if r.get('observation_type')=='source_clause')
         summary['attributes']=len(graph['attributes'])
         summary['numeric_comparisons']=sum(a['normalized']['comparison_rule']=='numeric_requirement' for a in graph['attributes'])
         summary['unresolved_units']=sum(a['normalized']['unit_status']=='unmapped' for a in graph['attributes'])
@@ -184,9 +192,12 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                 'unresolved_extraction':{**{k:summary[k] for k in ['failed_chunks','uncovered_spec_fragments','semantic_resolution','recovery_passes']},
                                          'held_relations':len(graph.get('held_relations',[])),
                                          'coverage_by_kind':summary.get('coverage_by_kind',{}),
+                                         'coverage_reasons':summary.get('coverage_reasons',{}),
+                                         'repeated_target_mentions':summary.get('repeated_target_mentions',0),
+                                         'other_requirement_clauses':summary.get('other_requirement_clauses',0),
                                          'held_relations_by_kind':summary.get('held_relations_by_kind',{})}})
         corpus={'schema_version':'specification_extraction_v1','classification_code':request.classification_code,'documents':documents,'unavailable_documents':failed,
-            'extraction_policy':'all_text_nodes_forwarded_with_bounded_recovery_and_semantic_resolution'}
+            'extraction_policy':'product_specifications_with_bounded_recovery_and_other_source_clauses'}
     validate_checkpoint(corpus,request,items)
     await save(Path(workspace)/'extracted.json',corpus)
     async with artifact_store(request.artifact_root) as store:
@@ -251,6 +262,7 @@ async def select_and_map_standard(request:SpecificationRun,workspace:str,extract
             standard_ref=StandardReference(uri=ref.uri,sha256=ref.sha256);artifacts.append(ref.model_dump())
             ref=await store.put(run_key(request,'meaning_candidates.json'),(json.dumps(candidates,ensure_ascii=False,indent=2)+'\n').encode());artifacts.append(ref.model_dump())
         else:standard_ref=request.standard
+        await save(Path(workspace)/'standard_definitions.json', [d.model_dump() if hasattr(d, 'model_dump') else d for d in standard.definitions])
         normalized['standard_ref']=standard_ref.model_dump()
         attach_source_term_alignment(normalized,dictionary)
         await save(Path(workspace)/'normalized.json',normalized)
@@ -266,3 +278,13 @@ async def persist_report(request:SpecificationRun,workspace:str,standard_version
     text=render_report(corpus,normalized,standard_version,candidates)
     async with artifact_store(request.artifact_root) as store:
         return (await store.put(run_key(request,'index.md'),text.encode(),'text/markdown')).model_dump()
+
+
+@task(name='09 문서별 탐색 결과 저장', **TASK_OPTIONS)
+async def persist_document_results(request: SpecificationRun, workspace: str):
+    from teoria.features.specification_processing.catalog.results import store_document_results
+    corpus = await load(Path(workspace) / 'extracted.json')
+    normalized = await load(Path(workspace) / 'normalized.json')
+    async with artifact_store(request.artifact_root) as store:
+        definitions = await load(Path(workspace)/'standard_definitions.json') if (Path(workspace)/'standard_definitions.json').exists() else []
+        return await store_document_results(store, request.run_id, corpus, normalized, definitions=definitions)

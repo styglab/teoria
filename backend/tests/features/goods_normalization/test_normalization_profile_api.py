@@ -114,3 +114,16 @@ def test_candidate_draft_records_principal_and_never_auto_approves():
     assert repo.create_from_candidates.await_args.kwargs["actor"] == "principal:test"
     assert repo.create_from_candidates.await_args.kwargs["version"] == "next"
     repo.transition.assert_not_called()
+
+
+def test_profile_review_forwards_expected_content_and_state_to_atomic_transition():
+    repo = AsyncMock()
+    repo.transition.return_value = {"status": "approved"}
+    http = client(repo)
+    path = "/v1/admin/goods/normalization-profiles/00000000-0000-0000-0000-000000000001/transitions"
+    headers = {"Authorization": "Bearer test-token"}
+    body = {"action": "approve", "expected_content_checksum": "a" * 64, "expected_status": "in_review"}
+    assert http.post(path, headers=headers, json=body).status_code == 200
+    assert repo.transition.await_args.kwargs["expected_content_checksum"] == "a" * 64
+    assert repo.transition.await_args.kwargs["expected_status"] == "in_review"
+    assert http.post(path, headers=headers, json={**body, "expected_content_checksum": "invalid"}).status_code == 422

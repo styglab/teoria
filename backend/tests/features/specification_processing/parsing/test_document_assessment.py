@@ -38,18 +38,18 @@ def test_mixed_passages_preserve_requirements_unknowns_offsets_and_source_contex
         'document_assessment':{'node_roles':dict(zip(map(str,range(5)),['heading','technical_requirement','delivery_requirement','procedure','unknown']))}}
     chunks=make_chunks({'entities':[]},document)
     fragments=[f for chunk in chunks for f in chunk]
-    assert {f['node_id'] for f in fragments}=={'1','2','4'}
+    assert {f['node_id'] for f in fragments}=={'1','4'}
     assert all(document['nodes'][int(f['node_id'])]['text'][f['start']:f['end']]==f['text'] for f in fragments)
     assert document['nodes'][0]['text']=='4. 기술 지원 사항'
 
 
-def test_entity_mention_is_not_a_property_but_delivery_obligation_still_needs_observation():
+def test_entity_mention_and_other_delivery_clauses_do_not_require_properties():
     from teoria.features.specification_processing.extraction.attribute_validation import uncovered
     node={'id':'f','node_id':'n','text':'HW/SW 설치 및 사용 매뉴얼','expected_role':'target_mention'}
     graph={'entities':[{'id':'manual','evidence':[{'node_id':'n'}]}]}
     assert uncovered([[node]],[],graph=graph)==[]
     obligation={**node,'expected_role':'delivery_requirement'}
-    assert uncovered([[obligation]],[],graph=graph)==[obligation]
+    assert uncovered([[obligation]],[],graph=graph)==[]
 
 
 def test_clause_context_preserves_split_source_sentence_without_joining_or_changing_values():
@@ -119,3 +119,17 @@ async def test_notice_inventory_metadata_is_not_technical_but_performance_values
     assert (await assess_document(document,model,tmp_path))['excluded']
     document['nodes'][0]['text']='CPU 코어 수:';document['nodes'][1]['text']='16';document['nodes'][3]['text']='Core'
     assert not (await assess_document(document,model,tmp_path))['excluded']
+
+
+async def test_general_law_clauses_stay_available_but_do_not_replace_concrete_product_specs(tmp_path):
+    texts=['제작사는 관련 법령을 준수할 것','허용하중: 200kg 이상\n세척·소독이 용이한 재질로 마감','납품 시 매뉴얼 제출']
+    document={'document_id':'vehicle','nodes':[{'node_id':str(i),'kind':'paragraph','text':t} for i,t in enumerate(texts)]}
+    model=AsyncMock();model.generate.return_value={'document_kind':'specification','groups':[
+        {'role':'general_requirement','node_ids':['0']},{'role':'technical_requirement','node_ids':['1']},
+        {'role':'delivery_requirement','node_ids':['2']}],'rationale':'Product constraints with other terms.'}
+    document['document_assessment']=await assess_document(document,model,tmp_path)
+    assert document['document_assessment']['status']=='classified'
+    assert extraction_node_ids(document)=={'0','1','2'}
+    fragments=[f for c in make_chunks({'entities':[]},document) for f in c]
+    assert [f['node_id'] for f in fragments]==['1']
+    assert '세척·소독이 용이한 재질' in fragments[0]['text']

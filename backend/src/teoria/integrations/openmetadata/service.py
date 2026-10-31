@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 import math
+import asyncio
 
 from teoria.features.metadata_management.catalog.models import MetadataPage, MetadataStatus, TableDetail, TableSampleData, TableProfileData
 from teoria.integrations.openmetadata.client import OpenMetadataClient, OpenMetadataError
@@ -32,6 +33,20 @@ class OpenMetadataService:
 
     async def list_tables(self, *, database_schema: str | None, limit: int = 50, after: str | None = None) -> MetadataPage:
         return page(await self._list("v1/tables", limit, after, databaseSchema=database_schema), "table")
+
+    async def search_tables(self, **options) -> MetadataPage:
+        from teoria.integrations.openmetadata.catalog_search import search_tables
+
+        return await search_tables(self.client, **options)
+
+    async def table_counts(self, *, database_schema: str | None, query: str = "") -> dict[str, int]:
+        # Four fixed count-only requests; no entity bodies are collected or persisted.
+        kinds = ("all", "description", "owner", "tags")
+        pages = await asyncio.gather(*(
+            self.search_tables(database_schema=database_schema, query=query, missing=kind, limit=0)
+            for kind in kinds
+        ))
+        return dict(zip(kinds, (result.total for result in pages)))
 
     async def get_table(self, fully_qualified_name: str) -> TableDetail:
         return table_detail(await self.client.get_table_by_name(fully_qualified_name))

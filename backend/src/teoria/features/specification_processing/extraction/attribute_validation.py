@@ -36,24 +36,60 @@ def fragment_context(document,fragment,*,context=None):
     return [[n['node_id'],n.get('row'),n.get('column'),n['text'][:1000]] for n in rows]
 
 
-def uncovered(chunks,attributes,additional_covered=(),*,graph=None):
-    covered=set(additional_covered)|{a['evidence']['fragment_id'] for a in attributes if 'fragment_id' in a.get('evidence',{})}
-    entity_nodes={ev['node_id'] for e in (graph or {}).get('entities',[]) for ev in e.get('evidence',[]) if ev.get('node_id')}
-    labels={}
-    for entity in (graph or {}).get('entities',[]):
-        for ev in entity.get('evidence',[]):
-            if ev.get('node_id'):labels.setdefault(ev['node_id'],set()).add(re.sub(r'\s+','',entity.get('name') or ''))
-    def missing(f):
-        if f['id'] in covered:return False
-        bare=re.sub(r'^\s*\d+\s*[.)]\s*','',f['text']).strip()
-        # A grounded list label is entity coverage, not an absent property. Do not use this
-        # shortcut for obligations or text carrying a numeric/conditional requirement.
-        if f.get('expected_role')!='delivery_requirement' and not is_spec(bare) and re.sub(r'\s+','',bare) in labels.get(f['node_id'],set()):return False
-        # Bare target mentions expect an entity, not an invented property. Actual obligations
-        # still require observations; an entity name alone cannot cover a delivery requirement.
-        if f.get('expected_role')=='target_mention':return f['node_id'] not in entity_nodes
-        return f.get('expected_role') in {'technical_requirement','delivery_requirement'} or is_spec(f['text'])
-    return [f for chunk in chunks for f in chunk if missing(f)]
+def fragment_coverage(chunks, attributes, additional_covered=(), *, graph=None):
+    """Explain coverage without treating raw-clause retention as requirement extraction."""
+    covered = set(additional_covered) | {a['evidence']['fragment_id'] for a in attributes
+        if 'fragment_id' in a.get('evidence', {})}
+    labels = {}
+    entity_nodes = set()
+    def bare(text):
+        text = re.sub(r'^\s*(?:\d+(?:\.\d+)*|[A-Za-z가-힣])[.)]\s*', '', text)
+        return re.sub(r'\s+', '', text)
+    for index, entity in enumerate((graph or {}).get('entities', [])):
+        name = bare(entity.get('name', ''))
+        grounded = [e for e in entity.get('evidence', []) if e.get('node_id')]
+        if grounded and name:
+            labels.setdefault(name, set()).add(entity.get('id', ('legacy', index)))
+        entity_nodes.update(e['node_id'] for e in grounded)
+        for alias in entity.get('aliases',[]):
+            evidence=[e for e in alias.get('evidence',[]) if e.get('node_id')]
+            if evidence and bare(alias.get('name','')):
+                labels.setdefault(bare(alias['name']),set()).add(entity.get('id',('legacy',index)))
+                entity_nodes.update(e['node_id'] for e in evidence)
+    results = []
+    for chunk in chunks:
+        for fragment in chunk:
+            role = fragment.get('expected_role', 'unknown')
+            text = fragment['text']
+            if fragment['id'] in covered:
+                status = 'attributes_returned'
+            elif role in {'general_requirement','delivery_requirement'}:
+                status = 'other_requirement_preserved'
+            elif (role in {'target_mention', 'heading'}
+                  and not re.search(r'이상|이하|초과|미만|하여야|해야|할 것|준수|경우|조건', text)
+                  and len(labels.get(bare(text), ())) == 1):
+                status = 'repeated_target_mention'
+            elif role == 'target_mention':
+                if re.search(r'이상|이하|초과|미만|하여야|해야|할 것|준수|경우|조건', text):
+                    status = 'missing_requirement'
+                else:
+                    status = 'entity_returned' if fragment['node_id'] in entity_nodes else 'unresolved_target_mention'
+            elif role in {'technical_requirement', 'delivery_requirement'} or is_spec(text):
+                # Same-node labels without a property are also valid in legacy unclassified parses.
+                matching = labels.get(bare(text), set())
+                same_node = fragment['node_id'] in entity_nodes
+                status = ('entity_returned' if role != 'delivery_requirement' and not is_spec(text)
+                          and matching and same_node else 'missing_requirement')
+            else:
+                status = 'no_observation_expected'
+            results.append({**fragment, 'coverage_status': status})
+    return results
+
+
+def uncovered(chunks, attributes, additional_covered=(), *, graph=None):
+    return [{k:v for k,v in f.items() if k!='coverage_status'} for f in fragment_coverage(chunks, attributes, additional_covered,
+                graph=graph)
+            if f['coverage_status'] in {'missing_requirement', 'unresolved_target_mention'}]
 
 
 def deduplicate_inventory(inventory,attributes):

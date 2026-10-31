@@ -24,6 +24,8 @@ class TransitionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     action: Literal["submit", "request_changes", "approve", "reject", "deprecate"]
     comment: str | None = None
+    expected_content_checksum: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    expected_status: Literal["draft", "in_review", "approved", "rejected", "deprecated"] | None = None
 
 
 class TemplateInput(BaseModel):
@@ -280,7 +282,10 @@ def create_normalization_profile_router(
     ):
         return await translate(
             require_service().transition(
-                revision_id, **payload.model_dump(), actor=principal.actor
+                revision_id,
+                **{key: value for key, value in payload.model_dump().items()
+                   if key in {"action", "comment"} or value is not None},
+                actor=principal.actor
             )
         )
 

@@ -28,7 +28,7 @@ def inputs(tmp_path,mode='document_processing'):
 @pytest.fixture
 def undecorated(monkeypatch):
     # Exercise the exact operational task bodies without starting an orchestration server.
-    for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','resolve_dictionary','select_and_map_standard','persist_report']:
+    for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','resolve_dictionary','select_and_map_standard','persist_report','persist_document_results']:
         monkeypatch.setattr(tasks,name,getattr(tasks,name).fn)
     from teoria.features.specification_processing.normalization import dictionary_alignment
     from teoria.features.specification_processing.normalization import dictionary_incremental
@@ -56,9 +56,9 @@ async def test_canonical_artifacts_are_separate_and_db_completion_is_last(tmp_pa
     result=await flows.execute_specification_run(request)
     assert result.status=='completed'
     assert result.summary['applied']==1
-    assert len(result.artifacts)==8
+    assert len(result.artifacts)==9
     root=tmp_path/'objects/specification_processing/fixture_run'
-    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==sorted(['source_term_alignment.json','dictionary_semantic_decisions.json','dictionary_bindings.json','dictionary_candidates.json','extracted.json','index.md','normalized.json','sources/doc_1.hwp'])
+    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==sorted(['documents/doc_1/result.json','source_term_alignment.json','dictionary_semantic_decisions.json','dictionary_bindings.json','dictionary_candidates.json','extracted.json','index.md','normalized.json','sources/doc_1.hwp'])
     for artifact in result.artifacts:
         path=Path(artifact.uri.removeprefix('file://'))
         assert path.exists() and hashlib.sha256(path.read_bytes()).hexdigest()==artifact.sha256

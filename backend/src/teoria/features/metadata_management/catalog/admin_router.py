@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from uuid import UUID
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
@@ -86,6 +87,33 @@ def create_metadata_router(
         return await _call(
             require_service().list_schemas(database=database, limit=limit, after=after)
         )
+
+    @router.get("/table-search/counts")
+    async def table_counts(
+        response: Response,
+        database_schema: str | None = None,
+        q: str = Query("", max_length=200),
+    ) -> dict:
+        response.headers["Cache-Control"] = "no-store"
+        return await _call(require_service().table_counts(database_schema=database_schema, query=q))
+
+    @router.get("/table-search")
+    async def table_search(
+        response: Response,
+        database_schema: str | None = None,
+        q: str = Query("", max_length=200),
+        missing: Literal["all", "description", "owner", "tags"] = "all",
+        sort: Literal["asc", "desc"] = "asc",
+        offset: int = Query(0, ge=0, le=9975),
+        limit: int = Query(25, ge=1, le=50),
+    ) -> dict:
+        response.headers["Cache-Control"] = "no-store"
+        if offset + limit > 10_000:
+            raise HTTPException(422, detail={"code": "catalog_search_window_exceeded"})
+        return await _call(require_service().search_tables(
+            database_schema=database_schema, query=q, missing=missing,
+            sort=sort, offset=offset, limit=limit,
+        ))
 
     @router.get("/tables")
     async def tables(

@@ -153,7 +153,8 @@ class NormalizationProfileService:
         return profile_result(row)
 
     async def transition(
-        self, revision_id: UUID, *, action: str, actor: str, comment=None
+        self, revision_id: UUID, *, action: str, actor: str, comment=None,
+        expected_content_checksum: str | None = None, expected_status: str | None = None
     ):
         transitions = {
             ("draft", "submit"): "in_review",
@@ -164,6 +165,9 @@ class NormalizationProfileService:
         }
         async with self.repository.transaction() as conn:
             row = await self.repository.get(conn, revision_id, lock=True)
+            if ((expected_content_checksum is not None and row["content_checksum"] != expected_content_checksum)
+                    or (expected_status is not None and row["status"] != expected_status)):
+                raise ValueError("profile changed since review; reload before transitioning")
             status = transitions.get((row["status"], action))
             if status is None:
                 raise ValueError("invalid profile transition")

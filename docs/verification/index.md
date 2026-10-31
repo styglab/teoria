@@ -5,6 +5,9 @@
 
 | 기록 | 확인할 내용 |
 |---|---|
+| [FormatID 분류별 문서 탐색·비교 배포 — 10월 31일](document_catalog_deployment_2026_10_31.md) | 문서 버전 목록·이전 정상 결과·2열 상세·표준 비교·migration 104 |
+| [FormatID 결과 화면 배포 — 10월 31일](formatid_results_deployment_2026_10_31.md) | 규격서별 엔티티·관계·속성·근거 탐색과 승인 UI 제거 |
+| [Web·Admin API 배포 — 10월 31일](frontend_admin_deployment_2026_10_31.md) | 인증·서버 검색·규격서 후보 화면의 실제 배포와 이전 이미지 정리 |
 | [Compose 모듈 실행 — 10월 30일](compose_modules_2026_10_30.md) | 단독·전체 구성, 중지·재시작, 실제 Flow와 이미지 정리 |
 | [규격서 처리 재점검 — 10월 30일](specification_processing_recheck_2026_10_30.md) | 원문·중간 결과·품질 판정의 대조와 남은 문제 |
 | [MinIO 저장 전환 — 10월 30일](specification_minio_storage_2026_10_30.md) | 저장소·계정 분리·산출물 보관·검증 범위 |

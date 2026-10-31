@@ -44,6 +44,18 @@ class FrozenInventoryChecks(unittest.TestCase):
         clauses={e['node_id'] for q in graph['requirements'] if q['observation_type']=='source_clause' for e in q['evidence']}
         self.assertTrue({'na','nq','nc','nb'}<=clauses)
 
+    def test_general_clauses_keep_original_text_and_evidence_without_duty_fields(self):
+        doc,inv,detail=self.fixture()
+        doc['nodes'].append({'node_id':'law','text':'제작사는 관련 법령을 준수할 것','native_ref':'/law','kind':'paragraph'})
+        doc['document_assessment']={'node_roles':{'law':'general_requirement','ns':'technical_requirement'}}
+        graph=materialize(inv,detail,doc)
+        clause=next(r for r in graph['requirements'] if r['id']=='clause_law')
+        self.assertEqual(clause['category'],'other')
+        self.assertEqual(clause['text'],'제작사는 관련 법령을 준수할 것')
+        self.assertEqual(clause['evidence'][0]['node_id'],'law')
+        self.assertNotIn('action_raw',clause)
+        self.assertEqual(next(r for r in graph['requirements'] if r['id']=='clause_ns')['category'],'specification')
+
     def test_fallback_section_groups_are_labeled_as_document_scopes(self):
         doc,inv,detail=self.fixture();inv.basis='technical_sections'
         graph=materialize(inv,detail,doc)

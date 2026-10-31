@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronRight,
   Database,
@@ -21,18 +21,9 @@ import {
   SearchField,
 } from "../../components/workspace/WorkspaceLayout";
 
-function normalizeAdminToken(input: string): string {
-  let token = input
-    .trim()
-    .replace(/^(?:export\s+)?TEORIA_ADMIN_API_TOKEN\s*=\s*/, "");
-  if (
-    (token.startsWith('"') && token.endsWith('"')) ||
-    (token.startsWith("'") && token.endsWith("'"))
-  ) {
-    token = token.slice(1, -1);
-  }
-  return token.replace(/^Bearer\s+/i, "").trim();
-}
+import { AdminApiError } from "../../api/http_client";
+import { useAdminAccess } from "../access/AdminAccess";
+import type { CatalogCounts } from "../../api/metadata";
 
 type Filter = "all" | "description" | "owner" | "tags";
 const filters: Array<{ id: Filter; label: string }> = [
@@ -42,6 +33,7 @@ const filters: Array<{ id: Filter; label: string }> = [
   { id: "tags", label: "태그·용어 없음" },
 ];
 export function MetadataExplorer() {
+  const { principal, requestLogin } = useAdminAccess();
   const navigate = useNavigate();
   const location = useLocation();
   const [params, setParams] = useSearchParams();
@@ -51,26 +43,27 @@ export function MetadataExplorer() {
     ? (params.get("filter") as Filter)
     : "all";
   const sort = params.get("sort") === "desc" ? "desc" : "asc";
-  const page = Math.max(0, Math.floor(Number(params.get("page")) || 0));
+  const page = Math.min(
+    params.get("size") === "50" ? 199 : 399,
+    Math.max(0, Math.floor(Number(params.get("page")) || 0)),
+  );
   const pageSize = params.get("size") === "50" ? 50 : 25;
   const [status, setStatus] = useState<MetadataStatus | null>(null);
   const [tables, setTables] = useState<MetadataEntity[]>([]);
   const [schemas, setSchemas] = useState<MetadataEntity[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loaded, setLoaded] = useState(0);
+  const [counts, setCounts] = useState<CatalogCounts | null>(null);
+  const [countsError, setCountsError] = useState(false);
+  const [unauthorized, setUnauthorized] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
-  const [adminToken, setAdminToken] = useState("");
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [showAdminToken, setShowAdminToken] = useState(false);
   const update = (values: Record<string, string>) =>
     setParams(
       (previous) => {
         const next = new URLSearchParams(previous);
-        next.delete("page");
+        if (!("page" in values)) next.delete("page");
         Object.entries(values).forEach(([key, value]) =>
           value ? next.set(key, value) : next.delete(key),
         );
@@ -82,18 +75,24 @@ export function MetadataExplorer() {
     let active = true;
     setError(null);
     setStatus(null);
+    setUnauthorized(false);
     metadataApi
       .metadataStatus()
       .then((value) => {
         if (active) setStatus(value);
       })
       .catch((reason) => {
-        if (active) setError((reason as Error).message);
+        if (active) {
+          setUnauthorized(
+            reason instanceof AdminApiError && reason.status === 401,
+          );
+          setError((reason as Error).message);
+        }
       });
     return () => {
       active = false;
     };
-  }, [refresh]);
+  }, [refresh, principal?.actor]);
   useEffect(() => {
     if (!status?.available) return;
     let active = true;
@@ -131,98 +130,79 @@ export function MetadataExplorer() {
   }, [status?.available, refresh]);
   useEffect(() => {
     if (!status?.available) return;
-    let active = true;
+    const controller = new AbortController();
     setLoading(true);
+    setError(null);
     setTables([]);
     setTotal(null);
-    setLoaded(0);
-    setError(null);
-    const load = async () => {
-      const all: MetadataEntity[] = [];
-      const visited = new Set<string>();
-      let cursor: string | undefined;
-      try {
-        do {
-          const options: {
-            after?: string;
-            limit: number;
-            databaseSchema?: string;
-          } = { after: cursor, limit: 100 };
-          if (schema) options.databaseSchema = schema;
-          const result = await metadataApi.metadataTables(options);
-          if (!active) return;
-          all.push(...result.items);
+    const timer = setTimeout(() => {
+      metadataApi
+        .searchTables(
+          {
+            databaseSchema: schema || undefined,
+            query,
+            missing: filter,
+            sort,
+            offset: page * pageSize,
+            limit: pageSize,
+          },
+          controller.signal,
+        )
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          setTables(result.items);
           setTotal(result.total);
-          setLoaded(all.length);
-          cursor = result.after || undefined;
-          if (cursor) {
-            if (visited.has(cursor))
-              throw new Error("자산 페이지가 반복됩니다.");
-            visited.add(cursor);
-          }
-        } while (cursor);
-        if (active)
-          setTables([
-            ...new Map(
-              all.map((item) => [item.reference.entity_id, item]),
-            ).values(),
-          ]);
-      } catch (reason) {
-        if (active) setError((reason as Error).message);
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    load();
+          if (page > 0 && page * pageSize >= result.total) update({ page: "" });
+        })
+        .catch((reason) => {
+          if (controller.signal.aborted) return;
+          setUnauthorized(
+            reason instanceof AdminApiError && reason.status === 401,
+          );
+          setError((reason as Error).message);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoading(false);
+        });
+    }, 250);
     return () => {
-      active = false;
+      clearTimeout(timer);
+      controller.abort();
     };
-  }, [schema, status?.available, refresh]);
-  const counts = useMemo(
-    () => ({
-      all: tables.length,
-      description: tables.filter((item) => !item.description?.trim()).length,
-      owner: tables.filter((item) => !item.owners.length).length,
-      tags: tables.filter((item) => !item.tags.length).length,
-    }),
-    [tables],
-  );
-  const filtered = useMemo(() => {
-    const text = query.trim().toLocaleLowerCase();
-    return tables
-      .filter(
-        (item) =>
-          (filter === "all" ||
-            (filter === "description" && !item.description?.trim()) ||
-            (filter === "owner" && !item.owners.length) ||
-            (filter === "tags" && !item.tags.length)) &&
-          (!text ||
-            [
-              item.name,
-              item.display_name,
-              item.description,
-              item.reference.fully_qualified_name,
-              ...item.owners.map((owner) =>
-                String(owner.displayName || owner.name || ""),
-              ),
-              ...item.tags.map((tag) => String(tag.tagFQN || tag.name || "")),
-            ].some((value) => value?.toLocaleLowerCase().includes(text))),
-      )
-      .sort(
-        (a, b) =>
-          (a.display_name || a.name).localeCompare(
-            b.display_name || b.name,
-            "ko",
-            { numeric: true },
-          ) * (sort === "asc" ? 1 : -1),
-      );
-  }, [tables, query, filter, sort]);
-  const lastPage = Math.max(0, Math.ceil(filtered.length / pageSize) - 1);
-  const currentPage = Math.min(page, lastPage);
-  const visible = filtered.slice(
-    currentPage * pageSize,
-    (currentPage + 1) * pageSize,
-  );
+  }, [
+    schema,
+    query,
+    filter,
+    sort,
+    page,
+    pageSize,
+    status?.available,
+    refresh,
+    principal?.actor,
+  ]);
+  useEffect(() => {
+    if (!status?.available) return;
+    const controller = new AbortController();
+    setCounts(null);
+    setCountsError(false);
+    const timer = setTimeout(() => {
+      metadataApi
+        .tableCounts(
+          { databaseSchema: schema || undefined, query },
+          controller.signal,
+        )
+        .then((value) => {
+          if (!controller.signal.aborted) setCounts(value);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setCountsError(true);
+        });
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [schema, query, status?.available, refresh, principal?.actor]);
   const openTable = (table: MetadataEntity) => {
     if (!table.reference.fully_qualified_name) return;
     const back = location.pathname + location.search;
@@ -230,73 +210,13 @@ export function MetadataExplorer() {
       `/admin/data-catalog/assets/${encodeURIComponent(table.reference.fully_qualified_name)}?${new URLSearchParams({ returnTo: back })}`,
     );
   };
-  if (error?.includes("(401)"))
+  if (unauthorized)
     return (
       <div className="metadata-empty">
         <Database size={28} />
         <h3>관리자 인증이 필요합니다</h3>
-        <p>관리자에게 받은 토큰으로 데이터 자산을 조회하세요.</p>
-        <form
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const token = normalizeAdminToken(adminToken);
-            if (!token || authBusy) return;
-            setAuthBusy(true);
-            setAuthError(null);
-            window.sessionStorage.setItem("teoria-admin-token", token);
-            try {
-              const next = await metadataApi.metadataStatus();
-              setStatus(next);
-              setAdminToken("");
-              setShowAdminToken(false);
-              setError(null);
-              setRefresh((value) => value + 1);
-            } catch (reason) {
-              window.sessionStorage.removeItem("teoria-admin-token");
-              setAuthError(
-                (reason as Error).message.includes("(401)")
-                  ? "운영 서버가 이 토큰을 거절했습니다. deploy/compose/.env의 TEORIA_ADMIN_API_TOKEN인지 확인하세요. OpenMetadata 토큰과는 다릅니다."
-                  : "서버에 연결하지 못했습니다. 잠시 후 다시 시도하세요.",
-              );
-            } finally {
-              setAuthBusy(false);
-            }
-          }}
-        >
-          <label>
-            관리자 토큰{" "}
-            <input
-              type={showAdminToken ? "text" : "password"}
-              autoComplete="off"
-              spellCheck={false}
-              disabled={authBusy}
-              value={adminToken}
-              onChange={(event) => {
-                setAdminToken(event.target.value);
-                setAuthError(null);
-              }}
-            />
-          </label>
-          <button
-            type="button"
-            disabled={authBusy}
-            aria-pressed={showAdminToken}
-            onClick={() => setShowAdminToken((value) => !value)}
-          >
-            {showAdminToken ? "토큰 숨기기" : "토큰 보기"}
-          </button>
-          <button
-            type="submit"
-            disabled={!normalizeAdminToken(adminToken) || authBusy}
-          >
-            {authBusy ? "연결 중…" : "연결"}
-          </button>
-          <p>
-            deploy/compose/.env의 TEORIA_ADMIN_API_TOKEN을 사용하세요. 설정 줄
-            전체를 붙여넣어도 됩니다.
-          </p>
-          {authError && <p role="alert">{authError}</p>}
-        </form>
+        <p>관리자 연결 후 데이터 자산을 다시 조회합니다.</p>
+        <button onClick={requestLogin}>관리자 연결</button>
       </div>
     );
 
@@ -344,7 +264,7 @@ export function MetadataExplorer() {
                   }
                 >
                   {item.label}
-                  <small>{loading || error ? "—" : counts[item.id]}</small>
+                  <small>{counts?.[item.id] ?? "—"}</small>
                 </button>
               ))}
           </nav>
@@ -389,10 +309,10 @@ export function MetadataExplorer() {
         }
         description={
           loading
-            ? `불러오는 중 · ${loaded}${total === null ? "" : ` / ${total}`}개`
+            ? "자산을 조회하고 있습니다…"
             : error
               ? "조회 실패"
-              : `${filtered.length}개 표시 · 선택 범위 ${tables.length}개`
+              : `${tables.length}개 표시 · 검색 결과 ${total ?? 0}개`
         }
         actions={
           <button
@@ -414,7 +334,7 @@ export function MetadataExplorer() {
       <div className="page-controls">
         <span className="workspace-muted">
           {filters.find((item) => item.id === filter)?.label} ·{" "}
-          {loading ? "확인 중" : `${filtered.length}개`}
+          {loading ? "확인 중" : `${total ?? 0}개`}
         </span>
         <label>
           정렬
@@ -449,7 +369,7 @@ export function MetadataExplorer() {
             </tr>
           </thead>
           <tbody>
-            {visible.map((table) => (
+            {tables.map((table) => (
               <tr
                 key={table.reference.entity_id}
                 onClick={() => openTable(table)}
@@ -529,7 +449,7 @@ export function MetadataExplorer() {
           </div>
         ) : (
           !error &&
-          !visible.length && (
+          !tables.length && (
             <div className="asset-catalog-empty">
               {query || filter !== "all"
                 ? "조건에 맞는 자산이 없습니다."
@@ -543,10 +463,22 @@ export function MetadataExplorer() {
           )
         )}
       </div>
+      {countsError && (
+        <p role="status">
+          누락 항목 집계를 조회하지 못했습니다. 자산 목록은 계속 사용할 수
+          있습니다.
+        </p>
+      )}
+      {(total ?? 0) > 10000 && (
+        <p role="status">
+          검색 결과 중 첫 10,000개까지 탐색할 수 있습니다. 검색어나 스키마로
+          범위를 좁히세요.
+        </p>
+      )}
       <CatalogPagination
-        page={currentPage}
+        page={page}
         pageSize={pageSize}
-        total={filtered.length}
+        total={Math.min(total ?? 0, 10000)}
         loading={loading}
         error={!!error}
         onPageChange={(value) => update({ page: String(value) })}

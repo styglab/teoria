@@ -89,3 +89,23 @@ async def test_shared_context_nodes_are_sent_once_in_a_bounded_model_call(saved_
     model=Model()
     summary=await extract_requirements('doc',saved_parse,tmp_path/'output',model,None)
     assert model.calls==1 and summary['attributes']==2
+
+
+async def test_general_clause_is_retained_without_a_model_call_or_partial(saved_parse,tmp_path):
+    document=json.loads((saved_parse/'document.json').read_text())
+    document['nodes'][0]['text']='제작사는 안전 관련 법령을 준수할 것'
+    document['document_assessment']={'node_roles':{'n':'general_requirement'}}
+    (saved_parse/'document.json').write_text(json.dumps(document))
+    graph=json.loads((saved_parse/'graph.json').read_text())
+    clause={'id':'clause_n','observation_type':'source_clause','category':'other',
+        'text':document['nodes'][0]['text'],'subject_ids':[], 'evidence':[{'node_id':'n'}]}
+    graph['requirements']=[clause]
+    (saved_parse/'graph.json').write_text(json.dumps(graph))
+    class Model:
+        async def generate(self,*args,**kwargs):raise AssertionError('general terms need no model decomposition')
+    summary=await extract_requirements('doc',saved_parse,tmp_path/'output',Model(),None)
+    assert summary['other_requirement_clauses']==1 and summary['attributes']==0
+    assert summary['uncovered_spec_fragments']==0 and summary['recovery_passes']==0
+    assert summary['status']=='needs_review' and summary['chunks']==0
+    graph=json.loads((tmp_path/'output/attribute_graph.json').read_text())
+    assert graph['requirements']==[clause]

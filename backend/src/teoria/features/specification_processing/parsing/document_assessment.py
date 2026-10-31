@@ -4,7 +4,7 @@ import re
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-Role=Literal['technical_requirement','delivery_requirement','target_mention','heading','table_of_contents','procedure','template','other','unknown']
+Role=Literal['technical_requirement','delivery_requirement','general_requirement','target_mention','heading','table_of_contents','procedure','template','other','unknown']
 
 class PassageGroup(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -24,7 +24,17 @@ proof of document kind. Empty bidder comparison forms, compliance confirmation s
 procedures are not technical specifications. Mixed documents may contain real technical requirements;
 retain those and delivery, installation, warranty, training and deliverable requirements.
 Group every supplied node exactly once. technical_requirement is a product/component constraint;
-delivery_requirement is an actual delivery/service/document obligation. target_mention names a target
+delivery_requirement is an actual delivery/service/document obligation.
+general_requirement is a blanket legal/compliance/safety principle, contract responsibility or rule
+of precedence. Preserve these as other requirements, not product properties. Delivery, installation,
+warranty and submission clauses are other requirements too; do not split their actor/action/modality.
+Blanket obligations to use legally approved products or products approved in their country of manufacture,
+without a named product/standard, are general_requirement. Do not assume they apply to every component.
+Specific product constraints remain technical_requirement: load capacity, dimensions, material,
+cleanability, electrical/installation compatibility, safety performance, named product certification,
+food hygiene/storage and software licence limits. A reference to law or safety alone is NOT grounds
+to discard a concrete product constraint. If a node mixes product specifications with general/delivery
+clauses, classify it as technical_requirement so the product constraints still reach extraction. target_mention names a target
 without asserting an additional condition. heading is a section, column or property label WITHOUT its value/condition, never a substantive condition.
 A numbered inventory item name alone is target_mention; its separate quantity/value cell is a requirement.
 Food, clothing, materials and standalone software are also procurement targets, not only equipment.
@@ -83,13 +93,14 @@ async def assess_document(document,runner,out):
         excluded=(result.document_kind=='template' and all(role in {'heading','table_of_contents','procedure','template','other','target_mention'} for role in roles.values())) or (
             result.document_kind=='procurement_notice' and not technical and 'unknown' not in roles.values())
         return {'document_kind':result.document_kind,'node_roles':roles,'excluded':excluded,
-                'status':'needs_review' if 'unknown' in roles.values() or result.document_kind=='unknown' or (not excluded and not any(r in {'technical_requirement','delivery_requirement'} for r in roles.values())) else 'classified',
+                'status':'needs_review' if 'unknown' in roles.values() or result.document_kind=='unknown' or (not excluded and not any(r in {'technical_requirement','delivery_requirement','general_requirement'} for r in roles.values())) else 'classified',
                 'rationale':result.rationale,'clause_groups':clauses}
     except Exception as exc:
         return {**fallback,'reason':'document_assessment_failed','error_type':type(exc).__name__}
 
 
-def extraction_node_ids(document,*,headings=False):
+def extraction_node_ids(document,*,headings=False,specifications_only=False):
     roles=document.get('document_assessment',{}).get('node_roles',{})
     excluded={'procedure','template','other','table_of_contents'} | (set() if headings else {'heading'})
+    if specifications_only:excluded|={'delivery_requirement','general_requirement'}
     return {n['node_id'] for n in document['nodes'] if roles.get(n['node_id'],'unknown') not in excluded}

@@ -7,6 +7,13 @@ from teoria.features.specification_processing.models import SpecificationRun
 
 
 def run_command(args):
+    if args.specification_command == 'index-catalog':
+        from teoria.features.specification_processing.catalog.indexing import index_catalog
+        if not 1 <= args.limit <= 1000:
+            raise ValueError('limit must be between 1 and 1000')
+        result = asyncio.run(index_catalog(args.limit))
+        print(json.dumps(result))
+        return 1 if result['failed_runs'] else 0
     if args.specification_command == 'dictionary-maintain':
         from teoria.features.specification_processing.normalization.dictionary_maintenance import maintain_dictionary
         result = asyncio.run(maintain_dictionary(json.loads(args.manifest.read_text())))

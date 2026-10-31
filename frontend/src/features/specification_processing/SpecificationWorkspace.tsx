@@ -1,3 +1,8 @@
+import {
+  SpecificationCatalog,
+  CatalogDocumentView,
+  DocumentComparison,
+} from "./SpecificationCatalog";
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FileText, RefreshCw, Plus } from "lucide-react";
@@ -24,14 +29,51 @@ const states: Record<string, string> = {
   extracted: "추출 완료",
 };
 const modes: Record<string, string> = {
-  standard_management: "추출 표준 작성",
+  standard_management: "규격서 구조화",
   document_processing: "고정 표준 적용",
 };
 
 export function SpecificationWorkspace() {
+  const [params] = useSearchParams();
+  if (
+    params.get("run") ||
+    params.get("new") ||
+    params.get("flow") ||
+    params.get("view") === "runs"
+  )
+    return <RunWorkspace />;
+  if (params.get("document"))
+    return (
+      <CatalogDocumentView
+        key={params.get("document")}
+        id={params.get("document")!}
+      />
+    );
+  if (params.get("compare"))
+    return <DocumentComparison ids={params.get("compare")!.split(",")} />;
+  return <SpecificationCatalog />;
+}
+function RunWorkspace() {
   const [params, setParams] = useSearchParams();
   const run = params.get("run");
-  const tab = params.get("tab") || "evidence";
+  const requestedTab = params.get("tab");
+  const tab =
+    requestedTab === "documents" || requestedTab === "artifacts"
+      ? requestedTab
+      : "evidence";
+  useEffect(() => {
+    if (requestedTab === "review" || params.has("review_revision")) {
+      setParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          if (next.get("tab") === "review") next.set("tab", "evidence");
+          next.delete("review_revision");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [requestedTab, params, setParams]);
   const creating = params.get("new") === "1";
   const page = Math.max(0, Number(params.get("page")) || 0);
   const size = params.get("size") === "50" ? 50 : 25;
@@ -191,7 +233,7 @@ export function SpecificationWorkspace() {
     >
       <PageHeader
         title="FormatID"
-        description="규격서 기반 물품 구조화·분석. 물품·구성품의 관계와 규격·속성을 탐색하고 원문 근거를 확인합니다."
+        description="규격서별 처리 결과에서 엔티티·관계·속성과 원문 근거를 확인합니다."
         actions={
           <>
             {!creating && (
@@ -237,7 +279,7 @@ export function SpecificationWorkspace() {
           </button>
           <ProcessingForm
             onStarted={(flowId, runId) =>
-              update({ new: "", flow: flowId, pending: runId })
+              update({ new: "", view: "runs", flow: flowId, pending: runId })
             }
           />
         </>
@@ -245,7 +287,7 @@ export function SpecificationWorkspace() {
         <>
           <button
             className="breadcrumb-link"
-            onClick={() => update({ run: "", tab: "" })}
+            onClick={() => update({ run: "", tab: "", document: "" })}
           >
             ← 처리 목록
           </button>
@@ -280,7 +322,7 @@ export function SpecificationWorkspace() {
                 value={tab}
                 onChange={(tab) => update({ tab })}
                 items={[
-                  { id: "evidence", label: "분석" },
+                  { id: "evidence", label: "규격서 결과" },
                   { id: "documents", label: "문서별 결과" },
                   { id: "artifacts", label: "산출물·실행 정보" },
                 ]}
@@ -300,7 +342,19 @@ export function SpecificationWorkspace() {
                         <tbody>
                           {detail.documents.map((d) => (
                             <tr key={d.document_id}>
-                              <td>{d.document_id}</td>
+                              <td>
+                                <button
+                                  className="operations-link"
+                                  onClick={() =>
+                                    update({
+                                      tab: "evidence",
+                                      document: d.document_id,
+                                    })
+                                  }
+                                >
+                                  {d.document_id}
+                                </button>
+                              </td>
                               <td>{states[d.status] || d.status}</td>
                               <td>
                                 <dl className="specification-summary">
@@ -386,7 +440,10 @@ export function SpecificationWorkspace() {
                 )}
                 {artifact && tab === "evidence" && (
                   <AnalysisExplorer
+                    key={run}
                     value={artifact}
+                    documentId={params.get("document") || ""}
+                    onDocumentChange={(document) => update({ document })}
                     normalization={normalization}
                     mappingStatus={mappingStatus}
                   />
@@ -450,6 +507,7 @@ export function SpecificationWorkspace() {
                             tab: "",
                             flow: "",
                             pending: "",
+                            document: "",
                           })
                         }
                       >
@@ -596,9 +654,7 @@ function ProcessingForm({
           onChange={(event) => setMode(event.target.value)}
           disabled={busy}
         >
-          <option value="standard_management">
-            문서 추출 및 표준 후보 작성
-          </option>
+          <option value="standard_management">규격서 구조화 추출</option>
           <option value="document_processing">고정 표준 적용</option>
         </select>
       </label>
@@ -648,8 +704,8 @@ function ProcessingForm({
           <small>비우면 Worker 설정을 사용합니다.</small>
         </label>
         <p>
-          추출된 의미 후보는 자동 승인하지 않습니다. 검토 후 게시 절차를
-          진행하세요.
+          처리 결과에서 문서별 엔티티·관계·속성과 원문 근거를 확인할 수
+          있습니다.
         </p>
       </details>
       <h3>3. 실행</h3>

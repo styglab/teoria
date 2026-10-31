@@ -7,8 +7,10 @@ import time
 import unicodedata
 from pathlib import Path
 from typing import Literal
-from pydantic import BaseModel,ConfigDict
+from pydantic import BaseModel,ConfigDict,Field
 from teoria.features.specification_processing.extraction.value_normalization import UNITS
+
+from teoria.features.specification_processing.extraction.target_names import TargetName,validate_target_names,apply_target_names
 
 class Record(BaseModel):model_config=ConfigDict(extra='forbid')
 Kind=Literal['product','material','equipment','software','activity','group','document','unknown']
@@ -24,6 +26,7 @@ class Inventory(Record):
     issues:list[str]
 
 class Details(Record):
+    names:list[TargetName]=Field(default_factory=list)
     # Additional target observation: id, node, original name; never recreate frozen items.
     additional:list[tuple[str,str,str]]
     types:list[tuple[str,Kind,Literal['existing','required','unknown']]]
@@ -48,6 +51,7 @@ INVENTORY_PROMPT=BASE+'''구매 범위의 기준 목록만 먼저 찾는다. 상
 우선순위: 명시적 공급 목록/공급 범위, 장비의 구성/장비구성 목록, 명시적 구성 규격표, 마지막으로 기술 절의 주요 항목.
 표지의 품명·수량 표가 1 System/1 set의 통합 구매를 뜻하고 별도 장비구성 목록이 있으면 표지는 root, 구성 목록을 items로 한다.
 문서에서 기능·용도·성능 설명을 구성 목록과 혼동하지 않는다. 적합한 목록이 없으면 technical_sections 또는 unresolved를 사용한다.
+명칭에는 가능하면 대상 자체의 이름을 쓰고 용도·설명·영문 병기를 임의로 이어붙이지 않는다. 식별에 필요한 모델·품종·함량·가공 상태는 유지한다.
 root=[대표 node, 구매 대상 원문명, 명시 수량 또는 null, 원문 단위 또는 null, 근거 node 목록]. root ID는 코드가 root로 고정한다.
 items 각 배열=[i1 같은 고유 ID, 해당 node, 항목 원문명, 수량 또는 null, 단위 또는 null, 근거 node 목록]. 원문 순서대로 빠짐없이 기록한다.
 항목명과 단위·수량이 다른 셀/문단에 나뉘면 모두 근거 node로 연결한다. 문서에 없는 수량은 null이다.
@@ -63,7 +67,8 @@ DETAIL_PROMPT=BASE+'''확정된 root와 inventory.items가 1차 골격이다. �
 상세 성능 및 규격 절은 기존 1차 항목을 설명한다. 같은 이름을 다시 additional에 만들지 말고 기존 항목 ID로 연결한다.
 공급표가 포괄 묶음이고 기술 사양에 그 세부 대상들이 있으면 문맥으로 대응시켜 specification_for(세부 대상→포괄 항목)를 만든다.
 이름이 정확히 같지 않다는 이유만으로 모두 형제로 만들지 않는다. 문맥 해석이면 interpreted다. 수량 배분은 별도이며 추정하지 않는다.
-additional=[새 고유 ID, 근거 node, 원문 명칭] 목록. 문서에 명시된 물품·부속품·원재료·포장·소프트웨어·작업·문서를 보존한다.
+additional=[새 고유 ID, 근거 node, 원문 명칭] 목록.
+표의 품명·구성항목 열과 본문의 표현이 같은 대상을 직접 가리키면 표의 명칭을 대표명으로 우선하고, 대응하는 규격 본문의 다른 표현은 같은 ID의 names.aliases에 보존한다. 다른 대상인지 불명확하면 이 규칙으로 합치지 않는다. 문서에 명시된 물품·부속품·원재료·포장·소프트웨어·작업·문서를 보존한다.
 기존 1차 항목의 다른 표현·상세 절 제목을 중복 생성하지 않는다. 단 실제 동일 여부가 불명확한 기존/별도 대상은 분리하고 same_target_as+ambiguous로 둔다.
 문서에 명시된 하위 요구 대상은 엔티티로 표현할 수 있다. 수치·성능·재질 표현만으로 독립 장비를 만들지 않는다. 독립 공급·구성 근거가 있으면 해당 대상도 엔티티가 될 수 있고, 불명확하면 unknown으로 남긴다.
 제목·섹션 계층 자체는 도메인 엔티티가 아니다. 분석/데이터처리/기기컨트롤 같은 기능 구획은 원문 scopes로 남기고 제품으로 만들지 않는다.
@@ -89,6 +94,15 @@ service_for는 activity로 분류한 작업→작업대상이다. 장비→작�
 구성 근거 node를 반드시 지정한다. 공급 목록에 함께 있다는 사실이나 표·절 제목만으로 구성품이라고 추정하지 않는다.
 작업·납품 문서·소프트웨어를 장비의 물리 구성품으로 넣지 않는다. 작업·교육·설치·보증·기술지원의 대상은 service_for로 표현한다. 대상이나 적용 범위가 모호한 설비는 이름만으로 관계를 확정하지 않는다.
 통합 구매라는 이유로 물리적 내부 장착을 추정하지 않는다. 판단이 불확실하면 ambiguous 또는 unknown으로 남긴다. 없는 부품을 제품 상식으로 채우지 않는다.
+names는 원문 명칭에 설명·영문 병기가 섞였거나 같은 대상의 다른 표현을 원문에서 확인한 경우만 작성한다.
+각 항목은 entity_id, name, aliases, descriptions다. name은 고정 원문 이름에 실제 포함된 연속 구절이다.
+고정 inventory의 원문 이름·ID·수량 자체는 바꾸지 않는다. 표시할 핵심 명칭만 분리하고 원문 이름은 코드가 보존한다.
+목적·용도·시험 구분·가스 목록 같은 설명은 descriptions=[node ID,원문 구절]로, 영문 병기나 같은 대상의 다른 명칭은 aliases=[node ID,원문 명칭]로 남긴다.
+product/material 유형은 식별 조건을 추측해 분리하지 말고 원문 이름 전체를 name에 유지한다. 다른 표현과 설명은 원문 이름을 줄이지 않고 추가할 수 있다.
+영문·괄호를 기계적으로 지우지 않는다. 물품을 구별하는 모델·품종·저지방 같은 가공 상태·함량·규격은 이름에서 없애지 않는다.
+표의 품명과 바로 대응하는 규격 셀에서 같은 물품을 다르게 부르는 경우 그 원문을 같은 ID의 별칭으로 연결한다.
+다른 절의 유사 이름을 자동으로 합치거나 상위/하위 대상을 별칭으로 만들지 않는다. 동일 여부가 불명확하면 별칭을 쓰지 말고 기존 보류 관계 방식으로 남긴다.
+별칭은 새로운 납품 항목이나 수량을 만들지 않는다. source_structure의 표 행·절 문맥과 직접 대응 근거를 확인한다.
 scopes=[대상 ID,그 대상에 적용되는 상세 원문 node ID 목록]. 원문 전체를 재출력하지 않는다.
 표의 헤더·행·열·병합 셀과 절 문맥을 이용한다. 작은 대상에 직접 적용되는 구절은 해당 하위 대상에 귀속시킨다.
 공통 납품/보증/교육 조건은 root 범위이며 모든 구성품에 복제하지 않는다. 여러 대상에 실제 적용되면 여러 scopes에 같은 node를 참조할 수 있다.
@@ -132,6 +146,7 @@ def project_root_identifier(value,inventory):
     result.types=[(fix(id),kind,state) for id,kind,state in value.types]
     result.relations=[(fix(a),fix(b),kind,basis,refs) for a,b,kind,basis,refs in value.relations]
     result.scopes=[(fix(id),refs) for id,refs in value.scopes]
+    result.names=[n.model_copy(update={'entity_id':fix(n.entity_id)}) for n in value.names]
     return result,alias
 
 
@@ -252,6 +267,9 @@ def validate_details(value,inventory,document):
     if cyclic_relation_indexes(value.relations):errors.append('cyclic hierarchy')
     for id,refs in value.scopes:
         if id not in all_ids or not set(refs)<=nodes.keys()-navigation:errors.append('invalid scope assignment')
+    labels={id:label for id,_,label,*_ in [('root',*inventory.root),*inventory.items]}
+    labels.update({id:label for id,_,label in value.additional})
+    errors.extend(validate_target_names(value.names,labels,nodes,nodes.keys()-navigation,kinds=types))
     return errors
 
 
@@ -273,6 +291,7 @@ def materialize(inventory,details,document,held_relations=()):
             quantities.append({'entity_id':id,'requirement_id':quantity_id,'value_raw':quantity,'unit_raw':unit,'source_node_ids':refs,'basis':'explicit_inventory','scope':'this target only'})
             requirements.append({'id':quantity_id,'text':quantity+(unit or ''),'subject_ids':[id],'value_raw':quantity,'unit_raw':unit,'operator_raw':None,'normalized_unit':UNITS.get(unit),
                                  'observation_type':'inventory_quantity','evidence':evidence(refs),'review_status':'needs_review'})
+    apply_target_names(entities,details.names,document)
     relations=[]
     for item in inventory.items:
         relations.append({'id':f'rel_{len(relations)+1:03}','source_id':item[0],'target_id':'root','kind':'in_procurement_scope','basis':'explicit','evidence':evidence(inventory.basis_node_ids+item[5]),'review_status':'needs_review'})
@@ -287,7 +306,7 @@ def materialize(inventory,details,document,held_relations=()):
         if not text.strip() or node['kind']=='image':continue
         subjects=list(dict.fromkeys(ownership.get(node['node_id'],[])))
         requirements.append({'id':'clause_'+node['node_id'],'text':text,'subject_ids':subjects,'value_raw':None,'unit_raw':None,'operator_raw':None,
-                             'observation_type':'source_clause','atomic_requirement':False,'evidence':evidence([node['node_id']]),'review_status':'needs_review'})
+                             'observation_type':'source_clause','category':'other' if document.get('document_assessment',{}).get('node_roles',{}).get(node['node_id']) in {'general_requirement','delivery_requirement'} else 'specification','atomic_requirement':False,'evidence':evidence([node['node_id']]),'review_status':'needs_review'})
     held=[]
     for index,proposal in enumerate(held_relations):
         source,target,kind,basis,refs=proposal['relation']

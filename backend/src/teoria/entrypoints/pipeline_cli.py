@@ -204,6 +204,8 @@ def main() -> int:
     specification_subparsers = specification_parser.add_subparsers(
         dest="specification_command", required=True
     )
+    specification_index = specification_subparsers.add_parser("index-catalog", help="index existing document results without reprocessing")
+    specification_index.add_argument("--limit", type=int, default=100)
     specification_run = specification_subparsers.add_parser(
         "run", help="execute a specification Prefect flow"
     )

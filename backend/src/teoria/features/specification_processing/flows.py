@@ -76,6 +76,7 @@ async def execute_specification_run(request:SpecificationRun, *, extra_artifacts
             selection=await tasks.select_and_map_standard(request,temporary,extracted_ref,dictionary) # 07
             normalized=await tasks.load(Path(temporary)/'normalized.json')
             report_ref=await tasks.persist_report(request,temporary,normalized['standard_version']) # 08
+            document_refs=await tasks.persist_document_results(request,temporary) # 09
             corpus=await tasks.load(Path(temporary)/'extracted.json');work=await tasks.load(Path(temporary)/'work.json')
             document_results=[]
             for d in corpus['documents']:
@@ -100,7 +101,7 @@ async def execute_specification_run(request:SpecificationRun, *, extra_artifacts
             state='completed' if all_excluded else 'failed' if not corpus['documents'] else 'partial' if partial else 'completed'
             diagnostics=await working.publish()
             result=RunResult(run_id=request.run_id,status=state,
-                artifacts=sorted([ArtifactRef.model_validate(a) for a in [*extra_artifacts,*diagnostics,*(e['artifact'] for e in work),extracted_ref,*dictionary['artifacts'],*selection['artifacts'],report_ref]],key=lambda a:a.key),
+                artifacts=sorted([ArtifactRef.model_validate(a) for a in [*extra_artifacts,*document_refs,*diagnostics,*(e['artifact'] for e in work),extracted_ref,*dictionary['artifacts'],*selection['artifacts'],report_ref]],key=lambda a:a.key),
                 document_results=sorted(document_results,key=lambda d:d['document_id']),standard=StandardReference.model_validate(selection['standard']),
                 summary={'documents':len(corpus['documents']),'failed_documents':sum(d.get('disposition')!='excluded' for d in corpus['unavailable_documents']),
                     'excluded_documents':sum(d.get('disposition')=='excluded' for d in corpus['unavailable_documents']),

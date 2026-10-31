@@ -3,9 +3,11 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   type ReactNode,
 } from "react";
 import { AdminLoginDialog } from "./AdminLoginDialog";
+import { AdminApiError, SESSION_EXPIRED_EVENT } from "../../api/http_client";
 import { authApi } from "../../api/auth";
 
 type Principal = { actor: string; roles: string[] };
@@ -17,12 +19,36 @@ export const useAdminAccess = () => useContext(AccessContext);
 export function AdminAccessProvider({ children }: { children: ReactNode }) {
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [open, setOpen] = useState(false);
+  const generation = useRef(0);
   useEffect(() => {
+    let active = true;
+    const current = generation.current;
+    const expired = () => {
+      generation.current += 1;
+      setPrincipal(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, expired);
     if (window.sessionStorage.getItem("teoria-admin-token"))
       authApi
         .session()
-        .then(setPrincipal)
-        .catch(() => window.sessionStorage.removeItem("teoria-admin-token"));
+        .then((value) => {
+          if (active && current === generation.current) setPrincipal(value);
+        })
+        .catch((reason) => {
+          if (
+            active &&
+            current === generation.current &&
+            reason instanceof AdminApiError &&
+            [401, 403].includes(reason.status)
+          ) {
+            window.sessionStorage.removeItem("teoria-admin-token");
+            setPrincipal(null);
+          }
+        });
+    return () => {
+      active = false;
+      window.removeEventListener(SESSION_EXPIRED_EVENT, expired);
+    };
   }, []);
 
   return (
@@ -36,6 +62,7 @@ export function AdminAccessProvider({ children }: { children: ReactNode }) {
             <span>관리자 · {principal.actor}</span>
             <button
               onClick={() => {
+                generation.current += 1;
                 window.sessionStorage.removeItem("teoria-admin-token");
                 setPrincipal(null);
               }}
@@ -54,6 +81,7 @@ export function AdminAccessProvider({ children }: { children: ReactNode }) {
         <AdminLoginDialog
           onClose={() => setOpen(false)}
           onAuthenticated={(value) => {
+            generation.current += 1;
             setPrincipal(value);
             setOpen(false);
           }}

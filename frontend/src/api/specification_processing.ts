@@ -1,4 +1,4 @@
-import { getJson } from "./http_client";
+import { expireSession, getJson } from "./http_client";
 export type ProcessingRun = {
   run_id: string;
   mode: string;
@@ -61,12 +61,72 @@ export const processingApi = {
         body: file,
       },
     );
-    if (!response.ok)
+    if (!response.ok) {
+      expireSession(response, token);
       throw new Error(
         response.status === 413
           ? "파일은 40MB 이하로 선택하세요."
           : `문서를 등록하지 못했습니다 (${response.status}). 파일 형식과 연결 상태를 확인하세요.`,
       );
+    }
     return response.json();
   },
+};
+
+export type CatalogDocument = {
+  catalog_id: string;
+  filename: string;
+  classification_code: string | null;
+  notice_number: string | null;
+  source_sha256: string | null;
+  run_id: string;
+  document_id: string;
+  status: string;
+  latest_status: string;
+  latest_run_status: string;
+  latest_run_id: string;
+  latest_started_at: string;
+  started_at: string;
+  attempt_count: number;
+  result_available: boolean;
+  result_summary: Record<string, unknown>;
+};
+export type DocumentResult = {
+  document: CatalogDocument;
+  result: null | {
+    extracted: Record<string, unknown>;
+    normalization: Record<string, unknown> | null;
+    result_kind: string;
+    document_id: string;
+  };
+};
+const catalogRoot = "/specification-processing/catalog";
+export const documentCatalogApi = {
+  classifications: (query = "", offset = 0) =>
+    getJson<{
+      items: Array<{
+        classification_code: string | null;
+        documents: number;
+        results: number;
+      }>;
+      total: number;
+      documents: number;
+    }>(
+      `${catalogRoot}/classifications?${new URLSearchParams({ query, offset: String(offset) })}`,
+    ),
+  documents: (params: URLSearchParams) =>
+    getJson<{ items: CatalogDocument[]; total: number }>(
+      `${catalogRoot}/documents?${params}`,
+    ),
+  result: (id: string) =>
+    getJson<DocumentResult>(
+      `${catalogRoot}/documents/${encodeURIComponent(id)}/result`,
+    ),
+  history: (id: string, page = 0) =>
+    getJson<{
+      items: Array<{ run_id: string; status: string; started_at: string }>;
+      total: number;
+    }>(
+      `${catalogRoot}/documents/${encodeURIComponent(id)}/history?offset=${page * 25}&limit=25`,
+    ),
 };

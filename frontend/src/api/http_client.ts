@@ -28,6 +28,19 @@ const requestMessages: Record<string, string> = {
     "저장된 산출물의 checksum이 일치하지 않습니다. 원본과 실행 이력을 확인하세요.",
 };
 
+export const SESSION_EXPIRED_EVENT = "teoria-admin-session-expired";
+
+export function expireSession(response: Response, token: string | null) {
+  if (
+    response.status === 401 &&
+    token &&
+    window.sessionStorage.getItem("teoria-admin-token") === token
+  ) {
+    window.sessionStorage.removeItem("teoria-admin-token");
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  }
+}
+
 async function responseError(response: Response): Promise<AdminApiError> {
   let message = `Admin API 요청 실패 (${response.status})`;
   let code: string | null = null;
@@ -50,13 +63,20 @@ async function responseError(response: Response): Promise<AdminApiError> {
   return new AdminApiError(message, response.status, code);
 }
 
-export async function getJson<T>(path: string): Promise<T> {
+export async function getJson<T>(
+  path: string,
+  signal?: AbortSignal,
+): Promise<T> {
   const token = window.sessionStorage.getItem("teoria-admin-token");
   const response = await fetch(`${API_ROOT}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     cache: "no-store",
+    signal,
   });
-  if (!response.ok) throw await responseError(response);
+  if (!response.ok) {
+    expireSession(response, token);
+    throw await responseError(response);
+  }
   return response.json() as Promise<T>;
 }
 
@@ -70,7 +90,10 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
     },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw await responseError(response);
+  if (!response.ok) {
+    expireSession(response, token);
+    throw await responseError(response);
+  }
   return response.json() as Promise<T>;
 }
 
@@ -84,6 +107,9 @@ export async function patchJson<T>(path: string, body: unknown): Promise<T> {
     },
     body: JSON.stringify(body),
   });
-  if (!response.ok) throw await responseError(response);
+  if (!response.ok) {
+    expireSession(response, token);
+    throw await responseError(response);
+  }
   return response.json() as Promise<T>;
 }

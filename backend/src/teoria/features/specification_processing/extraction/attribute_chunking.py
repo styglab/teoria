@@ -14,7 +14,7 @@ def make_chunks(graph,document,target_chars=2200,fragment_chars=1100):
             owners.setdefault(evidence['node_id'],[]).append(entity['id'])
     # Source completeness does not depend on whether an upstream graph used a cell as a label/list.
     from teoria.features.specification_processing.parsing.document_assessment import extraction_node_ids
-    eligible=extraction_node_ids(document)
+    eligible=extraction_node_ids(document,specifications_only=True)
     for node_id,node in nodes.items():
         if node_id not in eligible:continue
         text=node['text']

@@ -207,3 +207,57 @@ async def test_semantic_judgment_receives_source_property_type_and_operator(tmp_
     await resolve_attribute_semantics(document,graph,[attribute],Judge(),tmp_path)
     assert attribute['semantic_role']=='requirement_candidate'
     assert attribute['value_raw']=='200' and attribute['unit_raw']=='kg' and attribute['operator']=='gte'
+
+
+async def test_ambiguous_common_approval_clause_is_preserved_without_applying_to_all(tmp_path):
+    text='기타의 것은 제조국가에서 검정을 필한 제품을 사용하여야 한다.'
+    document={'nodes':[{'node_id':'n','kind':'paragraph','text':text,'native_ref':'/n'}]}
+    graph={'entities':[{'id':'root','name':'차량','kind':'equipment'}],'relations':[],'requirements':[]}
+    a=decode(text,'제조국가에서 검정을 필한 제품','product_certification','text')
+    attributes=[a]
+    class Judge:
+        async def generate(self,prompt,request,out):
+            return {'resolutions':[{'attribute_id':a['id'],'subject_ids':[],'role':'unknown','scope':'unknown',
+                'evidence_node_ids':['n'],'other_requirement':True}]}
+    summary=await resolve_attribute_semantics(document,graph,attributes,Judge(),tmp_path)
+    assert attributes==[] and summary['unresolved']==0
+    clause=graph['requirements'][0]
+    assert clause['text']==text and clause['category']=='other'
+    assert clause['subject_ids']==[] and clause['application_scope']=='unspecified'
+    assert clause['evidence'][0]['node_id']=='n'
+
+
+async def test_unknown_numeric_requirement_is_not_hidden_as_a_general_clause(tmp_path):
+    text='허용하중 200kg 이상'
+    document={'nodes':[{'node_id':'n','kind':'paragraph','text':text}]}
+    graph={'entities':[{'id':'cpu','name':'진료대','kind':'equipment'}],'relations':[]}
+    a=decode(text,'200','load_capacity','number');attributes=[a]
+    class Judge:
+        async def generate(self,prompt,request,out):
+            return {'resolutions':[{'attribute_id':a['id'],'subject_ids':[],'role':'unknown','scope':'unknown',
+                'evidence_node_ids':['n'],'other_requirement':True}]}
+    summary=await resolve_attribute_semantics(document,graph,attributes,Judge(),tmp_path)
+    assert len(attributes)==1 and attributes[0]['value_raw']=='200'
+    assert summary['unresolved']==1 and not graph.get('requirements')
+
+
+@pytest.mark.parametrize('text,value,key',[
+    ('벽체와 바닥 등의 접합부는 라운드(곡면) 코너로 마감하여 오염물 및 세척수가 고이지 않고 청소·소독이 용이하도록 할 것',
+     '라운드(곡면) 코너','joint_finish'),
+    ('오염물의 흡수·잔류가 최소화되고 세척·소독이 용이한 구조로 제작할 것',
+     '세척·소독이 용이한 구조','cleanability'),
+])
+async def test_product_itself_can_own_a_direct_condition_without_copying_it_to_all_parts(tmp_path,text,value,key):
+    document={'nodes':[{'node_id':'n','kind':'cell','text':text,'native_ref':'/n'}]}
+    graph={'entities':[{'id':'root','name':'차량','kind':'equipment'},
+                       {'id':'floor','name':'바닥','kind':'equipment'},
+                       {'id':'wall','name':'벽면','kind':'equipment'}],'relations':[]}
+    attribute=decode(text,value,key,'text');attribute['subject_ids']=['root'];attributes=[attribute]
+    class Judge:
+        async def generate(self,prompt,request,out):
+            return {'resolutions':[{'attribute_id':attribute['id'],'subject_ids':['root'],
+                'role':'requirement_candidate','scope':'per_item','evidence_node_ids':['n']}]}
+    await resolve_attribute_semantics(document,graph,attributes,Judge(),tmp_path)
+    assert len(attributes)==1 and attributes[0]['subject_ids']==['root']
+    assert attributes[0]['semantic_scope']=='per_item' and attributes[0]['value_raw']==value
+    assert not graph.get('requirements')

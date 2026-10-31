@@ -28,9 +28,15 @@
 조회 실패를 빈 값으로 처리하지 않는다. [자산 맥락](metadata/asset_context.md) ·
 [Codex 진단](metadata/asset_assessment.md) · [제안·적용](metadata/suggestions.md)을 참고한다.
 
+자산 목록은 `GET /v1/admin/metadata/table-search`에 검색어·스키마·누락 유형·정렬·offset·limit를
+전달한다. `GET /v1/admin/metadata/table-search/counts`는 동일 검색 범위의 전체·설명 없음·소유자 없음·태그 없음
+건수를 조회한다. 목록 실패와 집계 실패는 구분하고, 집계 실패가 자산 탐색을 막지 않는다.
+검색 색인의 반영 지연이 있을 수 있으며 결과가 10,000개를 넘으면 검색·스키마로 범위를 좁힌다.
+전체 테이블을 브라우저에 수집하거나 Teoria DB에 복제하지 않는다.
+
 ## FormatID
 
-앱은 저장된 문서 추출 결과와 표준 매핑을 구분한다. 행 선택·키보드 Enter로 속성과 원문 근거를 함께 강조한다.
+앱은 규격서별 최종 처리 결과의 엔티티·관계·속성과 표준화 전후 값을 보여준다. 행 선택·키보드 Enter로 속성과 원문 근거를 함께 강조한다.
 구매 범위·해석·보류·순환·복수 부모 관계를 물리적 구성으로 확정하지 않는다.
 실행·스케줄·로그는 기존 Prefect 배포를 사용하는 파이프라인 화면에서 관리한다.
 
@@ -40,15 +46,25 @@
 | 권한 | 업로드는 metadata_admin, 실행은 허용된 workflow 권한 |
 | 결과 조회 | Data DB에 등록된 참조·허용 저장소 경계·checksum 검사 |
 | JSON 미리보기 | 등록된 MinIO/S3 또는 허용된 개발용 로컬 참조, 5MB 이하 |
+| 규격서 결과 | `tab=evidence`; 엔티티 목록·구성/포장 계층, 속성·관계·미해결 항목과 원문 근거 |
+| 문서 선택 복원 | 목록은 `document=<catalog_id>`, 기존 `run` 링크 안에서는 `document=<document_id>` |
+| 분류별 목록 | 서버 검색·필터·페이지 조회. 본문은 열 때만 조회. 동일 원문·분류·공고의 재처리는 묶고 이전 정상 결과 보존 |
+| 문서 비교 | 같은 분류 2–4개, 확인된 동일 표준 스냅샷·대상·속성·역할·범위·단위만 정렬. 여러 대상 값과 조건 보존 |
+| 이전 검토 링크 | `tab=review`는 결과 화면으로 연결하고 `review_revision`은 제거; 승인 작업을 실행하지 않음 |
 | 후속 | K3s 업로드 저장소 연결·실환경 검증 |
 
-추출 결과를 Published Ontology나 승인된 제품 성능으로 표시하지 않는다.
+최종 결과는 해당 실행의 산출물을 뜻한다. FormatID는 검토·승인 기능을 제공하지 않으며 미해결·실패 상태를 함께 표시한다.
+상세는 구성 트리와 속성의 기본 2열이며 요청한 원문 근거만 추가 패널로 연다. 트리의 위·아래/Home/End는 초점 이동, 좌·우는 접기·펼치기, Enter는 대상 선택이다.
+추출용 표준 초안을 Published Ontology로 표시하지 않는다. 미매핑은 추출 실패와 구별한다.
+
 단계와 결과 파일은 [규격서 파이프라인](../procurement_specification_processing/pipeline.md)을 따른다.
 
 ## 관리자 연결
 
 Admin token으로 `/v1/admin/auth/session`을 확인한다. 공개 상태 응답을 인증 성공으로 사용하지 않는다.
-token은 sessionStorage에 보관하고 로그아웃 때 제거한다. OpenMetadata bot token과는 다른 값이다.
+자산 화면도 공통 관리자 연결을 사용한다. token은 sessionStorage에 보관하고 로그아웃 또는 해당 token의
+401 응답 때 제거한다. 늦게 도착한 이전 token의 실패가 새 연결을 해제하지 않도록 구분한다.
+403은 권한 부족으로 처리하며 다른 조회 권한을 임의로 해제하지 않는다. OpenMetadata bot token과는 다른 값이다.
 운영은 bearer 인증과 principal별 역할을 사용한다. [설정·권한](../deployment/configuration.md)을 참고한다.
 
 ## 프론트엔드 개발

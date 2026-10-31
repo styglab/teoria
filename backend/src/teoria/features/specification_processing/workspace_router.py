@@ -9,6 +9,10 @@ import logging
 import os
 import httpx
 from pathlib import Path
+from datetime import date
+from typing import Literal
+from teoria.features.specification_processing.catalog.repository import DocumentCatalogRepository
+from teoria.features.specification_processing.catalog.results import document_result
 from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
@@ -72,8 +76,7 @@ class ProcessingWorkspaceRepository:
             return {"run": row, "documents": documents, "artifacts": artifacts}
 
 
-async def verified_artifact(reference: dict, root: Path, object_root: str | None = None) -> dict:
-    limit=5*1024*1024
+async def verified_artifact(reference: dict, root: Path, object_root: str | None = None, *, limit: int = 5*1024*1024) -> dict:
     if reference['size_bytes']>limit:raise HTTPException(413,'artifact_preview_too_large')
     uri=reference['uri'];parsed=urlsplit(uri)
     if parsed.scheme=='file':
@@ -233,5 +236,69 @@ def create_processing_workspace_router(
             raise HTTPException(404, "artifact_not_found")
         async with preview_slots:
             return await verified_artifact(reference, artifact_root, object_root)
+
+    catalog = DocumentCatalogRepository(database_url) if database_url else None
+
+    async def catalog_call(method, *args, **kwargs):
+        if catalog is None:
+            raise HTTPException(503, "processing_database_not_configured")
+        try:
+            return await getattr(catalog, method)(*args, **kwargs)
+        except psycopg.Error:
+            raise HTTPException(503, "processing_results_unavailable") from None
+
+    @router.get("/catalog/classifications")
+    async def classifications(query: str = Query("", max_length=100), offset: int = Query(0, ge=0),
+                              limit: int = Query(100, ge=1, le=100),
+                              principal: AdminPrincipal = Depends(authorizer.require())):
+        return await catalog_call("classifications", query=query, offset=offset, limit=limit)
+
+    @router.get("/catalog/documents")
+    async def documents(classification: str = Query("", pattern=r"^(?:[0-9]{10}|unclassified)?$"),
+                        query: str = Query("", max_length=200),
+                        status: Literal["all", "running", "extracted", "partial", "failed", "excluded"] = "all",
+                        since: date | None = None, until: date | None = None,
+                        sort: Literal["recent", "name"] = "recent", offset: int = Query(0, ge=0),
+                        limit: int = Query(25, ge=1, le=100),
+                        principal: AdminPrincipal = Depends(authorizer.require())):
+        if since and until and since > until:
+            raise HTTPException(422, "invalid_date_range")
+        return await catalog_call("documents", classification=classification, query=query, status=status,
+                                  since=since, until=until, sort=sort, offset=offset, limit=limit)
+
+    @router.get("/catalog/documents/{catalog_id}/history")
+    async def history(catalog_id: str, offset: int = Query(0, ge=0), limit: int = Query(25, ge=1, le=100),
+                      principal: AdminPrincipal = Depends(authorizer.require())):
+        if not await catalog_call("entry", catalog_id):
+            raise HTTPException(404, "document_not_found")
+        return await catalog_call("history", catalog_id, offset=offset, limit=limit)
+
+    @router.get("/catalog/documents/{catalog_id}/result")
+    async def result(catalog_id: str, principal: AdminPrincipal = Depends(authorizer.require())):
+        entry = await catalog_call("entry", catalog_id)
+        if not entry:
+            raise HTTPException(404, "document_not_found")
+        if not entry['result_available']:
+            return {"document": entry, "result": None}
+        run = await detail(entry['run_id'], principal)
+        key = f"specification_processing/{entry['run_id']}/documents/{entry['document_id']}/result.json"
+        ref = next((r for r in run['artifacts'] if r['key'] == key), None)
+        async with preview_slots:
+            if ref:
+                payload = await verified_artifact(ref, artifact_root, object_root)
+                if payload.get('artifact_kind') != 'specification_document_result' or payload.get('document_id') != entry['document_id'] or payload.get('source_sha256') != entry['source_sha256']:
+                    raise HTTPException(409, 'document_result_identity_mismatch')
+            else:
+                extracted = next((r for r in run['artifacts'] if r['key'].endswith('/extracted.json') or r['key']=='extracted.json'), None)
+                normalized = next((r for r in run['artifacts'] if r['key'].endswith('/normalized.json')), None)
+                if not extracted:
+                    raise HTTPException(404, 'artifact_not_found')
+                corpus = await verified_artifact(extracted, artifact_root, object_root)
+                norm = await verified_artifact(normalized, artifact_root, object_root) if normalized else None
+                try:
+                    payload = document_result(corpus, norm, entry['document_id'])
+                except (KeyError, ValueError):
+                    raise HTTPException(409, 'invalid_document_result') from None
+        return {"document": entry, "result": payload}
 
     return router

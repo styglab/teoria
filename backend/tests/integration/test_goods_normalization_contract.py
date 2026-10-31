@@ -403,6 +403,7 @@ async def test_operational_standard_management_uses_package_and_saves_only_canon
         "persist_extraction",
         "select_and_map_standard",
         "persist_report",
+        "persist_document_results",
     ]:
         monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
     monkeypatch.setattr(tasks, "resolve_dictionary", AsyncMock(return_value={
@@ -423,7 +424,7 @@ async def test_operational_standard_management_uses_package_and_saves_only_canon
         and result.standard.uri == exported.as_uri()
     )
     assert result.status == "partial" and normalized["extraction_ref"]["sha256"]
-    assert len(result.artifacts) == 5
+    assert len(result.artifacts) == 6
     report = (
         tmp_path / "objects/specification_processing/profile_run/index.md"
     ).read_text()
@@ -465,6 +466,7 @@ def test_candidates_roundtrip_deduplicate_and_build_compatible_draft():
     assert proposed["observation_count"] == proposed["document_count"] == 1
     assert proposed["decision"] == "existing_concept_proposal"
     assert proposed["matches"][0]["concept_id"] == uid(2)
+    assert proposed["matches"][0]["unit"] == "GB"
     assert proposed["observations"][0]["raw"]["value_raw"] == "64"
     selection = CandidateSelection(
         group_id=group.group_id,
@@ -801,6 +803,7 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
         "persist_extraction",
         "select_and_map_standard",
         "persist_report",
+        "persist_document_results",
     ]:
         monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
     monkeypatch.setattr(tasks, "resolve_dictionary", AsyncMock(return_value={
