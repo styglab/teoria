@@ -36,6 +36,11 @@ class ConceptDefinition(Record):
         return self
 
 
+class DictionaryMeaningReset(Record):
+    expected_checksum: str = Field(pattern=r'^[a-f0-9]{64}$')
+    rationale: str = Field(min_length=10,max_length=4000)
+
+
 class MeaningDecision(Record):
     action: Literal['approve', 'reject', 'deprecate']
     rationale: str = Field(min_length=10, max_length=4000)

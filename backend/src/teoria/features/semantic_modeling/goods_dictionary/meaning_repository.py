@@ -6,6 +6,12 @@ from teoria.features.semantic_modeling.goods_dictionary.repository import GoodsD
 
 
 class GoodsMeaningRepository(GoodsDictionaryRepository):
+    async def delete_meaning_records(self, conn):
+        # Source expressions and audit events are separate from replaceable meaning records.
+        mappings=await conn.execute('DELETE FROM goods.concept_mappings')
+        concepts=await conn.execute('DELETE FROM goods.concept_revisions')
+        return {'mappings':mappings.rowcount,'definitions':concepts.rowcount}
+
     async def all_sources(self, conn):
         return await (await conn.execute('SELECT entry_id,kind,owner_entry_id,status,preferred_name FROM goods.dictionary_entries ORDER BY entry_id')).fetchall()
 

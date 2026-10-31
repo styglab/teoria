@@ -11,6 +11,7 @@ from teoria.features.semantic_modeling.goods_dictionary.contracts import Diction
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import ConceptDefinition, MappingProposal, MeaningDecision, MeaningResolution
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import DictionaryChangeSet
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import RelatedMeaningContext
+from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import DictionaryMeaningReset
 
 
 def create_goods_dictionary_router(service, authorizer, meaning_service=None):
@@ -77,6 +78,10 @@ def create_goods_dictionary_router(service, authorizer, meaning_service=None):
     @router.get('/snapshot')
     async def snapshot(actor: AdminPrincipal = Depends(principal)):
         return await translate(meanings().snapshot())
+
+    @router.post('/reset-meanings')
+    async def reset_meanings(payload: DictionaryMeaningReset, actor: AdminPrincipal = Depends(principal)):
+        return await translate(meanings().reset_meanings(payload,actor=actor.actor))
 
     @router.post('/related-context')
     async def related_context(payload: RelatedMeaningContext, actor: AdminPrincipal = Depends(principal)):

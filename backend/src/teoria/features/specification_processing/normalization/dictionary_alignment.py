@@ -75,6 +75,9 @@ async def align_dictionary(request, corpus, extraction_ref, *, maintenance=None)
     async with artifact_store(request.artifact_root) as store:
         artifacts = []
         pinned = None
+        if getattr(request,'dictionary_rebuild_from_sources',False):
+            from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import snapshot_from_records
+            pinned = snapshot_from_records([], [], [])
         if maintenance is not None:
             artifacts.extend(maintenance['artifacts'])
             standard=maintenance.get('dictionary_standard')

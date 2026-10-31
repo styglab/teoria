@@ -74,6 +74,96 @@ def request(tmp_path):
             'model':'fixture','extractions':[input_file(tmp_path,'one','1'*64),input_file(tmp_path,'two','2'*64)]}
 
 
+async def test_source_rebuild_uses_no_old_meanings_and_leaves_live_dictionary_unchanged(tmp_path):
+    api=API()
+    await maintain_dictionary(request(tmp_path),api=api,runner=Runner())
+    before=await api.service.snapshot()
+    manifest={**request(tmp_path),'batch_id':'fresh_fixture','auto_apply':False,'rebuild_from_sources':True}
+    class FreshRunner(Runner):
+        async def generate(self,instruction,context,output,**kwargs):
+            result=await super().generate(instruction,context,output,**kwargs)
+            assert context['concepts']==[]
+            if 'plan' in context:return result
+            prefix=context['rebuild_instruction']['required_key_prefix']
+            for d in result['definitions']:
+                d['definition']['key']=prefix+d['definition']['key']
+                if context['kind']=='characteristic':
+                    d['definition']['applicable_item_type_ids']=[str(concept_id_for_key(prefix+'mobile_table'))]
+            for m in result['mappings']:
+                m['target_key']=prefix+m['target_key']
+                if m['owner_key']:m['owner_key']=prefix+m['owner_key']
+            return result
+    result=await maintain_dictionary(manifest,api=api,runner=FreshRunner())
+    assert result['status']=='proposed' and result['draft_only']
+    assert result['definitions']==2 and result['mappings']>0
+    assert 'dictionary_standard' not in result
+    assert before==await api.service.snapshot()
+    assert any(a['key'].endswith('/draft_definitions.json') for a in result['artifacts'])
+    index_path=tmp_path/'objects/specification_processing/dictionary_maintenance/fresh_fixture/index.md'
+    index=index_path.read_text()
+    assert '(draft_definitions.json)' in index and '(draft_mappings.json)' in index
+    assert '(impact.json)' not in index
+
+
+@pytest.mark.parametrize('repair_succeeds',[True,False])
+async def test_invalid_unit_policy_is_repaired_once_or_held_without_application(tmp_path,repair_succeeds):
+    class UnitRunner(Runner):
+        async def generate(self,instruction,context,output,**kwargs):
+            result=await super().generate(instruction,context,output,**kwargs)
+            if context['kind']=='characteristic' and 'plan' not in context:
+                if not repair_succeeds or 'validation_feedback' not in context:
+                    result['definitions'][0]['definition']['canonical_unit']=None
+                else:
+                    assert context['validation_feedback']['errors'][0]['location']==['definitions',0,'definition']
+                    assert context['previous_plan']['definitions'][0]['definition']['allowed_units']==['kg']
+            return result
+    api=API();runner=UnitRunner()
+    result=await maintain_dictionary(request(tmp_path),api=api,runner=runner)
+    assert result['status']==('applied' if repair_succeeds else 'held')
+    attempts=[c for c in runner.calls if c['kind']=='characteristic' and 'plan' not in c]
+    assert len(attempts)==2
+    files=tmp_path/'objects/specification_processing/dictionary_maintenance/corpus_fixture'
+    rejected=json.loads((files/'characteristic_invalid_plan.json').read_text())
+    assert rejected['definitions'][0]['definition']['canonical_unit'] is None
+    if not repair_succeeds:
+        assert result['reason']=='corpus_plan_contract_failed'
+        assert not (files/'changeset.json').exists()
+        assert not (await api.service.snapshot())['concepts']
+        assert (files/'characteristic_repair_1_validation.json').exists()
+
+
+def test_source_rebuild_cannot_automatically_apply_or_ignore_validation_inputs(tmp_path):
+    from teoria.features.specification_processing.normalization.dictionary_maintenance import DictionaryMaintenance
+    with pytest.raises(ValueError,match='auto_apply'):
+        DictionaryMaintenance.model_validate({**request(tmp_path),'rebuild_from_sources':True})
+    with pytest.raises(ValueError,match='separate frozen-draft'):
+        DictionaryMaintenance.model_validate({**request(tmp_path),'rebuild_from_sources':True,'auto_apply':False,
+            'validation_extractions':[input_file(tmp_path,'validation','3'*64)]})
+
+
+async def test_rebuild_alignment_cannot_fall_back_to_previously_approved_meanings(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    from teoria.features.specification_processing.normalization import dictionary_alignment
+    api=API()
+    await maintain_dictionary(request(tmp_path),api=api,runner=Runner())
+    class StageAPI:
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def dictionary(self,operation_id,payload):
+            result=await api.dictionary(operation_id,payload)
+            return {**result,'operation_id':operation_id,'policy_version':'source_literal_v1',
+                    'summary':{'approved':0,'reused':len(result['decisions'])}}
+        async def resolve_dictionary_meanings(self,*args):
+            raise AssertionError('rebuild cannot reuse old meanings')
+    monkeypatch.setattr(dictionary_alignment,'GoodsAuthoringClient',StageAPI)
+    req=SimpleNamespace(mode='standard_management',run_id='fresh_alignment',dictionary_standard=None,
+        artifact_root=(tmp_path/'fresh_alignment').as_uri(),dictionary_auto_approve=False,
+        dictionary_meaning_auto_approve=False,dictionary_rebuild_from_sources=True,classification_code=None)
+    data=corpus('허용하중');data['documents'][0]['relations']=[]
+    result=await dictionary_alignment.align_dictionary(req,data,{},maintenance={'status':'proposed','artifacts':[]})
+    assert result['meaning_summary'].get('resolved',0)==0
+
+
 async def test_bulk_reconciliation_deduplicates_inputs_rekeys_document_ids_and_exports_snapshot(tmp_path):
     manifest=request(tmp_path);manifest['extractions'].append(manifest['extractions'][0]);api=API();runner=Runner()
     result=await maintain_dictionary(manifest,api=api,runner=runner)
@@ -229,7 +319,6 @@ def test_group_context_keeps_all_occurrences_and_excludes_other_nodes():
 
 
 async def test_unknown_mapping_target_reports_a_safe_rule_instead_of_key_error(tmp_path):
-    from teoria.features.specification_processing.normalization.dictionary_maintenance import DictionaryProposalError
     class UnknownTarget(Runner):
         async def generate(self,*args,**kwargs):
             result=await super().generate(*args,**kwargs)
@@ -237,7 +326,7 @@ async def test_unknown_mapping_target_reports_a_safe_rule_instead_of_key_error(t
                 result['mappings'][0]['target_key']='undefined_target'
             return result
     api=API()
-    with pytest.raises(DictionaryProposalError) as error:
-        await maintain_dictionary(request(tmp_path),api=api,runner=UnknownTarget())
-    assert error.value.code=='mapping_target_not_defined'
+    result=await maintain_dictionary(request(tmp_path),api=api,runner=UnknownTarget())
+    assert result['reason']=='corpus_plan_contract_failed'
+    assert result['validation']['errors']==[{'code':'mapping_target_not_defined'}]
     assert not api.repo.definitions and not api.repo.links

@@ -124,7 +124,16 @@ export type UnresolvedResult = {
   attribute?: ResultRecord;
   relation?: ResultRecord;
   entityId?: string;
+  supplementary?: boolean;
 };
+const supplementaryRelations = new Set([
+  "sends_data_to",
+  "compatible_with",
+  "depends_on",
+  "supports",
+  "service_for",
+  "document_for",
+]);
 export function unresolvedResults(
   document: ResultRecord,
   _mappings: ResultRecord[],
@@ -165,7 +174,10 @@ export function unresolvedResults(
   resultRows(document.held_relations).forEach((relation, index) =>
     results.push({
       id: `held_${index}`,
-      title: "보류 관계",
+      title: supplementaryRelations.has(String(relation.kind))
+        ? "부가 관계 검토"
+        : "보류 관계",
+      supplementary: supplementaryRelations.has(String(relation.kind)),
       reasons: Array.isArray(relation.reasons)
         ? relation.reasons.map(resultLabel)
         : ["구성 계층에 반영되지 않은 관계입니다."],
@@ -235,16 +247,23 @@ export function UnresolvedResults({
   onChoose,
   onAttribute,
   evidence,
+  supplementary = false,
 }: {
   items: UnresolvedResult[];
   entities: ResultRecord[];
   onChoose: (id: string) => void;
-  onAttribute: (attribute: ResultRecord) => void;
+  onAttribute?: (attribute: ResultRecord) => void;
   evidence: (record: ResultRecord) => ReactNode;
+  supplementary?: boolean;
 }) {
   return (
-    <section className="result-unresolved" aria-label="문서 미해결 항목">
-      <h4>미해결 항목 · {items.length}</h4>
+    <section
+      className="result-unresolved"
+      aria-label={supplementary ? "부가 관계 검토" : "문서 미해결 항목"}
+    >
+      <h4>
+        {supplementary ? "부가 관계 검토" : "미해결 항목"} · {items.length}
+      </h4>
       {!items.length && <p>이 산출물에 기록된 미해결 항목이 없습니다.</p>}
       {items.map((item) => (
         <article className="result-issue" key={item.id}>
@@ -262,7 +281,7 @@ export function UnresolvedResults({
               onChoose={onChoose}
               evidence={evidence}
             />
-          ) : item.attribute ? (
+          ) : item.attribute && onAttribute ? (
             <button
               type="button"
               className="operations-link"
@@ -292,4 +311,48 @@ export function normalizedResultValue(fact: ResultRecord): string {
   if (record.min_decimal != null && record.max_decimal != null)
     return `${resultLabel(record.min_decimal)}–${resultLabel(record.max_decimal)}${unit ? ` ${resultLabel(unit)}` : ""}`;
   return resultLabel(record.text ?? record.raw_text ?? value);
+}
+
+export function requirementValue(fact: ResultRecord): string {
+  const operator: Record<string, string> = {
+    gte: "≥",
+    gt: ">",
+    lte: "≤",
+    lt: "<",
+    eq: "=",
+    one_of: "다음 중 하나:",
+  };
+  return [
+    operator[String(fact.operator)] || fact.operator_raw || "",
+    normalizedResultValue(fact),
+  ]
+    .filter(Boolean)
+    .map(resultLabel)
+    .join(" ");
+}
+export function requirementContext(fact: ResultRecord): string {
+  const roles: Record<string, string> = {
+    requirement_candidate: "요구조건 후보",
+    required: "필수 조건",
+    informational: "참고 정보",
+    declared_quantity: "명시 수량",
+  };
+  const scopes: Record<string, string> = {
+    per_processor: "프로세서당",
+    per_cpu: "CPU당",
+    per_component: "구성품당",
+    per_system: "시스템당",
+    whole_system: "시스템 전체",
+    per_item: "품목당",
+    unknown: "범위 미확정",
+  };
+  return [
+    fact.role ? roles[String(fact.role)] || fact.role : "",
+    fact.semantic_scope
+      ? scopes[String(fact.semantic_scope)] || fact.semantic_scope
+      : "",
+  ]
+    .filter(Boolean)
+    .map(resultLabel)
+    .join(" · ");
 }

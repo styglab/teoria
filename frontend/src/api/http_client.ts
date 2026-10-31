@@ -24,6 +24,7 @@ const requestMessages: Record<string, string> = {
     "현재 화면은 파일 저장소의 산출물을 미리 볼 수 있습니다. 이 산출물은 외부 객체 저장소에서 확인하세요.",
   artifact_preview_too_large:
     "이 산출물은 미리보기 크기(5MB)를 초과합니다. 산출물 저장 참조에서 확인하세요.",
+  artifact_not_available: "현재 저장소에서 산출물을 찾을 수 없습니다. 실행 이력과 원래 저장소를 확인하세요.",
   artifact_checksum_mismatch:
     "저장된 산출물의 checksum이 일치하지 않습니다. 원본과 실행 이력을 확인하세요.",
 };

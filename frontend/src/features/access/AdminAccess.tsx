@@ -64,6 +64,7 @@ export function AdminAccessProvider({ children }: { children: ReactNode }) {
               onClick={() => {
                 generation.current += 1;
                 window.sessionStorage.removeItem("teoria-admin-token");
+                window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
                 setPrincipal(null);
               }}
             >

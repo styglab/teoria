@@ -127,6 +127,13 @@ async def update_standard_dictionary(request, corpus, extraction_ref, *, api=Non
             result['artifacts'].append(ref.model_dump())
             return result
         await repo.register_extraction(request.run_id,extraction_ref,corpus)
+        if getattr(request,'dictionary_rebuild_from_sources',False):
+            rebuilt=await maintain_dictionary({'batch_id':'rebuild_'+hashlib.sha256(request.run_id.encode()).hexdigest()[:24],
+                'artifact_root':request.artifact_root,'classification_code':request.classification_code,
+                'model':request.model or 'configured_default','model_timeout_seconds':request.model_timeout_seconds,
+                'auto_apply':False,'rebuild_from_sources':True,
+                'extractions':[{'uri':extraction_ref['uri'],'sha256':extraction_ref['sha256']}]},api=api,runner=runner)
+            return await finish(rebuilt)
         candidates,decisions=await register_corpus(api,corpus,'dictionary_'+request.run_id+'_scan',auto_approve=request.dictionary_auto_approve)
         entries={str(d['entry_id']) for d in decisions if d.get('entry_id') and d['status'] in {'approved','reused'}}
         baseline=DictionarySnapshot.model_validate(await api.dictionary_meaning('GET','/snapshot'))

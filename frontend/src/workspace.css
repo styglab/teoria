@@ -1,12 +1,12 @@
 /* Shared admin workspace: the data catalog is the reference surface. */
 :root {
-  --workspace-text: #18181b;
-  --workspace-secondary: #71717a;
-  --workspace-line: #e4e4e7;
-  --workspace-subtle: #fafafa;
-  --workspace-hover: #f4f4f5;
+  --workspace-text: var(--ui-text);
+  --workspace-secondary: var(--ui-secondary);
+  --workspace-line: var(--ui-line);
+  --workspace-subtle: var(--ui-subtle);
+  --workspace-hover: var(--ui-selected);
   --workspace-radius: 8px;
-  --workspace-padding: 24px;
+  --workspace-padding: var(--ui-space-xl);
 }
 .workspace-frame { height: 100%; min-height: 0; padding: 16px; }
 .workspace-surface { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; border: 1px solid var(--workspace-line); border-radius: 12px; background: #fff; }
@@ -34,7 +34,7 @@
 .page-icon-button:hover { background: var(--workspace-subtle); }
 .page-search { display: flex; flex-shrink: 0; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border: 1px solid #d4d4d8; border-radius: var(--workspace-radius); background: #fff; color: var(--workspace-secondary); }
 .page-search input { width: 100%; min-width: 0; padding: 10px 0; border: 0; outline: none; background: transparent; color: var(--workspace-text); font-size: 13px; }
-.page-search:focus-within { border-color: #a1a1aa; box-shadow: 0 0 0 2px #f4f4f5; }
+
 .page-search button { flex-shrink: 0; padding: 4px; font-size: 11px; cursor: pointer; }
 .page-controls { display: flex; flex-shrink: 0; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0; }
 .page-controls > label { display: inline-flex; align-items: center; gap: 8px; color: var(--workspace-secondary); font-size: 11px; }
@@ -156,7 +156,7 @@
 .ui-tabs-list { background: transparent; border-radius: 0; border-width: 0 0 1px; padding: 0; justify-content: flex-start; }
 .ui-tabs-trigger { padding: 12px; font-size: 12px; border-radius: 0; border-bottom: 2px solid transparent; }
 .ui-tabs-trigger[data-state=active] { background: transparent; border-bottom-color: #18181b; box-shadow: none; }
-.workspace-surface :is(button, a, select, input):focus-visible { outline: 2px solid #71717a; outline-offset: 3px; }
+
 @media (max-width:1100px) {
   :root { --workspace-padding: 18px; }
   .catalog-layout { grid-template-columns: 180px minmax(0,1fr); }

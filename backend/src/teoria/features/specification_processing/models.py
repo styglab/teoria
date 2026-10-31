@@ -59,6 +59,7 @@ class SpecificationRun(Record):
     mode: Literal['standard_management','document_processing']
     classification_code: str | None = Field(default=None,pattern=r"^\d{10}$")
     dictionary_auto_approve: bool = True
+    dictionary_rebuild_from_sources: bool = False
     dictionary_meaning_auto_approve: bool = True
     dictionary_standard: StandardReference | None = None
     dictionary_baseline: StandardReference | None = None
@@ -80,6 +81,11 @@ class SpecificationRun(Record):
 
     @model_validator(mode='after')
     def check_contract(self):
+        if self.dictionary_rebuild_from_sources and (self.mode!='standard_management' or
+                self.dictionary_auto_approve or self.dictionary_meaning_auto_approve or self.dictionary_standard
+                or self.dictionary_baseline or self.dictionary_validation_corpus or self.dictionary_evidence_corpus
+                or self.dictionary_corpus):
+            raise ValueError('source rebuild requires standard_management, both approvals disabled and no prior dictionary or corpus inputs')
         if len({d.document_id for d in self.documents})!=len(self.documents):
             raise ValueError('duplicate document_id')
         if self.mode=='document_processing' and self.standard is None:

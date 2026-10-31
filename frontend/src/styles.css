@@ -58,7 +58,7 @@ button { color: inherit; }
 .ontology-list strong { font-size: 12px; }
 .ontology-list small { margin-top: 4px; color: #66718b; font-size: 9px; }
 
-main { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: radial-gradient(circle at 52% 5%, #12172a 0, #080a11 45%); }
+.app-shell > main { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: radial-gradient(circle at 52% 5%, #12172a 0, #080a11 45%); }
 .overview-row { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 10px; padding: 14px 16px 4px; }
 .metric-card { min-height: 66px; display: flex; align-items: center; gap: 11px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: rgba(14,18,29,.8); }
 .metric-icon { width: 34px; height: 34px; display: grid; place-items: center; color: #a9a1ff; border: 1px solid #302b53; border-radius: 8px; background: #17152a; }
@@ -235,7 +235,7 @@ main { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; display: flex; 
 :root[data-theme="light"] .sidebar { background: #f7f8fb; }
 :root[data-theme="light"] .sidebar nav button.active,
 :root[data-theme="light"] .ontology-list button.selected { color: #252a3c; background: #e8eaf4; }
-:root[data-theme="light"] main { background: radial-gradient(circle at 52% 5%, #e7e9f8 0, #f3f4f8 48%); }
+:root[data-theme="light"] .app-shell > main { background: radial-gradient(circle at 52% 5%, #e7e9f8 0, #f3f4f8 48%); }
 :root[data-theme="light"] .metric-card,
 :root[data-theme="light"] .workspace { background: rgba(255,255,255,.9); }
 :root[data-theme="light"] .metric-icon { color: #5e53d7; background: #efedff; }
@@ -264,17 +264,6 @@ main { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; display: flex; 
 .release-badge.modified { color: #f0b46c; border-color: #664923; background: #2e2415; }
 
 /* shadcn-style primitives: locally owned, Radix-powered, and aligned with Teoria tokens. */
-.ui-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-radius: 7px; border: 1px solid transparent; font-weight: 650; cursor: pointer; transition: background .15s, border-color .15s, opacity .15s; }
-.ui-button:disabled { opacity: .42; cursor: not-allowed; }
-.ui-button-md { height: 34px; padding: 0 12px; font-size: 10px; }
-.ui-button-sm { height: 28px; padding: 0 9px; font-size: 9px; }
-.ui-button-icon { width: 32px; height: 32px; padding: 0; }
-.ui-button-default { color: white; background: var(--accent); }
-.ui-button-default:hover:not(:disabled) { background: #6d61e8; }
-.ui-button-secondary { color: #dfe3f2; background: var(--panel-2); }
-.ui-button-outline { color: #c5cce0; border-color: var(--border); background: transparent; }
-.ui-button-outline:hover:not(:disabled), .ui-button-ghost:hover:not(:disabled) { background: var(--panel-2); }
-.ui-button-ghost { color: #aab3ca; background: transparent; }
 .ui-card { color: inherit; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); }
 .ui-card-header { padding: 14px 15px 8px; }
 .ui-card-title { margin: 0; font-size: 11px; font-weight: 700; }
@@ -411,10 +400,6 @@ body { color: #09090b; background: #fff; }
 .capability-hero code, .capability-hero p { color: #71717a; }
 .ui-card { color: #09090b; border-color: #e4e4e7; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.025); }
 .ui-card-description { color: #71717a; }
-.ui-button-default { color: #fff; background: #18181b; }
-.ui-button-default:hover:not(:disabled) { background: #27272a; }
-.ui-button-outline { color: #27272a; border-color: #e4e4e7; background: #fff; }
-.ui-button-outline:hover:not(:disabled), .ui-button-ghost:hover:not(:disabled) { background: #f4f4f5; }
 .ui-badge-default { color: #27272a; border-color: #e4e4e7; background: #f4f4f5; }
 .ui-badge-success { color: #27272a; border-color: #d4d4d8; background: #fafafa; }
 .ui-badge-warning { color: #52525b; border-color: #e4e4e7; background: #fafafa; }

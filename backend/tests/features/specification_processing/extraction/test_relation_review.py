@@ -133,14 +133,16 @@ async def test_structurally_invalid_entity_labels_still_fail_after_rejudgment(tm
         await extract_entity_relations(doc,tmp_path,Predictions(inventory,details))
 
 
-async def test_held_relations_survive_extraction_storage_and_mark_partial(tmp_path):
+@pytest.mark.parametrize('kind,expected', [('service_for','extracted'),('supports','extracted'),
+    ('compatible_with','extracted'),('component_of','partial'),('unknown','partial'),('same_target_as','partial')])
+async def test_held_relations_survive_storage_with_separate_core_and_supplementary_status(tmp_path,kind,expected):
     from teoria.features.specification_processing.models import SpecificationRun
     from teoria.features.specification_processing.tasks import persist_extraction
     workspace=tmp_path/'work';folder=workspace/'processing'/'regression';out=folder/'attributes'
     out.mkdir(parents=True)
     doc,inventory,details=source_case();doc['parser_version']='fixture'
     graph=materialize(inventory,details,doc);graph['attributes']=[]
-    graph['held_relations']=[{'source_id':'sensor','target_id':'work','kind':'service_for',
+    graph['held_relations']=[{'source_id':'sensor','target_id':'work','kind':kind,
         'review_status':'held','reasons':['service_for source must be an activity'],
         'evidence':[{'node_id':'work_node'}]}]
     summary={'status':'needs_review','input_coverage':{'missing_node_ids':[]},'failed_chunks':0,
@@ -158,7 +160,9 @@ async def test_held_relations_survive_extraction_storage_and_mark_partial(tmp_pa
     result=json.loads((workspace/'extracted.json').read_text())['documents'][0]
     assert result['held_relations']==graph['held_relations']
     assert result['requirements']==graph['requirements']
-    assert result['extraction_status']=='partial'
+    assert result['extraction_status']==expected
+    assert result['unresolved_extraction']['core_held_relations']==int(expected=='partial')
+    assert result['unresolved_extraction']['supplementary_held_relations']==int(expected=='extracted')
     assert result['unresolved_extraction']['held_relations']==1
     stored=json.loads(Path(ref['uri'].removeprefix('file://')).read_text())
     assert stored['documents'][0]['held_relations']==graph['held_relations']

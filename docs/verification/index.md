@@ -5,6 +5,7 @@
 
 | 기록 | 확인할 내용 |
 |---|---|
+| [프런트엔드 공통 스타일·문서 탐색 개선 — 10월 31일](frontend_refinement_2026_10_31.md) | 공통 UI·모바일 카드·조회 복구·비교 이유·화면 회귀 검사 |
 | [FormatID 분류별 문서 탐색·비교 배포 — 10월 31일](document_catalog_deployment_2026_10_31.md) | 문서 버전 목록·이전 정상 결과·2열 상세·표준 비교·migration 104 |
 | [FormatID 결과 화면 배포 — 10월 31일](formatid_results_deployment_2026_10_31.md) | 규격서별 엔티티·관계·속성·근거 탐색과 승인 UI 제거 |
 | [Web·Admin API 배포 — 10월 31일](frontend_admin_deployment_2026_10_31.md) | 인증·서버 검색·규격서 후보 화면의 실제 배포와 이전 이미지 정리 |

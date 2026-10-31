@@ -25,6 +25,21 @@ class GoodsMeaningService:
             await self.repository.lock(conn)
             return (await repository_snapshot(self.repository,conn)).model_dump(mode='json')
 
+    async def reset_meanings(self, request, *, actor):
+        from teoria.features.semantic_modeling.goods_dictionary.change_service import repository_snapshot
+        from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import DictionaryMeaningReset
+        request=DictionaryMeaningReset.model_validate(request)
+        repo=self.repository
+        async with repo.transaction() as conn:
+            await repo.lock(conn)
+            snapshot=await repository_snapshot(repo,conn)
+            if snapshot.checksum!=request.expected_checksum:
+                raise ValueError('dictionary_reset_snapshot_changed')
+            for kind,records,id_key in [('mapping',snapshot.mappings,'mapping_id'),('concept',snapshot.concepts,'revision_id')]:
+                for record in records:
+                    await repo.meaning_event(conn,kind,record[id_key],'delete',actor,request.rationale)
+            return {'status':'deleted',**await repo.delete_meaning_records(conn)}
+
     async def related_context(self, request):
         from teoria.features.semantic_modeling.goods_dictionary.change_service import repository_snapshot, affected_scopes
         async with self.repository.transaction() as conn:

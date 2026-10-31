@@ -1,0 +1,17 @@
+:root {
+  --ui-text: #18181b;
+  --ui-secondary: #71717a;
+  --ui-line: #e4e4e7;
+  --ui-surface: #fff;
+  --ui-subtle: #fafafa;
+  --ui-selected: #f4f4f5;
+  --ui-radius: 7px;
+  --ui-font-body: 14px;
+  --ui-font-control: 13px;
+  --ui-font-caption: 12px;
+  --ui-space-sm: 8px;
+  --ui-space-md: 12px;
+  --ui-space-lg: 16px;
+  --ui-space-xl: 24px;
+  --ui-control-height: 36px;
+}

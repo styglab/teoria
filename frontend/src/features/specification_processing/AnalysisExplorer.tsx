@@ -8,9 +8,9 @@ import {
   RelationResults,
   UnresolvedResults,
   unresolvedResults,
-  normalizedResultValue,
 } from "./document_results";
 import "./document_results.css";
+import { AttributeValue } from "./AttributeValue";
 
 const kindNames: Record<string, string> = {
   product: "물품",
@@ -22,8 +22,22 @@ const kindNames: Record<string, string> = {
   document: "문서",
   unknown: "유형 미확정",
 };
-/** Only evidence-backed explicit composition forms the tree; other relations remain visible separately. */
-export function composition(document: Row, mode = "composition") {
+function isGoodsTarget(entity: Row) {
+  return (
+    !["activity", "document"].includes(String(entity.kind)) &&
+    !(
+      Array.isArray(entity.document_roles) &&
+      entity.document_roles.includes("existing_target")
+    )
+  );
+}
+
+/** Only evidence-backed explicit composition forms the tree; related targets remain accessible. */
+export function composition(
+  document: Row,
+  mode = "composition",
+  primaryOnly = false,
+) {
   const entities = rows(document.entities);
   const ids = new Set(entities.map((e) => String(e.id)));
   const physical = (id: unknown) => {
@@ -34,8 +48,35 @@ export function composition(document: Row, mode = "composition") {
   };
   const software = (id: unknown) =>
     entities.find((e) => e.id === id)?.kind === "software";
+  const related = new Set(
+    entities.filter((e) => !isGoodsTarget(e)).map((e) => String(e.id)),
+  );
+  // A component of an existing asset is not a newly supplied component by default.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const r of rows(document.relations)) {
+      if (
+        ["component_of", "physical_part_of"].includes(String(r.kind)) &&
+        related.has(String(r.target_id)) &&
+        !related.has(String(r.source_id))
+      ) {
+        const child = entities.find((e) => e.id === r.source_id);
+        if (
+          Array.isArray(child?.document_roles) &&
+          child.document_roles.includes("supply_target")
+        )
+          continue;
+        related.add(String(r.source_id));
+        changed = true;
+      }
+    }
+  }
   const candidates = rows(document.relations).filter(
     (r) =>
+      (!primaryOnly ||
+        (!related.has(String(r.source_id)) &&
+          !related.has(String(r.target_id)))) &&
       (mode === "packaging"
         ? r.kind === "pack_unit_of"
         : ["component_of", "physical_part_of"].includes(String(r.kind))) &&
@@ -81,11 +122,18 @@ export function composition(document: Row, mode = "composition") {
     entities,
     children,
     roots: entities.filter(
-      (e) => !attached.has(String(e.id)) && children.has(String(e.id)),
+      (e) =>
+        (!primaryOnly || !related.has(String(e.id))) &&
+        !attached.has(String(e.id)) &&
+        children.has(String(e.id)),
     ),
     unclassified: entities.filter(
-      (e) => !attached.has(String(e.id)) && !children.has(String(e.id)),
+      (e) =>
+        (!primaryOnly || !related.has(String(e.id))) &&
+        !attached.has(String(e.id)) &&
+        !children.has(String(e.id)),
     ),
+    related: entities.filter((e) => related.has(String(e.id))),
   };
 }
 
@@ -196,11 +244,24 @@ function DocumentAnalysis({
   const [navigation, setNavigation] = useState(() =>
     composition(document, "composition").children.size ? "composition" : "list",
   );
-  const [kindFilter, setKindFilter] = useState("all");
+  const [kindFilter, setKindFilter] = useState("goods");
   const graph = useMemo(
-    () => composition(document, navigation),
-    [document, navigation],
+    () => composition(document, navigation, kindFilter === "goods"),
+    [document, navigation, kindFilter],
   );
+  const entitiesById = useMemo(
+    () => new Map(graph.entities.map((entity) => [String(entity.id), entity])),
+    [graph.entities],
+  );
+  const attributeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const attribute of rows(document.attributes)) {
+      if (Array.isArray(attribute.subject_ids))
+        for (const id of new Set(attribute.subject_ids.map(String)))
+          counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    return counts;
+  }, [document]);
   const initialAttribute = rows(document.attributes).find(
     (a) => a.id === initialAttributeId,
   );
@@ -246,8 +307,11 @@ function DocumentAnalysis({
   const mappings = rows(normalization?.attributes).filter(
     (a) => a.document_id === document.document_id,
   );
+  const mappingsById = new Map(
+    mappings.map((mapping) => [mapping.attribute_id, mapping]),
+  );
   const mappingFor = (a: Row) =>
-    mappings.find((m) => a.id != null && m.attribute_id === a.id);
+    a.id != null ? mappingsById.get(a.id) : undefined;
   const mappingLabel = (a: Row) => {
     if (mappingStatus === "loading") return "조회 중";
     if (mappingStatus === "error") return "조회 실패";
@@ -273,7 +337,7 @@ function DocumentAnalysis({
       });
   }, [focused]);
   const [mobileDetail, setMobileDetail] = useState(false);
-  const entity = graph.entities.find((e) => String(e.id) === selected);
+  const entity = entitiesById.get(selected);
   const attributes = rows(document.attributes).filter(
     (a) => Array.isArray(a.subject_ids) && a.subject_ids.includes(selected),
   );
@@ -287,6 +351,10 @@ function DocumentAnalysis({
     document,
     mappings,
     mappingStatus === "available",
+  );
+  const coreUnresolved = unresolved.filter((item) => !item.supplementary);
+  const supplementaryUnresolved = unresolved.filter(
+    (item) => item.supplementary,
   );
   const inPurchaseScope = (e: Row) =>
     (Array.isArray(document.inventory_ids) &&
@@ -306,7 +374,7 @@ function DocumentAnalysis({
       .includes(query.toLowerCase()) &&
     (kindFilter === "all" ||
       (kindFilter === "goods"
-        ? !["activity", "document"].includes(String(e.kind))
+        ? !graph.related.some((item) => item.id === e.id)
         : kindFilter === "purchase"
           ? inPurchaseScope(e)
           : String(e.kind ?? "unknown") === kindFilter));
@@ -349,7 +417,7 @@ function DocumentAnalysis({
     ),
   );
   while (ancestor) {
-    const item = graph.entities.find((e) => String(e.id) === ancestor);
+    const item = entitiesById.get(ancestor);
     if (item) ancestry.unshift(item);
     ancestor = parentOf.get(ancestor) || "";
   }
@@ -432,7 +500,7 @@ function DocumentAnalysis({
           ...graph.unclassified.map((e) => String(e.id)),
         ];
   const itemRow = (id: string, depth = 0) => {
-    const item = graph.entities.find((e) => String(e.id) === id)!;
+    const item = entitiesById.get(id)!;
     const children =
       navigation === "list" || query || !["all", "goods"].includes(kindFilter)
         ? undefined
@@ -470,10 +538,14 @@ function DocumentAnalysis({
           aria-level={depth + 1}
           aria-expanded={children ? !closed.has(id) : undefined}
           tabIndex={
-            id ===
-            (treeCandidates.includes(treeFocus) ? treeFocus : treeCandidates[0])
+            kindFilter === "goods" && graph.related[0]?.id === id
               ? 0
-              : -1
+              : id ===
+                  (treeCandidates.includes(treeFocus)
+                    ? treeFocus
+                    : treeCandidates[0])
+                ? 0
+                : -1
           }
           onFocus={() => setTreeFocus(id)}
           onKeyDown={(event) => {
@@ -511,15 +583,13 @@ function DocumentAnalysis({
         >
           {label(item.name || id)}
           <small>
-            {
-              rows(document.attributes).filter(
-                (a) =>
-                  Array.isArray(a.subject_ids) && a.subject_ids.includes(id),
-              ).length
-            }
-            개 속성
+            {attributeCounts.get(id) || 0}개 속성
             {kindNames[String(item.kind)]
               ? ` · ${kindNames[String(item.kind)]}`
+              : ""}
+            {Array.isArray(item.document_roles) &&
+            item.document_roles.includes("existing_target")
+              ? " · 기존 대상"
               : ""}
           </small>
         </button>
@@ -582,8 +652,13 @@ function DocumentAnalysis({
             setMobileDetail(true);
           }}
         >
-          미해결 항목 <strong>{unresolved.length}</strong>
+          미해결 항목 <strong>{coreUnresolved.length}</strong>
         </button>
+        {!!supplementaryUnresolved.length && (
+          <span>
+            부가 관계 검토 <strong>{supplementaryUnresolved.length}</strong>
+          </span>
+        )}
         {mappingStatus === "available" && (
           <span>
             표준 미매핑{" "}
@@ -693,6 +768,16 @@ function DocumentAnalysis({
               </>
             )}
           </div>
+          {kindFilter === "goods" && !!graph.related.length && (
+            <details className="analysis-related-targets">
+              <summary>
+                관련 대상·설치 지원·문서 · {graph.related.length}
+              </summary>
+              <div role="tree" aria-label="관련 대상">
+                {graph.related.map((e) => itemRow(String(e.id)))}
+              </div>
+            </details>
+          )}
         </aside>
         <section className="analysis-properties" aria-label="분석 대상 상세">
           <button
@@ -727,24 +812,47 @@ function DocumentAnalysis({
             </button>
           </div>
           {detailTab === "unresolved" && (
-            <UnresolvedResults
-              items={unresolved}
-              entities={graph.entities}
-              onChoose={(id) => {
-                choose(id);
-                setDetailTab("relations");
-              }}
-              onAttribute={(attribute) => {
-                setSelectedAttribute("");
-                setSourceTitle(
-                  label(attribute.property_raw || attribute.property_key),
-                );
-                setSourceReferences(refs(attribute));
-                setFocused(refs(attribute)[0] || "");
-                setSourceOpen(true);
-              }}
-              evidence={(record) => nodeButton(record)}
-            />
+            <>
+              <UnresolvedResults
+                items={coreUnresolved}
+                entities={graph.entities}
+                onChoose={(id) => {
+                  choose(id);
+                  setDetailTab("relations");
+                }}
+                onAttribute={(attribute) => {
+                  setSelectedAttribute("");
+                  setSourceTitle(
+                    label(attribute.property_raw || attribute.property_key),
+                  );
+                  setSourceReferences(refs(attribute));
+                  setFocused(refs(attribute)[0] || "");
+                  setSourceOpen(true);
+                }}
+                evidence={(record) => nodeButton(record)}
+              />
+              {!!supplementaryUnresolved.length && (
+                <details>
+                  <summary>
+                    부가 관계 검토 · {supplementaryUnresolved.length}
+                  </summary>
+                  <p>
+                    통신·호환·의존·지원 관계의 보류입니다. 물품 구성·속성 추출의
+                    미해결 항목과 별도로 확인합니다.
+                  </p>
+                  <UnresolvedResults
+                    supplementary
+                    items={supplementaryUnresolved}
+                    entities={graph.entities}
+                    onChoose={(id) => {
+                      choose(id);
+                      setDetailTab("relations");
+                    }}
+                    evidence={(record) => nodeButton(record)}
+                  />
+                </details>
+              )}
+            </>
           )}
           {entity && detailTab !== "unresolved" ? (
             <>
@@ -834,15 +942,13 @@ function DocumentAnalysis({
                     <table className="page-table">
                       <thead>
                         <tr>
-                          <th>문서 속성명</th>
-                          <th>문서 값</th>
-                          <th>단위</th>
-                          {view === "mapping" && (
-                            <>
-                              <th>연결된 표준 식별자</th>
-                              <th>매핑 상태</th>
-                            </>
-                          )}
+                          <th>속성</th>
+                          <th>
+                            {view === "mapping"
+                              ? "요구값·단위·조건"
+                              : "문서 값"}
+                          </th>
+                          {view !== "mapping" && <th>단위</th>}
                           <th>원문 근거</th>
                         </tr>
                       </thead>
@@ -864,12 +970,53 @@ function DocumentAnalysis({
                               }
                             }}
                           >
-                            <td>
-                              {label(
-                                a.property_raw ||
-                                  a.property_name ||
-                                  a.name ||
-                                  "원문 명칭 미기재",
+                            <td data-label="속성">
+                              <span className="analysis-property-name">
+                                {label(
+                                  (view === "mapping" &&
+                                    rows(mappingFor(a)?.facts).find(
+                                      (fact) => fact.property_label,
+                                    )?.property_label) ||
+                                    a.property_raw ||
+                                    a.property_name ||
+                                    a.name ||
+                                    "원문 명칭 미기재",
+                                )}
+                              </span>
+                              {view === "mapping" &&
+                              rows(mappingFor(a)?.facts).some(
+                                (fact) =>
+                                  fact.property_label &&
+                                  fact.property_label !== a.property_raw,
+                              ) &&
+                              a.property_raw ? (
+                                <details
+                                  className="analysis-internal-key"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <summary>원문 속성명</summary>
+                                  <span>{label(a.property_raw)}</span>
+                                </details>
+                              ) : null}
+                              {view === "mapping" && (
+                                <>
+                                  <span className="analysis-status">
+                                    {mappingLabel(a)}
+                                  </span>
+                                  {mappingFor(a)?.reason ? (
+                                    <details
+                                      className="analysis-internal-key"
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                    >
+                                      <summary>보류 사유</summary>
+                                      <code>
+                                        {label(mappingFor(a)?.reason)}
+                                      </code>
+                                    </details>
+                                  ) : null}
+                                </>
                               )}
                               {!!a.property_key && (
                                 <details
@@ -881,76 +1028,23 @@ function DocumentAnalysis({
                                 </details>
                               )}
                             </td>
-                            <td>
-                              {a.operator_raw
-                                ? `${label(a.operator_raw)} `
-                                : ""}
-                              {label(a.value_raw ?? a.value ?? a.raw_value)}
-                              {Array.isArray(a.qualifiers_raw) &&
-                                a.qualifiers_raw.length > 0 && (
-                                  <p className="operations-note">
-                                    조건:{" "}
-                                    {a.qualifiers_raw.map(label).join(" · ")}
-                                  </p>
-                                )}
+                            <td
+                              data-label={
+                                view === "mapping"
+                                  ? "요구값·단위·조건"
+                                  : "문서 값"
+                              }
+                            >
+                              <AttributeValue
+                                attribute={a}
+                                mapping={mappingFor(a)}
+                                standard={view === "mapping"}
+                              />
                             </td>
-                            <td>{label(a.unit_raw)}</td>
-                            {view === "mapping" && (
-                              <>
-                                <td>
-                                  {rows(mappingFor(a)?.facts).map(
-                                    (fact, index) => (
-                                      <div key={index}>
-                                        {label(
-                                          fact.property_label ||
-                                            fact.property_stable_key ||
-                                            fact.property_id ||
-                                            fact.property_concept_id,
-                                        )}
-                                        <p className="analysis-normalized-value">
-                                          {normalizedResultValue(fact)}
-                                          <small>
-                                            {[
-                                              fact.operator_raw ||
-                                                fact.operator,
-                                              fact.role,
-                                              fact.semantic_scope,
-                                              ...(Array.isArray(
-                                                fact.qualifiers_raw,
-                                              )
-                                                ? fact.qualifiers_raw
-                                                : []),
-                                            ]
-                                              .filter(Boolean)
-                                              .map(label)
-                                              .join(" · ")}
-                                          </small>
-                                        </p>
-                                      </div>
-                                    ),
-                                  )}
-                                  {!rows(mappingFor(a)?.facts).length && "—"}
-                                </td>
-                                <td>
-                                  <span className="analysis-status">
-                                    {mappingLabel(a)}
-                                  </span>
-                                  {mappingFor(a)?.reason ? (
-                                    <details
-                                      onClick={(event) =>
-                                        event.stopPropagation()
-                                      }
-                                    >
-                                      <summary>보류 사유</summary>
-                                      <code>
-                                        {label(mappingFor(a)?.reason)}
-                                      </code>
-                                    </details>
-                                  ) : null}
-                                </td>
-                              </>
+                            {view !== "mapping" && (
+                              <td data-label="단위">{label(a.unit_raw)}</td>
                             )}
-                            <td>
+                            <td data-label="원문 근거">
                               {refs(a).length ? (
                                 nodeButton(a, true)
                               ) : (

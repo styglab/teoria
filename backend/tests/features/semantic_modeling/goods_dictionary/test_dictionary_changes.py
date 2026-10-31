@@ -35,6 +35,26 @@ async def initial():
     return repo,service,source,target
 
 
+async def test_reset_deletes_only_meanings_with_snapshot_guard_and_actor_audit():
+    repo,service,source,target=await initial()
+    async def delete_meaning_records(conn):
+        counts={'definitions':len(repo.definitions),'mappings':len(repo.links)}
+        repo.links.clear();repo.definitions.clear()
+        return counts
+    repo.delete_meaning_records=delete_meaning_records
+    before=await service.snapshot()
+    with pytest.raises(ValueError,match='snapshot_changed'):
+        await service.reset_meanings({'expected_checksum':'0'*64,'rationale':'수정 전 파이프라인의 기존 사전을 제거합니다.'},actor='user:test')
+    assert await service.snapshot()==before
+    result=await service.reset_meanings({'expected_checksum':before['checksum'],
+        'rationale':'수정 전 파이프라인의 기존 사전을 제거합니다.'},actor='user:test')
+    assert result=={'status':'deleted','definitions':1,'mappings':1}
+    assert not repo.definitions and not repo.links and str(source) in repo.sources
+    deleted=[e for e in repo.events if e[2]=='delete']
+    assert {e[0] for e in deleted}=={'concept','mapping'}
+    assert all(e[3]=='user:test' for e in deleted)
+
+
 def revision(snapshot,source,target):
     return DictionaryChangeSet(baseline_checksum=snapshot['checksum'],
         reviewed_source_sha256=['a'*64],
@@ -151,6 +171,29 @@ def test_maintenance_http_uses_authenticated_actor_and_rejects_body_actor():
         result=client.post(base+'/maintenance/maintenance_http',headers=headers,json=payload)
         assert result.status_code==200 and result.json()['status']=='applied'
         assert repo.operations['maintenance_http']['actor']=='system:authenticated'
+
+
+def test_reset_http_requires_owner_and_rejects_body_actor_and_stale_snapshot():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from teoria.features.access_control.auth import AdminAuthorizer
+    from teoria.features.semantic_modeling.goods_dictionary.admin_router import create_goods_dictionary_router
+    from teoria.settings import Settings
+    repo=ChangeRepository();service=GoodsMeaningService(repository=repo)
+    async def delete_meaning_records(conn):
+        return {'definitions':0,'mappings':0}
+    repo.delete_meaning_records=delete_meaning_records
+    authorizer=AdminAuthorizer(Settings(admin_auth_mode='bearer',admin_api_token='fixture-token',
+        admin_api_actor='system:authenticated',admin_api_roles='ontology_owner'))
+    app=FastAPI();app.include_router(create_goods_dictionary_router(None,authorizer,service))
+    with TestClient(app) as client:
+        headers={'Authorization':'Bearer fixture-token'};base='/v1/admin/goods/dictionary'
+        payload={'expected_checksum':'0'*64,'rationale':'기존 파이프라인의 사전 정의와 매핑을 정리합니다.'}
+        assert client.post(base+'/reset-meanings',json=payload).status_code==401
+        assert client.post(base+'/reset-meanings',headers=headers,json={**payload,'actor':'fake'}).status_code==422
+        assert client.post(base+'/reset-meanings',headers=headers,json=payload).status_code==409
+        payload['expected_checksum']=client.get(base+'/snapshot',headers=headers).json()['checksum']
+        assert client.post(base+'/reset-meanings',headers=headers,json=payload).json()['status']=='deleted'
 
 
 async def test_owner_revision_requires_reassessment_of_dependent_characteristic_mapping():

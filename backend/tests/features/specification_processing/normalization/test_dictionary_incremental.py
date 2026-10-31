@@ -57,6 +57,19 @@ async def setup(tmp_path):
     return api,Catalog(descriptor),new,ref,req
 
 
+async def test_explicit_rebuild_bypasses_old_context_and_disables_application(tmp_path,monkeypatch):
+    api,repo,data,ref,req=await setup(tmp_path)
+    request=req.model_copy(update={'dictionary_rebuild_from_sources':True,
+        'dictionary_auto_approve':False,'dictionary_meaning_auto_approve':False})
+    maintenance=AsyncMock(return_value={'status':'proposed','draft_only':True,'artifacts':[]})
+    monkeypatch.setattr(dictionary_incremental,'maintain_dictionary',maintenance)
+    result=await dictionary_incremental.update_standard_dictionary(request,data,ref,api=api,repository=repo)
+    assert result['draft_only']
+    args=maintenance.await_args.args[0]
+    assert args['rebuild_from_sources'] and not args['auto_apply']
+    assert args['extractions']==[ref]
+
+
 async def test_value_only_change_reuses_verified_context_without_any_model_call(tmp_path):
     api,catalog,new,ref,req=await setup(tmp_path);runner=AsyncMock()
     result=await dictionary_incremental.update_standard_dictionary(req,new,ref,api=api,repository=catalog,runner=runner)

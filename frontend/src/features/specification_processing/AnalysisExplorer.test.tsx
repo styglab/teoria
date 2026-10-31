@@ -8,6 +8,40 @@ import {
 import { afterEach, expect, it } from "vitest";
 import { AnalysisExplorer, composition } from "./AnalysisExplorer";
 afterEach(cleanup);
+it("separates existing assets and installation support while preserving their source and relations", () => {
+  const value = {
+    document_id: "roles",
+    entities: [
+      { id: "root", name: "구매 서버", kind: "equipment" },
+      { id: "cpu", name: "CPU", kind: "equipment" },
+      { id: "old", name: "기존 서버", kind: "equipment", document_roles: ["existing_target"] },
+      { id: "part", name: "기존 부품", kind: "equipment" },
+      { id: "install", name: "설치 지원", kind: "activity" },
+    ],
+    relations: [
+      { source_id: "cpu", target_id: "root", kind: "component_of", basis: "explicit", evidence: [{ node_id: "n" }] },
+      { source_id: "part", target_id: "old", kind: "physical_part_of", basis: "explicit", evidence: [{ node_id: "n" }] },
+      { source_id: "install", target_id: "old", kind: "service_for", basis: "explicit", evidence: [{ node_id: "n" }] },
+    ],
+    attributes: [],
+    parsed_document: { nodes: [{ node_id: "n", text: "기존 서버에 대한 설치 지원을 제공한다." }] },
+  };
+  const primary = composition(value, "composition", true);
+  expect(primary.roots.map((e) => e.id)).toEqual(["root"]);
+  expect(primary.related.map((e) => e.id)).toEqual(["old", "part", "install"]);
+  render(<AnalysisExplorer value={{ documents: [value] }} />);
+  const primaryTree = screen.getByRole("tree", { name: "구성 대상" });
+  expect(within(primaryTree).getByRole("treeitem", { name: /CPU/ })).toBeTruthy();
+  expect(within(primaryTree).queryByRole("treeitem", { name: /기존 서버/ })).toBeNull();
+  const summary = screen.getByText("관련 대상·설치 지원·문서 · 3");
+  const related = summary.closest("details")!;
+  expect(related.open).toBe(false);
+  fireEvent.click(summary);
+  fireEvent.click(within(related).getByRole("treeitem", { name: /설치 지원/ }));
+  fireEvent.click(screen.getByRole("button", { name: "관계" }));
+  expect(screen.getAllByText(/기존 서버/).length).toBeGreaterThan(0);
+  expect(within(related).getByRole("treeitem", { name: /기존 서버.*기존 대상/ })).toBeTruthy();
+});
 const evidence = [{ node_id: "n1" }];
 const relation = (
   source_id: string,
@@ -381,8 +415,9 @@ it("keeps other requirements collapsed with source text instead of duty fields",
   expect(within(detail).getByText(clause.text)).toBeTruthy();
   expect(within(detail).queryByText(/구조화된 의무/)).toBeNull();
   expect((screen.getByLabelText("대상 유형") as HTMLSelectElement).value).toBe(
-    "all",
+    "goods",
   );
+  fireEvent.change(screen.getByLabelText("대상 유형"), { target: { value: "all" } });
   expect(
     screen.getByRole("treeitem", { name: /설치 작업 0개 속성/ }),
   ).toBeTruthy();
@@ -468,12 +503,24 @@ it("presents held relations and incomplete attributes as read-only unresolved re
   fireEvent.click(screen.getByRole("button", { name: "미해결 항목" }));
   const issues = screen.getByRole("region", { name: "문서 미해결 항목" });
   expect(within(issues).getByText("확인할 용량: 64")).toBeTruthy();
-  expect(within(issues).getByText(/방향이 불명확함/)).toBeTruthy();
+  expect(within(issues).queryByText(/방향이 불명확함/)).toBeNull();
+  expect(screen.getByRole("button", { name: "미해결 항목 1" })).toBeTruthy();
+  fireEvent.click(screen.getByText("부가 관계 검토 · 1", { selector: "summary" }));
+  expect(within(screen.getByRole("region", { name: "부가 관계 검토" })).getByText(/방향이 불명확함/)).toBeTruthy();
   fireEvent.click(
     within(issues).getByRole("button", { name: "속성 원문 확인" }),
   );
   expect(screen.getByText("프로세서는 32코어 이상")).toBeTruthy();
   expect(screen.queryByRole("button", { name: /승인|반려/ })).toBeNull();
+});
+it("does not count a supplementary-only hold as an unresolved product extraction", () => {
+  render(<AnalysisExplorer value={{ documents: [{ ...document, extraction_status: "extracted", attributes: [],
+    held_relations: [{ ...relation("cpu", "root", "compatible_with"), reasons: ["호환 여부 확인 필요"] }],
+  }] }} />);
+  expect(screen.getByRole("button", { name: "미해결 항목 0" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "미해결 항목" }));
+  expect(within(screen.getByRole("region", { name: "문서 미해결 항목" })).queryByText(/호환 여부/)).toBeNull();
+  expect(screen.getByText("부가 관계 검토 · 1", { selector: "summary" })).toBeTruthy();
 });
 it("retains failed documents in the document selector instead of presenting them as empty success", () => {
   render(

@@ -100,11 +100,14 @@ def render_report(corpus,normalized,standard_version,candidates=None):
                 lines.append(f"| {cell(clause['text'])} | {cell(refs)} |")
             lines+=['','</details>','']
         if d.get('held_relations'):
-            lines+=['### 보류한 관계','','| 출발 | 관계 | 도착 | 보류 사유 | 근거 |','|---|---|---|---|---|']
+            from teoria.features.specification_processing.extraction.extraction_status import SUPPLEMENTARY_RELATIONS
+            lines+=['### 보류한 관계','','통신·호환·의존·지원·작업·문서 관계는 부가 검토이며, 구성·속성 추출 상태와 구별합니다.','',
+                    '| 구분 | 출발 | 관계 | 도착 | 보류 사유 | 근거 |','|---|---|---|---|---|---|']
             for relation in d['held_relations']:
                 name=lambda key:entities.get(relation.get(key),{}).get('name',relation.get(key,''))
                 refs=' / '.join(e.get('native_ref',e.get('node_id','')) for e in relation.get('evidence',[]))
-                lines.append(f"| {cell(name('source_id'))} | {cell(relation['kind'])} | {cell(name('target_id'))} | {cell('; '.join(relation.get('reasons',[])))} | {cell(refs)} |")
+                category='부가 검토' if relation['kind'] in SUPPLEMENTARY_RELATIONS else '구성·대상 검토'
+                lines.append(f"| {category} | {cell(name('source_id'))} | {cell(relation['kind'])} | {cell(name('target_id'))} | {cell('; '.join(relation.get('reasons',[])))} | {cell(refs)} |")
             lines.append('')
         lines += ['| 대상 | 속성 | 원문 값·단위·조건 | 역할 / 범위 | 근거 |','|---|---|---|---|---|']
         for a in d['attributes']:

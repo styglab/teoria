@@ -1,0 +1,168 @@
+/* Shared input, native select and focus appearance for every admin workspace. */
+:root {
+  --control-background: var(--ui-surface);
+  --control-foreground: #27272a;
+  --control-border: var(--ui-line);
+  --control-hover-border: #b8b8c0;
+  --control-focus-border: #85858f;
+  --control-focus-ring: #a1a1aa33;
+  --control-radius: var(--ui-radius);
+}
+
+.workspace-main select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 8px 34px 8px 11px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  background-color: var(--control-background);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 10 4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  color: var(--control-foreground);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.workspace-main select:not([multiple]):not([size]):hover:not(:disabled) {
+  border-color: var(--control-hover-border);
+}
+.workspace-main select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  background-color: #fafafa;
+}
+
+/* One border and a subtle ring; no second, offset frame around form fields. */
+.workspace-main
+  :is(input, textarea, select):not(
+    :where([type="checkbox"], [type="radio"], [type="range"], [type="file"])
+  ):focus {
+  outline: none;
+  outline-offset: 0;
+  border-color: var(--control-focus-border);
+  box-shadow: 0 0 0 1px var(--control-focus-ring);
+}
+.workspace-main .page-search:focus-within {
+  border-color: var(--control-focus-border);
+  box-shadow: 0 0 0 1px var(--control-focus-ring);
+}
+.workspace-main .page-search input:focus {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+.workspace-main
+  :is(
+    button,
+    a,
+    input[type="checkbox"],
+    input[type="radio"],
+    summary
+  ):focus-visible {
+  outline: 1px solid var(--control-focus-border);
+  outline-offset: 2px;
+}
+/* Style the popup as well where customizable native selects are supported.
+   Other browsers keep their native picker and the shared trigger appearance. */
+@supports (appearance: base-select) {
+  .workspace-main select:not([multiple]):not([size]),
+  .workspace-main select:not([multiple]):not([size])::picker(select) {
+    appearance: base-select;
+  }
+  .workspace-main select:not([multiple]):not([size])::picker-icon {
+    display: none;
+  }
+  .workspace-main select:not([multiple]):not([size])::picker(select) {
+    min-width: anchor-size(width);
+    max-height: min(320px, 60vh);
+    margin-block: 6px;
+    padding: 5px;
+    border: 1px solid var(--control-border);
+    border-radius: 9px;
+    background: var(--control-background);
+    color: var(--control-foreground);
+    box-shadow:
+      0 8px 24px #18181b14,
+      0 2px 6px #18181b08;
+    font-family: inherit;
+    overflow: auto;
+  }
+  .workspace-main select:not([multiple]):not([size]) option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-size: 13px;
+    line-height: 1.4;
+    cursor: pointer;
+  }
+  .workspace-main select:not([multiple]):not([size]) option:checked {
+    background: #f4f4f5;
+    font-weight: 500;
+  }
+  .workspace-main
+    select:not([multiple]):not([size])
+    option:is(:hover, :focus-visible) {
+    background: #f4f4f5;
+    outline: none;
+  }
+  .workspace-main select:not([multiple]):not([size]) option::checkmark {
+    order: 1;
+    margin-inline-start: auto;
+    color: #71717a;
+  }
+  .workspace-main select:not([multiple]):not([size]) option:disabled {
+    color: #a1a1aa;
+    cursor: not-allowed;
+  }
+}
+@media (forced-colors: active) {
+  .workspace-main :is(input, select, textarea):focus {
+    outline: 1px solid Highlight;
+    outline-offset: 1px;
+  }
+  .workspace-main select:not([multiple]):not([size]) {
+    appearance: auto;
+    background-image: none;
+    padding-right: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-main select {
+    transition: none;
+  }
+}
+
+.ui-input:not(
+  :where([type="checkbox"], [type="radio"], [type="range"], [type="file"])
+) {
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--ui-control-height);
+  padding: 8px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  background: var(--control-background);
+  color: var(--control-foreground);
+  font: inherit;
+  font-size: var(--ui-font-control);
+}
+.ui-input::placeholder {
+  color: #a1a1aa;
+}
+.workspace-main .page-search .ui-input {
+  padding-inline: 0;
+  border: 0;
+  background: transparent;
+}

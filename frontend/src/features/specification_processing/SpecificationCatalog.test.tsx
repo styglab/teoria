@@ -1,3 +1,4 @@
+import { clearCatalogCache } from "./catalog_queries";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
@@ -18,6 +19,7 @@ import {
 } from "./SpecificationCatalog";
 afterEach(() => {
   cleanup();
+  clearCatalogCache();
   vi.restoreAllMocks();
 });
 const doc = {
@@ -141,7 +143,9 @@ it("preserves source failure status while displaying an earlier available docume
   expect(screen.getByText(/최근 처리: 실패/)).toBeTruthy();
   expect(history).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "처리 이력 2회" }));
-  await waitFor(() => expect(history).toHaveBeenCalledWith("a", 0));
+  await waitFor(() =>
+    expect(history).toHaveBeenCalledWith("a", 0, expect.any(AbortSignal)),
+  );
 });
 it("aligns only matching authority, concept, scope and units and retains repeated target values", () => {
   const one = result();
@@ -185,4 +189,45 @@ it("resolves profile subject observation IDs and keeps unknown scopes separate",
   }>;
   rows[0].facts[0].semantic_scope = "unknown";
   expect(comparisonRows([one, two])).toHaveLength(2);
+});
+it("explains missing comparison cells without equating incompatible values", async () => {
+  const { comparisonGap } = await import("./document_comparison");
+  const one = result();
+  const scoped = comparisonRows([one, result("b", "whole_system")]);
+  expect(
+    comparisonGap(scoped.find((row) => row.cells[0].length)!, 1, scoped),
+  ).toBe("적용 범위 다름");
+  const versions = comparisonRows([one, result("b", "per_cpu", "new")]);
+  expect(
+    comparisonGap(versions.find((row) => row.cells[0].length)!, 1, versions),
+  ).toBe("적용 표준 다름");
+  const two = result("b");
+  const attributes = two.result!.normalization!.attributes as Array<{
+    facts: Array<{ value: { unit: string } }>;
+  }>;
+  attributes[0].facts[0].value.unit = "thread";
+  const units = comparisonRows([one, two]);
+  expect(
+    comparisonGap(units.find((row) => row.cells[0].length)!, 1, units),
+  ).toBe("단위 다름");
+});
+it("keeps a classification error separate from a successful document list", async () => {
+  vi.spyOn(documentCatalogApi, "classifications").mockRejectedValue(
+    new Error("offline"),
+  );
+  vi.spyOn(documentCatalogApi, "documents").mockResolvedValue({
+    items: [doc],
+    total: 1,
+  });
+  render(
+    <MemoryRouter>
+      <SpecificationCatalog />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole("link", { name: doc.filename })).toBeTruthy();
+  expect(screen.getByRole("alert").textContent).toContain("분류 목록");
+  fireEvent.click(screen.getByRole("button", { name: "새로고침" }));
+  await waitFor(() =>
+    expect(screen.getByRole("alert").textContent).toContain("분류 목록"),
+  );
 });

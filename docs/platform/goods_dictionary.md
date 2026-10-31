@@ -188,3 +188,12 @@ operation_id는 `maintenance_` 접두사를 사용하며 인증 주체를 적용
 별도 재검증과 영향 검사를 통과한 변경 묶음만 적용하고 승인 스냅샷을 고정한다.
 과거 근거가 없거나 충돌하면 해당 문맥을 보류한다. 문서처리는 지정한 스냅샷을 계속 사용한다.
 상세 순서와 산출물은 [파이프라인](../procurement_specification_processing/pipeline.md#증분-관리-산출물)을 따른다.
+
+## 기존 의미 기록 초기화
+
+파이프라인 변경으로 기존 사전 정의·매핑을 제거해야 할 때 소유 권한으로
+`POST /v1/admin/goods/dictionary/reset-meanings`를 호출할 수 있다.
+입력은 현재 `/snapshot`의 `checksum`을 담은 `expected_checksum`과 `rationale`이다.
+잠금 안에서 checksum을 다시 확인하고 일치할 때만 모든 로컬 사전 정의·매핑을 삭제한다.
+원문 표현 등록·감사 이벤트와 Published Ontology는 유지하며 삭제 주체는 인증 principal로 기록한다.
+문서 결과·객체 저장소 산출물 삭제는 별도 운영 정리 범위다. 정상 재구축 Flow는 이 API를 호출하지 않는다.

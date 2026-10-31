@@ -102,7 +102,7 @@ export type DocumentResult = {
 };
 const catalogRoot = "/specification-processing/catalog";
 export const documentCatalogApi = {
-  classifications: (query = "", offset = 0) =>
+  classifications: (query = "", offset = 0, signal?: AbortSignal) =>
     getJson<{
       items: Array<{
         classification_code: string | null;
@@ -113,20 +113,24 @@ export const documentCatalogApi = {
       documents: number;
     }>(
       `${catalogRoot}/classifications?${new URLSearchParams({ query, offset: String(offset) })}`,
+      signal,
     ),
-  documents: (params: URLSearchParams) =>
+  documents: (params: URLSearchParams, signal?: AbortSignal) =>
     getJson<{ items: CatalogDocument[]; total: number }>(
       `${catalogRoot}/documents?${params}`,
+      signal,
     ),
-  result: (id: string) =>
+  result: (id: string, signal?: AbortSignal) =>
     getJson<DocumentResult>(
       `${catalogRoot}/documents/${encodeURIComponent(id)}/result`,
+      signal,
     ),
-  history: (id: string, page = 0) =>
+  history: (id: string, page = 0, signal?: AbortSignal) =>
     getJson<{
       items: Array<{ run_id: string; status: string; started_at: string }>;
       total: number;
     }>(
       `${catalogRoot}/documents/${encodeURIComponent(id)}/history?offset=${page * 25}&limit=25`,
+      signal,
     ),
 };

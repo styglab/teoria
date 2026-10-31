@@ -74,6 +74,9 @@ Admin token으로 `/v1/admin/auth/session`을 확인한다. 공개 상태 응답
 | `frontend/src/app/` | 앱·라우팅·메뉴 |
 | `frontend/src/features/` | 기능별 화면 |
 | `frontend/src/api/` | API client·HTTP 계약 |
+| `frontend/src/components/ui/design_tokens.css` | 공통 색상·간격·글자 크기·컨트롤 크기 |
+| `frontend/src/components/ui/button.tsx`, `button.css`, `input.tsx` | 실제 공유 버튼·입력 컴포넌트 |
+| `frontend/src/components/ui/form_controls.css` | 관리자 화면의 입력 포커스·셀렉트 화살표·옵션 목록 |
 | `backend/src/teoria/features/` | 소유 기능의 HTTP 라우터 |
 | `backend/src/teoria/entrypoints/` | 앱·lifespan·조립 |
 
@@ -81,8 +84,40 @@ Admin token으로 `/v1/admin/auth/session`을 확인한다. 공개 상태 응답
 npm --prefix frontend ci
 npm --prefix frontend run test -- --run
 npm --prefix frontend run build
+npm --prefix frontend run test:e2e
 ```
+
+입력 포커스와 단일 선택 셀렉트의 표현은 `components/ui/form_controls.css`를 기준으로 한다.
+`main.tsx`에서 화면 CSS 다음에 한 번 적재하며, 화면별 규칙이 공통 포커스·셀렉트 표현을 덮지 않도록 한다.
+기존 화면 CSS에는 레이아웃과 과거 입력 표현 규칙도 일부 남아 있으나 공통 모듈을 우선 적용한다.
+입력은 기존 1px 테두리와 얇은 포커스 표시를 사용하고, 검색 그룹은 바깥 컨테이너에만 표시한다.
+셀렉트는 기본 HTML 선택 동작을 유지한다. 지원 브라우저에서는 옵션 목록도 공통 모양으로 표시하고,
+그 외에는 동일한 입력창 모양과 브라우저 기본 목록을 제공한다.
+구현 기준은 [Chrome 공식 가이드](https://developer.chrome.com/blog/a-customizable-select)와
+[MDN의 customizable select 안내](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Customizable_select)를 따른다.
+고대비 모드에서는 시스템 선택 모양과 명확한 포커스를 사용한다.
 
 탐색 상태는 URL로 복원하고 큰 관계도는 필요할 때 적재한다.
 Compose의 gateway는 UI와 내부 API proxy를, K3s는 UI와 서비스별 ingress 구성을 사용한다.
 [배포 안내](../deployment/compose.md)와 [개발 경계](development.md)를 따른다.
+
+
+## 화면 회귀 검사와 조회 정책
+
+`frontend/tests/browser/`는 고정 샘플만 사용하는 브라우저 검사다. 실제 API 인증정보와 원문을
+baseline 이미지에 저장하지 않는다. 목록·입력 포커스·펼친 셀렉트·모바일 카드·상세·근거·비교의
+9개 기준 이미지와 키보드 선택·오류 복구·스크롤/선택 복원·1,000개 대상 탐색을 검사한다.
+CI의 `admin-ui-visual`과 같은 고정 Playwright 컨테이너에서 생성·비교한다.
+기준 갱신은 `npm run test:e2e:update`, 일반 검증은 `npm run test:e2e`다.
+실패한 비교의 이미지·trace는 CI artifact로 제공한다.
+
+문서 탐색 요청은 조건 변경·화면 이탈 시 취소한다. 목록 갱신 중에는 기존 행을 유지하고
+현재 조건의 응답을 기다린다는 상태를 표시한다. 분류·문서 오류와 재시도는 분리한다.
+문서 조회 캐시는 메모리에서 최대 8개·30초이며 로그인 토큰이 달라지면 폐기한다.
+관찰 본문을 localStorage/sessionStorage에 저장하지 않는다. 목록 스크롤과 비교 선택은
+같은 탭의 메모리에서 최대 12개 조회 상태로 복원한다.
+
+모바일은 규격서 카드와 접을 수 있는 필터를 사용한다. 표준 상세는 속성·요구값/단위/조건·근거의
+3열로 제공하고 작은 화면에서는 세로로 배치한다. 원문 값과 내부 식별자는 펼쳐 확인한다.
+문서 비교는 표준·단위·범위·역할·대상 연결이 다른 경우 빈 셀의 이유를 표시한다.
+주요 업무 화면은 방문 시 적재하고 화면 오류에는 전체 앱 탐색을 유지하는 복구 화면을 제공한다.

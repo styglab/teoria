@@ -162,6 +162,7 @@ async def resolve_attribute_semantics(request:SpecificationRun,workspace:str):
 
 @task(name='05 추출 결과 검증·저장',**TASK_OPTIONS)
 async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool):
+    from teoria.features.specification_processing.extraction.extraction_status import document_extraction_status,held_relation_counts
     items=await load(Path(workspace)/'work.json')
     if reused:
         corpus=await load(Path(workspace)/'extracted.json')
@@ -187,7 +188,7 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                 'entities':graph['entities'],'relations':graph['relations'],'held_relations':graph.get('held_relations',[]),'inventory_ids':graph.get('inventory_ids',[]),
                 'declared_quantities':graph.get('declared_quantities',[]),'attributes':attributes,
                 'requirements':graph.get('requirements',[]),
-                'extraction_status':'partial' if summary['status']=='partial' or graph.get('held_relations') or context.get('document_assessment',{}).get('status')=='needs_review' else 'extracted',
+                'extraction_status':document_extraction_status(summary,graph,context),
                 'attribute_input_coverage':summary['input_coverage'],
                 'unresolved_extraction':{**{k:summary[k] for k in ['failed_chunks','uncovered_spec_fragments','semantic_resolution','recovery_passes']},
                                          'held_relations':len(graph.get('held_relations',[])),
@@ -195,7 +196,7 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                                          'coverage_reasons':summary.get('coverage_reasons',{}),
                                          'repeated_target_mentions':summary.get('repeated_target_mentions',0),
                                          'other_requirement_clauses':summary.get('other_requirement_clauses',0),
-                                         'held_relations_by_kind':summary.get('held_relations_by_kind',{})}})
+                                         **held_relation_counts(graph)}})
         corpus={'schema_version':'specification_extraction_v1','classification_code':request.classification_code,'documents':documents,'unavailable_documents':failed,
             'extraction_policy':'product_specifications_with_bounded_recovery_and_other_source_clauses'}
     validate_checkpoint(corpus,request,items)

@@ -202,3 +202,19 @@ def test_semantic_context_includes_owner_scope_text_and_source_ancestors():
     assert context['owners'][0]['name']=='이동형 진료대'
     texts={n['node_id']:n['text'] for n in context['source_context']}
     assert texts['heading']=='이동형 진료대의 규격' and '200kg' in texts['detail']
+
+
+@pytest.mark.parametrize('value,kind,expected',[
+    ('10 MHz~8 GHz','range',{'MHz','GHz'}),
+    ('10MHz～8GHz','range',{'MHz','GHz'}),
+    ('10 MHz~80 MHz','range',{'MHz'}),
+    ('10~80','range',set()),
+    ('Model 10 MHz~8 GHz','range',set()),
+    ('10 MHz~8 GHz','text',set()),
+])
+def test_units_in_literal_numeric_range_are_observed_without_conversion(value,kind,expected):
+    from teoria.features.specification_processing.normalization.dictionary_semantics import observed_unit_literals
+    observation={'value_raw':value,'unit_raw':None,'value_kind':kind}
+    before=deepcopy(observation)
+    assert observed_unit_literals(observation)==expected
+    assert observation==before

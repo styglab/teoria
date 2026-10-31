@@ -1,6 +1,7 @@
 """Stage 06 semantic authoring: grounded inference, independent check, audited Admin writes."""
 from collections import Counter
 from pathlib import Path
+import re
 from tempfile import TemporaryDirectory
 from typing import Literal
 
@@ -9,6 +10,20 @@ from pydantic import Field
 from teoria.features.semantic_modeling.goods_dictionary.contracts import Record
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import ConceptDefinition, MappingProposal
 from teoria.integrations.codex import CodexRunner
+from teoria.features.specification_processing.extraction.value_normalization import UNITS
+
+
+def observed_unit_literals(observation, value_kind=None):
+    """Read explicit units, including two numeric range endpoints; never convert values."""
+    if observation.get('unit_raw'):
+        return {observation['unit_raw']}
+    if (value_kind or observation.get('value_kind') or observation.get('data_type'))!='range':
+        return set()
+    unit_pattern='|'.join(re.escape(u) for u in sorted(UNITS,key=len,reverse=True) if UNITS[u] is not None)
+    numeric=r'[+-]?(?:\d+(?:,\d{3})*)(?:\.\d+)?'
+    match=re.fullmatch(rf'\s*{numeric}\s*({unit_pattern})\s*(?:~|～|–|—|-|to)\s*{numeric}\s*({unit_pattern})\s*',
+        observation.get('value_raw') or '')
+    return {match[1],match[2]} if match else set()
 
 
 class SemanticChoice(Record):
@@ -109,7 +124,7 @@ def validate_choice(choice, candidate, concepts, owner_id, occurrences):
         kinds = {o['candidate']['value_kind'] for o in occurrences}
         if kinds != {definition.value_kind}:
             raise ValueError('value_kind_mismatch')
-        units = {o['observation'].get('unit_raw') for o in occurrences} - {None, ''}
+        units = set().union(*(observed_unit_literals(o['observation'],candidate.value_kind) for o in occurrences))
         if definition.allowed_units and not units.issubset(set(definition.allowed_units)):
             raise ValueError('unit_not_allowed')
         if choice.action == 'create' and set(definition.allowed_units) != units:
