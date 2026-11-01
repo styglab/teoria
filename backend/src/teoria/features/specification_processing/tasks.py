@@ -61,6 +61,9 @@ def validate_checkpoint(corpus,request,source_items):
         for requirement in d.get('requirements',[]):
             if requirement.get('observation_type')=='obligation':
                 validate_legacy_obligation(requirement,ids,d['parsed_document'])
+            elif requirement.get('observation_type')=='source_clause' and requirement.get('category')=='description':
+                from teoria.features.specification_processing.extraction.requirement_clauses import validate_description_clause
+                validate_description_clause(requirement,ids,d['parsed_document'])
         from teoria.features.specification_processing.extraction.target_names import validate_materialized_names
         for entity in d['entities']:
             validate_materialized_names(entity,d['parsed_document'])
@@ -110,55 +113,109 @@ async def stage_original_documents(request:SpecificationRun,workspace:str):
 
 @task(name='01 문서 파싱·본문 역할 분류',**TASK_OPTIONS)
 async def parse_documents(request:SpecificationRun,workspace:str):
-    from teoria.features.specification_processing.parsing.document_parser import parse_document
+    from teoria.features.specification_processing.parsing.document_parser import parse_document,parser_runtime_identity
+    from teoria.features.specification_processing.parsing.document_assessment import assess_document
+    from teoria.features.specification_processing.storage.extraction_checkpoints import extraction_checkpoints
     model=runner(request)
-    async def parse_one(entry):
-        folder=Path(workspace)/'processing'/entry['document_id'];await asyncio.to_thread(folder.mkdir,parents=True,exist_ok=True)
-        context=await parse_document(Path(entry['source_path']),folder/'native.json',entry['document_id'],request.parser_python)
-        from teoria.features.specification_processing.parsing.document_assessment import assess_document
-        assessment=await assess_document(context,model,folder)
-        context['document_assessment']=assessment
-        await save(folder/'document_assessment.json',assessment)
-        await save(folder/'document.json',context)
-        if assessment['excluded']:
-            entry['failure']={'stage':'document_assessment','reason':'not_specification','disposition':'excluded',
-                              'details':{'document_kind':assessment['document_kind']}}
-    await each_document(workspace,request,parse_one)
+    async with extraction_checkpoints(request) as checkpoints:
+        runtime=await parser_runtime_identity(request.parser_python) if checkpoints.enabled else None
+        async def parse_one(entry):
+            folder=Path(workspace)/'processing'/entry['document_id'];await asyncio.to_thread(folder.mkdir,parents=True,exist_ok=True)
+            inputs={'source_sha256':entry['source']['sha256'],'document_id':entry['document_id'],
+                    'filename':entry['source']['original_name'],'parser_runtime':runtime}
+            restored=await checkpoints.restore('parse',inputs,folder,entry['source_path'])
+            if restored:
+                context=await load(folder/'document.json');assessment=context['document_assessment']
+                entry.setdefault('reused_stages',[]).append('parse')
+            else:
+                context=await parse_document(Path(entry['source_path']),folder/'native.json',entry['document_id'],request.parser_python)
+                assessment=await assess_document(context,model,folder)
+                context['document_assessment']=assessment
+                await save(folder/'document_assessment.json',assessment);await save(folder/'document.json',context)
+                if assessment.get('status')=='classified':await checkpoints.record('parse',inputs,folder)
+            if assessment['excluded']:
+                entry['failure']={'stage':'document_assessment','reason':'not_specification','disposition':'excluded',
+                                  'details':{'document_kind':assessment['document_kind']}}
+        await each_document(workspace,request,parse_one)
+
 
 @task(name='02 엔티티·계층·관계 추출',**TASK_OPTIONS)
 async def extract_entity_relations(request:SpecificationRun,workspace:str):
     from teoria.features.specification_processing.extraction.entity_relation_extraction import extract_entity_relations as extract
+    from teoria.features.specification_processing.storage.extraction_checkpoints import extraction_checkpoints
     model=runner(request)
-    async def extract_one(entry):
-        folder=Path(workspace)/'processing'/entry['document_id']
-        await extract(await load(folder/'document.json'),folder/'inventory',model)
-    await each_document(workspace,request,extract_one)
+    async with extraction_checkpoints(request) as checkpoints:
+        async def extract_one(entry):
+            folder=Path(workspace)/'processing'/entry['document_id'];document=await load(folder/'document.json')
+            inputs={'source_sha256':entry['source']['sha256'],'document':document}
+            if await checkpoints.restore('composition',inputs,folder,entry['source_path']):
+                entry.setdefault('reused_stages',[]).append('composition')
+            else:
+                await extract(document,folder/'inventory',model,checkpoints=checkpoints)
+                await checkpoints.record('composition',inputs,folder)
+        await each_document(workspace,request,extract_one)
+
 
 @task(name='03 요구조건 추출·누락 구간 재추출',**TASK_OPTIONS)
 async def extract_requirements(request:SpecificationRun,workspace:str):
     from teoria.features.specification_processing.extraction.requirement_extraction import extract_requirements as extract
+    from teoria.features.specification_processing.extraction.composition_review import assert_composition_preserved
+    from teoria.features.specification_processing.storage.extraction_checkpoints import extraction_checkpoints
     model=runner(request)
-    async def extract_one(entry):
-        folder=Path(workspace)/'processing'/entry['document_id']
-        await extract(entry['document_id'],folder/'inventory',folder/'attributes',model,None,False,resolve_semantics=False)
-    await each_document(workspace,request,extract_one)
+    async with extraction_checkpoints(request) as checkpoints:
+        async def extract_one(entry):
+            folder=Path(workspace)/'processing'/entry['document_id'];out=folder/'attributes'
+            document=await load(folder/'document.json');base=await load(folder/'inventory/graph.json')
+            inputs={'source_sha256':entry['source']['sha256'],'document':document,'graph':base}
+            restored=await checkpoints.restore('attributes',inputs,folder,entry['source_path'])
+            if restored:
+                entry.setdefault('reused_stages',[]).append('attributes')
+                summary=await load(out/'summary.json');summary.update(new_model_calls=0,checkpoint_reused=True)
+                await save(out/'summary.json',summary)
+            else:
+                await extract(entry['document_id'],folder/'inventory',out,model,None,False,
+                              resolve_semantics=False,checkpoints=checkpoints)
+            graph=await load(out/'attribute_graph.json');assert_composition_preserved(base,graph)
+            summary=await load(out/'summary.json')
+            if (not restored and not summary['failed_chunks'] and not summary.get('quarantined')
+                    and not summary['uncovered_spec_fragments'] and not summary.get('target_recovery',{}).get('error_type')):
+                await checkpoints.record('attributes',inputs,folder)
+        await each_document(workspace,request,extract_one)
+
 
 @task(name='04 대상·역할·범위 해석',**TASK_OPTIONS)
 async def resolve_attribute_semantics(request:SpecificationRun,workspace:str):
     from teoria.features.specification_processing.extraction.attribute_resolution import resolve_attribute_semantics as resolve
+    from teoria.features.specification_processing.extraction.composition_review import assert_composition_preserved
+    from teoria.features.specification_processing.storage.extraction_checkpoints import extraction_checkpoints
     model=runner(request)
-    async def resolve_one(entry):
-        folder=Path(workspace)/'processing'/entry['document_id'];out=folder/'attributes'
-        graph=await load(out/'attribute_graph.json');summary=await load(out/'summary.json')
-        semantic=await resolve(await load(folder/'document.json'),graph,graph['attributes'],model,out)
-        summary['semantic_resolution']=semantic
-        summary['other_requirement_clauses']=sum(r.get('category')=='other' for r in graph.get('requirements',[]) if r.get('observation_type')=='source_clause')
-        summary['attributes']=len(graph['attributes'])
-        summary['numeric_comparisons']=sum(a['normalized']['comparison_rule']=='numeric_requirement' for a in graph['attributes'])
-        summary['unresolved_units']=sum(a['normalized']['unit_status']=='unmapped' for a in graph['attributes'])
-        if semantic['unresolved'] or semantic.get('unresolved_scope',0):summary['status']='partial'
-        await save(out/'attribute_graph.json',graph);await save(out/'summary.json',summary)
-    await each_document(workspace,request,resolve_one)
+    async with extraction_checkpoints(request) as checkpoints:
+        async def resolve_one(entry):
+            folder=Path(workspace)/'processing'/entry['document_id'];out=folder/'attributes'
+            document=await load(folder/'document.json');graph=await load(out/'attribute_graph.json')
+            base=await load(folder/'inventory/graph.json')
+            inputs={'source_sha256':entry['source']['sha256'],'document':document,'graph':graph}
+            restored=await checkpoints.restore('semantics',inputs,folder,entry['source_path'])
+            if restored:
+                entry.setdefault('reused_stages',[]).append('semantics')
+                graph=await load(out/'attribute_graph.json');summary=await load(out/'summary.json')
+                semantic=summary['semantic_resolution']
+                semantic.update(cached_batches=semantic['batches'],input_nodes=0,input_characters=0,
+                                retried_attributes=0,recovered_attributes=0,model_failures=0,failed_batches=0)
+                summary.update(new_model_calls=0,checkpoint_reused=True)
+            else:
+                summary=await load(out/'summary.json')
+                semantic=await resolve(document,graph,graph['attributes'],model,out,checkpoints=checkpoints)
+                summary['semantic_resolution']=semantic
+            assert_composition_preserved(base,graph)
+            summary['other_requirement_clauses']=sum(r.get('category')=='other' for r in graph.get('requirements',[]) if r.get('observation_type')=='source_clause')
+            summary['attributes']=len(graph['attributes'])
+            summary['numeric_comparisons']=sum(a['normalized']['comparison_rule']=='numeric_requirement' for a in graph['attributes'])
+            summary['unresolved_units']=sum(a['normalized']['unit_status']=='unmapped' for a in graph['attributes'])
+            if semantic['unresolved'] or semantic.get('unresolved_scope',0):summary['status']='partial'
+            await save(out/'attribute_graph.json',graph);await save(out/'summary.json',summary)
+            if not restored and not semantic['failed_batches']:await checkpoints.record('semantics',inputs,folder)
+        await each_document(workspace,request,resolve_one)
 
 @task(name='05 추출 결과 검증·저장',**TASK_OPTIONS)
 async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool):
@@ -184,18 +241,25 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                 row={k:v for k,v in a.items() if k not in {'normalized','ontology_property_id','wire_format_projection'}}
                 row['evidence']={k:v for k,v in a['evidence'].items() if k!='quote'};attributes.append(row)
             documents.append({**common,'classification_code':request.classification_code,'parsed_document':context,
-                'parser':{'name':'kory_parser','version':context['parser_version'],'ocr':False},
+                'parser':{'name':'kory_parser','version':context['parser_version'],
+                          'ocr':context.get('ocr',False),'ocr_enabled':context.get('ocr_enabled',False),
+                          'ocr_pages':context.get('ocr_pages',[]),
+                          'unreadable_ocr_pages':context.get('unreadable_ocr_pages',[])},
                 'entities':graph['entities'],'relations':graph['relations'],'held_relations':graph.get('held_relations',[]),'inventory_ids':graph.get('inventory_ids',[]),
+                **({'composition_inventory':graph['composition_inventory']} if 'composition_inventory' in graph else {}),
                 'declared_quantities':graph.get('declared_quantities',[]),'attributes':attributes,
                 'requirements':graph.get('requirements',[]),
                 'extraction_status':document_extraction_status(summary,graph,context),
                 'attribute_input_coverage':summary['input_coverage'],
                 'unresolved_extraction':{**{k:summary[k] for k in ['failed_chunks','uncovered_spec_fragments','semantic_resolution','recovery_passes']},
+                                         'reused_stages':entry.get('reused_stages',[]),
                                          'held_relations':len(graph.get('held_relations',[])),
                                          'coverage_by_kind':summary.get('coverage_by_kind',{}),
                                          'coverage_reasons':summary.get('coverage_reasons',{}),
                                          'repeated_target_mentions':summary.get('repeated_target_mentions',0),
+                                         'specification_references':summary.get('specification_references',0),
                                          'other_requirement_clauses':summary.get('other_requirement_clauses',0),
+                                         'target_recovery':summary.get('target_recovery',{}),
                                          **held_relation_counts(graph)}})
         corpus={'schema_version':'specification_extraction_v1','classification_code':request.classification_code,'documents':documents,'unavailable_documents':failed,
             'extraction_policy':'product_specifications_with_bounded_recovery_and_other_source_clauses'}

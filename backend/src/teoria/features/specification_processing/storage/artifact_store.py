@@ -114,6 +114,13 @@ class S3ArtifactStore:
                 return bytes(data)
 
     async def put(self,key,data,media_type='application/json'):
+        # Replays can contain large originals. Some S3 endpoints close the upload connection
+        # as soon as If-None-Match fails, before an HTTP client can read the 412 response.
+        try:existing=await self.get(key)
+        except FileNotFoundError:existing=None
+        if existing is not None:
+            if existing!=data:raise ValueError('immutable S3 artifact conflict')
+            return ArtifactRef(key=key,uri=self.root_uri+'/'+object_key(key),sha256=hashlib.sha256(data).hexdigest(),size_bytes=len(data),media_type=media_type)
         response=await self.request('PUT',key,data,{'if-none-match':'*','content-type':media_type})
         if response.status_code==412:
             if await self.get(key)!=data:raise ValueError('immutable S3 artifact conflict')

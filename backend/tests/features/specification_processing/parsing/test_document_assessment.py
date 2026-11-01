@@ -71,8 +71,8 @@ async def test_non_specification_disposition_prevents_following_extraction(tmp_p
         {'role':'template','node_ids':[n['node_id'] for n in document['nodes']]}],'rationale':'Blank comparison form.'}
     monkeypatch.setattr(tasks,'runner',lambda _:model)
     monkeypatch.setattr(document_parser,'parse_document',AsyncMock(return_value=document))
-    work=tmp_path/'work.json';work.write_text(json.dumps([{'document_id':'form','source_path':'unused.hwp'}]))
-    request=SimpleNamespace(concurrency=1,parser_python=None)
+    work=tmp_path/'work.json';work.write_text(json.dumps([{'document_id':'form','source_path':'unused.hwp','source':{'sha256':'fixture','original_name':'unused.hwp'}}]))
+    request=SimpleNamespace(concurrency=1,parser_python=None,model=None,reuse_stage_checkpoints=False,artifact_root=(tmp_path/'objects').as_uri())
     await tasks.parse_documents.fn(request,str(tmp_path))
     assert json.loads(work.read_text())[0]['failure']['disposition']=='excluded'
     followup=AsyncMock()
@@ -133,3 +133,11 @@ async def test_general_law_clauses_stay_available_but_do_not_replace_concrete_pr
     fragments=[f for c in make_chunks({'entities':[]},document) for f in c]
     assert [f['node_id'] for f in fragments]==['1']
     assert '세척·소독이 용이한 재질' in fragments[0]['text']
+
+
+def test_pure_description_is_kept_for_source_reading_but_real_nonnumeric_conditions_stay_extractable():
+    document={'nodes':[{'node_id':'description','kind':'paragraph','text':'화합물 분석에 사용된다.'},
+                       {'node_id':'storage','kind':'paragraph','text':'냉장 상태를 유지해야 한다.'}],
+              'document_assessment':{'node_roles':{'description':'description','storage':'technical_requirement'}}}
+    assert extraction_node_ids(document)=={'description','storage'}
+    assert extraction_node_ids(document,specifications_only=True)=={'storage'}

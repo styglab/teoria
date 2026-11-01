@@ -166,6 +166,73 @@
   color: var(--ui-text);
 }
 
+/* Keep the selected original alongside a long property list instead of below its fold. */
+.spec-document .analysis-layout {
+  flex: none;
+  height: max(420px, calc(100dvh - 300px));
+}
+.analysis-layout[data-view="source"] .analysis-properties .page-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.analysis-layout[data-view="source"] .page-table th:nth-child(1) { width: 24%; }
+.analysis-layout[data-view="source"] .page-table th:nth-child(2) { width: 36%; }
+.analysis-layout[data-view="source"] .page-table th:nth-child(3) { width: 10%; }
+.analysis-layout[data-view="source"] .page-table th:nth-child(4) { width: 30%; }
+.analysis-layout[data-view="source"] .page-table td:nth-child(3) {
+  padding-inline: 6px;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.analysis-evidence-preview {
+  margin: 0 0 6px;
+  color: var(--ui-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.analysis-source-selection {
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--ui-line);
+  border-radius: 6px;
+  background: var(--ui-surface);
+}
+.analysis-source-selection small {
+  color: var(--ui-secondary);
+}
+.analysis-source-heading {
+  position: sticky;
+  top: -14px;
+  z-index: 1;
+  padding-block: 6px;
+  background: #f8fbff;
+}
+.analysis-source .evidence-node p,
+.analysis-source-context p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.analysis-source mark {
+  background: #fef08a;
+  color: #18181b;
+}
+.analysis-source-context {
+  margin: 16px 0;
+  font-size: 12px;
+}
+.analysis-source-context p {
+  padding: 8px;
+  border-left: 2px solid var(--ui-line);
+}
+.analysis-source-context p.is-selected {
+  border-left-color: var(--ui-text);
+  background: var(--ui-surface);
+}
+
 .analysis-layout[data-view="mapping"] .analysis-properties .page-table {
   min-width: 0;
   table-layout: fixed;

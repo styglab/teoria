@@ -73,6 +73,7 @@ class SpecificationRun(Record):
     artifact_root: str = Field(min_length=1)
     standard: StandardReference | None = None
     extraction_checkpoint: StandardReference | None = None
+    reuse_stage_checkpoints: bool = True
     parser_python: str | None = None
     model: str | None = None
     concurrency: int = Field(default=2,ge=1,le=4)

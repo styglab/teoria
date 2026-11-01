@@ -111,13 +111,15 @@ def cleanup_cycle(root, *, apply=False, history_path=DEFAULT_HISTORY):
         history.regression_bytes()
         protected = protected_sources(history.state)
         paths = []
-        keep_ids = set(acceptance.get("changed_documents", []))
+        keep_outputs = set(acceptance.get("changed_documents", []))
+        keep_inputs = set(keep_outputs)
         labels = root / "source_labels.json"
         if labels.exists():
-            keep_ids.update(row["document_id"] for row in json.loads(labels.read_text()).get("cases", []))
+            keep_inputs.update(row["document_id"] for row in json.loads(labels.read_text()).get("cases", []))
         issues = root / "next_issues.json"
         if issues.exists():
-            keep_ids.update(row["document_id"] for row in json.loads(issues.read_text()))
+            keep_outputs.update(row["document_id"] for row in json.loads(issues.read_text()))
+            keep_inputs.update(keep_outputs)
         successful = set()
         for benchmark_path in [root / "benchmark_final/benchmark.json", root / "benchmark/benchmark.json"]:
             if benchmark_path.exists():
@@ -134,12 +136,12 @@ def cleanup_cycle(root, *, apply=False, history_path=DEFAULT_HISTORY):
                 path = Path(row["source_path"]).resolve()
                 if (
                     row["document_id"] in successful
-                    and row["document_id"] not in keep_ids
+                    and row["document_id"] not in keep_inputs
                     and path.is_relative_to(root)
                 ):
                     paths.append(path)
-        # Keep compact benchmark measurements and reviewed/failing cases, not
-        # full parsed bodies for every ordinary successful document.
+        # Labels protect the source and oracle, not regenerable successful output.
+        # Keep full output only for changed, unresolved or failing cases.
         for name in ("benchmark", "benchmark_final", "timing_confirmation"):
             directory = root / name
             benchmark_path = directory / "benchmark.json"
@@ -147,7 +149,7 @@ def cleanup_cycle(root, *, apply=False, history_path=DEFAULT_HISTORY):
                 continue
             for row in json.loads(benchmark_path.read_text())["results"]:
                 identifier = row["document_id"]
-                if identifier in keep_ids or Path(identifier).name != identifier:
+                if identifier in keep_outputs or Path(identifier).name != identifier:
                     continue
                 engines = row["engines"]
                 if not engines or not all(
@@ -159,7 +161,7 @@ def cleanup_cycle(root, *, apply=False, history_path=DEFAULT_HISTORY):
                     for engine in ("baseline", "candidate", "kordoc")
                 )
         if (root / "benchmark_final/benchmark.json").exists() or (root / "benchmark/benchmark.json").exists():
-            paths.append(root / "discovery")
+            paths.extend((root / name) for name in ("discovery", "fresh_discovery"))
         replay = root / "historical_regression"
         if (replay / "report.json").exists():
             # The source/version manifest and report survive; full replay bodies

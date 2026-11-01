@@ -5,6 +5,17 @@ import {
   requirementValue,
   requirementContext,
 } from "./document_results";
+
+/** A reading label is not an assertion that these words appeared in the original. */
+export function attributeName(attribute: Row): string {
+  const names: Record<string, string> = {
+    quantity: "수량", model: "모델", manufacturer: "제조사",
+    function: "기능", purpose: "용도",
+  };
+  return resultLabel(attribute.property_raw || attribute.property_name || attribute.property_label || attribute.name ||
+    names[String(attribute.property_key)] || "속성명 확인 필요");
+}
+
 function RawValue({
   attribute,
   unit = false,
@@ -12,14 +23,16 @@ function RawValue({
   attribute: Row;
   unit?: boolean;
 }) {
+  const value = resultLabel(attribute.value_raw ?? attribute.value ?? attribute.raw_value);
+  const operator = String(attribute.operator_raw || "");
+  const included = operator && (value.startsWith(operator) ||
+    (attribute.operator === "range" && value.includes(operator)));
   return (
     <>
       <span>
         {[
-          attribute.operator_raw,
-          resultLabel(
-            attribute.value_raw ?? attribute.value ?? attribute.raw_value,
-          ),
+          included ? "" : operator,
+          value,
         ]
           .filter(Boolean)
           .map(resultLabel)

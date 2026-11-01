@@ -81,7 +81,7 @@ def render_report(corpus,normalized,standard_version,candidates=None):
                 lines.append(f"| {cell(source)} | {cell(r['kind'])} | {cell(target)} | {cell(labels)} | {cell(r.get('basis','unknown'))} | {cell(refs)} |")
         lines.append('')
         clauses=[r for r in d.get('requirements',[]) if r.get('observation_type')=='source_clause'
-                 and r.get('subject_ids') and not is_other_requirement(r,d)]
+                 and r.get('category')!='description' and r.get('subject_ids') and not is_other_requirement(r,d)]
         if clauses:
             lines+=['### 대상별 원문 요구조건','',
                     '원문 요구조건이며 이행 완료를 뜻하지 않습니다.','',
@@ -90,6 +90,12 @@ def render_report(corpus,normalized,standard_version,candidates=None):
                 refs=' / '.join(e.get('native_ref',e.get('node_id','')) for e in clause.get('evidence',[]))
                 lines.append(f"| {cell(', '.join(clause.get('subject_ids',[])))} | {cell(clause['text'])} | {cell(refs)} |")
             lines.append('')
+        descriptions=[r for r in d.get('requirements',[]) if r.get('category')=='description']
+        if descriptions:
+            lines+=['<details><summary>물품 설명</summary>','','개요·용도·작동 원리의 원문이며 규격 속성과 구분합니다.','']
+            for clause in descriptions:
+                lines+=[cell(clause['text']), '']
+            lines+=['</details>','']
         other=other_requirements(d)
         if other:
             lines+=['<details><summary>기타 요구사항</summary>','',

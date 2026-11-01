@@ -8,7 +8,6 @@ import {
 import { CatalogPagination } from "../../components/workspace/CatalogPagination";
 import { AnalysisExplorer } from "./AnalysisExplorer";
 import { resultLabel } from "./document_results";
-import { authority } from "./result_authority";
 export { authority } from "./result_authority";
 export { DocumentComparison, comparisonRows } from "./document_comparison";
 import "./specification_catalog.css";
@@ -148,7 +147,7 @@ export function SpecificationCatalog() {
       <header className="spec-catalog-heading">
         <div>
           <h1>규격서 탐색</h1>
-          <p>물품 분류별 구성품·관계·속성과 적용 표준을 확인합니다.</p>
+          <p>규격서를 열어 물품·구성품과 속성이 원문에 맞게 추출됐는지 확인합니다.</p>
         </div>
         <div>
           <Button asChild>
@@ -371,9 +370,9 @@ export function SpecificationCatalog() {
                       <dd>{doc.classification_code || "미분류"}</dd>
                     </div>
                     <div>
-                      <dt>최근 처리</dt>
+                      <dt>추출 결과</dt>
                       <dd>
-                        {statuses[doc.latest_status] || doc.latest_status}
+                        {statuses[doc.result_available ? doc.status : doc.latest_status] || doc.latest_status}
                       </dd>
                     </div>
                     <div>
@@ -403,8 +402,8 @@ export function SpecificationCatalog() {
                     <th>비교</th>
                     <th>규격서</th>
                     <th>물품 분류</th>
-                    <th>최근 처리</th>
-                    <th>조회 결과</th>
+                    <th>추출 결과</th>
+                    <th>최근 처리 시각</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -437,22 +436,14 @@ export function SpecificationCatalog() {
                         </td>
                         <td>{doc.classification_code || "미분류"}</td>
                         <td>
-                          {statuses[doc.latest_status] || doc.latest_status}
-                          <small>{date(doc.latest_started_at)}</small>
+                          {statuses[doc.result_available ? doc.status : doc.latest_status] || doc.latest_status}
+                          {doc.run_id !== doc.latest_run_id && <small>
+                            최근 처리: {statuses[doc.latest_status] || doc.latest_status} · <span>이전 정상 결과 유지</span>
+                          </small>}
                         </td>
                         <td>
-                          {doc.result_available ? (
-                            <>
-                              {statuses[doc.status]}
-                              <small>
-                                {doc.run_id !== doc.latest_run_id
-                                  ? "이전 정상 결과 유지"
-                                  : "최신 결과"}
-                              </small>
-                            </>
-                          ) : (
-                            "조회 결과 없음"
-                          )}
+                          {date(doc.latest_started_at)}
+                          {!doc.result_available && <small>조회 결과 없음</small>}
                         </td>
                       </tr>
                     );
@@ -519,7 +510,7 @@ export function CatalogDocumentView({ id }: { id: string }) {
               <h1>{data.document.filename}</h1>
               <p>
                 {data.document.classification_code || "미분류"} ·{" "}
-                {authority(data.result)} · 결과 기준{" "}
+                {statuses[data.document.status] || data.document.status} · 결과 기준{" "}
                 {date(data.document.started_at)}
               </p>
             </div>

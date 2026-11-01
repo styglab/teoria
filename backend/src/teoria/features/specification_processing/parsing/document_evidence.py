@@ -29,6 +29,7 @@ class EvidenceNode:
     column_span: int | None = None
     source_table_id: str | None = None
     heading_level: int | None = None
+    source: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -77,7 +78,8 @@ def build_document_evidence(
             page = block.get("pageNumber") or (block.get("source") or {}).get("page") or inherited_page
             kind = block.get("type", "unknown")
             # Parent cell text is a flattened duplicate when nested blocks exist.
-            node = add(kind, block.get("text") or "", path, parent, page, heading_level=block.get("level"))
+            node = add(kind, block.get("text") or "", path, parent, page,
+                       heading_level=block.get("level"), source=block.get('source'))
             if kind == "image":
                 unreadable.append(path)
             table = block.get("table")
@@ -92,6 +94,7 @@ def build_document_evidence(
                             row=ri, column=ci, row_span=cell.get("row_span", cell.get("rowSpan", 1)),
                             column_span=cell.get("col_span", cell.get("colSpan", 1)),
                             source_table_id=table.get("source_id", table.get("sourceId")),
+                            source=cell.get('source'),
                         )
                         walk(nested, cp + "/blocks", cell_id, cell_page)
             walk(block.get("children") or [], path + "/children", node, page)

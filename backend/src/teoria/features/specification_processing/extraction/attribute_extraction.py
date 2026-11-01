@@ -29,6 +29,8 @@ facts 각 배열은 정확히 다음 10개 필드다:
 원문 속성명·값·단위·연산·한정 표현은 해당 fragment에 실제 있는 문자열만 쓴다. 뜻을 번역해 raw 필드에 쓰지 않는다.
 수치 바로 뒤에 명시된 단위는 속성명으로도 사용되더라도 단위 필드에 보존한다. 단위가 없으면 추정하지 않는다.
 속성명이 생략되어 있으면 property_raw는 null이며 속성 후보명에만 의미를 해석한다. 하나의 원문에 여러 속성이면 각각 기록한다.
+개요·분석 용도·일반 작동 원리를 단순 설명하는 문장을 속성으로 분해하지 않는다. 단, 필수 기능·지원 모드·재질·성능·식품 보관/위생 등 실제 요구조건은 숫자가 없어도 반드시 유지한다.
+validated_inventory_quantities는 이미 원문으로 확인한 수량·단위다. 같은 원문 셀의 구매 수량이나 구매 단위를 별도 속성으로 반복 출력하지 않는다. 다른 구성품·위치·조건의 수량은 계속 추출한다.
 제목·도표 구획·기관명·법령 나열·그림 번호를 속성으로 만들지 않는다. 모델·용량·치수·성능·재질·인터페이스·기능·기간·보증·설치 조건을 대상으로 한다.
 식품의 내용량·원재료/영양성분 함량·원산지·가공 상태·보관 조건, 의류의 혼용률·치수, 자재의 규격·품질, 소프트웨어의 이용자 수·모듈·이용기간도 대상별 사양이다.
 같은 표의 독립 구매 행을 서로의 부품으로 보거나 조건을 옆 행으로 복제하지 않는다. 혼용률·원재료 비율은 상위 물품의 구성 비율이며 구매 수량이 아니다.
@@ -86,6 +88,31 @@ def recover_literal_unit(text,value,data_type,property_key):
         if unit is None:return None
         candidates.append(unit)
     return candidates[0] if candidates and len(set(candidates))==1 else None
+
+
+def narrow_source_evidence(attribute,nodes,source_quote):
+    """Resolve a unique literal quote inside the observation's original source bounds."""
+    old=attribute['evidence'];node=nodes[old['node_id']];text=node['text']
+    lower=old.get('char_start',0);upper=old.get('char_end',len(text))
+    if not isinstance(source_quote,str) or not source_quote.strip() or not 0<=lower<upper<=len(text):
+        raise ValueError('invalid source quote or original bounds')
+    matches=spans(text[lower:upper],source_quote)
+    if len(matches)!=1:raise ValueError('source quote must be unique inside original evidence')
+    start,end=[offset+lower for offset in matches[0]]
+    quote=text[start:end];field_spans={}
+    for field in ('property_raw','value_raw','unit_raw','operator_raw'):
+        value=attribute.get(field)
+        if value is None:continue
+        found=spans(quote,value)
+        if not found:raise ValueError('source quote omits '+field)
+        field_spans[field]=[[a+start,b+start] for a,b in found]
+    qualifiers=[]
+    for raw in attribute.get('qualifiers_raw',[]):
+        found=spans(quote,raw)
+        if not found:raise ValueError('source quote omits qualifier')
+        qualifiers.append({'raw':raw,'spans':[[a+start,b+start] for a,b in found]})
+    return {**old,'char_start':start,'char_end':end,'quote':quote,
+            'field_spans':field_spans,'qualifier_spans':qualifiers,'precision':'quoted_clause'}
 
 
 def decode_batch(raw,chunk,graph,document,chunk_index):

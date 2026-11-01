@@ -12,7 +12,7 @@ from teoria.features.specification_processing.processing_errors import Specifica
 PARSER_CODE='''import json,sys
 from pathlib import Path
 from kory_parser import parse,ParseOptions
-result=parse(Path(sys.argv[1]),ParseOptions(ocr=False,images=False,extract_contents=True))
+result=parse(Path(sys.argv[1]),ParseOptions(ocr=True,images=False,extract_contents=True))
 Path(sys.argv[2]).write_text(json.dumps(result.to_dict(),ensure_ascii=False))
 '''
 
@@ -36,8 +36,42 @@ async def parse_document(source:Path,native_path:Path,document_id:str,parser_pyt
     digest=hashlib.sha256(source_bytes).hexdigest()
     if native['sha256']!=digest:raise ValueError('parser_source_checksum_mismatch')
     context=build_document_evidence(native,document_id=document_id,parse_run_id='specification_pipeline',native_sha256=hashlib.sha256(raw).hexdigest()).context()
+    ocr_nodes=[n for n in context['nodes'] if n['text'].strip()
+               and ((n.get('source') or {}).get('anchor') or '').startswith('ocr:')]
+    ocr_pages={n['page'] for n in ocr_nodes if n.get('page') is not None}
+    required_pages={(w.get('source') or {}).get('page') for w in native.get('warnings',[])
+                    if isinstance(w,dict) and w.get('code')=='NEEDS_OCR'}-{None}
+    context.update(ocr_enabled=True,ocr=bool(ocr_nodes),ocr_pages=sorted(ocr_pages),
+                   unreadable_ocr_pages=sorted(required_pages-ocr_pages))
     if not any(n['text'].strip() for n in context['nodes'] if n['kind']!='image'):
         raise SpecificationProcessingError('needs_ocr' if 'NEEDS_OCR' in context['warnings'] else 'no_extractable_text')
     context.update({'source_path':str(source),'source_sha256':digest,'parse_path':str(native_path),
         'parser_version':native['parser_version'],'source_file_reverified':True})
     return context
+
+PARSER_IDENTITY_CODE='''import hashlib,importlib.metadata,json,sys
+from pathlib import Path
+import kory_parser
+root=Path(kory_parser.__file__).parent
+digest=hashlib.sha256()
+for path in sorted(root.rglob('*.py')):
+ digest.update(path.relative_to(root).as_posix().encode());digest.update(b'\\0');digest.update(path.read_bytes());digest.update(b'\\0')
+packages=sorted((d.metadata.get('Name',''),d.version) for d in importlib.metadata.distributions())
+print(json.dumps({'version':getattr(kory_parser,'__version__','unknown'),'source_sha256':digest.hexdigest(),
+ 'packages_sha256':hashlib.sha256(json.dumps(packages).encode()).hexdigest(),'python_version':sys.version}))
+'''
+
+
+async def parser_runtime_identity(parser_python=None):
+    """Pin installed parser code/dependencies independently from its disposable executable path."""
+    executable=parser_python or os.getenv('TEORIA_SPECIFICATION_PARSER_PYTHON') or sys.executable
+    process=await asyncio.create_subprocess_exec(executable,'-c',PARSER_IDENTITY_CODE,
+        stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.DEVNULL)
+    try:stdout,_=await asyncio.wait_for(process.communicate(),30)
+    except (TimeoutError,asyncio.CancelledError):
+        process.kill();await process.communicate();raise
+    if process.returncode:raise SpecificationProcessingError('parser_identity_unavailable')
+    result=json.loads(stdout)
+    if not result.get('source_sha256') or not result.get('packages_sha256'):
+        raise SpecificationProcessingError('parser_identity_unavailable')
+    return result

@@ -17,7 +17,8 @@ def held_relation_counts(graph):
 
 def document_extraction_status(summary, graph, document):
     # Unknown and identity relationships stay blocking: their effect on supplied composition is unknown.
-    if (summary['status'] == 'partial' or held_relation_counts(graph)['core_held_relations']
+    if (summary['status'] == 'partial' or document.get('unreadable_ocr_pages')
+            or held_relation_counts(graph)['core_held_relations']
             or document.get('document_assessment', {}).get('status') == 'needs_review'):
         return 'partial'
     return 'extracted'

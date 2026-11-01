@@ -73,3 +73,12 @@ def test_current_parser_fields_preserve_heading_levels_pages_and_merged_cells():
     structure = context.extraction_structure({text.node_id})
     assert structure['section_paths'][text.node_id] == [top.node_id, sub.node_id]
     assert structure['table_cells'][0] == [text.node_id, table.node_id, 0, 0, 2, 3]
+
+
+def test_ocr_coordinates_and_confidence_are_kept_with_the_native_pointer():
+    source={'part':'pdf','anchor':'ocr:confidence=0.987000','page':4,
+            'bbox':[20.0,30.0,160.0,44.0],'coordinate_system':'top_left','unit':'pt'}
+    parsed=document([{'type':'paragraph','text':'Touch screen','source':source}])
+    row=parsed.context()['nodes'][0]
+    assert row['native_ref']=='/blocks/0' and row['page']==4
+    assert row['source']==source

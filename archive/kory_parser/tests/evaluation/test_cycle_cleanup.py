@@ -122,7 +122,8 @@ def test_finished_cycle_only_drops_unneeded_successful_samples(tmp_path, monkeyp
     assert (root / "acceptance/acceptance.json").exists()
     assert (root / "report/summary.json").exists()
     assert not (root / "benchmark/unused/candidate.json").exists()
-    for name in ("labelled", "problem", "failed"):
+    assert not (root / "benchmark/labelled/candidate.json").exists()
+    for name in ("problem", "failed"):
         assert (root / "benchmark" / name / "candidate.json").exists()
     assert not (replay / "equal/candidate.json").exists()
     assert (replay / "changed/candidate.json").exists()
@@ -131,3 +132,67 @@ def test_finished_cycle_only_drops_unneeded_successful_samples(tmp_path, monkeyp
     with CorpusHistory(history) as state:
         assert len(state.state["documents"]) == 5
         assert state.state["documents"][rows[-1]["sha256"]]["retention"] == "removed_after_completed_cycle"
+
+
+def test_cleanup_keeps_changed_output_but_drops_labelled_confirmation_and_discovery(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    root = project / ".artifacts/cycle"
+    sample = root / "sample"
+    sample.mkdir(parents=True)
+    rows = []
+    for name in ("labelled", "changed"):
+        source = sample / (name + ".pdf")
+        source.write_bytes(b"%PDF-" + name.encode())
+        rows.append(
+            {
+                "document_id": name,
+                "source_path": str(source),
+                "sha256": digest(source.read_bytes()),
+                "format": "pdf",
+            }
+        )
+    history = project / ".artifacts/history/state.json"
+    with CorpusHistory(history) as state:
+        state.freeze_regression([rows[0]])
+        state.register(rows[1:])
+    for name in ("acceptance", "report", "benchmark", "timing_confirmation", "fresh_discovery"):
+        (root / name).mkdir()
+    write_json(
+        root / "acceptance/acceptance.json",
+        {"accepted": False, "applied": False, "changed_documents": ["changed"]},
+    )
+    write_json(root / "report/summary.json", {})
+    write_json(root / "source_labels.json", {"cases": [{"document_id": "labelled"}]})
+    write_json(sample / "manifest.json", rows)
+    for directory in (root / "benchmark", root / "timing_confirmation"):
+        write_json(
+            directory / "benchmark.json",
+            {
+                "results": [
+                    {
+                        "document_id": row["document_id"],
+                        "engines": {
+                            engine: {"success": True} for engine in ("baseline", "candidate", "kordoc")
+                        },
+                    }
+                    for row in rows
+                ]
+            },
+        )
+        for row in rows:
+            (directory / row["document_id"]).mkdir()
+            for engine in ("baseline", "candidate", "kordoc"):
+                write_json(directory / row["document_id"] / (engine + ".json"), {"blocks": []})
+    write_json(root / "fresh_discovery/generated.json", {})
+    monkeypatch.setattr(cleanup, "PROJECT", project)
+    result = cleanup.cleanup_cycle(root, apply=True, history_path=history)
+    assert result["removed_bytes"] > 0
+    for row in rows:
+        assert (sample / (row["document_id"] + ".pdf")).exists()
+    for directory in (root / "benchmark", root / "timing_confirmation"):
+        for engine in ("baseline", "candidate", "kordoc"):
+            assert not (directory / "labelled" / (engine + ".json")).exists()
+            assert (directory / "changed" / (engine + ".json")).exists()
+        assert (directory / "benchmark.json").exists()
+    assert (root / "source_labels.json").exists()
+    assert not (root / "fresh_discovery").exists()

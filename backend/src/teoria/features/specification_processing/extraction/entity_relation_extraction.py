@@ -73,6 +73,7 @@ additional=[새 고유 ID, 근거 node, 원문 명칭] 목록.
 표의 품명·구성항목 열과 본문의 표현이 같은 대상을 직접 가리키면 표의 명칭을 대표명으로 우선하고, 대응하는 규격 본문의 다른 표현은 같은 ID의 names.aliases에 보존한다. 다른 대상인지 불명확하면 이 규칙으로 합치지 않는다. 문서에 명시된 물품·부속품·원재료·포장·소프트웨어·작업·문서를 보존한다.
 기존 1차 항목의 다른 표현·상세 절 제목을 중복 생성하지 않는다. 단 실제 동일 여부가 불명확한 기존/별도 대상은 분리하고 same_target_as+ambiguous로 둔다.
 문서에 명시된 하위 요구 대상은 엔티티로 표현할 수 있다. 수치·성능·재질 표현만으로 독립 장비를 만들지 않는다. 독립 공급·구성 근거가 있으면 해당 대상도 엔티티가 될 수 있고, 불명확하면 unknown으로 남긴다.
+상세 규격이 실제 하위 장치의 이름과 구체적인 장치 종류·구조를 명시하면 그 하위 대상과 근거 있는 구성 관계를 보존한다. 상위 장치의 속성명으로만 소비해 명시된 하위 장치를 누락하지 않는다. 콜론이나 항목 형식만으로는 구성품이라고 판단하지 않으며 성능·수치·기능 이름은 계속 속성으로 다룬다.
 불특정 '부품', '장비', '부자재'라는 언급만으로 독립 구성품을 만들지 않는다. 구체적인 식별·수량·독립 사양이 없는 표현은 해당 물품 또는 작업의 원문 scopes에 보존한다.
 설치·교육·유지보수·기술지원·제출 의무는 삭제하지 않는다. 구체적인 작업·제공 문서는 관련 대상으로 보존하고 service_for/document_for 및 원문 scopes로 연결한다. 기존 장비는 existing으로 분류하고 신규 납품 구성으로 연결하지 않는다.
 제목·섹션 계층 자체는 도메인 엔티티가 아니다. 분석/데이터처리/기기컨트롤 같은 기능 구획은 원문 scopes로 남기고 제품으로 만들지 않는다.
@@ -93,6 +94,10 @@ installed_on(소프트웨어→설치 대상), firmware_for(펌웨어→물리�
 document_for는 문서의 대상만 나타낸다. 제출 완료·정품 인증 성공을 뜻하지 않는다. 제출 의무·제출 시점·설치 종료 등의 조건은 해당 대상 scopes에 원문을 연결하여 별도 요구조건으로 보존한다.
 service_for는 activity로 분류한 작업→작업대상이다. 장비→작업으로 뒤집지 않는다. sends_data_to는 발신→수신이다. 수치 속성을 구성품으로 만들지 않는다.
 추가 대상의 상위는 1차 항목 또는 다른 추가 대상이다. 근거가 없으면 무리하게 root에 붙이지 말고 unknown/ambiguous로 보존한다.
+inventory.basis가 configuration_list이고 integrated_scope가 true이면 items는 전체 물품의 고정된 직접 구성 목록이다.
+상세 규격의 반복 항목은 기존 item ID에 연결한다. 추가 하위 대상을 직접 구성 목록에 끼워 넣거나 root에 바로 붙이지 않는다.
+상세의 실제 구성 근거로 어느 item 또는 추가 대상에 속하는지 확인한다. 부모가 불명확하면 원문·속성·제안은 보존하고 관계를 ambiguous로 남긴다.
+문서상 포함을 해석한 관계의 basis는 interpreted로 유지한다. 화면 표시를 위해 explicit으로 바꾸지 않는다.
 코드는 items→root의 in_procurement_scope(구매 범위 소속)만 생성한다. 이것은 구성 관계를 대신하지 않는다.
 원문에 장비의 구성 목록이나 구성품 포함 문장이 있으면 기존 item ID→root의 component_of도 relations에 별도로 출력한다. 기존 item을 additional에 다시 만들지 않는다.
 구성 근거 node를 반드시 지정한다. 공급 목록에 함께 있다는 사실이나 표·절 제목만으로 구성품이라고 추정하지 않는다.
@@ -231,15 +236,38 @@ def cyclic_relation_indexes(relations):
             if kind in HIERARCHY_RELATIONS and basis != 'ambiguous' and reaches(target, source)}
 
 
+def composition_inventory(inventory):
+    """Preserve the source inventory's boundary and order separately from detail proposals."""
+    return {'root_id':'root','basis':inventory.basis,'integrated_scope':inventory.integrated_scope,
+            'item_ids':[item[0] for item in inventory.items],
+            'basis_node_ids':list(inventory.basis_node_ids),
+            'scope_evidence_node_ids':list(inventory.scope_evidence_node_ids)}
+
+
+def configuration_boundary_errors(source, target, kind, inventory):
+    """Hold shortcuts across a declared configuration; never infer a replacement parent."""
+    if (not inventory or inventory.get('basis')!='configuration_list'
+            or not inventory.get('integrated_scope') or kind not in {'component_of','physical_part_of'}):
+        return []
+    root=inventory['root_id'];items=set(inventory['item_ids'])
+    if target==root and source not in items:
+        return ['detail target bypasses frozen configuration inventory']
+    if source in items and target!=root:
+        return ['direct item moved below another target in frozen configuration inventory']
+    return []
+
+
 def review_relations(value, inventory, document):
     """Retain unresolved proposals separately without changing entities or quantities."""
     ids = {'root', *(i[0] for i in inventory.items), *(i[0] for i in value.additional)}
     types = {id: kind for id, kind, _ in value.types}
     node_ids = {n['node_id'] for n in document['nodes'] if document.get('document_assessment',{}).get('node_roles',{}).get(n['node_id'])!='table_of_contents'}
     cyclic = cyclic_relation_indexes(value.relations)
+    boundary = composition_inventory(inventory)
     accepted, held = [], []
     for index, row in enumerate(value.relations):
         reasons = relation_errors(row, ids, types, node_ids)
+        reasons.extend(configuration_boundary_errors(row[0],row[1],row[2],boundary))
         if index in cyclic:
             reasons.append('cyclic hierarchy')
         if row[3] == 'ambiguous':
@@ -309,8 +337,12 @@ def materialize(inventory,details,document,held_relations=()):
         if document.get('document_assessment',{}).get('node_roles',{}).get(node['node_id'])=='table_of_contents':continue
         if not text.strip() or node['kind']=='image':continue
         subjects=list(dict.fromkeys(ownership.get(node['node_id'],[])))
+        role=document.get('document_assessment',{}).get('node_roles',{}).get(node['node_id'])
+        category='description' if role=='description' else 'other' if role in {'general_requirement','delivery_requirement'} else 'specification'
         requirements.append({'id':'clause_'+node['node_id'],'text':text,'subject_ids':subjects,'value_raw':None,'unit_raw':None,'operator_raw':None,
-                             'observation_type':'source_clause','category':'other' if document.get('document_assessment',{}).get('node_roles',{}).get(node['node_id']) in {'general_requirement','delivery_requirement'} else 'specification','atomic_requirement':False,'evidence':evidence([node['node_id']]),'review_status':'needs_review'})
+                             'observation_type':'source_clause','category':category,'atomic_requirement':False,'evidence':evidence([node['node_id']]),'review_status':'needs_review'})
+    from teoria.features.specification_processing.extraction.requirement_clauses import merge_description_clauses
+    merge_description_clauses(requirements,document)
     held=[]
     for index,proposal in enumerate(held_relations):
         source,target,kind,basis,refs=proposal['relation']
@@ -320,6 +352,7 @@ def materialize(inventory,details,document,held_relations=()):
                      'evidence':evidence([n for n in refs if n in nodes])})
     return {'document_id':document['document_id'],'entities':entities,'relations':relations,'held_relations':held,'requirements':requirements,
             'declared_quantities':quantities,'inventory_ids':[i[0] for i in inventory.items],
+            'composition_inventory':composition_inventory(inventory),
             'issues':inventory.issues+details.issues,'review_status':'needs_review','ontology_mapping_enabled':False}
 
 
@@ -329,7 +362,7 @@ def safe_rules(errors):
     return [e if '\n' not in e and len(e)<180 else 'model_output_schema_invalid' for e in errors[:30]]
 
 
-async def extract_entity_relations(document,out,runner):
+async def extract_entity_relations(document,out,runner,*,checkpoints=None):
     from teoria.features.specification_processing.parsing.document_assessment import extraction_node_ids
     from teoria.features.specification_processing.processing_errors import SpecificationProcessingError
     eligible=extraction_node_ids(document,headings=True)
@@ -339,7 +372,13 @@ async def extract_entity_relations(document,out,runner):
     started=time.monotonic();nodes=[[n['node_id'],n['kind'],n['parent_id'],n['row'],n['column'],n['row_span'],n['column_span'],n['text']] for n in document['nodes'] if n['node_id'] in eligible and n['text'].strip() and n['kind']!='image']
     save(out/'document.json',document);save(out/'status.json',{'stage':'inventory','state':'running'})
     inventory_request={'document_id':document['document_id'],'nodes':nodes,'source_structure':structure,'contents_nodes':navigation,'output_schema':Inventory.model_json_schema()}
-    for inventory_attempt in range(2):
+    checkpoint_inputs={'source_sha256':document.get('source_sha256'),'request':inventory_request}
+    cached=await checkpoints.get('inventory',checkpoint_inputs) if checkpoints is not None else None
+    if cached is not None:
+        inventory=Inventory.model_validate(cached);errors=validate_inventory(inventory,document)
+        if errors:raise ValueError('invalid inventory checkpoint')
+        inventory_attempt=0
+    for inventory_attempt in range(0 if cached is not None else 2):
         raw=await runner.generate(INVENTORY_PROMPT,inventory_request,out/('inference/inventory.json' if inventory_attempt==0 else 'inference/inventory_repair.json'))
         try:
             inventory=Inventory.model_validate(raw);errors=validate_inventory(inventory,document)
@@ -348,6 +387,7 @@ async def extract_entity_relations(document,out,runner):
         inventory_request.update({'previous_prediction':raw,'validation_errors':errors,'repair_instruction':'원문 근거와 스키마를 지키면서 오류만 수정한다. 검사를 우회하지 않는다.'})
     if errors:
         raise SpecificationProcessingError('inventory_validation_failed',details={'rules':safe_rules(errors)})
+    if checkpoints is not None:await checkpoints.put('inventory',checkpoint_inputs,inventory.model_dump())
     save(out/'inventory.json',inventory.model_dump());save(out/'inventory_validation.json',{'errors':errors})
     save(out/'status.json',{'stage':'specification_alignment','state':'running','frozen_primary_items':len(inventory.items)})
     detail_request={'document_id':document['document_id'],'nodes':nodes,'source_structure':structure,'contents_nodes':navigation,'root_id':'root','inventory':inventory.model_dump(),'output_schema':Details.model_json_schema()}

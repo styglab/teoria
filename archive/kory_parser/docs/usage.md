@@ -2,18 +2,20 @@
 
 지속 평가와 Codex 개선 작업은 [평가·개선 순환](evaluation_loop.md)과
 [실제 공고 첨부문서 사이클](public_procurement_cycle.md)을 따른다.
+버전별 적용 사항과 검증·배포 상태는 [변경 이력](change_history.md)에 기록한다.
 
 프로젝트 이름은 **Kory Parser**이며, 기존 `teoria_docparse`에서 `kory_parser`로 변경했다. Python import는
 `kory_parser`, 설치 패키지와 파싱 CLI는 `kory-parser`, 비교 CLI는
 `kory-parser-compare`다. 기존 이름의 import·CLI 별칭은 제공하지 않는다.
 원본 kordoc의 이름·저작권·라이선스 표기는 유지한다.
 
-`kory-parser` 0.9.13은 kordoc 4.22.15를 기준으로 만든 **실험용 독립 Python
+`kory-parser` 0.9.16은 kordoc 4.22.15를 기준으로 만든 **실험용 독립 Python
 패키지**다. Python SDK로 JavaScript 엔진을 호출하는 방식이 아니다. 파싱은 Python과
 설치된 native dependency에서 수행한다. 원본 비교 명령에서만 Node.js를 사용한다.
 
-사용자 요청에 따라 `archive/kory_parser/`에 격리했다. 루트 uv workspace와
-Platform·Pipelines의 의존성, API, Registry, Prefect 배포에 연결하지 않았다.
+패키지는 `archive/kory_parser/`에 유지하며 Teoria backend 의존성에 합치지 않는다.
+로컬 규격서 Worker는 사용자 배포 요청에 따라 별도 Python 환경에서 실행한다.
+개선 스킬은 파서 평가·수정·검증을 수행하며 컨테이너 재배포는 별도 요청으로 실행한다.
 Git에는 이 패키지의 소스·테스트·설명 문서만 제한적으로 포함한다.
 환경과 원문·검증 산출물은 [Git 보관 범위](git_storage.md)에 따라 로컬에 남긴다.
 
@@ -86,7 +88,7 @@ kory-parser document.hwpx -o legacy.json --no-numbered-structure
 | HWPX | ZIP/XML, 현재 본문 변경 추적, 표 ID·셀 주소·병합·중첩, 번호/글머리표, 기본 span | 실제 표본 대조. 물리 페이지 조판과 레이아웃 표 해체는 미이식 |
 | HWPML | XML 본문·문단·표·병합·중첩 | 합성 단위 표본. 원본 전체 코퍼스 검증 없음 |
 | DOCX | 문서 순서, 현재 본문, 표·병합·중첩, 기본 글자 서식·제목, 자동 번호·글머리표·스타일 상속 | 기존 문서와 W3C 공개 Word 2개, 번호 재시작·override 합성 검증. numStyleLink, 전체 번호 형식, 각주/미주·header/footer 전체 처리 미이식 |
-| XLSX | workbook 관계 순서, 공유/인라인 문자열, 셀 주소·값·병합, 빈 서식 셀을 버리는 worksheet XML 순차 읽기 | 기존 2개와 새 공고의 2개 검증. 기본 compact 격자와 원본 셀 주소 보존. sheet_layout="source"로 빈 행·열 유지. 날짜/수치 표시 형식 미이식 |
+| XLSX | workbook 관계 순서, 공유/인라인 문자열, 셀 주소·값·병합, 빈 서식 셀을 버리는 worksheet XML 순차 읽기, 텍스트 상자·그룹 도형 문단 | 기본 compact 격자와 원본 셀 주소 보존. 0.9.16부터 도형 원문 part·ID도 보존. sheet_layout="source"로 빈 행·열 유지. 날짜/수치 표시 형식 미이식 |
 | XLS | xlrd로 BIFF 값·병합·sheet 순서 | 합성 BIFF 표본. 표시 형식 전체 호환 미검증 |
 | PPTX | slide 관계 순서, 문단·표·병합·그룹·이미지 자리, 숨긴 slide 제외 | 합성 단위 표본. 제목 역할·발표자 노트·이미지 바이트 추출 미이식 |
 | PDF | MuPDF 문자·선·클리핑·음영 추출, 자체 Python 표·중첩·부분 격자 복원, MuPDF OCR 렌더 | 실제 문서 비교. PDF.js/OpenDataLoader 계열 로직의 완전 포팅이 아니다. 일부 무괘선 표, 페이지 간 표 연결, 한국어 줄 복원, 복잡한 읽기 순서에 차이 |

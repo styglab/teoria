@@ -72,6 +72,14 @@ confirmed defects from suspicious signals. Retire inspected validation cases int
 regression pool; use fresh notice/template groups for future blind validation claims.
 
 Report the defect, change, regression coverage, metric changes and remaining limits.
+Show the baseline/candidate/kordoc comparison in the final response, with a link to
+the final report. Distinguish raw-value/formatting differences from lost content.
+After applying a parser update, increment the package patch version and append its
+date, behavior changes, tests, comparison evidence and release/deployment status to
+`docs/change_history.md`. Evaluation-only runs without a source change keep the
+current version and do not create a release entry. Keep versioning and local package
+builds separate from container/image publication or redeployment; deploy only when
+the current task explicitly requests it, and preserve in-flight specification work.
 Finish a completed cycle with the report command's default cleanup. Keep fixed
 regression originals, labelled/problem cases, usage hashes/manifests, comparison
 reports and frozen sources; remove unneeded successful samples and regenerable
@@ -80,7 +88,9 @@ accepted candidate. Preserve use history even when sample bytes are removed.
 Use `--keep-intermediates` only when the task needs the full debugging artifacts.
 Cleanup is part of completing every cycle, including a rejected candidate. Remove
 ordinary successful sample attachments and full parsed outputs after reporting;
-retain only fixed regression originals and selected source-backed problem evidence.
+labels alone protect original inputs and oracles, not successful parsed JSON bodies.
+Retain full output for changed, failing or unresolved cases, plus fixed regression
+originals and selected source-backed problem evidence.
 Do not promote every inspected attachment into a permanent regression fixture.
 Keep compact measurements, decisions and usage hashes rather than all result bodies.
 Report bytes removed and bytes retained at the end. Before another cycle, check for

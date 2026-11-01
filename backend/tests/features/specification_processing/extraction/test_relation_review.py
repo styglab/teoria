@@ -258,3 +258,60 @@ def test_workstation_report_lists_typed_targets_and_relations_without_a_forced_t
     assert '### 분석 대상' in report and '### 대상 간 관계' in report
     assert '| manual | document_for | root |' in report
     assert '설치 작업의 종료와 함께 다음의 문서를 제출하여야 한다.' in report
+
+
+def lcms_hierarchy_case():
+    names=['질량분석기','시스템 컨트롤러','용매 운반용 펌프','자동시료주입기','컬럼오븐',
+           '광다이오드어레이 검출기','온라인 가스제거 유닛','데이터 처리 시스템','악세서리']
+    text={'scope':'액체크로마토그래프 질량분석기','list':'나. 장비의 구성(Configurations of Goods)',
+          **{f'n{i}':f'{i}. {name}' for i,name in enumerate(names,1)},
+          'pc':'(4) PC SYSTEM','cpu':'1) CPU : Intel Core i5 or better',
+          'detector':'- 검출기 : 변환 다이노드를 갖는 전자 증배관'}
+    doc={'document_id':'lcms','nodes':[{'node_id':id,'text':value,'native_ref':'/'+id,'kind':'paragraph'} for id,value in text.items()]}
+    inventory=Inventory(root=('scope',text['scope'],None,None,['scope']),basis='configuration_list',
+        basis_node_ids=['list'],integrated_scope=True,scope_evidence_node_ids=['scope','list'],
+        items=[(f'i{i}',f'n{i}',name,None,None,[f'n{i}']) for i,name in enumerate(names,1)],issues=[])
+    details=Details(additional=[('pc','pc','PC SYSTEM'),('cpu','cpu','CPU'),('detector','detector','검출기')],
+        types=[('root','equipment','required'),*[(f'i{i}','equipment','required') for i in range(1,10)],
+               ('pc','equipment','required'),('cpu','equipment','required'),('detector','equipment','required')],
+        relations=[*[(f'i{i}','root','component_of','explicit',['list',f'n{i}']) for i in range(1,10)],
+                   ('pc','i8','component_of','interpreted',['n8','pc','cpu']),
+                   ('cpu','pc','component_of','explicit',['cpu']),
+                   ('detector','i1','component_of','interpreted',['n1','detector'])],
+        scopes=[('i8',['n8','pc','cpu']),('pc',['pc','cpu'])],issues=[])
+    return doc,inventory,details
+
+
+def test_frozen_configuration_keeps_nine_primary_items_and_nested_proposals():
+    from teoria.features.specification_processing.extraction.entity_relation_extraction import review_relations
+    doc,inventory,details=lcms_hierarchy_case()
+    before=deepcopy(details)
+    reviewed,held=review_relations(details,inventory,doc)
+    assert held==[]
+    graph=materialize(inventory,reviewed,doc,held)
+    assert graph['composition_inventory']['item_ids']==[f'i{i}' for i in range(1,10)]
+    assert graph['composition_inventory']['root_id']=='root'
+    assert len([r for r in graph['relations'] if r['kind']=='component_of' and r['target_id']=='root'])==9
+    assert ('pc','i8','component_of','interpreted',['n8','pc','cpu']) in reviewed.relations
+    assert reviewed.scopes==before.scopes
+
+
+def test_detail_component_cannot_bypass_frozen_configuration_owner():
+    from teoria.features.specification_processing.extraction.entity_relation_extraction import review_relations
+    doc,inventory,details=lcms_hierarchy_case()
+    details.relations.append(('pc','root','component_of','explicit',['n8','pc','cpu']))
+    reviewed,held=review_relations(details,inventory,doc)
+    assert len(held)==1 and 'frozen configuration' in held[0]['reasons'][0]
+    assert held[0]['relation'][:2]==('pc','root')
+    assert any(r[:2]==('pc','i8') for r in reviewed.relations)
+    assert not any(r[:2]==('pc','root') for r in reviewed.relations)
+
+
+@pytest.mark.parametrize('basis,integrated',[('supply_list',True),('technical_sections',True),('configuration_list',False)])
+def test_other_inventory_bases_do_not_imply_a_closed_component_list(basis,integrated):
+    from teoria.features.specification_processing.extraction.entity_relation_extraction import review_relations
+    doc,inventory,details=lcms_hierarchy_case()
+    inventory.basis=basis;inventory.integrated_scope=integrated
+    details.relations.append(('pc','root','component_of','explicit',['n8','pc','cpu']))
+    _,held=review_relations(details,inventory,doc)
+    assert held==[]

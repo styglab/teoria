@@ -10,9 +10,9 @@ test("desktop list, focused input and opened select", async ({ page }) => {
     page.getByRole("link", { name: document.filename, exact: true }),
   ).toBeVisible();
   await page.getByLabel("파일명·공고번호").click();
-  await expect(page).toHaveScreenshot("catalog_input.png");
+  await expect(page).toHaveScreenshot("catalog-input.png");
   await page.getByLabel("최근 처리 상태").click();
-  await expect(page).toHaveScreenshot("catalog_select.png");
+  await expect(page).toHaveScreenshot("catalog-select.png");
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/status=running/);
@@ -30,7 +30,7 @@ test("mobile cards and collapsed filters", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByLabel("규격서 카드 목록")).toBeVisible();
   await expect(page.getByLabel("파일명·공고번호")).not.toBeVisible();
-  await expect(page).toHaveScreenshot("catalog_mobile.png");
+  await expect(page).toHaveScreenshot("catalog-mobile.png");
   await page.getByText("검색·필터", { exact: true }).click();
   await expect(page.getByLabel("파일명·공고번호")).toBeVisible();
   expect(
@@ -46,22 +46,22 @@ test("result name, tree, source and comparison reasons", async ({ page }) => {
   ).toBeVisible();
   await page.getByRole("treeitem", { name: /CPU/ }).click();
   await expect(
-    page.getByText("프로세서당 코어 수", { exact: true }).first(),
+    page.getByText("코어 수", { exact: true }).first(),
   ).toBeVisible();
-  await expect(page).toHaveScreenshot("document_result.png");
+  await expect(page).toHaveScreenshot("document-result.png");
   await page.getByRole("treeitem", { name: /CPU/ }).click();
   await page
     .getByRole("region", { name: "분석 대상 상세" })
-    .getByRole("button", { name: "원문 근거 n1", exact: true })
+    .getByRole("button", { name: "원문 보기", exact: true })
     .first()
     .click();
   await expect(
     page.getByRole("region", { name: "선택한 원문 근거" }),
   ).toBeVisible();
-  await expect(page).toHaveScreenshot("document_source.png");
+  await expect(page).toHaveScreenshot("document-source.png");
   await page.goto("/admin/specifications?compare=server_a,server_b");
   await expect(page.getByText("적용 범위 다름").first()).toBeVisible();
-  await expect(page).toHaveScreenshot("document_compare.png");
+  await expect(page).toHaveScreenshot("document-compare.png");
 });
 test("keeps old rows during a failed request, retries and restores selection on return", async ({
   page,
@@ -172,16 +172,16 @@ test("mobile target to requirement to source navigation", async ({ page }) => {
   await expect(
     page.getByRole("region", { name: "분석 대상 상세" }),
   ).toBeVisible();
-  await expect(page).toHaveScreenshot("document_mobile.png");
+  await expect(page).toHaveScreenshot("document-mobile.png");
   await page
     .getByRole("region", { name: "분석 대상 상세" })
-    .getByRole("button", { name: "원문 근거 n1", exact: true })
+    .getByRole("button", { name: "원문 보기", exact: true })
     .first()
     .click();
   await expect(
     page.getByRole("region", { name: "선택한 원문 근거" }),
   ).toBeVisible();
-  await expect(page).toHaveScreenshot("document_source_mobile.png");
+  await expect(page).toHaveScreenshot("document-source-mobile.png");
   await page.getByRole("button", { name: "근거 닫기", exact: true }).click();
   await page
     .getByRole("button", { name: "← 분석 대상 목록", exact: true })
@@ -212,5 +212,5 @@ test("shared search field has one focus frame on the data catalog", async ({
     ),
   ).toBe("1px");
   await expect(page.getByText("0개", { exact: true }).first()).toBeVisible();
-  await expect(page).toHaveScreenshot("metadata_search_focus.png");
+  await expect(page).toHaveScreenshot("metadata-search-focus.png");
 });

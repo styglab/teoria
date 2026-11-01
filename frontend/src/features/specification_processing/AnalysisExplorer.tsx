@@ -10,7 +10,7 @@ import {
   unresolvedResults,
 } from "./document_results";
 import "./document_results.css";
-import { AttributeValue } from "./AttributeValue";
+import { AttributeValue, attributeName } from "./AttributeValue";
 
 const kindNames: Record<string, string> = {
   product: "물품",
@@ -32,7 +32,7 @@ function isGoodsTarget(entity: Row) {
   );
 }
 
-/** Only evidence-backed explicit composition forms the tree; related targets remain accessible. */
+/** Preserve grounded parent proposals; interpreted links stay visibly under review. */
 export function composition(
   document: Row,
   mode = "composition",
@@ -85,7 +85,10 @@ export function composition(
           r.kind === "component_of" &&
           software(r.source_id) &&
           software(r.target_id))) &&
-      r.basis === "explicit" &&
+      (r.basis === "explicit" ||
+        (mode === "composition" &&
+          r.kind === "component_of" &&
+          r.basis === "interpreted")) &&
       r.review_status !== "held" &&
       refs(r).length &&
       ids.has(String(r.source_id)) &&
@@ -111,27 +114,57 @@ export function composition(
   };
   const children = new Map<string, string[]>(),
     attached = new Set<string>();
+  const pendingParents = new Set<string>();
   for (const [child, targets] of parents) {
     if (targets.size !== 1) continue;
     const parent = [...targets][0];
     if (reaches(parent, child)) continue;
     children.set(parent, [...(children.get(parent) || []), child]);
     attached.add(child);
+    if (!candidates.some((r) =>
+      String(r.source_id) === child && String(r.target_id) === parent && r.basis === "explicit"))
+      pendingParents.add(child);
+  }
+  const inventory = (document.composition_inventory || {}) as Row;
+  const primaryIds = Array.isArray(inventory.item_ids)
+    ? inventory.item_ids.map(String) : [];
+  const anchor = mode === "composition" &&
+    inventory.basis === "configuration_list" && inventory.integrated_scope === true &&
+    ids.has(String(inventory.root_id)) ? String(inventory.root_id) : undefined;
+  if (anchor && children.has(anchor)) {
+    const order = new Map(primaryIds.map((id, index) => [id, index]));
+    children.get(anchor)!.sort((a, b) =>
+      (order.get(a) ?? Infinity) - (order.get(b) ?? Infinity));
+  }
+  // A withheld parent link must never promote a descendant into a new top-level goods target.
+  const proposedChildren = new Set(
+    [...rows(document.relations), ...rows(document.held_relations)]
+      .filter((r) => mode === "packaging" ? r.kind === "pack_unit_of"
+        : ["component_of", "physical_part_of"].includes(String(r.kind)))
+      .map((r) => String(r.source_id)),
+  );
+  const roots = entities.filter((e) =>
+    (!primaryOnly || !related.has(String(e.id))) && children.has(String(e.id)) &&
+    (anchor ? String(e.id) === anchor
+      : !attached.has(String(e.id)) && !proposedChildren.has(String(e.id))));
+  const treeIds = new Set<string>();
+  const pending = roots.map((e) => String(e.id));
+  while (pending.length) {
+    const id = pending.pop()!;
+    if (treeIds.has(id)) continue;
+    treeIds.add(id);
+    pending.push(...(children.get(id) || []));
   }
   return {
     entities,
     children,
-    roots: entities.filter(
-      (e) =>
-        (!primaryOnly || !related.has(String(e.id))) &&
-        !attached.has(String(e.id)) &&
-        children.has(String(e.id)),
-    ),
+    roots,
+    treeIds,
+    pendingParents,
     unclassified: entities.filter(
       (e) =>
         (!primaryOnly || !related.has(String(e.id))) &&
-        !attached.has(String(e.id)) &&
-        !children.has(String(e.id)),
+        !treeIds.has(String(e.id)),
     ),
     related: entities.filter((e) => related.has(String(e.id))),
   };
@@ -197,8 +230,7 @@ export function AnalysisExplorer({
         </label>
       )}
       <p className="result-execution-note">
-        해당 실행의 최종 처리 결과입니다. 문서에 남은 미해결 항목과 원문 근거를
-        함께 표시합니다.
+        왼쪽에서 물품·구성품을 선택하고, 속성 행을 누르면 오른쪽에서 원문을 대조할 수 있습니다.
       </p>
       {documentIndex >= available.length ? (
         <section className="result-document-failure" role="status">
@@ -242,7 +274,7 @@ function DocumentAnalysis({
   mappingStatus: MappingStatus;
 }) {
   const [navigation, setNavigation] = useState(() =>
-    composition(document, "composition").children.size ? "composition" : "list",
+    composition(document, "composition").roots.length ? "composition" : "list",
   );
   const [kindFilter, setKindFilter] = useState("goods");
   const graph = useMemo(
@@ -300,9 +332,7 @@ function DocumentAnalysis({
   const [sourceTitle, setSourceTitle] = useState("");
   const [relationScope, setRelationScope] = useState("selected");
   const [detailTab, setDetailTab] = useState("attributes");
-  const [view, setView] = useState(
-    mappingStatus === "available" ? "mapping" : "source",
-  );
+  const [view, setView] = useState("source");
   const [filter, setFilter] = useState("all");
   const mappings = rows(normalization?.attributes).filter(
     (a) => a.document_id === document.document_id,
@@ -330,12 +360,22 @@ function DocumentAnalysis({
   };
   const sourcePanel = useRef<HTMLElement>(null);
   useEffect(() => {
+    const panel = sourcePanel.current;
+    if (panel && sourceOpen) {
+      panel.scrollTop = 0;
+      const passage = panel.querySelector(".evidence-node.is-selected mark") ||
+        panel.querySelector(".evidence-node.is-selected");
+      if (passage) {
+        const top = passage.getBoundingClientRect().top - panel.getBoundingClientRect().top;
+        if (top > panel.clientHeight - 100) panel.scrollTop = Math.max(0, top - 100);
+      }
+    }
     if (focused && window.innerWidth <= 1100)
       sourcePanel.current?.scrollIntoView?.({
         block: "nearest",
         behavior: "smooth",
       });
-  }, [focused]);
+  }, [focused, sourceOpen, selectedAttribute]);
   const [mobileDetail, setMobileDetail] = useState(false);
   const entity = entitiesById.get(selected);
   const attributes = rows(document.attributes).filter(
@@ -394,11 +434,16 @@ function DocumentAnalysis({
   const clauses = rows(document.requirements).filter(
     (r) =>
       r.observation_type === "source_clause" &&
+      r.category !== "description" &&
       !isOther(r) &&
       Array.isArray(r.subject_ids) &&
       r.subject_ids.includes(selected),
   );
   const otherRows = rows(document.requirements).filter(isOther);
+  const descriptions = rows(document.requirements).filter((r) => r.category === "description" &&
+    Array.isArray(r.subject_ids) && r.subject_ids.includes(selected));
+  const unassignedDescriptions = rows(document.requirements).filter((r) => r.category === "description" &&
+    (!Array.isArray(r.subject_ids) || !r.subject_ids.length));
   const sourceClauseNodes = new Set(
     otherRows
       .filter((r) => r.observation_type === "source_clause")
@@ -423,6 +468,20 @@ function DocumentAnalysis({
   }
   const nodes = rows((document.parsed_document as Row | undefined)?.nodes);
   const node = nodes.find((n) => n.node_id === focused);
+  const selectedObservation = attributes.find((a, index) =>
+    String(a.id ?? index) === selectedAttribute);
+  const sourceExcerpt = (a: Row) => {
+    const evidence = (a.evidence || {}) as Row;
+    return refs(a).map((id) => {
+      const original = nodes.find((n) => n.node_id === id);
+      let text = String(original?.text || "").trim();
+      if (evidence.node_id === id && typeof evidence.char_start === "number" &&
+          typeof evidence.char_end === "number" && evidence.char_start >= 0 &&
+          evidence.char_end > evidence.char_start && evidence.char_end <= String(original?.text || "").length)
+        text = String(original?.text || "").slice(evidence.char_start, evidence.char_end).trim();
+      return text;
+    }).filter(Boolean).join(" · ");
+  };
   useEffect(() => {
     setFocused("");
     setSourceOpen(false);
@@ -435,17 +494,16 @@ function DocumentAnalysis({
       ),
   );
   const unmapped = attributes.filter((a) => mappingLabel(a) === "보류·미매핑");
+  const unnamed = attributes.filter((a) => attributeName(a) === "속성명 확인 필요");
   const shownAttributes =
     filter === "evidence"
       ? missingEvidence
       : filter === "unmapped"
         ? unmapped
-        : attributes;
+        : filter === "unnamed" ? unnamed : attributes;
   const openAttribute = (a: Row, index: number) => {
     setSelectedAttribute(String(a.id ?? attributes.indexOf(a) ?? index));
-    setSourceTitle(
-      label(a.property_raw || a.property_name || "원문 명칭 미기재"),
-    );
+    setSourceTitle(attributeName(a));
     setSourceReferences(refs(a));
     setFocused(refs(a)[0] || "");
     setSourceOpen(true);
@@ -455,29 +513,23 @@ function DocumentAnalysis({
     setRelationScope("selected");
     setMobileDetail(true);
   };
-  const nodeButton = (item: Row, attribute = false) =>
-    refs(item).map((id) => (
-      <button
-        className="operations-link"
-        type="button"
-        key={id}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (attribute) openAttribute(item, attributes.indexOf(item));
-          else {
-            setSelectedAttribute("");
-            setSourceTitle(
-              label(item.name || item.text || item.kind || "원문 근거"),
-            );
-          }
-          setSourceReferences(refs(item));
-          setFocused(id);
-          setSourceOpen(true);
-        }}
-      >
-        원문 근거 {id}
-      </button>
-    ));
+  const nodeButton = (item: Row) => {
+    const references = refs(item);
+    if (!references.length) return null;
+    return <button className="operations-link" type="button" onClick={(event) => {
+      event.stopPropagation();
+      setSelectedAttribute("");
+      setSourceTitle(label(item.name || item.text ||
+        (item.source_id && item.target_id
+          ? `${label(entitiesById.get(String(item.source_id))?.name)} → ${label(entitiesById.get(String(item.target_id))?.name)}`
+          : "선택한 항목")));
+      setSourceReferences(references);
+      setFocused(references[0]);
+      setSourceOpen(true);
+    }}>
+      원문 보기{references.length > 1 ? ` · ${references.length}곳` : ""}
+    </button>;
+  };
   const visible: { id: string; depth: number }[] = [];
   const pending = graph.roots
     .map((e) => ({ id: String(e.id), depth: 0 }))
@@ -504,7 +556,9 @@ function DocumentAnalysis({
     const children =
       navigation === "list" || query || !["all", "goods"].includes(kindFilter)
         ? undefined
-        : graph.children.get(id);
+        : graph.treeIds.has(id)
+          ? graph.children.get(id)
+          : undefined;
     return (
       <div
         key={id}
@@ -587,6 +641,10 @@ function DocumentAnalysis({
             {kindNames[String(item.kind)]
               ? ` · ${kindNames[String(item.kind)]}`
               : ""}
+            {navigation === "composition" &&
+            graph.treeIds.has(id) && graph.pendingParents.has(id)
+              ? " · 구성 관계 검토 중"
+              : ""}
             {Array.isArray(item.document_roles) &&
             item.document_roles.includes("existing_target")
               ? " · 기존 대상"
@@ -602,21 +660,21 @@ function DocumentAnalysis({
         <div role="group" aria-label="분석 결과 보기">
           <button
             aria-pressed={view === "source"}
-            onClick={() => setView("source")}
+            onClick={() => { setView("source"); setFilter("all"); }}
           >
-            엔티티·관계·속성
+            추출 결과
           </button>
           <button
             aria-pressed={view === "mapping"}
             onClick={() => setView("mapping")}
           >
-            표준 적용 결과
+            표준 매핑
           </button>
         </div>
         <span className="analysis-status">
           {document.extraction_status === "partial"
             ? "일부 추출 · 미해결 항목 있음"
-            : "실행 산출물"}
+            : document.extraction_status === "extracted" ? "추출 완료" : "추출 결과"}
         </span>
       </div>
       {view === "mapping" && (
@@ -632,7 +690,7 @@ function DocumentAnalysis({
       )}
       <div className="result-document-summary" aria-label="규격서 결과 요약">
         <span>
-          엔티티 <strong>{graph.entities.length}</strong>
+          대상 <strong>{graph.entities.length}</strong>
         </span>
         <button
           onClick={() => {
@@ -659,7 +717,7 @@ function DocumentAnalysis({
             부가 관계 검토 <strong>{supplementaryUnresolved.length}</strong>
           </span>
         )}
-        {mappingStatus === "available" && (
+        {view === "mapping" && mappingStatus === "available" && (
           <span>
             표준 미매핑{" "}
             <strong>
@@ -681,7 +739,7 @@ function DocumentAnalysis({
       >
         <aside className="analysis-tree" aria-label="분석 대상 탐색">
           <h3>
-            엔티티 <small>{graph.entities.length}개 대상</small>
+            물품·구성 <small>{graph.entities.length}개 대상</small>
           </h3>
           <input
             aria-label="분석 대상 검색"
@@ -913,7 +971,7 @@ function DocumentAnalysis({
                     </div>
                   )}
                   <div className="analysis-attribute-toolbar">
-                    <h4>문서 속성 · {attributes.length}</h4>
+                    <h4>추출 속성 · {attributes.length}</h4>
                     <label>
                       속성 필터{" "}
                       <select
@@ -925,7 +983,8 @@ function DocumentAnalysis({
                         <option value="evidence">
                           근거 누락 ({missingEvidence.length})
                         </option>
-                        <option
+                        <option value="unnamed">이름 확인 필요 ({unnamed.length})</option>
+                        {view === "mapping" && <option
                           value="unmapped"
                           disabled={mappingStatus !== "available"}
                         >
@@ -934,7 +993,7 @@ function DocumentAnalysis({
                             ? unmapped.length
                             : "—"}
                           )
-                        </option>
+                        </option>}
                       </select>
                     </label>
                   </div>
@@ -946,7 +1005,7 @@ function DocumentAnalysis({
                           <th>
                             {view === "mapping"
                               ? "요구값·단위·조건"
-                              : "문서 값"}
+                              : "요구값·조건"}
                           </th>
                           {view !== "mapping" && <th>단위</th>}
                           <th>원문 근거</th>
@@ -977,10 +1036,7 @@ function DocumentAnalysis({
                                     rows(mappingFor(a)?.facts).find(
                                       (fact) => fact.property_label,
                                     )?.property_label) ||
-                                    a.property_raw ||
-                                    a.property_name ||
-                                    a.name ||
-                                    "원문 명칭 미기재",
+                                    attributeName(a),
                                 )}
                               </span>
                               {view === "mapping" &&
@@ -1018,21 +1074,12 @@ function DocumentAnalysis({
                                   ) : null}
                                 </>
                               )}
-                              {!!a.property_key && (
-                                <details
-                                  className="analysis-internal-key"
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  <summary>내부 식별자</summary>
-                                  <code>{label(a.property_key)}</code>
-                                </details>
-                              )}
                             </td>
                             <td
                               data-label={
                                 view === "mapping"
                                   ? "요구값·단위·조건"
-                                  : "문서 값"
+                                  : "요구값·조건"
                               }
                             >
                               <AttributeValue
@@ -1045,8 +1092,14 @@ function DocumentAnalysis({
                               <td data-label="단위">{label(a.unit_raw)}</td>
                             )}
                             <td data-label="원문 근거">
+                              {sourceExcerpt(a) && <p className="analysis-evidence-preview">
+                                {sourceExcerpt(a).length > 150 ? `${sourceExcerpt(a).slice(0, 150)}…` : sourceExcerpt(a)}
+                              </p>}
                               {refs(a).length ? (
-                                nodeButton(a, true)
+                                <button className="operations-link" type="button"
+                                  onClick={(event) => { event.stopPropagation(); openAttribute(a, i); }}>
+                                  원문 보기{refs(a).length > 1 ? ` · ${refs(a).length}곳` : ""}
+                                </button>
                               ) : (
                                 <span className="operations-note">
                                   근거 없음
@@ -1114,6 +1167,13 @@ function DocumentAnalysis({
                   ))}
                 </details>
               )}
+              {detailTab === "attributes" && !!descriptions.length && <details>
+                <summary>물품 설명 · {descriptions.length}</summary>
+                <p>개요·용도·작동 원리의 원문입니다. 규격 속성과 구분합니다.</p>
+                {descriptions.map((clause, index) => <div key={String(clause.id ?? index)}>
+                  <p>{label(clause.text)}</p>{nodeButton(clause)}
+                </div>)}
+              </details>}
             </>
           ) : detailTab !== "unresolved" ? (
             <p>표시할 엔티티가 없습니다.</p>
@@ -1130,6 +1190,12 @@ function DocumentAnalysis({
               ))}
             </details>
           )}
+          {detailTab === "attributes" && !!unassignedDescriptions.length && <details>
+            <summary>문서 설명 · 대상 미지정 · {unassignedDescriptions.length}</summary>
+            {unassignedDescriptions.map((clause, index) => <div key={String(clause.id ?? index)}>
+              <p>{label(clause.text)}</p>{nodeButton(clause)}
+            </div>)}
+          </details>}
         </section>
         <section
           ref={sourcePanel}
@@ -1151,6 +1217,9 @@ function DocumentAnalysis({
               </button>
             )}
           </div>
+          {sourceOpen && <p className="operations-note">
+            {(document.parser as Row | undefined)?.ocr ? "OCR로 읽은 문서 텍스트입니다." : "문서에서 읽어낸 원문 텍스트입니다."}
+          </p>}
           {!sourceOpen ? (
             <p className="operations-note">
               엔티티·관계·속성의 원문 근거를 선택하면 해당 위치와 내용을
@@ -1158,33 +1227,59 @@ function DocumentAnalysis({
             </p>
           ) : (
             <>
-              <p>{sourceTitle}</p>
+              {!selectedObservation && <p>{sourceTitle}</p>}
+              {selectedObservation && <div className="analysis-source-selection">
+                <strong>{label(entity?.name)} · {attributeName(selectedObservation)}</strong>
+                <div><AttributeValue attribute={selectedObservation} mapping={undefined} standard={false} />
+                  {selectedObservation.unit_raw ? ` ${label(selectedObservation.unit_raw)}` : ""}</div>
+                {!selectedObservation.property_raw && <small>
+                  {selectedObservation.property_label_origin === "model_suggestion"
+                    ? "속성명은 AI가 해석한 추출명입니다. 원문 명칭이나 승인된 표준명과 구분합니다."
+                    : "속성명은 추출 분류에 따른 표시명입니다. 아래 원문과 대조하세요."}
+                </small>}
+              </div>}
               <div className="analysis-source-tabs">
-                {sourceReferences.map((id) => (
+                {sourceReferences.map((id, index) => (
                   <button
                     key={id}
                     aria-pressed={id === focused}
                     onClick={() => setFocused(id)}
                   >
-                    {id}
+                    근거 {index + 1}
                   </button>
                 ))}
               </div>
-              {node ? (
-                <article className="evidence-node is-selected">
-                  <small>
-                    {focused}
-                    {node.page != null ? ` · ${label(node.page)}쪽` : ""}
-                  </small>
-                  <p>{label(node.text)}</p>
-                </article>
-              ) : (
+              {sourceReferences.map((id, index) => {
+                const source = nodes.find((n) => n.node_id === id);
+                if (!source) return <p key={id} className="operations-note">이 산출물에서 해당 원문 노드를 찾지 못했습니다.</p>;
+                const text = String(source.text || "");
+                const evidence = (selectedObservation?.evidence || {}) as Row;
+                const start = evidence.char_start, end = evidence.char_end;
+                const highlight = evidence.node_id === id && typeof start === "number" &&
+                  typeof end === "number" && start >= 0 && end > start && end <= text.length;
+                return <article key={id} className={`evidence-node ${id === focused ? "is-selected" : ""}`}>
+                  <small>근거 {index + 1}{source.page != null ? ` · ${label(source.page)}쪽` : ""}</small>
+                  <p>{highlight ? <>{text.slice(0, start as number)}<mark>{text.slice(start as number, end as number)}</mark>{text.slice(end as number)}</> : text}</p>
+                </article>;
+              })}
+              {!sourceReferences.length && (
                 <p className="operations-note">
                   {focused
                     ? "이 산출물에서 해당 원문 노드를 찾지 못했습니다."
                     : "이 속성에는 원문 근거 참조가 없습니다."}
                 </p>
               )}
+              {node && <details className="analysis-source-context">
+                <summary>앞뒤 원문 함께 보기</summary>
+                {nodes.slice(Math.max(0, nodes.indexOf(node) - 2), nodes.indexOf(node) + 3)
+                  .filter((n) => !sourceReferences.includes(String(n.node_id)) && String(n.text || "").trim()).map((n) => <p key={String(n.node_id)}
+                    className={n.node_id === focused ? "is-selected" : ""}>{label(n.text)}</p>)}
+              </details>}
+              <details className="analysis-internal-key">
+                <summary>추출 정보</summary>
+                {selectedObservation?.property_key ? <p>내부 식별자: <code>{label(selectedObservation.property_key)}</code></p> : null}
+                <p>원문 참조: {sourceReferences.join(", ") || "없음"}</p>
+              </details>
             </>
           )}
         </section>

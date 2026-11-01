@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
@@ -119,9 +120,9 @@ it("loads extracted properties and opens checksum-verified source evidence", asy
     </MemoryRouter>,
   );
   expect(await screen.findByText("32GB", { exact: true })).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "원문 근거 n1" }));
+  fireEvent.click(screen.getByRole("button", { name: "원문 보기" }));
   expect(
-    screen.getByText("메모리 용량 32GB").closest("article")?.className,
+    within(screen.getByRole("region", { name: "선택한 원문 근거" })).getByText("메모리 용량 32GB").closest("article")?.className,
   ).toContain("is-selected");
   expect(artifact).toHaveBeenCalledWith("sample_run", "extracted.json");
 });
@@ -173,7 +174,7 @@ it("keeps document observations visible when the separate normalization request 
     </MemoryRouter>,
   );
   expect(await screen.findByText("원문 값")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "표준 적용 결과" }));
+  fireEvent.click(screen.getByRole("button", { name: "표준 매핑" }));
   expect(await screen.findByText("조회 실패", { exact: true })).toBeTruthy();
   expect(screen.getByText("원문 값")).toBeTruthy();
 });

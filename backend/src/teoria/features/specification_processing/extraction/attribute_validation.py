@@ -2,21 +2,37 @@
 import re
 import json
 from teoria.features.specification_processing.extraction.document_context import DocumentContext
+from teoria.features.specification_processing.parsing.document_evidence import literal
 
 # Broad recovery signals, never an allowlist of product/component names. All text is forwarded first.
 SPEC = re.compile(r'\d\s*(?:[A-Za-zµμΩ℃℉°%][A-Za-z0-9µμΩ℃℉°%/·²³^_-]*|개|대|회|년|개월|시간|분|초)|(?:이상|이하|초과|미만|필수|요구|하여야|해야|가능|지원|설치|납품|보증|무상|교육)',re.I)
+SPECIFICATION_REFERENCE = re.compile(
+    r'\s*(?:(?:아래|위|상기|하기|별첨|첨부)\s*)?'
+    r'(?:상세|세부)\s*(?:사양|규격)\s*(?:참조|참고)\s*[.!。]?\s*'
+)
 
 def is_spec(text):
     return bool(SPEC.search(text))
 
 
-def fragment_context(document,fragment,*,context=None):
+def inventory_fragment(fragment, quantity):
+    """Only a complete quantity/unit cell, never another number inside a combined specification."""
+    if fragment['node_id'] not in quantity.get('evidence',{}).get('source_node_ids',[]):
+        return False
+    text=literal(fragment['text'])
+    value=literal(quantity['value_raw'])
+    unit=literal(quantity.get('unit_raw') or '')
+    return bool(text) and text in {value, value+unit, unit}-{''}
+
+
+def fragment_context(document,fragment,*,context=None,graph=None):
     context=context or DocumentContext(document)
     node_id=fragment['node_id']
     ancestors={n['node_id'] for n in context.ancestors(node_id)}
     headings=set(context.paths[node_id])
     cell=context.cells.get(node_id)
-    selected=ancestors|headings
+    targets=context.target_evidence_ids(node_id,graph) if graph is not None else set()
+    selected=ancestors|headings|targets
     clause_nodes={id for group in document.get('document_assessment',{}).get('clause_groups',[]) if node_id in group for id in group}
     selected.update(clause_nodes)
     if cell is not None:
@@ -32,7 +48,8 @@ def fragment_context(document,fragment,*,context=None):
     selected.discard(node_id)
     rows=[n for n in document['nodes'] if n['node_id'] in selected and n['text'].strip()]
     # Retain the previous extraction context limits; full primary fragments stay unchanged.
-    rows=sorted(rows,key=lambda n:(n['node_id'] not in clause_nodes,n['node_id'] not in headings))[:8]
+    rows=sorted(rows,key=lambda n:(n['node_id'] not in targets,n['node_id'] not in clause_nodes,
+                                  n['node_id'] not in headings))[:8]
     return [[n['node_id'],n.get('row'),n.get('column'),n['text'][:1000]] for n in rows]
 
 
@@ -40,6 +57,7 @@ def fragment_coverage(chunks, attributes, additional_covered=(), *, graph=None):
     """Explain coverage without treating raw-clause retention as requirement extraction."""
     covered = set(additional_covered) | {a['evidence']['fragment_id'] for a in attributes
         if 'fragment_id' in a.get('evidence', {})}
+    quantities=[a for a in attributes if a.get('origin')=='validated_inventory_quantity']
     labels = {}
     entity_nodes = set()
     def bare(text):
@@ -63,6 +81,11 @@ def fragment_coverage(chunks, attributes, additional_covered=(), *, graph=None):
             text = fragment['text']
             if fragment['id'] in covered:
                 status = 'attributes_returned'
+            elif any(inventory_fragment(fragment,q) for q in quantities):
+                status = 'inventory_quantity_preserved'
+            elif SPECIFICATION_REFERENCE.fullmatch(text):
+                # Navigation alone states no property. Destination clauses still need their own coverage.
+                status = 'specification_reference'
             elif role in {'general_requirement','delivery_requirement'}:
                 status = 'other_requirement_preserved'
             elif (role in {'target_mention', 'heading'}
@@ -92,11 +115,30 @@ def uncovered(chunks, attributes, additional_covered=(), *, graph=None):
             if f['coverage_status'] in {'missing_requirement', 'unresolved_target_mention'}]
 
 
-def deduplicate_inventory(inventory,attributes):
-    """Only exact generic quantity duplicates. Component counts remain distinct observations."""
+def deduplicate_inventory(inventory,attributes,*,document=None):
+    """Reuse verified inventory cells without merging different locations, units or conditions."""
+    nodes={n['node_id']:n for n in (document or {}).get('nodes',[])}
     kept=[];duplicates=[]
     for a in attributes:
-        match=next((q for q in inventory if a['property_key']=='quantity' and a['subject_ids']==q['subject_ids'] and a['value_raw']==q['value_raw'] and a['unit_raw']==q['unit_raw'] and a['operator']=='eq' and not a['qualifiers_raw'] and a['evidence']['node_id'] in q['evidence']['source_node_ids']),None)
+        match=None
+        node_id=a.get('evidence',{}).get('node_id')
+        for q in inventory:
+            if (a['subject_ids']!=q['subject_ids'] or a['operator']!='eq' or a.get('qualifiers_raw')
+                    or node_id not in q['evidence']['source_node_ids']):
+                continue
+            same_quantity=(a['property_key']=='quantity' and a['value_raw']==q['value_raw'])
+            if same_quantity and a.get('unit_raw')==q.get('unit_raw'):
+                match=q;break
+            node=nodes.get(node_id)
+            if node is None or not inventory_fragment({'node_id':node_id,'text':node['text']},q):
+                continue
+            if same_quantity and a.get('unit_raw') is None:
+                match=q;break
+            if (a['property_key'] in {'procurement_unit','purchase_unit','quantity_unit'}
+                    and q.get('unit_raw') and a.get('unit_raw') is None
+                    and literal(a['value_raw'])==literal(q['unit_raw'])
+                    and literal(node['text'])==literal(q['unit_raw'])):
+                match=q;break
         if match:
             duplicates.append({'attribute_id':a['id'],'duplicate_of':match['id'],'evidence':a['evidence']})
         else:kept.append(a)

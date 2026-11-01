@@ -23,6 +23,7 @@ from .models import (
     table_from_cells,
 )
 from .office_numbering import DocxNumbering
+from .xlsx_drawing_text import drawing_text_blocks
 from .xlsx_worksheet import worksheet_xml
 
 
@@ -329,10 +330,11 @@ def parse_xlsx(data: bytes, options: ParseOptions) -> ParseResult:
                     r, c = column_index(begin)
                     er, ec = column_index(end)
                     merges.append((r, c, er, ec))
-            if not values:
+            drawing_blocks = drawing_text_blocks(archive, root, relationships(archive, path))
+            if not values and not drawing_blocks:
                 continue
-            rows = max(r for r, _ in values) + 1
-            cols = max(c for _, c in values) + 1
+            rows = max((r for r, _ in values), default=-1) + 1
+            cols = max((c for _, c in values), default=-1) + 1
             for r, c, er, ec in merges:
                 rows, cols = max(rows, er + 1), max(cols, ec + 1)
                 cell = values.setdefault((r, c), Cell(source=SourceRef(path, f"R{r + 1}C{c + 1}")))
@@ -344,6 +346,7 @@ def parse_xlsx(data: bytes, options: ParseOptions) -> ParseResult:
             table = sheet_table(rows, cols, values, options)
             if table is not None:
                 result.blocks.append(Block("table", table=table, source=SourceRef(path)))
+            result.blocks.extend(drawing_blocks)
         result.page_count = len(sheets)
         result.metadata = metadata(archive)
     return result

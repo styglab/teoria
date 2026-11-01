@@ -38,6 +38,16 @@ def test_grounded_composition_preserves_values_and_installation_support():
     assert graph['relations'][-1]['review_attribute_ids'] == ['a']
 
 
+def test_attribute_review_cannot_add_a_shortcut_past_the_frozen_inventory():
+    document,graph,link=example()
+    graph['composition_inventory']={'root_id':'root','basis':'configuration_list',
+        'integrated_scope':True,'item_ids':['assembly']}
+    graph['entities'].append({'id':'assembly','name':'제공 조립체','kind':'equipment'})
+    before=deepcopy(graph)
+    assert add_composition_links(graph,document,[link])=={'added':0,'rejected':1}
+    assert graph==before
+
+
 @pytest.mark.parametrize('defect', ['existing', 'capability', 'unknown_owner', 'fabricated_quote',
                                     'unknown_node', 'service', 'cycle', 'contents', 'missing_attribute'])
 def test_unsupported_composition_is_not_added(defect):

@@ -1,5 +1,7 @@
 """Build attribute input fragments while preserving source character offsets."""
 from teoria.features.specification_processing.extraction.document_context import DocumentContext,pack_fragments
+from teoria.features.specification_processing.extraction.attribute_validation import is_spec
+import re
 
 def make_chunks(graph,document,target_chars=2200,fragment_chars=1100):
     """Split long cells at line boundaries, preserving original character offsets."""
@@ -21,13 +23,23 @@ def make_chunks(graph,document,target_chars=2200,fragment_chars=1100):
         if not text.strip() or node.get('kind')=='image':continue
         offset=0;start=0;size=0;parts=[]
         for line in text.splitlines(keepends=True):
+            if len(text)>fragment_chars:
+                # A long cell can contain many different components. Each source line keeps its own anchor.
+                if size and line.strip() and text[start:offset].strip():
+                    parts.append((start,offset));start=offset;size=0
+                offset+=len(line);size+=len(line)
+                continue
             if size and size+len(line)>fragment_chars:
                 parts.append((start,offset));start=offset;size=0
             offset+=len(line);size+=len(line)
         if offset>start:parts.append((start,offset))
         for index,(a,b) in enumerate(parts):
+            role=document.get('document_assessment',{}).get('node_roles',{}).get(node_id,'unknown')
+            if (len(text)>fragment_chars and re.fullmatch(r'\s*[ㅇ○●■□]\s*[^\n:：]{1,60}\s*',text[a:b])
+                    and not is_spec(text[a:b])):
+                role='heading'
             if text[a:b].strip():fragments.append({'id':f'{node_id}_f{index:02}','node_id':node_id,'start':a,'end':b,'text':text[a:b],
-                                                 'expected_role':document.get('document_assessment',{}).get('node_roles',{}).get(node_id,'unknown'),
+                                                 'expected_role':role,
                                                  'suggested_subject_ids':list(dict.fromkeys(owners.get(node_id,[])))})
     return pack_fragments(fragments,DocumentContext(document),target_chars)
 

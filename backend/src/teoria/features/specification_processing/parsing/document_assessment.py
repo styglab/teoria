@@ -4,7 +4,7 @@ import re
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-Role=Literal['technical_requirement','delivery_requirement','general_requirement','target_mention','heading','table_of_contents','procedure','template','other','unknown']
+Role=Literal['technical_requirement','delivery_requirement','general_requirement','description','target_mention','heading','table_of_contents','procedure','template','other','unknown']
 
 class PassageGroup(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -24,10 +24,19 @@ proof of document kind. Empty bidder comparison forms, compliance confirmation s
 procedures are not technical specifications. Mixed documents may contain real technical requirements;
 retain those and delivery, installation, warranty, training and deliverable requirements.
 Group every supplied node exactly once. technical_requirement is a product/component constraint;
+description is pure overview, intended analytical use or explanatory operating principle without an
+asserted product constraint. Preserve it as source description, not atomic properties. A sentence saying
+that an instrument is used to identify or screen compounds is description, even when it spans lines.
+Required functions, supported modes, material, capacity, storage/hygiene, certification and performance
+remain technical_requirement, including nonnumeric requirements. Never classify a mixed node as
+description when it also contains a real constraint. Mark continuations in clause_groups.
 delivery_requirement is an actual delivery/service/document obligation.
 general_requirement is a blanket legal/compliance/safety principle, contract responsibility or rule
 of precedence. Preserve these as other requirements, not product properties. Delivery, installation,
 warranty and submission clauses are other requirements too; do not split their actor/action/modality.
+Stock rotation/delivery order and blanket statutory package-labelling duties are delivery/general
+requirements. Concrete shelf-life limits, package contents/material and storage conditions remain
+technical requirements. Keep mixed passages technical so their concrete conditions are retained.
 Blanket obligations to use legally approved products or products approved in their country of manufacture,
 without a named product/standard, are general_requirement. Do not assume they apply to every component.
 Specific product constraints remain technical_requirement: load capacity, dimensions, material,
@@ -102,5 +111,5 @@ async def assess_document(document,runner,out):
 def extraction_node_ids(document,*,headings=False,specifications_only=False):
     roles=document.get('document_assessment',{}).get('node_roles',{})
     excluded={'procedure','template','other','table_of_contents'} | (set() if headings else {'heading'})
-    if specifications_only:excluded|={'delivery_requirement','general_requirement'}
+    if specifications_only:excluded|={'delivery_requirement','general_requirement','description'}
     return {n['node_id'] for n in document['nodes'] if roles.get(n['node_id'],'unknown') not in excluded}

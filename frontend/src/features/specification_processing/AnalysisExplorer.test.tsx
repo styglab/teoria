@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { AnalysisExplorer, composition } from "./AnalysisExplorer";
+import { AttributeValue } from "./AttributeValue";
 afterEach(cleanup);
 it("separates existing assets and installation support while preserving their source and relations", () => {
   const value = {
@@ -79,9 +80,9 @@ it("selects a nested component and shows its own properties and original evidenc
   expect(within(detail).getByText("2 개", { exact: true })).toBeTruthy();
   expect(within(detail).getByText("32", { exact: true })).toBeTruthy();
   fireEvent.click(
-    within(detail).getAllByRole("button", { name: "원문 근거 n1" })[0],
+    within(detail).getAllByRole("button", { name: "원문 보기" })[0],
   );
-  expect(screen.getByText("프로세서는 32코어 이상")).toBeTruthy();
+  expect(within(screen.getByRole("region", { name: "선택한 원문 근거" })).getByText("프로세서는 32코어 이상")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "구성 관계" })).toBeTruthy();
   fireEvent.change(screen.getByLabelText("대상 유형"), {
     target: { value: "all" },
@@ -96,7 +97,7 @@ it("selects a nested component and shows its own properties and original evidenc
     screen.queryByRole("button", { name: /프로세서 1개 속성/ }),
   ).toBeNull();
 });
-it("never turns scope, interpreted, cyclic, or multiple-parent relations into composition", () => {
+it("keeps interpreted links under review and excludes scope, cyclic and multiple-parent links", () => {
   const entities = ["a", "b", "c", "d", "e", "f"].map((id) => ({
     id,
     name: id,
@@ -112,8 +113,62 @@ it("never turns scope, interpreted, cyclic, or multiple-parent relations into co
       relation("f", "e"),
     ],
   });
-  expect(graph.children.size).toBe(0);
-  expect(graph.unclassified).toHaveLength(6);
+  expect([...graph.children]).toEqual([["e", ["d"]]]);
+  expect([...graph.pendingParents]).toEqual(["d"]);
+  expect(graph.roots.map((e) => e.id)).toEqual(["e"]);
+  expect(graph.unclassified.map((e) => e.id)).toEqual(["a", "b", "c", "f"]);
+});
+
+const lcmsConfiguration = () => {
+  const names = ["질량분석기", "시스템 컨트롤러", "용매 운반용 펌프", "자동시료주입기",
+    "컬럼오븐", "광다이오드어레이 검출기", "온라인 가스제거 유닛", "데이터 처리 시스템", "악세서리"];
+  const item_ids = names.map((_, i) => `i${i + 1}`);
+  return {
+    document_id: "lcms",
+    composition_inventory: { root_id: "scope", basis: "configuration_list", integrated_scope: true, item_ids },
+    entities: [{ id: "scope", name: "액체크로마토그래프 질량분석기", kind: "equipment" },
+      ...names.map((name, i) => ({ id: item_ids[i], name, kind: "equipment" })),
+      ...[{ id: "pc", name: "PC SYSTEM" }, { id: "cpu", name: "CPU" },
+        { id: "detector", name: "검출기" }, { id: "dynode", name: "변환 다이노드" }]
+        .map((e) => ({ ...e, kind: "equipment" }))],
+    relations: [...item_ids.map((id) => relation(id, "scope")),
+      relation("pc", "i8", "component_of", "interpreted"), relation("cpu", "pc"),
+      relation("detector", "i1", "component_of", "interpreted"), relation("dynode", "detector")],
+    attributes: [], parsed_document: { nodes: [{ node_id: "n1", text: "8. 데이터 처리 시스템 (4) PC SYSTEM" }] },
+  };
+};
+
+it("keeps nine configuration items and nested PC/detector branches under one source root", () => {
+  const value = lcmsConfiguration();
+  value.relations.reverse();
+  const graph = composition(value);
+  expect(graph.roots.map((e) => e.id)).toEqual(["scope"]);
+  expect(graph.children.get("scope")).toEqual(value.composition_inventory.item_ids);
+  expect(graph.children.get("i8")).toEqual(["pc"]);
+  expect(graph.children.get("pc")).toEqual(["cpu"]);
+  expect(graph.children.get("i1")).toEqual(["detector"]);
+  render(<AnalysisExplorer value={{ documents: [value] }} />);
+  const pc = screen.getByRole("treeitem", { name: /PC SYSTEM/ });
+  expect(pc.getAttribute("aria-level")).toBe("3");
+  expect(pc.textContent).toContain("구성 관계 검토 중");
+  expect(screen.getByRole("treeitem", { name: /CPU/ }).getAttribute("aria-level")).toBe("4");
+});
+
+it("does not promote PC or its descendants when the parent proposal is held or missing", () => {
+  for (const held of [false, true]) {
+    const value = lcmsConfiguration();
+    const pcLink = value.relations.find((r) => r.source_id === "pc")!;
+    const graph = composition({ ...value, relations: value.relations.filter((r) => r !== pcLink),
+      held_relations: held ? [{ ...pcLink, review_status: "held" }] : [] });
+    expect(graph.roots.map((e) => e.id)).toEqual(["scope"]);
+    expect(graph.unclassified.map((e) => e.id)).toEqual(["pc", "cpu"]);
+  }
+});
+
+it("does not treat interpreted physical inclusion or packaging as established hierarchy", () => {
+  const entities = [{ id: "a", name: "a" }, { id: "b", name: "b" }];
+  expect(composition({ entities, relations: [relation("a", "b", "physical_part_of", "interpreted")] }).children.size).toBe(0);
+  expect(composition({ entities, relations: [relation("a", "b", "pack_unit_of", "interpreted")] }, "packaging").children.size).toBe(0);
 });
 it("preserves comparison operators and conditions in property values", () => {
   render(
@@ -195,8 +250,8 @@ it("joins standard mappings by document and observation ID and keeps source labe
     />,
   );
   fireEvent.click(screen.getByRole("treeitem", { name: /프로세서 1개 속성/ }));
-  expect(screen.getByText("cpu_core_count")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "표준 적용 결과" }));
+  expect(screen.queryByText("cpu_core_count")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "표준 매핑" }));
   expect(screen.getByText("cpu_core_count")).toBeTruthy();
   expect(screen.queryByText("wrong_standard")).toBeNull();
   expect(screen.getByText("연결됨", { exact: true })).toBeTruthy();
@@ -210,12 +265,12 @@ it("distinguishes mapping failure from unmapped and opens evidence from the sele
     />,
   );
   fireEvent.click(screen.getByRole("treeitem", { name: /프로세서 1개 속성/ }));
-  fireEvent.click(screen.getByRole("button", { name: "표준 적용 결과" }));
+  fireEvent.click(screen.getByRole("button", { name: "표준 매핑" }));
   expect(screen.getByText("조회 실패", { exact: true })).toBeTruthy();
   const row = screen.getByText("코어 수").closest("tr")!;
   fireEvent.keyDown(row, { key: "Enter" });
   expect(row.getAttribute("aria-selected")).toBe("true");
-  expect(screen.getByText("프로세서는 32코어 이상")).toBeTruthy();
+  expect(within(screen.getByRole("region", { name: "선택한 원문 근거" })).getByText("프로세서는 32코어 이상")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "근거 닫기" }));
   expect(screen.queryByRole("region", { name: "선택한 원문 근거" })).toBeNull();
 });
@@ -246,7 +301,7 @@ it("filters missing source evidence without losing the full property count", () 
   expect(
     screen.getByText("이 산출물에서 해당 원문 노드를 찾지 못했습니다."),
   ).toBeTruthy();
-  expect(screen.getByRole("heading", { name: "문서 속성 · 1" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "추출 속성 · 1" })).toBeTruthy();
 });
 
 it("separates software, support and submitted documents from the physical tree even for legacy composition", () => {
@@ -424,9 +479,9 @@ it("keeps other requirements collapsed with source text instead of duty fields",
   fireEvent.click(
     within(
       within(detail).getByText("기타 요구사항 · 1").closest("details")!,
-    ).getByRole("button", { name: "원문 근거 n1" }),
+    ).getByRole("button", { name: "원문 보기" }),
   );
-  expect(screen.getByText("프로세서는 32코어 이상")).toBeTruthy();
+  expect(within(screen.getByRole("region", { name: "선택한 원문 근거" })).getByText("프로세서는 32코어 이상")).toBeTruthy();
 });
 
 it("finds a source alias without adding another product and keeps the original name collapsed", () => {
@@ -461,7 +516,7 @@ it("finds a source alias without adding another product and keeps the original n
 it("shows document-wide counts and directional relationships with navigable endpoints", () => {
   render(<AnalysisExplorer value={{ documents: [document] }} />);
   const summary = screen.getByLabelText("규격서 결과 요약");
-  expect(summary.textContent).toContain("엔티티 3");
+  expect(summary.textContent).toContain("대상 3");
   expect(summary.textContent).toContain("관계 2");
   expect(summary.textContent).toContain("속성 1");
   fireEvent.click(within(summary).getByRole("button", { name: /관계 2/ }));
@@ -510,7 +565,7 @@ it("presents held relations and incomplete attributes as read-only unresolved re
   fireEvent.click(
     within(issues).getByRole("button", { name: "속성 원문 확인" }),
   );
-  expect(screen.getByText("프로세서는 32코어 이상")).toBeTruthy();
+  expect(within(screen.getByRole("region", { name: "선택한 원문 근거" })).getByText("프로세서는 32코어 이상")).toBeTruthy();
   expect(screen.queryByRole("button", { name: /승인|반려/ })).toBeNull();
 });
 it("does not count a supplementary-only hold as an unresolved product extraction", () => {
@@ -581,7 +636,7 @@ it("shows normalized values next to original conditions while keeping mappings s
     />,
   );
   fireEvent.click(screen.getByRole("treeitem", { name: /프로세서 1개 속성/ }));
-  fireEvent.click(screen.getByRole("button", { name: "표준 적용 결과" }));
+  fireEvent.click(screen.getByRole("button", { name: "표준 매핑" }));
   expect(screen.getByText("이상 1", { exact: true })).toBeTruthy();
   expect(screen.getByText("1000 GB", { exact: true })).toBeTruthy();
 });
@@ -630,8 +685,76 @@ it("keeps missing standard mappings out of extraction issue counts", () => {
     />,
   );
   const summary = screen.getByLabelText("규격서 결과 요약");
+  expect(within(summary).queryByText("표준 미매핑")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "표준 매핑" }));
   expect(within(summary).getByText("표준 미매핑")).toBeTruthy();
   expect(
     within(summary).getByRole("button", { name: "미해결 항목 0" }),
   ).toBeTruthy();
+});
+
+it("opens source verification first, names inventory quantities, and shows all original references together", () => {
+  render(<AnalysisExplorer value={{ documents: [{
+    document_id: "quantity", entities: [{ id: "item", name: "질량분석기" }], relations: [],
+    attributes: [{ id: "q", subject_ids: ["item"], property_key: "quantity", property_raw: null,
+      value_raw: "1", unit_raw: "set", evidence: { source_node_ids: ["name", "qty"] } }],
+    parsed_document: { nodes: [{ node_id: "name", text: "질량분석기" }, { node_id: "qty", text: "1 set" }] },
+  }] }} mappingStatus="available" normalization={{ attributes: [{ document_id: "quantity", attribute_id: "q", status: "automatically_deferred" }] }} />);
+  expect(screen.getByRole("button", { name: "추출 결과" }).getAttribute("aria-pressed")).toBe("true");
+  const detail = screen.getByRole("region", { name: "분석 대상 상세" });
+  const row = within(detail).getByText("수량").closest("tr")!;
+  expect(within(row).queryByText("원문 명칭 미기재")).toBeNull();
+  expect(within(row).queryByText("내부 식별자")).toBeNull();
+  expect(within(row).queryByText("보류·미매핑")).toBeNull();
+  fireEvent.click(within(row).getByRole("button", { name: "원문 보기 · 2곳" }));
+  const source = screen.getByRole("region", { name: "선택한 원문 근거" });
+  const articles = source.querySelectorAll("article");
+  expect(articles.length).toBe(2);
+  expect(articles[0].textContent).toContain("질량분석기");
+  expect(articles[1].textContent).toContain("1 set");
+  expect(within(source).getByText("추출 정보").closest("details")?.open).toBe(false);
+});
+
+it("highlights the exact source passage and leaves unknown property names for inspection", () => {
+  render(<AnalysisExplorer value={{ documents: [{
+    document_id: "span", entities: [{ id: "item", name: "CPU" }], relations: [],
+    attributes: [{ id: "clock", subject_ids: ["item"], property_key: "unrecognized_clock", value_raw: "3.50",
+      unit_raw: "GHz", evidence: { node_id: "spec", char_start: 4, char_end: 11 } }],
+    parsed_document: { nodes: [{ node_id: "spec", text: "CPU 3.50GHz 이상", page: 2 }] },
+  }] }} />);
+  fireEvent.change(screen.getByLabelText("속성 필터"), { target: { value: "unnamed" } });
+  const row = screen.getByText("속성명 확인 필요").closest("tr")!;
+  fireEvent.keyDown(row, { key: "Enter" });
+  const source = screen.getByRole("region", { name: "선택한 원문 근거" });
+  expect(source.querySelector("mark")?.textContent).toBe("3.50GHz");
+  expect(source.querySelector("article")?.textContent).toContain("2쪽");
+});
+
+it("does not repeat source operators already contained in the extracted value", () => {
+  const first = render(<AttributeValue attribute={{ value_raw: "±0.1", operator_raw: "±" }} mapping={undefined} standard={false} />);
+  expect(first.container.textContent).toBe("±0.1");
+  first.unmount();
+  const second = render(<AttributeValue attribute={{ value_raw: "2 to 2000", operator_raw: "to", operator: "range" }} mapping={undefined} standard={false} />);
+  expect(second.container.textContent).toBe("2 to 2000");
+});
+
+it("shows a suggested property name without presenting source descriptions as properties", () => {
+  const text = "화합물을 신속하게 스크리닝하는 데 사용된다.";
+  render(<AnalysisExplorer value={{ documents: [{
+    document_id: "descriptions", entities: [{ id: "root", name: "분석 장치" }], relations: [],
+    attributes: [{ id: "a", subject_ids: ["root"], property_raw: null, property_key: "mass_range",
+      property_label: "질량 범위", property_label_origin: "model_suggestion", value_raw: "2 to 2000", unit_raw: "m/z",
+      evidence: { node_id: "spec" } }],
+    requirements: [{ id: "overview", observation_type: "source_clause", category: "description", subject_ids: ["root"],
+      text, evidence: [{ node_id: "intro" }] }],
+    parsed_document: { nodes: [{ node_id: "spec", text: "m/z 2 to 2000" }, { node_id: "intro", text }] },
+  }] }} />);
+  const detail = screen.getByRole("region", { name: "분석 대상 상세" });
+  expect(within(detail).getByText("물품 설명 · 1").closest("details")?.open).toBe(false);
+  expect(within(detail).queryByText("대상별 원문 요구조건 · 1")).toBeNull();
+  const table = within(detail).getByRole("table");
+  expect(within(table).queryByText(text)).toBeNull();
+  fireEvent.click(within(table).getByText("질량 범위").closest("tr")!);
+  expect(within(screen.getByRole("region", { name: "선택한 원문 근거" }))
+    .getByText(/AI가 해석한 추출명/)).toBeTruthy();
 });

@@ -61,6 +61,8 @@ async def extraction_evaluation_flow(manifest:dict,workspace:str):
     request=SpecificationRun.model_validate(manifest)
     if request.extraction_checkpoint is not None:
         raise ValueError('IE evaluation must rerun extraction, not reuse a checkpoint')
+    # Evaluation must measure fresh inference, never operational checkpoint reuse.
+    request=request.model_copy(update={'reuse_stage_checkpoints':False})
     ref,_=await extract_documents(request,workspace)
     return ref
 

@@ -109,3 +109,26 @@ async def test_general_clause_is_retained_without_a_model_call_or_partial(saved_
     assert summary['status']=='needs_review' and summary['chunks']==0
     graph=json.loads((tmp_path/'output/attribute_graph.json').read_text())
     assert graph['requirements']==[clause]
+
+
+async def test_attribute_target_gap_gets_one_grounded_target_recovery(saved_parse,tmp_path):
+    graph=json.loads((saved_parse/'graph.json').read_text())
+    graph['entities']=[{'id':'pc','name':'PC SYSTEM','kind':'equipment'}]
+    (saved_parse/'graph.json').write_text(json.dumps(graph))
+    class Model:
+        def __init__(self):self.attempts=[]
+        async def generate(self,prompt,request,out):
+            if 'targets' in request['output_schema']['properties']:
+                self.attempts.append('target_recovery')
+                return {'targets':[{'fragment_id':'n_f00','node_id':'n','name':'CPU','kind':'equipment'}]}
+            self.attempts.append(request['attempt'])
+            owner=next((e[0] for e in request['entities'] if e[1]=='CPU'),None)
+            return {'facts':[['n_f00',[owner] if owner else [],'core_count','CPU','number','gte','이상','16','core',[]]],'unresolved':[]}
+    model=Model();summary=await extract_requirements('doc',saved_parse,tmp_path/'output',model,None)
+    assert model.attempts==['initial','target_recovery','missing_fragment_recovery']
+    result=json.loads((tmp_path/'output/attribute_graph.json').read_text())
+    cpu=next(e for e in result['entities'] if e['name']=='CPU')
+    assert len(result['attributes'])==1 and result['attributes'][0]['subject_ids']==[cpu['id']]
+    assert result['relations']==[] and summary['target_recovery']['added']==1
+    manifest=json.loads((tmp_path/'output/input_manifest.json').read_text())
+    assert manifest['graph_entities_changed'] is True

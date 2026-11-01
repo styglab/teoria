@@ -45,6 +45,26 @@ def test_misclassified_target_mention_with_obligation_still_needs_extraction():
     assert fragment_coverage([[f]], [], graph=graph)[0]['coverage_status'] == 'missing_requirement'
 
 
+@pytest.mark.parametrize('text', ['아래 상세사양 참조', '별첨 세부 규격 참고.'])
+def test_reference_navigation_does_not_cover_the_referenced_specifications(text):
+    reference, _, graph = source_case(text)
+    detail = {**source_case('상판 두께 25mm 이상')[0], 'id': 'detail', 'node_id': 'detail_node'}
+    chunks = [[reference, detail]]
+    assert fragment_coverage(chunks, [], graph=graph)[0]['coverage_status'] == 'specification_reference'
+    assert uncovered(chunks, [], graph=graph) == [detail]
+    attribute = {'evidence': {'fragment_id': 'detail'}}
+    assert not uncovered(chunks, [attribute], graph=graph)
+
+
+@pytest.mark.parametrize('text', [
+    '아래 상세사양 참조, 상판 두께 25mm 이상',
+    '아래 상세사양의 동급 또는 그 이상이어야 함',
+])
+def test_reference_with_an_actual_requirement_still_requires_extraction(text):
+    fragment, _, graph = source_case(text)
+    assert uncovered([[fragment]], [], graph=graph) == [fragment]
+
+
 
 def test_legacy_duties_render_as_original_clauses_and_are_still_source_validated():
     f,document,graph=source_case()

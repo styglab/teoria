@@ -89,8 +89,38 @@ class DocumentContext:
             if table is not None:
                 cells.append([key,table[1],cell.get('row'),cell.get('column'),
                               cell.get('row_span') or 1,cell.get('column_span') or 1])
+        regions={n['node_id']:{key:value for key,value in (n.get('source') or {}).items()
+                              if key in {'page','bbox','coordinate_system','unit','anchor'}}
+                 for n in self.nodes if n['node_id'] in node_ids and (n.get('source') or {}).get('bbox')}
         return {'section_paths':{key:list(path) for key,path in self.paths.items() if key in node_ids and path},
-                'table_cells':cells}
+                'table_cells':cells,**({'source_regions':regions} if regions else {})}
+
+    def purchase_row_targets(self,node_id,graph):
+        """Return independently supplied targets explicitly named in this source table row."""
+        cell=self.cells.get(node_id)
+        table=self.table_key(cell) if cell is not None else None
+        if table is None:
+            return set()
+        targets=set()
+        for entity in graph.get('entities',[]):
+            roles=entity.get('document_roles',[])
+            if 'supply_target' not in roles or 'procurement_scope' in roles:
+                continue
+            for evidence in entity.get('evidence',[]):
+                other=self.cells.get(evidence.get('node_id'))
+                if other is not None and self.table_key(other)==table and self.overlaps(cell,other,'row'):
+                    targets.add(entity['id'])
+        return targets
+
+    def target_evidence_ids(self,node_id,graph):
+        """Carry source-linked item labels, including names outside the specification row."""
+        owners=self.purchase_row_targets(node_id,graph)
+        for clause in graph.get('requirements',[]):
+            if (clause.get('observation_type')=='source_clause'
+                    and any(e.get('node_id')==node_id for e in clause.get('evidence',[]))):
+                owners.update(clause.get('subject_ids',[]))
+        return {e['node_id'] for entity in graph.get('entities',[]) if entity['id'] in owners
+                for e in entity.get('evidence',[]) if e.get('node_id') in self.lookup}
 
     @staticmethod
     def overlaps(a,b,axis):

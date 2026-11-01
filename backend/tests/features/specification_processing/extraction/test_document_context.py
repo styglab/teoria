@@ -206,3 +206,143 @@ def test_initial_extraction_context_is_local_and_bounded_while_primary_text_stay
     assert len(rows)<=8 and all(len(row[3])<=1000 for row in rows)
     fragments=[f for c in make_chunks({},document) for f in c]
     assert ''.join(f['text'] for f in fragments if f['node_id']=='n8')==document['nodes'][9]['text']
+
+
+def independent_purchase_rows():
+    # The dairy sample's neighboring independent purchase rows, reduced to their source cells.
+    document={'nodes':[
+        node('table','','table'),
+        node('milk','우유','cell',parent_id='table',row=1,column=0),
+        node('milk_value','200ml','cell',parent_id='table',row=1,column=1),
+        node('yogurt','요구르트','cell',parent_id='table',row=2,column=0),
+        node('yogurt_value','65ml','cell',parent_id='table',row=2,column=1),
+    ]}
+    g={'entities':[
+        {'id':'milk','name':'우유','kind':'product','document_roles':['supply_target'],
+         'evidence':[{'node_id':'milk'}]},
+        {'id':'yogurt','name':'요구르트','kind':'product','document_roles':['supply_target'],
+         'evidence':[{'node_id':'yogurt'}]},
+    ],'relations':[]}
+    return document,g
+
+
+async def test_independent_purchase_row_cannot_take_another_rows_attribute(tmp_path):
+    document,g=independent_purchase_rows()
+    attrs=[attribute('a','milk','milk_value'),attribute('b','yogurt','yogurt_value')]
+    class WrongRow:
+        def __init__(self):self.calls=0
+        async def generate(self,prompt,request,out):
+            self.calls+=1
+            return {'resolutions':[{'attribute_id':a['id'],'subject_ids':['yogurt'],
+                'role':'requirement_candidate','scope':'per_item',
+                'evidence_node_ids':[a['evidence']['node_id']]} for a in request['attributes']]}
+    model=WrongRow()
+    summary=await resolve_attribute_semantics(document,g,attrs,model,tmp_path)
+    assert model.calls==2 and summary['retried_attributes']==1
+    assert attrs[0]['subject_ids']==[] and attrs[0]['semantic_role']=='unknown'
+    assert attrs[1]['subject_ids']==['yogurt']
+
+
+async def test_resolution_cannot_use_only_another_attributes_source_even_in_same_batch(tmp_path):
+    document,g=independent_purchase_rows()
+    attrs=[attribute('a','milk','milk_value'),attribute('b','yogurt','yogurt_value')]
+    class ForeignEvidence:
+        async def generate(self,prompt,request,out):
+            return {'resolutions':[{'attribute_id':a['id'],'subject_ids':a['subject_ids'],
+                'role':'requirement_candidate','scope':'per_item',
+                'evidence_node_ids':['yogurt_value']} for a in request['attributes']]}
+    result=await resolve_attribute_semantics(document,g,attrs,ForeignEvidence(),tmp_path)
+    assert result['unresolved']==1 and attrs[0]['subject_ids']==[]
+    assert attrs[1]['subject_ids']==['yogurt']
+
+
+def test_row_owner_hints_do_not_claim_shared_merged_conditions_for_one_purchase():
+    document,g=independent_purchase_rows()
+    document['nodes'].append(node('shared','냉장보관','cell',parent_id='table',row=1,column=2,row_span=2))
+    hints=DocumentContext(document).purchase_row_targets('shared',g)
+    assert hints=={'milk','yogurt'}
+
+
+def test_row_owner_hint_does_not_cross_tables_or_replace_component_ownership():
+    document,g=independent_purchase_rows()
+    document['nodes'] += [node('other_table','','table'),
+        node('other_value','200ml','cell',parent_id='other_table',row=1,column=1)]
+    assert DocumentContext(document).purchase_row_targets('other_value',g)==set()
+    g['entities'][0]['document_roles']=['requirement_target']
+    assert DocumentContext(document).purchase_row_targets('milk_value',g)==set()
+
+
+async def test_wrong_purchase_row_is_retried_with_reason_and_can_be_recovered(tmp_path):
+    document,g=independent_purchase_rows();attrs=[attribute('a','yogurt','milk_value')]
+    class CorrectOnRetry:
+        def __init__(self):self.calls=0
+        async def generate(self,prompt,request,out):
+            self.calls+=1
+            if self.calls==2:
+                assert 'purchase_row_target_mismatch' in request['validation_errors']['a']
+            return {'resolutions':[{'attribute_id':'a','subject_ids':['yogurt' if self.calls==1 else 'milk'],
+                'role':'requirement_candidate','scope':'per_item','evidence_node_ids':['milk_value']}]}
+    model=CorrectOnRetry()
+    result=await resolve_attribute_semantics(document,g,attrs,model,tmp_path)
+    assert result['recovered_attributes']==1 and attrs[0]['subject_ids']==['milk']
+
+
+async def test_nested_component_can_own_an_attribute_in_its_purchase_row(tmp_path):
+    document,g=independent_purchase_rows()
+    g['entities'].append({'id':'ingredient','name':'원유','kind':'material','evidence':[{'node_id':'milk_value'}]})
+    g['relations']=[{'source_id':'ingredient','target_id':'milk','kind':'ingredient_of','basis':'explicit'}]
+    attrs=[attribute('a','ingredient','milk_value')]
+    class Judge:
+        async def generate(self,prompt,request,out):
+            return {'resolutions':[{'attribute_id':'a','subject_ids':['ingredient'],
+                'role':'requirement_candidate','scope':'per_item','evidence_node_ids':['milk_value']}]}
+    result=await resolve_attribute_semantics(document,g,attrs,Judge(),tmp_path)
+    assert result['retried_attributes']==0 and attrs[0]['subject_ids']==['ingredient']
+
+
+def test_attribute_context_keeps_scoped_item_name_outside_its_table_row():
+    # Repeated detailed furniture blocks: an item's name can be several rows above its specification.
+    document={'nodes':[
+        node('table','','table'),
+        node('name','이동식 테이블 (2인) 가림판 有','cell',parent_id='table',row=1,column=1),
+        node('material','상판 - 23t PB 양면 LPM','cell',parent_id='table',row=5,column=1),
+        node('other','실습실 의자','cell',parent_id='table',row=12,column=1),
+    ]}
+    g={'entities':[
+        {'id':'desk','name':'이동식 테이블 (2인) 가림판 有','kind':'equipment','evidence':[{'node_id':'name'}]},
+        {'id':'chair','name':'실습실 의자','kind':'equipment','evidence':[{'node_id':'other'}]},
+    ],'relations':[],'requirements':[{'observation_type':'source_clause','subject_ids':['desk'],
+                                     'evidence':[{'node_id':'material'}]}]}
+    rows=fragment_context(document,{'node_id':'material'},graph=g)
+    assert 'name' in {r[0] for r in rows}
+    assert 'other' not in {r[0] for r in rows}
+
+
+def test_ocr_source_regions_are_forwarded_without_inventing_table_coordinates():
+    document={'nodes':[node('scan','Touch screen',page=4,source={
+        'page':4,'bbox':[20,30,160,44],'coordinate_system':'top_left','unit':'pt',
+        'anchor':'ocr:confidence=0.98'})]}
+    structure=DocumentContext(document).extraction_structure({'scan'})
+    assert structure['source_regions']['scan']=={'page':4,'bbox':[20,30,160,44],
+        'coordinate_system':'top_left','unit':'pt','anchor':'ocr:confidence=0.98'}
+    assert structure['table_cells']==[]
+
+
+async def test_same_row_recovered_target_can_be_reviewed_without_inventing_a_parent(tmp_path):
+    document,g=independent_purchase_rows()
+    g['entities'].append({'id':'ingredient','name':'원유','kind':'material',
+        'origin':'attribute_target_recovery','evidence':[{'node_id':'milk_value'}]})
+    attrs=[attribute('a','ingredient','milk_value')]
+    class Judge:
+        async def generate(self,prompt,request,out):
+            return {'resolutions':[{'attribute_id':'a','subject_ids':['ingredient'],
+                'role':'requirement_candidate','scope':'per_item','evidence_node_ids':['milk_value']}]}
+    result=await resolve_attribute_semantics(document,g,attrs,Judge(),tmp_path)
+    assert result['retried_attributes']==0 and attrs[0]['subject_ids']==['ingredient']
+    assert g['relations']==[]
+
+
+def test_whole_purchase_scope_is_not_an_independent_row_constraint():
+    document,g=independent_purchase_rows()
+    g['entities'][0]['document_roles']=['procurement_scope','supply_target']
+    assert DocumentContext(document).purchase_row_targets('milk_value',g)==set()

@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from teoria.features.specification_processing.extraction.entity_relation_extraction import (
-    cyclic_relation_indexes, relation_errors,
+    cyclic_relation_indexes, relation_errors, configuration_boundary_errors,
 )
 
 
@@ -42,6 +42,8 @@ def add_composition_links(graph, document, proposals, attributes=None):
         node_ids = [node for node, _ in link.evidence]
         row = (link.source_id, link.target_id, link.kind, 'explicit', node_ids)
         invalid = relation_errors(row, set(entities), kinds, set(nodes))
+        invalid.extend(configuration_boundary_errors(link.source_id,link.target_id,link.kind,
+            graph.get('composition_inventory')))
         if invalid or any('existing_target' in entities[i].get('document_roles', [])
                           for i in (link.source_id, link.target_id)):
             rejected += 1
@@ -75,3 +77,16 @@ def add_composition_links(graph, document, proposals, attributes=None):
         existing_ids.add(identifier)
         added += 1
     return {'added': added, 'rejected': rejected}
+
+
+def assert_composition_preserved(before,after):
+    """Attribute stages may append observations, never rewrite the verified composition base."""
+    for collection in ('entities','relations'):
+        rows=after.get(collection,[]);current={row['id']:row for row in rows}
+        if len(current)!=len(rows):raise ValueError('composition contains duplicate '+collection+' IDs')
+        for row in before.get(collection,[]):
+            if current.get(row['id'])!=row:
+                raise ValueError('composition changed during attribute processing: '+collection+' '+row['id'])
+    for key in ('inventory_ids','composition_inventory','declared_quantities'):
+        if before.get(key)!=after.get(key):
+            raise ValueError('composition changed during attribute processing: '+key)

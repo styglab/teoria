@@ -31,7 +31,8 @@ async def test_s3_uses_signed_native_http_and_conditional_put():
     async def handle(request):
         calls.append(request)
         assert request.headers['authorization'].startswith('AWS4-HMAC-SHA256')
-        if request.method=='GET':return httpx.Response(200,content=objects[request.url.path])
+        if request.method=='GET':
+            return httpx.Response(200,content=objects[request.url.path]) if request.url.path in objects else httpx.Response(404)
         assert request.headers['if-none-match']=='*'
         if request.url.path in objects:return httpx.Response(412)
         objects[request.url.path]=request.content;return httpx.Response(200)
@@ -43,15 +44,48 @@ async def test_s3_uses_signed_native_http_and_conditional_put():
         assert await store.put(first.key,b'canonical')==first
         with pytest.raises(ValueError,match='conflict'):await store.put(first.key,b'other')
     assert {r.method for r in calls}=={'PUT','GET'}
+    assert sum(r.method=='PUT' for r in calls)==1
 
 
 async def test_s3_does_not_confirm_an_upload_with_wrong_persisted_bytes():
+    uploaded=False
     async def handle(request):
-        return httpx.Response(200,content=b'corrupted' if request.method=='GET' else b'')
+        nonlocal uploaded
+        if request.method=='GET':return httpx.Response(200,content=b'corrupted') if uploaded else httpx.Response(404)
+        uploaded=True
+        return httpx.Response(200)
     async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
         store=S3ArtifactStore('s3://specifications',client,endpoint='http://localhost:9000',access_key='example',secret_key='example')
         with pytest.raises(ValueError,match='checksum verification'):
             await store.put('file.json',b'correct')
+
+
+async def test_s3_reuses_large_existing_original_without_sending_its_body_again():
+    original=b'x'*(5*1024*1024)
+    async def handle(request):
+        if request.method=='PUT':raise httpx.ReadError('endpoint closed a rejected upload',request=request)
+        return httpx.Response(200,content=original)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        store=S3ArtifactStore('s3://specifications',client,access_key='example',secret_key='example')
+        ref=await store.put('source.hwp',original,'application/octet-stream')
+        assert ref.size_bytes==len(original)
+
+
+@pytest.mark.parametrize('concurrent_content',[b'canonical',b'conflicting'])
+async def test_s3_conditional_put_still_guards_concurrent_creation(concurrent_content):
+    reads=0
+    async def handle(request):
+        nonlocal reads
+        if request.method=='GET':
+            reads+=1
+            return httpx.Response(404) if reads==1 else httpx.Response(200,content=concurrent_content)
+        assert request.headers['if-none-match']=='*'
+        return httpx.Response(412)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        store=S3ArtifactStore('s3://specifications',client,access_key='example',secret_key='example')
+        if concurrent_content==b'canonical':assert (await store.put('file.json',b'canonical')).size_bytes==9
+        else:
+            with pytest.raises(ValueError,match='immutable S3 artifact conflict'):await store.put('file.json',b'canonical')
 
 
 async def test_production_storage_never_falls_back_to_local_files(tmp_path,monkeypatch):

@@ -63,7 +63,22 @@ RUN ln -s /opt/codex/node_modules/@openai/codex/bin/codex.js /usr/local/bin/code
 COPY archive/kory_parser/pyproject.toml archive/kory_parser/uv.lock /opt/kory_parser_source/
 COPY archive/kory_parser/src /opt/kory_parser_source/src
 COPY archive/kory_parser/third_party /opt/kory_parser_source/third_party
-RUN UV_PROJECT_ENVIRONMENT=/opt/kory_parser uv sync --project /opt/kory_parser_source --locked --no-dev
+RUN UV_PROJECT_ENVIRONMENT=/opt/kory_parser uv sync --project /opt/kory_parser_source --locked --no-dev --extra ocr
+# Download PDF OCR models at build time: the runtime user cannot write to site-packages.
+RUN /opt/kory_parser/bin/python - <<'PY'
+import io
+import pymupdf
+from PIL import Image, ImageDraw, ImageFont
+from kory_parser import parse, ParseOptions
+image = Image.new('RGB', (640, 160), 'white')
+ImageDraw.Draw(image).text((20, 50), 'OCR model initialization', fill='black', font=ImageFont.load_default(size=32))
+stream = io.BytesIO()
+image.save(stream, format='PNG')
+document = pymupdf.open()
+page = document.new_page(width=640, height=160)
+page.insert_image(page.rect, stream=stream.getvalue())
+assert parse(document.tobytes(), ParseOptions(ocr=True)).success
+PY
 ENV TEORIA_SPECIFICATION_PARSER_PYTHON=/opt/kory_parser/bin/python
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --locked --no-dev --group orchestration --no-editable
