@@ -87,6 +87,6 @@ def assert_composition_preserved(before,after):
         for row in before.get(collection,[]):
             if current.get(row['id'])!=row:
                 raise ValueError('composition changed during attribute processing: '+collection+' '+row['id'])
-    for key in ('inventory_ids','composition_inventory','declared_quantities'):
+    for key in ('inventory_ids','composition_inventory','inventory_assessment','declared_quantities'):
         if before.get(key)!=after.get(key):
             raise ValueError('composition changed during attribute processing: '+key)

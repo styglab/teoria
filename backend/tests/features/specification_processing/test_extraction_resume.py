@@ -142,3 +142,35 @@ async def test_only_incomplete_semantic_batch_is_retried_after_validation_failur
     final=await resolve_attribute_semantics(document,deepcopy(graph),deepcopy(attributes),Model(),tmp_path/'retry',checkpoints=cache)
     assert final['failed_batches']==0 and final['cached_batches']==1
     assert sorted(calls)==[1,1,1,45]
+
+async def test_cpu_parser_budget_is_separate_from_concurrent_model_assessment(tmp_path,monkeypatch):
+    import asyncio
+    from teoria.features.specification_processing.parsing import document_parser,document_assessment
+    source=tmp_path/'source.pdf';source.write_bytes(b'fixture')
+    request=SpecificationRun(run_id='parse_budget',mode='standard_management',model='pinned_model',
+        artifact_root=(tmp_path/'objects').as_uri(),reuse_stage_checkpoints=False,concurrency=4,
+        documents=[{'document_id':f'doc{i}','filename':'source.pdf','source_uri':source.as_uri()} for i in range(4)])
+    active=peak=assessing=0;two_assessments=asyncio.Event()
+    async def parse(path,native,id,python):
+        nonlocal active,peak
+        active+=1;peak=max(active,peak)
+        try:
+            await asyncio.sleep(0)
+            return {'document_id':id,'nodes':[]}
+        finally:active-=1
+    async def assess(document,model,folder):
+        nonlocal assessing
+        assessing+=1
+        if assessing>=2:two_assessments.set()
+        await two_assessments.wait()
+        assessing-=1
+        return {'excluded':False,'status':'classified','node_roles':{}}
+    monkeypatch.setattr(document_parser,'parse_document',parse)
+    monkeypatch.setattr(document_assessment,'assess_document',assess)
+    monkeypatch.setattr(tasks,'runner',lambda request:object())
+    folder=tmp_path/'work';folder.mkdir()
+    await tasks.stage_original_documents.fn(request,str(folder))
+    await asyncio.wait_for(tasks.parse_documents.fn(request,str(folder)),2)
+    assert peak==1 and two_assessments.is_set()
+    entries=await tasks.load(folder/'work.json')
+    assert not any(entry.get('failure') for entry in entries)

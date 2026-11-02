@@ -27,7 +27,7 @@ function isGoodsTarget(entity: Row) {
     !["activity", "document"].includes(String(entity.kind)) &&
     !(
       Array.isArray(entity.document_roles) &&
-      entity.document_roles.includes("existing_target")
+      entity.document_roles.some((role) => ["existing_target", "work_scope_target"].includes(String(role)))
     )
   );
 }
@@ -143,10 +143,15 @@ export function composition(
         : ["component_of", "physical_part_of"].includes(String(r.kind)))
       .map((r) => String(r.source_id)),
   );
-  const roots = entities.filter((e) =>
-    (!primaryOnly || !related.has(String(e.id))) && children.has(String(e.id)) &&
-    (anchor ? String(e.id) === anchor
-      : !attached.has(String(e.id)) && !proposedChildren.has(String(e.id))));
+  // Supply rows are purchase anchors, not invented component_of links to a title.
+  const supplyBasis = mode === "composition" && inventory.basis === "supply_list";
+  const roots = supplyBasis
+    ? primaryIds.map((id) => entities.find((e) => String(e.id) === id))
+        .filter((e): e is Row => !!e && !related.has(String(e.id)) && !attached.has(String(e.id)))
+    : entities.filter((e) =>
+        (!primaryOnly || !related.has(String(e.id))) && children.has(String(e.id)) &&
+        (anchor ? String(e.id) === anchor
+          : !attached.has(String(e.id)) && !proposedChildren.has(String(e.id))));
   const treeIds = new Set<string>();
   const pending = roots.map((e) => String(e.id));
   while (pending.length) {
@@ -157,6 +162,7 @@ export function composition(
   }
   return {
     entities,
+    supplyBasis,
     children,
     roots,
     treeIds,
@@ -276,10 +282,22 @@ function DocumentAnalysis({
   const [navigation, setNavigation] = useState(() =>
     composition(document, "composition").roots.length ? "composition" : "list",
   );
-  const [kindFilter, setKindFilter] = useState("goods");
+  const inventoryAssessment = (document.inventory_assessment || {}) as Row;
+  const inventoryStatusNames: Record<string, string> = {
+    confirmed: "기준 목록 확인",
+    detail_fallback: "목록 미확인 · 상세 사양 기준",
+    reading_failed: "기준 목록 판독 확인 필요",
+    reading_uncertain: "기준 목록 확인 필요",
+    unresolved: "기준 목록 미확정",
+  };
+  const [scopeFilter, setScopeFilter] = useState("goods");
+  const [kindFilter, setKindFilter] = useState("all");
+  const availableKinds = Object.entries(kindNames).filter(([kind]) =>
+    rows(document.entities).some((entity) => String(entity.kind ?? "unknown") === kind),
+  );
   const graph = useMemo(
-    () => composition(document, navigation, kindFilter === "goods"),
-    [document, navigation, kindFilter],
+    () => composition(document, navigation, scopeFilter === "goods"),
+    [document, navigation, scopeFilter],
   );
   const entitiesById = useMemo(
     () => new Map(graph.entities.map((entity) => [String(entity.id), entity])),
@@ -412,12 +430,12 @@ function DocumentAnalysis({
       .join(" ")
       .toLowerCase()
       .includes(query.toLowerCase()) &&
-    (kindFilter === "all" ||
-      (kindFilter === "goods"
+    (kindFilter === "all" || String(e.kind ?? "unknown") === kindFilter) &&
+    (scopeFilter === "all" ||
+      (scopeFilter === "goods"
         ? !graph.related.some((item) => item.id === e.id)
-        : kindFilter === "purchase"
-          ? inPurchaseScope(e)
-          : String(e.kind ?? "unknown") === kindFilter));
+        : inPurchaseScope(e)));
+
   const passageRoles = (
     (document.parsed_document as Row | undefined)?.document_assessment as
       | Row
@@ -545,7 +563,7 @@ function DocumentAnalysis({
       );
   }
   const treeCandidates =
-    navigation === "list" || query || !["all", "goods"].includes(kindFilter)
+    navigation === "list" || query || (scopeFilter === "purchase" || kindFilter !== "all")
       ? graph.entities.filter(matches).map((e) => String(e.id))
       : [
           ...visible.map((e) => e.id),
@@ -554,7 +572,7 @@ function DocumentAnalysis({
   const itemRow = (id: string, depth = 0) => {
     const item = entitiesById.get(id)!;
     const children =
-      navigation === "list" || query || !["all", "goods"].includes(kindFilter)
+      navigation === "list" || query || (scopeFilter === "purchase" || kindFilter !== "all")
         ? undefined
         : graph.treeIds.has(id)
           ? graph.children.get(id)
@@ -592,7 +610,7 @@ function DocumentAnalysis({
           aria-level={depth + 1}
           aria-expanded={children ? !closed.has(id) : undefined}
           tabIndex={
-            kindFilter === "goods" && graph.related[0]?.id === id
+            scopeFilter === "goods" && graph.related[0]?.id === id
               ? 0
               : id ===
                   (treeCandidates.includes(treeFocus)
@@ -649,6 +667,8 @@ function DocumentAnalysis({
             item.document_roles.includes("existing_target")
               ? " · 기존 대상"
               : ""}
+            {Array.isArray(item.document_roles) && item.document_roles.includes("work_scope_target")
+              ? " · 작업 대상 묶음" : ""}
           </small>
         </button>
       </div>
@@ -741,6 +761,11 @@ function DocumentAnalysis({
           <h3>
             물품·구성 <small>{graph.entities.length}개 대상</small>
           </h3>
+          {inventoryStatusNames[String(inventoryAssessment.status)] && (
+            <p className="operations-note" aria-label="구매 기준 확인 상태">
+              {inventoryStatusNames[String(inventoryAssessment.status)]}
+            </p>
+          )}
           <input
             aria-label="분석 대상 검색"
             placeholder="대상 이름 검색"
@@ -748,22 +773,36 @@ function DocumentAnalysis({
             onChange={(e) => setQuery(e.target.value)}
           />
           <label>
-            대상 유형
+            조회 범위
             <select
-              aria-label="대상 유형"
-              value={kindFilter}
-              onChange={(event) => setKindFilter(event.target.value)}
+              aria-label="조회 범위"
+              value={scopeFilter}
+              onChange={(event) => {
+                setScopeFilter(event.target.value);
+                setKindFilter("all");
+              }}
             >
               <option value="goods">물품·구성</option>
               <option value="all">전체</option>
               <option value="purchase">구매 범위 항목</option>
-              {Object.entries(kindNames).map(([key, name]) => (
-                <option key={key} value={key}>
-                  {name}
-                </option>
-              ))}
             </select>
           </label>
+          <details className="analysis-type-filter">
+            <summary>세부 유형 필터</summary>
+            <label>
+              대상 유형
+              <select
+                aria-label="대상 유형"
+                value={kindFilter}
+                onChange={(event) => setKindFilter(event.target.value)}
+              >
+                <option value="all">전체 유형</option>
+                {availableKinds.map(([key, name]) => (
+                  <option key={key} value={key}>{name}</option>
+                ))}
+              </select>
+            </label>
+          </details>
           <label>
             탐색 방식
             <select
@@ -790,7 +829,7 @@ function DocumentAnalysis({
           <div role="tree" aria-label="구성 대상">
             {navigation === "list" ||
             query ||
-            !["all", "goods"].includes(kindFilter) ? (
+            (scopeFilter === "purchase" || kindFilter !== "all") ? (
               <>
                 <h4>{query ? "검색 결과" : "대상 목록"}</h4>
                 {graph.entities
@@ -806,7 +845,7 @@ function DocumentAnalysis({
                   <h4>
                     {navigation === "packaging"
                       ? "포장 단위 관계"
-                      : "구성 관계"}
+                      : graph.supplyBasis ? "공급 목록 기준" : "구성 관계"}
                   </h4>
                 )}
                 {visible.map(({ id, depth }) => itemRow(id, depth))}
@@ -826,13 +865,16 @@ function DocumentAnalysis({
               </>
             )}
           </div>
-          {kindFilter === "goods" && !!graph.related.length && (
+          {scopeFilter === "goods" && !!graph.related.length && (
             <details className="analysis-related-targets">
               <summary>
                 관련 대상·설치 지원·문서 · {graph.related.length}
               </summary>
               <div role="tree" aria-label="관련 대상">
-                {graph.related.map((e) => itemRow(String(e.id)))}
+                {graph.related.filter((e) =>
+                  (kindFilter === "all" || String(e.kind ?? "unknown") === kindFilter) &&
+                  label(e.name).toLowerCase().includes(query.toLowerCase()),
+                ).map((e) => itemRow(String(e.id)))}
               </div>
             </details>
           )}
@@ -961,7 +1003,7 @@ function DocumentAnalysis({
                     <div className="analysis-quantities">
                       {quantities.map((q, i) => (
                         <div key={i}>
-                          수량:{" "}
+                          구매 기준 수량:{" "}
                           <strong>
                             {label(q.value_raw)}{" "}
                             {q.unit_raw ? label(q.unit_raw) : ""}
@@ -969,6 +1011,9 @@ function DocumentAnalysis({
                         </div>
                       ))}
                     </div>
+                  )}
+                  {inventoryAssessment.status && !quantities.length && (
+                    <p className="operations-note">구매 기준 수량: 별도 기재 없음</p>
                   )}
                   <div className="analysis-attribute-toolbar">
                     <h4>추출 속성 · {attributes.length}</h4>

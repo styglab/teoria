@@ -117,6 +117,8 @@ async def parse_documents(request:SpecificationRun,workspace:str):
     from teoria.features.specification_processing.parsing.document_assessment import assess_document
     from teoria.features.specification_processing.storage.extraction_checkpoints import extraction_checkpoints
     model=runner(request)
+    # OCR subprocesses compete for CPU; keep their budget independent of model I/O.
+    parser_slots=asyncio.Semaphore(1)
     async with extraction_checkpoints(request) as checkpoints:
         runtime=await parser_runtime_identity(request.parser_python) if checkpoints.enabled else None
         async def parse_one(entry):
@@ -128,7 +130,8 @@ async def parse_documents(request:SpecificationRun,workspace:str):
                 context=await load(folder/'document.json');assessment=context['document_assessment']
                 entry.setdefault('reused_stages',[]).append('parse')
             else:
-                context=await parse_document(Path(entry['source_path']),folder/'native.json',entry['document_id'],request.parser_python)
+                async with parser_slots:
+                    context=await parse_document(Path(entry['source_path']),folder/'native.json',entry['document_id'],request.parser_python)
                 assessment=await assess_document(context,model,folder)
                 context['document_assessment']=assessment
                 await save(folder/'document_assessment.json',assessment);await save(folder/'document.json',context)
@@ -247,6 +250,7 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                           'unreadable_ocr_pages':context.get('unreadable_ocr_pages',[])},
                 'entities':graph['entities'],'relations':graph['relations'],'held_relations':graph.get('held_relations',[]),'inventory_ids':graph.get('inventory_ids',[]),
                 **({'composition_inventory':graph['composition_inventory']} if 'composition_inventory' in graph else {}),
+                'inventory_assessment':graph.get('inventory_assessment',{}),
                 'declared_quantities':graph.get('declared_quantities',[]),'attributes':attributes,
                 'requirements':graph.get('requirements',[]),
                 'extraction_status':document_extraction_status(summary,graph,context),

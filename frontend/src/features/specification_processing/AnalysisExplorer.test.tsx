@@ -84,7 +84,7 @@ it("selects a nested component and shows its own properties and original evidenc
   );
   expect(within(screen.getByRole("region", { name: "선택한 원문 근거" })).getByText("프로세서는 32코어 이상")).toBeTruthy();
   expect(screen.getByRole("heading", { name: "구성 관계" })).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("대상 유형"), {
+  fireEvent.change(screen.getByLabelText("조회 범위"), {
     target: { value: "all" },
   });
   fireEvent.change(screen.getByLabelText("분석 대상 검색"), {
@@ -344,7 +344,7 @@ it("separates software, support and submitted documents from the physical tree e
   expect(
     screen.queryByRole("button", { name: /설치 작업 0개 속성/ }),
   ).toBeNull();
-  fireEvent.change(screen.getByLabelText("대상 유형"), {
+  fireEvent.change(screen.getByLabelText("조회 범위"), {
     target: { value: "all" },
   });
   fireEvent.click(
@@ -389,14 +389,14 @@ it("starts with independent food items and offers packaging separately from comp
   ).toBe("list");
   expect(screen.getByRole("heading", { name: "대상 목록" })).toBeTruthy();
   expect(screen.getByRole("heading", { name: "우유/대" })).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("대상 유형"), {
+  fireEvent.change(screen.getByLabelText("조회 범위"), {
     target: { value: "purchase" },
   });
   expect(
     screen.getByRole("treeitem", { name: /우유\/소 0개 속성/ }),
   ).toBeTruthy();
   expect(screen.queryByRole("button", { name: /상자 0개 속성/ })).toBeNull();
-  fireEvent.change(screen.getByLabelText("대상 유형"), {
+  fireEvent.change(screen.getByLabelText("조회 범위"), {
     target: { value: "all" },
   });
   fireEvent.change(screen.getByLabelText("탐색 방식"), {
@@ -429,7 +429,7 @@ it("keeps a standalone software purchase visible without manufacturing hardware 
       }}
     />,
   );
-  fireEvent.change(screen.getByLabelText("대상 유형"), {
+  fireEvent.change(screen.getByLabelText("조회 범위"), {
     target: { value: "purchase" },
   });
   expect(
@@ -469,10 +469,10 @@ it("keeps other requirements collapsed with source text instead of duty fields",
   ).toBe(false);
   expect(within(detail).getByText(clause.text)).toBeTruthy();
   expect(within(detail).queryByText(/구조화된 의무/)).toBeNull();
-  expect((screen.getByLabelText("대상 유형") as HTMLSelectElement).value).toBe(
+  expect((screen.getByLabelText("조회 범위") as HTMLSelectElement).value).toBe(
     "goods",
   );
-  fireEvent.change(screen.getByLabelText("대상 유형"), { target: { value: "all" } });
+  fireEvent.change(screen.getByLabelText("조회 범위"), { target: { value: "all" } });
   expect(
     screen.getByRole("treeitem", { name: /설치 작업 0개 속성/ }),
   ).toBeTruthy();
@@ -757,4 +757,74 @@ it("shows a suggested property name without presenting source descriptions as pr
   fireEvent.click(within(table).getByText("질량 범위").closest("tr")!);
   expect(within(screen.getByRole("region", { name: "선택한 원문 근거" }))
     .getByText(/AI가 해석한 추출명/)).toBeTruthy();
+});
+
+it("separates scope from collapsed type filters and only offers observed types", () => {
+  render(<AnalysisExplorer value={{ documents: [{
+    document_id: "type_filters",
+    entities: [
+      { id: "root", name: "센서 장치", kind: "equipment" },
+      { id: "support", name: "센서 설치", kind: "activity" },
+    ],
+    relations: [], attributes: [],
+  }] }} />);
+  const scope = screen.getByLabelText("조회 범위");
+  const types = screen.getByLabelText("대상 유형");
+  expect(types.closest("details")?.open).toBe(false);
+  expect(within(scope).queryByRole("option", { name: "장비" })).toBeNull();
+  expect(within(types).getAllByRole("option").map((option) => option.textContent))
+    .toEqual(["전체 유형", "장비", "작업"]);
+  fireEvent.change(scope, { target: { value: "all" } });
+  fireEvent.change(types, { target: { value: "activity" } });
+  expect((scope as HTMLSelectElement).value).toBe("all");
+  expect(screen.getByRole("treeitem", { name: /센서 설치/ })).toBeTruthy();
+  expect(screen.queryByRole("treeitem", { name: /센서 장치/ })).toBeNull();
+  fireEvent.change(scope, { target: { value: "goods" } });
+  expect((types as HTMLSelectElement).value).toBe("all");
+  expect(screen.getByRole("treeitem", { name: /센서 장치/ })).toBeTruthy();
+});
+
+it("anchors navigation to supply rows and keeps work-only groups outside supplied composition", () => {
+  const value = {
+    document_id: "supply_work",
+    composition_inventory: { basis: "supply_list", root_id: "root", item_ids: ["sensor", "sender", "job"] },
+    entities: [
+      { id: "root", name: "環境監視 장치", kind: "equipment" },
+      { id: "sender", name: "데이터 전송장치", kind: "equipment", document_roles: ["supply_target"] },
+      { id: "sensor", name: "센서 및 분석장치", kind: "equipment", document_roles: ["supply_target"] },
+      { id: "gas", name: "환경가스 측정 장치", kind: "equipment" },
+      { id: "work", name: "환경감시 센서", kind: "group", document_roles: ["work_scope_target"] },
+      { id: "probe", name: "온습도센서", kind: "equipment" },
+      { id: "job", name: "센서 교체 및 설치공사", kind: "activity" },
+    ],
+    relations: [relation("gas", "sensor", "component_of", "interpreted"),
+      relation("probe", "work"), relation("job", "work", "service_for")],
+    held_relations: [relation("sender", "work")], attributes: [],
+  };
+  const graph = composition(value, "composition", true);
+  expect(graph.roots.map((e) => e.id)).toEqual(["sensor", "sender"]);
+  expect(graph.related.map((e) => e.id)).toEqual(["work", "probe", "job"]);
+  expect(graph.children.get("sensor")).toEqual(["gas"]);
+  render(<AnalysisExplorer value={{ documents: [value] }} />);
+  expect(screen.getByRole("heading", { name: "공급 목록 기준" })).toBeTruthy();
+  const tree = screen.getByRole("tree", { name: "구성 대상" });
+  expect(within(tree).getByRole("treeitem", { name: /데이터 전송장치/ }).getAttribute("aria-level")).toBe("1");
+  expect(within(tree).queryByRole("treeitem", { name: /환경감시 센서/ })).toBeNull();
+});
+
+it("shows inventory reading uncertainty and does not assign a parent's purchase quantity to a child", () => {
+  render(<AnalysisExplorer value={{ documents: [{
+    document_id: "inventory_status",
+    inventory_assessment: { status: "reading_failed" },
+    entities: [{ id: "root", name: "시험장치", kind: "equipment" },
+      { id: "sensor", name: "측정센서", kind: "equipment" }],
+    relations: [relation("sensor", "root")],
+    declared_quantities: [{ entity_id: "root", value_raw: "8", unit_raw: "식" }],
+    attributes: [],
+  }] }} />);
+  expect(screen.getByLabelText("구매 기준 확인 상태").textContent).toBe("기준 목록 판독 확인 필요");
+  fireEvent.click(screen.getByRole("treeitem", { name: /^측정센서/ }));
+  const detail = screen.getByRole("region", { name: "분석 대상 상세" });
+  expect(within(detail).getByText("구매 기준 수량: 별도 기재 없음")).toBeTruthy();
+  expect(within(detail).queryByText(/8 식/)).toBeNull();
 });

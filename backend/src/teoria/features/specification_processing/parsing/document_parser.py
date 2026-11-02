@@ -31,16 +31,23 @@ async def parse_document(source:Path,native_path:Path,document_id:str,parser_pyt
     if not native['success']:
         codes=sorted({w.get('code','UNKNOWN') for w in native.get('warnings',[]) if isinstance(w,dict)})
         raise SpecificationProcessingError('needs_ocr' if 'NEEDS_OCR' in codes else 'parser_unsuccessful',details={'warning_codes':codes})
-    raw=await asyncio.to_thread(native_path.read_bytes)
     source_bytes=await asyncio.to_thread(source.read_bytes)
     digest=hashlib.sha256(source_bytes).hexdigest()
     if native['sha256']!=digest:raise ValueError('parser_source_checksum_mismatch')
+    from teoria.features.specification_processing.parsing.table_recovery import recover_table_regions
+    recovery=await recover_table_regions(source,native,native_path,executable)
+    native['table_recovery']=recovery
+    await asyncio.to_thread(native_path.write_text,json.dumps(native,ensure_ascii=False))
+    raw=await asyncio.to_thread(native_path.read_bytes)
     context=build_document_evidence(native,document_id=document_id,parse_run_id='specification_pipeline',native_sha256=hashlib.sha256(raw).hexdigest()).context()
     ocr_nodes=[n for n in context['nodes'] if n['text'].strip()
                and ((n.get('source') or {}).get('anchor') or '').startswith('ocr:')]
     ocr_pages={n['page'] for n in ocr_nodes if n.get('page') is not None}
     required_pages={(w.get('source') or {}).get('page') for w in native.get('warnings',[])
                     if isinstance(w,dict) and w.get('code')=='NEEDS_OCR'}-{None}
+    context['table_recovery']=recovery
+    context['parse_diagnostics']=[{'code':w.get('code','UNKNOWN'),'source':w.get('source') or {}}
+        for w in native.get('warnings',[]) if isinstance(w,dict)]
     context.update(ocr_enabled=True,ocr=bool(ocr_nodes),ocr_pages=sorted(ocr_pages),
                    unreadable_ocr_pages=sorted(required_pages-ocr_pages))
     if not any(n['text'].strip() for n in context['nodes'] if n['kind']!='image'):

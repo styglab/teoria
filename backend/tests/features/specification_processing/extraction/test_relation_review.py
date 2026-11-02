@@ -307,7 +307,7 @@ def test_detail_component_cannot_bypass_frozen_configuration_owner():
     assert not any(r[:2]==('pc','root') for r in reviewed.relations)
 
 
-@pytest.mark.parametrize('basis,integrated',[('supply_list',True),('technical_sections',True),('configuration_list',False)])
+@pytest.mark.parametrize('basis,integrated',[('technical_sections',True),('configuration_list',False)])
 def test_other_inventory_bases_do_not_imply_a_closed_component_list(basis,integrated):
     from teoria.features.specification_processing.extraction.entity_relation_extraction import review_relations
     doc,inventory,details=lcms_hierarchy_case()

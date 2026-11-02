@@ -64,6 +64,13 @@ root가 단일 구매 제품을 이미 표현하고 같은 제품명이 상세 �
 basis_node_ids에는 목록 제목과 목록을 판단한 직접 근거를 넣는다. 조건문·설계 제출자료의 '구성도'는 실제 구성 목록이 아니다.
 '''
 DETAIL_PROMPT=BASE+'''확정된 root와 inventory.items가 1차 골격이다. 이 1차 항목 ID·명칭·수량을 변경하거나 다시 추출하지 않는다.
+기준 선택은 공급 목록 → 명시적 구성 목록 → 구조적 규격표 → 기술 절 순서이며 한 번 선택한 기준을 상세 단계에서 바꾸지 않는다.
+공급 목록이 기준이면 상세 절·설치공사 절을 별도의 최상위 구매 구성 목록으로 합치지 않는다.
+먼저 각 상세 절이 어느 기존 공급 항목을 설명하는지 원문 명칭·대응 표 행·명시된 기능/구성 근거를 대조한 뒤 scopes와 관계를 작성한다. 대응이 불분명하면 이름 유사성으로 합치지 않는다.
+설치·교체 설명에서만 확인되는 대상 묶음은 작업의 service_for 대상으로 보존한다.
+구매 목록은 구매 행·수량의 기준이며 물리 구성관계의 상한선이 아니다. 본문에 명시된 구성관계는 공급 항목과 독립적으로 보존한다. 구성 연결이 추가돼도 구매 행·수량을 생성하거나 복제하지 않는다.
+설치 설명의 언급이 기존 구매 대상과 동일하다는 직접 문맥 근거가 있으면 기존 ID로 연결한다. 동일성이 불명확하면 별도 언급 ID와 원문 구성관계를 보존하고 same_target_as+ambiguous로 기존 항목과의 대응만 보류한다. 이름 유사성만으로 합치지 않는다.
+상세의 하위 구성은 본문의 직접 근거가 있을 때 추가하며, 공급 목록에 없다는 이유만으로 버리지 않는다. 다른 절의 분류·명칭을 동일 대상이라고 추정하여 중복 생성하거나 강제로 통합하지 않는다.
 상세 성능 및 규격 절은 기존 1차 항목을 설명한다. 같은 이름을 다시 additional에 만들지 말고 기존 항목 ID로 연결한다.
 우선 목표는 구매 물품→구성품→하위 구성품과 각 대상의 규격이다. 상세 사양 절에서도 실제 제공 구성을 찾는다.
 상세 사양에 나온 대상이라는 이유만으로 specification_for만 만들지 않는다. 원문이 특정 물품의 제공 구성으로 명시한 대상이면 component_of로 연결한다. 실제 내부 장착까지 직접 명시한 경우에만 physical_part_of를 쓴다.
@@ -246,10 +253,11 @@ def composition_inventory(inventory):
 
 def configuration_boundary_errors(source, target, kind, inventory):
     """Hold shortcuts across a declared configuration; never infer a replacement parent."""
-    if (not inventory or inventory.get('basis')!='configuration_list'
-            or not inventory.get('integrated_scope') or kind not in {'component_of','physical_part_of'}):
+    if not inventory or kind not in {'component_of','physical_part_of'}:
         return []
     root=inventory['root_id'];items=set(inventory['item_ids'])
+    if inventory.get('basis')!='configuration_list' or not inventory.get('integrated_scope'):
+        return []
     if target==root and source not in items:
         return ['detail target bypasses frozen configuration inventory']
     if source in items and target!=root:
@@ -281,14 +289,20 @@ def review_relations(value, inventory, document):
     return value.model_copy(deep=True, update={'relations': accepted}), held
 
 
-def validate_details(value,inventory,document):
+def validate_details(value,inventory,document,held_relations=()):
     nodes={n['node_id']:n for n in document['nodes']};seed={'root',*(i[0] for i in inventory.items)}
     additional=[i[0] for i in value.additional];all_ids=seed|set(additional);errors=[]
     if len(additional)!=len(set(additional)) or seed&set(additional):errors.append('duplicate additional/seed IDs')
     seed_labels={norm(i[2]) for i in inventory.items}
     for id,node,label in value.additional:
         if node not in nodes or not norm(label) or norm(label) not in norm(nodes[node]['text']):errors.append(f'{id}: additional label not in source')
-        if norm(label) in seed_labels:errors.append(f'{id}: recreated frozen inventory label')
+        if norm(label) in seed_labels:
+            seeds=[i for i in inventory.items if norm(i[2])==norm(label)]
+            separate_mention=any(node!=seed[1] and any(
+                kind=='same_target_as' and basis=='ambiguous' and {source,target}=={id,seed[0]}
+                and node in refs and seed[1] in refs
+                for source,target,kind,basis,refs in [*value.relations,*(p['relation'] for p in held_relations)]) for seed in seeds)
+            if not separate_mention:errors.append(f'{id}: recreated frozen inventory label')
     if len(value.types)!=len(all_ids) or {i[0] for i in value.types}!=all_ids:errors.append('types must cover every seed and new target once')
     types={id:kind for id,kind,_ in value.types}
     navigation={key for key,role in document.get('document_assessment',{}).get('node_roles',{}).items() if role=='table_of_contents'}
@@ -305,9 +319,60 @@ def validate_details(value,inventory,document):
     return errors
 
 
+def inventory_assessment(inventory, document):
+    """State what is established, without treating absence of a parsed list as proof of absence."""
+    diagnostics=document.get('parse_diagnostics',[])
+    table_failures=[d for d in diagnostics if d.get('code') in {'INVALID_TABLE','TABLE_PARSE_FAILED'}]
+    unresolved_pages=document.get('unreadable_ocr_pages',[])
+    recovery=document.get('table_recovery',{'status':'not_needed'})
+    formal=inventory.basis in {'supply_list','configuration_list'} and bool(inventory.items)
+    basis_pages={n.get('page') for n in document['nodes'] if n['node_id'] in inventory.basis_node_ids}-{None}
+    affected=[d for d in table_failures if not formal or (d.get('source') or {}).get('page') in basis_pages]
+    if affected or (set(unresolved_pages)&basis_pages) or (unresolved_pages and not formal):
+        status='reading_uncertain' if recovery.get('status')=='text_recovered' else 'reading_failed'
+    elif formal:
+        status='confirmed'
+    elif inventory.basis in {'technical_table','technical_sections'}:
+        status='reading_uncertain' if any(d.get('code') in {'PARTIAL_PARSE','UNEXTRACTED_IMAGE_TEXT'} for d in diagnostics) else 'detail_fallback'
+    else:
+        status='unresolved'
+    return {'status':status,'basis':inventory.basis,'basis_node_ids':list(inventory.basis_node_ids),
+            'quantity_policy':'explicit_target_only','table_recovery':recovery,
+            'reading_warning_codes':sorted({d['code'] for d in diagnostics if d.get('code') in
+                {'INVALID_TABLE','TABLE_PARSE_FAILED','PARTIAL_PARSE','UNEXTRACTED_IMAGE_TEXT','NEEDS_OCR'}})}
+
+
+def work_scope_target_ids(inventory, details):
+    """Identify work-only groups without relabeling or merging supplied targets."""
+    if inventory.basis != 'supply_list':
+        return set()
+    supplied = {item[0] for item in inventory.items}
+    types = {id: kind for id, kind, _ in details.types}
+    parents = {}
+    for source, target, kind, basis, _ in details.relations:
+        if kind in {'component_of', 'physical_part_of'} and basis != 'ambiguous':
+            parents.setdefault(source, set()).add(target)
+
+    def has_supply_parent(id):
+        pending = [id]; seen = set()
+        while pending:
+            current = pending.pop()
+            if current in supplied:
+                return True
+            if current not in seen:
+                seen.add(current); pending.extend(parents.get(current, ()))
+        return False
+
+    return {target for source, target, kind, basis, _ in details.relations
+            if kind == 'service_for' and basis == 'explicit'
+            and types.get(source) == 'activity' and types.get(target) == 'group'
+            and target != 'root' and not has_supply_parent(target)}
+
+
 def materialize(inventory,details,document,held_relations=()):
     nodes={n['node_id']:n for n in document['nodes']};types={id:(kind,state) for id,kind,state in details.types}
     seeds=[('root',*inventory.root),*inventory.items];entities=[];quantities=[];requirements=[]
+    work_targets=work_scope_target_ids(inventory,details)
     def evidence(refs):return [{'node_id':n,'text':nodes[n]['text'],'quote':nodes[n]['text'],'native_ref':nodes[n]['native_ref']} for n in dict.fromkeys(refs)]
     for id,node,label,quantity,unit,refs in seeds+[(id,node,label,None,None,[node]) for id,node,label in details.additional]:
         kind,state=types[id];roles=['procurement_scope'] if id=='root' else ['requirement_target']
@@ -315,6 +380,7 @@ def materialize(inventory,details,document,held_relations=()):
         is_item=id!='root' and id in {i[0] for i in inventory.items}
         if is_item and inventory.basis=='supply_list':roles.append('supply_target')
         if state=='existing':roles.append('existing_target')
+        if id in work_targets:roles.append('work_scope_target')
         entities.append({'id':id,'name':label,'kind':kind,'document_roles':roles,'delivery_status':'explicit_supply' if 'supply_target' in roles else 'not_established',
                          'evidence':[{'node_id':node,'quote':label,'native_ref':nodes[node]['native_ref']}],
                          'basis_role':'document_scope' if is_item and inventory.basis=='technical_sections' else 'domain_target','review_status':'needs_review'})
@@ -353,6 +419,7 @@ def materialize(inventory,details,document,held_relations=()):
     return {'document_id':document['document_id'],'entities':entities,'relations':relations,'held_relations':held,'requirements':requirements,
             'declared_quantities':quantities,'inventory_ids':[i[0] for i in inventory.items],
             'composition_inventory':composition_inventory(inventory),
+            'inventory_assessment':inventory_assessment(inventory,document),
             'issues':inventory.issues+details.issues,'review_status':'needs_review','ontology_mapping_enabled':False}
 
 
@@ -405,7 +472,7 @@ async def extract_entity_relations(document,out,runner,*,checkpoints=None):
         detail_request.update({'previous_prediction':raw,'validation_errors':errors,'repair_instruction':'고정된 root/items를 유지한다. 원문에 없는 이름·물리적 관계를 만들지 말고 오류만 수정한다.'})
     if details is None:raise SpecificationProcessingError('details_schema_invalid',details={'rules':safe_rules(errors)})
     details,held=review_relations(details,inventory,document)
-    errors=validate_details(details,inventory,document)
+    errors=validate_details(details,inventory,document,held_relations=held)
     if errors:raise SpecificationProcessingError('details_validation_failed',details={'rules':safe_rules(errors)})
     save(out/'identifier_projection.json',{'aliases':alias,'reason':'Frozen root node reference to canonical entity ID; no semantic edits'})
     save(out/'details.json',details.model_dump());save(out/'details_validation.json',{'errors':errors})
