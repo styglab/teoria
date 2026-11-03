@@ -7,6 +7,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -16,7 +17,7 @@ import sys
 import tempfile
 import time
 
-from teoria.features.specification_processing.evaluation_cases import EvaluationManifest,file_sha256,local_source,sample_documents,verify_document
+from teoria.features.specification_processing.evaluation_cases import EvaluationManifest,exposed_documents,file_sha256,local_source,sample_documents,verify_document
 from teoria.features.specification_processing.evaluation_scoring import compare_runs,score_extraction
 
 MODULE='teoria.features.specification_processing.evaluation'
@@ -81,6 +82,48 @@ def _state(directory):
     return _json(path) if path.exists() else {'schema_version':1,'used':[],'cycles':{}}
 
 
+def cycle_status(directory=DEFAULT_STATE):
+    with _locked(directory):
+        state=_state(directory)
+        return {'cycles':[{'cycle_id':key,'status':c['status'],
+                    'decision':c.get('comparison',{}).get('decision'),
+                    'cleanup':c.get('cleanup',{'status':'pending'}),
+                    'active_controller':_running_elsewhere(c)} for key,c in state['cycles'].items()]}
+
+
+def discover_sources(root,directory=DEFAULT_STATE,limit=100):
+    """Inventory local originals only; cases and template identities need source review."""
+    if not 1<=limit<=1000:raise ValueError('limit must be between 1 and 1000')
+    root=Path(root).resolve(strict=True)
+    if not root.is_dir():raise ValueError('source root must be a directory')
+    with _locked(directory):
+        used={d['sha256'] for d in exposed_documents(_state(directory))}
+    result=[];scanned=0;directories=0;hashed_bytes=0;bounded=False
+    state_root=Path(directory).resolve()
+    for current,dirs,files in os.walk(root,followlinks=False):
+        directories+=1
+        if directories>1000:bounded=True;break
+        current=Path(current)
+        dirs[:]=sorted(d for d in dirs if not d.startswith('.') and d not in {'node_modules','__pycache__','sources'}
+                       and not (current/d).is_symlink() and (current/d).resolve()!=state_root)
+        for name in sorted(files):
+            scanned+=1
+            if scanned>10000:bounded=True;break
+            path=current/name
+            if path.is_symlink() or path.suffix.lower() not in {'.hwp','.hwpx','.pdf','.xlsx','.docx'}:continue
+            size=path.stat().st_size
+            if size>25*1024*1024:continue
+            if hashed_bytes+size>256*1024*1024:bounded=True;break
+            digest=file_sha256(path);hashed_bytes+=size
+            result.append({'filename':path.name,'source_uri':path.as_uri(),'sha256':digest,'size_bytes':size,
+                           'previously_used':digest in used,'classification_code':None,
+                           'template_family':None,'label_status':'silver'})
+            if len(result)>=limit:bounded=True;break
+        if bounded:break
+    return {'candidates':result,'bounded':bounded,'hashed_bytes':hashed_bytes,
+            'notice':'Local discovery only; review originals, templates and historical exposure before preparing cases.'}
+
+
 def _save(directory,state):_write(Path(directory)/'state.json',state)
 
 
@@ -125,7 +168,7 @@ def _running_elsewhere(cycle):
 
 
 def _report(directory,state):
-    lines=['# 규격서 추출 개선 평가','', '실제 공통 추출 Task 01–05를 평가한다. 표준화·운영 DB 연동 평가는 포함하지 않는다.',
+    lines=['# 규격서 추출 개선 평가','', '실제 공통 추출 Task 00–05를 평가한다. 표준화·운영 DB 연동 평가는 포함하지 않는다.',
            '사례 점수는 고정된 원문 사례에 대한 일치이며 전체 문서 재현율·독립 정답 정확도가 아니다.','']
     for cycle_id,cycle in state['cycles'].items():
         lines.extend([f'## {cycle_id}','',f"- 상태: {cycle['status']} / 목적: {cycle.get('purpose','extraction_improvement')}",f"- 샘플: {cycle['sampling']}",
@@ -156,7 +199,7 @@ def _persist_finished(directory,state,cycle):
 def prepare_cycle(manifest_path,directory=DEFAULT_STATE):
     manifest=EvaluationManifest.model_validate(_json(manifest_path))
     for document in manifest.documents+manifest.regression_documents:
-        verify_document(document,allow_unclassified=manifest.selection_mode=='fixed_sources')
+        verify_document(document,allow_unclassified=manifest.selection_mode!='classified_random')
     parser_runtime=_parser_runtime(manifest.parser_python)
     with _locked(directory):
         state=_state(directory)
@@ -223,7 +266,7 @@ def _load_cycle(directory,cycle_id):
     if _grader_revision()!=cycle['grader_revision']:raise ValueError('frozen evaluator changed during cycle')
     manifest=EvaluationManifest.model_validate(_json(workspace/'manifest.json'))
     for document in manifest.documents+manifest.regression_documents:
-        verify_document(document,allow_unclassified=manifest.selection_mode=='fixed_sources')
+        verify_document(document,allow_unclassified=manifest.selection_mode!='classified_random')
     return state,cycle,workspace,manifest
 
 
@@ -330,6 +373,7 @@ async def run_variant(cycle_id,variant,directory=DEFAULT_STATE):
 
 def _cleanup(cycle):
     workspace=_workspace(cycle,allow_missing=True);size=_size(workspace)
+    removed_before=cycle.get('cleanup',{}).get('removed_bytes',0)
     if _running_elsewhere(cycle):raise ValueError('interrupt the active evaluation before aborting it')
     # A hard-killed controller may leave its worker alive. Signal only recorded, unreused process IDs.
     for path in workspace.rglob('worker_pid.json'):
@@ -341,8 +385,25 @@ def _cleanup(cycle):
         deadline=time.monotonic()+15
         while _process_identity(pid)==identity and time.monotonic()<deadline:time.sleep(0.1)
         if _process_identity(pid)==identity:raise ValueError('evaluation worker has not terminated; cleanup remains pending')
-    if workspace.exists():shutil.rmtree(workspace)
-    cycle['cleanup']={'status':'complete','removed_bytes':size,'retained_bytes':0}
+    try:
+        if workspace.exists():
+            # Keep the ownership proof until the last directory operation, so a partial
+            # deletion failure remains safely retryable instead of orphaning the results.
+            marker=workspace/'.owner.json'
+            for child in workspace.iterdir():
+                if child==marker:continue
+                if child.is_dir() and not child.is_symlink():shutil.rmtree(child)
+                else:child.unlink()
+            marker.unlink()
+            try:workspace.rmdir()
+            except OSError:
+                if workspace.exists():_write(marker,{'cycle_id':cycle['cycle_id'],'token':cycle['token']})
+                raise
+    except OSError as exc:
+        cycle['cleanup']={'status':'pending','error_code':type(exc).__name__,
+                          'removed_bytes':removed_before+max(0,size-_size(workspace)),'retained_bytes':0}
+        raise
+    cycle['cleanup']={'status':'complete','removed_bytes':removed_before+size,'retained_bytes':0}
     cycle.pop('workspace',None);cycle.pop('token',None)
 
 
@@ -351,10 +412,57 @@ def abort_cycle(cycle_id,directory=DEFAULT_STATE,reason='aborted'):
         state=_state(directory);cycle=state['cycles'][cycle_id]
         if cycle.get('cleanup',{}).get('status')=='complete':return cycle['cleanup']
         if _running_elsewhere(cycle):raise ValueError('interrupt the active evaluation before aborting it')
-        cycle['status']='aborted';cycle['comparison']={'decision':'inconclusive','reasons':[reason]}
+        if cycle['status']!='finished':
+            cycle['status']='aborted';cycle['comparison']={'decision':'inconclusive','reasons':[reason]}
         try:_cleanup(cycle)
         finally:_persist_finished(directory,state,cycle)
         return cycle['cleanup']
+
+
+def compare_corpora(cycle_id,corpora_path,directory=DEFAULT_STATE):
+    """Compare actual external tool corpora with the existing frozen source-case scorer.
+
+    This is a tool study, not an accepted processor repair or a deployment check.
+    The bundle and each corpus must be owned by this cycle so normal cleanup removes them.
+    """
+    busy=False
+    try:
+        with _locked(directory):
+            state,cycle,workspace,manifest=_load_cycle(directory,cycle_id)
+            busy=cycle['status'] in {'running','finishing'}
+            if busy:raise ValueError('cannot compare a running cycle')
+            if cycle.get('completed_variants')!=['baseline']:raise ValueError('comparison requires exactly a completed baseline')
+            if manifest.selection_mode!='fixed_sources':raise ValueError('tool studies require explicit fixed sources')
+            if _processor_revision()!=cycle['baseline_revision']:raise ValueError('processor changed after baseline')
+            _assert_parser_runtime(cycle,manifest)
+            bundle_path=Path(corpora_path).resolve(strict=True)
+            if not bundle_path.is_relative_to(workspace.resolve()):raise ValueError('comparison bundle must be inside its cycle workspace')
+            bundle=_json(bundle_path)
+            if not isinstance(bundle,list) or not 1<=len(bundle)<=8:raise ValueError('provide between one and eight tool variants')
+            documents={d.document_id:d for d in manifest.documents+manifest.regression_documents}
+            ids=sum(cycle['sampling']['splits'].values(),[])
+            scores={};settings={}
+            for item in bundle:
+                name=item['name']
+                if not isinstance(name,str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,59}',name) or name in scores:raise ValueError('invalid or duplicate comparison name')
+                corpus_path=Path(item['path']).resolve(strict=True)
+                if not corpus_path.is_relative_to(workspace.resolve()):raise ValueError('corpus must be inside its cycle workspace')
+                corpus=_json(corpus_path)
+                actual_ids=[d['document_id'] for d in corpus.get('documents',[])]
+                if len(actual_ids)!=len(set(actual_ids)) or set(actual_ids)-set(ids):raise ValueError('unexpected or duplicate tool document')
+                scores[name]=score_extraction(corpus,[documents[i] for i in ids])
+                settings[name]=item.get('settings',{})
+            for split,digest in cycle['score_hashes']['baseline'].items():
+                if file_sha256(workspace/'baseline'/split/'score.json')!=digest:raise ValueError('frozen baseline score changed')
+            cycle['tool_comparison']={'scores':scores,'settings':settings}
+            cycle['comparison']={'decision':'comparison_only','reasons':['known_fixed_sources','different_tools_or_models_not_processor_improvement']}
+            cycle['status']='finished'
+            try:_cleanup(cycle)
+            finally:_persist_finished(directory,state,cycle)
+            return {'cycle_id':cycle_id,**cycle['comparison'],'scores':scores,'cleanup':cycle['cleanup']}
+    except BaseException as exc:
+        if not busy:abort_cycle(cycle_id,directory,type(exc).__name__)
+        raise
 
 
 async def finish_cycle(cycle_id,directory=DEFAULT_STATE):
@@ -389,17 +497,21 @@ async def finish_cycle(cycle_id,directory=DEFAULT_STATE):
                         'reasons':['grader_calibration_only','no_extraction_improvement_claim']}
         else:
             comparison=compare_runs(results['baseline'],results['candidate'],code==0)
-            if cycle['baseline_revision']==cycle['candidate_revision']:
+            if comparison['decision']!='rejected' and cycle['baseline_revision']==cycle['candidate_revision']:
                 comparison={'decision':'inconclusive','reasons':['no_processor_change']}
-            if any(results['baseline'][split]['parser_versions']!=results['candidate'][split]['parser_versions']
+            if comparison['decision']!='rejected' and any(results['baseline'][split]['parser_versions']!=results['candidate'][split]['parser_versions']
                    for split in results['baseline']):
                 comparison={'decision':'inconclusive','reasons':['parser_version_changed']}
-        if manifest.selection_mode=='fixed_sources' and comparison['decision']!='rejected':
+        if manifest.purpose=='extraction_improvement' and manifest.selection_mode=='fixed_sources' and comparison['decision']!='rejected':
             comparison={**comparison,'decision':'inconclusive',
                         'reasons':sorted(set(comparison['reasons']+['known_fixed_sources_not_independent_validation']))}
-        if manifest.model is None:
+        if manifest.purpose=='extraction_improvement' and comparison['decision']!='rejected' and manifest.selection_mode=='unclassified_random' and (
+                not manifest.history_reviewed or any(not d.template_family for d in manifest.documents+manifest.regression_documents)):
+            comparison={**comparison,'decision':'inconclusive',
+                        'reasons':sorted(set(comparison['reasons']+['source_history_or_template_review_incomplete']))}
+        if comparison['decision']!='rejected' and manifest.model is None:
             comparison={'decision':'inconclusive','reasons':['model_not_pinned']}
-        if _processor_revision()!=cycle[revision_key]:comparison={'decision':'inconclusive','reasons':['processor_changed_during_tests']}
+        if comparison['decision']!='rejected' and _processor_revision()!=cycle[revision_key]:comparison={'decision':'inconclusive','reasons':['processor_changed_during_tests']}
         await asyncio.to_thread(_assert_parser_runtime,cycle,manifest)
         def commit():
             with _locked(directory):

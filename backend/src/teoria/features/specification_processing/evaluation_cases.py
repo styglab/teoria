@@ -96,7 +96,7 @@ class EvaluationDocument(SourceDocument):
 class EvaluationManifest(Record):
     cycle_id: str = Field(pattern=r'^[a-z][a-z0-9_]{0,59}$')
     classification_code: str | None = Field(default='4321150102', pattern=r'^\d{10}$')
-    selection_mode: Literal['classified_random','fixed_sources'] = 'classified_random'
+    selection_mode: Literal['classified_random','unclassified_random','fixed_sources'] = 'classified_random'
     case_contract_version: Literal[2] = 2
     purpose: Literal['extraction_improvement','grader_calibration'] = 'extraction_improvement'
     replay_of: str | None = None
@@ -121,7 +121,7 @@ class EvaluationManifest(Record):
             if self.classification_code is None or any(d.classification_evidence is None for d in all_documents):
                 raise ValueError('classified sampling requires classification metadata for every document')
         elif self.classification_code is not None or any(d.classification_code is not None for d in all_documents):
-            raise ValueError('fixed source checks require explicitly absent classification')
+            raise ValueError('unclassified checks require explicitly absent classification')
         ids=[d.document_id for d in all_documents]
         if len(ids)!=len(set(ids)):raise ValueError('evaluation document IDs must be unique')
         if (self.purpose=='grader_calibration')!=(self.replay_of is not None):
@@ -192,22 +192,23 @@ def sample_documents(manifest: EvaluationManifest, history: dict, seed: int):
     def union(a,b):parent[find(b)]=find(a)
     keys={}
     for i,d in enumerate(docs):
-        for key in [('notice',d.notice_number),('hash',d.sha256),*([('template',d.template_family)] if d.template_family else [])]:
+        for key in [('hash',d.sha256),*([('notice',d.notice_number)] if d.notice_number else []),*([('template',d.template_family)] if d.template_family else [])]:
             if key in keys:union(i,keys[key])
             else:keys[key]=i
     groups=defaultdict(list)
     for i,d in enumerate(docs):groups[find(i)].append(d)
-    used=history.get('used',[])
-    seen_notices={d['notice_number'] for d in used}|set(manifest.excluded_notices)
+    used=exposed_documents(history)
+    seen_notices={d['notice_number'] for d in used if d.get('notice_number')}|set(manifest.excluded_notices)
     seen_hashes={d['sha256'] for d in used}|set(manifest.excluded_sha256)
     seen_templates={d.get('template_family') for d in used if d.get('template_family')}
     for document in manifest.regression_documents:
         if document.classification_code!=manifest.classification_code:raise ValueError('regression classification mismatch')
-        seen_notices.add(document.notice_number);seen_hashes.add(document.sha256)
+        if document.notice_number:seen_notices.add(document.notice_number)
+        seen_hashes.add(document.sha256)
         if document.template_family:seen_templates.add(document.template_family)
     eligible=[]
     for group in groups.values():
-        if any(d.notice_number in seen_notices or d.sha256 in seen_hashes or d.template_family and d.template_family in seen_templates for d in group):continue
+        if any(d.notice_number and d.notice_number in seen_notices or d.sha256 in seen_hashes or d.template_family and d.template_family in seen_templates for d in group):continue
         # Identical bytes appear once, but every alias remains in the use history.
         unique={}
         for d in group:unique.setdefault(d.sha256,d)
@@ -230,7 +231,7 @@ def sample_documents(manifest: EvaluationManifest, history: dict, seed: int):
     for group,all_aliases in selected:
         side='development' if len(splits['development'])<=len(splits['validation']) else 'validation'
         splits[side].extend(d.document_id for d in group);aliases.extend(all_aliases)
-    sampled_hashes={d.sha256 for d in aliases};sampled_notices={d.notice_number for d in aliases}
+    sampled_hashes={d.sha256 for d in aliases};sampled_notices={d.notice_number for d in aliases if d.notice_number}
     sampled_templates={d.template_family for d in aliases if d.template_family}
     for d in manifest.regression_documents:
         if d.classification_code!=manifest.classification_code:raise ValueError('regression classification mismatch')
@@ -239,4 +240,11 @@ def sample_documents(manifest: EvaluationManifest, history: dict, seed: int):
         splits['regression'].append(d.document_id)
     if sum(map(len,splits.values()))>100:raise ValueError('whole-group sample exceeds 100 documents')
     return splits,aliases,{'eligible_groups':len(eligible),'sampled_documents':count,
-        'independent_groups':len(selected),'freshness':'history_checked' if manifest.history_reviewed else 'unknown_prior_exposure'}
+        'independent_groups':len(selected),'selection_mode':manifest.selection_mode,
+        'freshness':'history_checked' if manifest.history_reviewed else 'unknown_prior_exposure'}
+
+
+def exposed_documents(history):
+    """Include regression exposure retained by older state versions as well as sampled aliases."""
+    return [*history.get('used',[]),
+            *(d for c in history.get('cycles',{}).values() for d in c.get('frozen_documents',[]))]

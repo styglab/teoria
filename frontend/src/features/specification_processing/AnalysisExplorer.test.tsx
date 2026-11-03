@@ -138,20 +138,54 @@ const lcmsConfiguration = () => {
   };
 };
 
-it("keeps nine configuration items and nested PC/detector branches under one source root", () => {
-  const value = lcmsConfiguration();
+it("limits the default tree to three levels while preserving deep components and their source parents", () => {
+  const value = { ...lcmsConfiguration(), attributes: [{ id: "cpu_cores", subject_ids: ["cpu"],
+    property_raw: "코어 수", value_raw: "8", unit_raw: "core", evidence: { node_id: "n1" } }] };
   value.relations.reverse();
   const graph = composition(value);
   expect(graph.roots.map((e) => e.id)).toEqual(["scope"]);
   expect(graph.children.get("scope")).toEqual(value.composition_inventory.item_ids);
   expect(graph.children.get("i8")).toEqual(["pc"]);
   expect(graph.children.get("pc")).toEqual(["cpu"]);
+  expect(graph.displayChildren.has("pc")).toBe(false);
+  expect(graph.detailTargets.map((e) => e.id)).toEqual(["cpu", "dynode"]);
+  expect(graph.unclassified).toEqual([]);
   expect(graph.children.get("i1")).toEqual(["detector"]);
   render(<AnalysisExplorer value={{ documents: [value] }} />);
   const pc = screen.getByRole("treeitem", { name: /PC SYSTEM/ });
   expect(pc.getAttribute("aria-level")).toBe("3");
   expect(pc.textContent).toContain("구성 관계 검토 중");
-  expect(screen.getByRole("treeitem", { name: /CPU/ }).getAttribute("aria-level")).toBe("4");
+  const tree = screen.getByRole("tree", { name: "구성 대상" });
+  expect(within(tree).queryByRole("treeitem", { name: /CPU/ })).toBeNull();
+  expect(pc.hasAttribute("aria-expanded")).toBe(false);
+  fireEvent.click(screen.getByRole("button", { name: "전체 펼치기" }));
+  expect(within(tree).queryByRole("treeitem", { name: /CPU/ })).toBeNull();
+  const summary = screen.getByText("세부 구성 · 2");
+  expect(summary.closest("details")?.hasAttribute("open")).toBe(false);
+  fireEvent.click(summary);
+  const details = screen.getByRole("tree", { name: "세부 구성" });
+  fireEvent.click(within(details).getByRole("treeitem", { name: /CPU/ }));
+  const detail = screen.getByRole("region", { name: "분석 대상 상세" });
+  expect(within(detail).getByText("코어 수")).toBeTruthy();
+  expect(within(detail).getByText("8")).toBeTruthy();
+  expect(within(detail).getByText("core")).toBeTruthy();
+  fireEvent.click(within(detail).getByRole("button", { name: /원문 보기/ }));
+  expect(within(screen.getByRole("region", { name: "선택한 원문 근거" }))
+    .getByText("8. 데이터 처리 시스템 (4) PC SYSTEM")).toBeTruthy();
+});
+
+it("uses the pipeline hierarchy contract while preserving the full relation graph", () => {
+  const value = lcmsConfiguration();
+  const graph = composition({ ...value, composition_hierarchy: {
+    schema_version: 1, max_primary_levels: 3, root_ids: ["scope"],
+    primary_entity_ids: ["scope", ...value.composition_inventory.item_ids, "pc", "detector"],
+    detail_entity_ids: ["cpu", "dynode"], levels: { scope: 1, i8: 2, pc: 3, cpu: 4, dynode: 4 },
+  } });
+  expect(graph.children.get("pc")).toEqual(["cpu"]);
+  expect(graph.displayChildren.has("pc")).toBe(false);
+  expect(graph.detailTargets.map((e) => e.id)).toEqual(["cpu", "dynode"]);
+  expect(graph.treeIds.has("cpu")).toBe(true);
+  expect(graph.unclassified).toEqual([]);
 });
 
 it("does not promote PC or its descendants when the parent proposal is held or missing", () => {
@@ -806,7 +840,7 @@ it("anchors navigation to supply rows and keeps work-only groups outside supplie
   expect(graph.related.map((e) => e.id)).toEqual(["work", "probe", "job"]);
   expect(graph.children.get("sensor")).toEqual(["gas"]);
   render(<AnalysisExplorer value={{ documents: [value] }} />);
-  expect(screen.getByRole("heading", { name: "공급 목록 기준" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "구매 물품·구성" })).toBeTruthy();
   const tree = screen.getByRole("tree", { name: "구성 대상" });
   expect(within(tree).getByRole("treeitem", { name: /데이터 전송장치/ }).getAttribute("aria-level")).toBe("1");
   expect(within(tree).queryByRole("treeitem", { name: /환경감시 센서/ })).toBeNull();
@@ -827,4 +861,89 @@ it("shows inventory reading uncertainty and does not assign a parent's purchase 
   const detail = screen.getByRole("region", { name: "분석 대상 상세" });
   expect(within(detail).getByText("구매 기준 수량: 별도 기재 없음")).toBeTruthy();
   expect(within(detail).queryByText(/8 식/)).toBeNull();
+});
+
+it("uses the sole purchased server as root even when the inventory has no extra purchase rows", () => {
+  const value = {
+    document_id: "single_server", classification_code: "4321150102",
+    composition_inventory: { basis: "supply_list", root_id: "root", item_ids: [] },
+    entities: [
+      { id: "root", name: "대형언어모델 추론실험용 서버", kind: "equipment", document_roles: ["procurement_scope", "supply_target"] },
+      { id: "cpu", name: "CPU", kind: "equipment" },
+      { id: "ram", name: "메모리", kind: "equipment" },
+      { id: "gpu", name: "GPU", kind: "equipment" },
+    ],
+    relations: [relation("cpu", "root"), relation("ram", "root"), relation("gpu", "root")], attributes: [],
+  };
+  const graph = composition(value, "composition", true);
+  expect(graph.roots.map((e) => e.id)).toEqual(["root"]);
+  expect(graph.children.get("root")).toEqual(["cpu", "ram", "gpu"]);
+  render(<AnalysisExplorer value={{ documents: [value] }} />);
+  expect(screen.getByRole("treeitem", { name: /^대형언어모델 추론실험용 서버/ }).getAttribute("aria-level")).toBe("1");
+  expect(screen.getByRole("treeitem", { name: /^메모리/ }).getAttribute("aria-level")).toBe("2");
+});
+
+it("keeps purchased upgrade parts as independent roots and the existing server as a related target", () => {
+  const value = {
+    document_id: "upgrade", classification_code: "4321150102",
+    composition_inventory: { basis: "supply_list", root_id: "scope", item_ids: ["gpu", "ram"] },
+    entities: [
+      { id: "scope", name: "서버 증설 구매", kind: "group", document_roles: ["procurement_scope"] },
+      { id: "gpu", name: "GPU", kind: "equipment", document_roles: ["supply_target"] },
+      { id: "ram", name: "메모리", kind: "equipment", document_roles: ["supply_target"] },
+      { id: "old", name: "기존 서버", kind: "equipment", document_roles: ["existing_target"] },
+    ],
+    relations: [relation("gpu", "old"), relation("ram", "old", "physical_part_of")], attributes: [],
+  };
+  for (const primaryOnly of [true, false]) {
+    const graph = composition(value, "composition", primaryOnly);
+    expect(graph.roots.map((e) => e.id)).toEqual(["gpu", "ram"]);
+    expect(graph.scopes.map((e) => e.id)).toEqual(["scope"]);
+  }
+  render(<AnalysisExplorer value={{ documents: [value] }} />);
+  const tree=screen.getByRole("tree", { name: "구성 대상" });
+  expect(within(tree).queryByRole("treeitem", { name: /기존 서버/ })).toBeNull();
+  expect(within(tree).queryByRole("treeitem", { name: /서버 증설 구매/ })).toBeNull();
+  expect(screen.getByText("구매 범위·공통 규격 · 1").closest("details")?.open).toBe(false);
+});
+
+it("does not start again at a purchased component when a purchased parent is known", () => {
+  const value = {
+    composition_inventory: { basis: "supply_list", root_id: "server", item_ids: ["server", "gpu"] },
+    entities: [
+      { id: "server", name: "서버", kind: "equipment", document_roles: ["supply_target"] },
+      { id: "gpu", name: "GPU", kind: "equipment", document_roles: ["supply_target"] },
+    ], relations: [relation("gpu", "server")],
+  };
+  const graph=composition(value, "composition", true);
+  expect(graph.roots.map((e) => e.id)).toEqual(["server"]);
+  expect(graph.children.get("server")).toEqual(["gpu"]);
+});
+
+it("never invents a server from classification or a title when purchase identity is unconfirmed", () => {
+  const value = {
+    classification_code: "4321150102",
+    composition_inventory: { basis: "unresolved", root_id: "scope", item_ids: [] },
+    entities: [
+      { id: "scope", name: "서버 구매 사업", kind: "equipment", document_roles: ["procurement_scope"] },
+      { id: "gpu", name: "GPU", kind: "equipment" },
+    ], relations: [],
+  };
+  const graph=composition(value, "composition", true);
+  expect(graph.roots).toEqual([]);
+  expect(graph.unclassified.map((e) => e.id)).toEqual(["gpu"]);
+  expect(graph.scopes.map((e) => e.id)).toEqual(["scope"]);
+});
+
+it("keeps a purchase target with an ambiguous parent in review instead of promoting it", () => {
+  const graph=composition({
+    composition_inventory: { basis: "supply_list", root_id: "scope", item_ids: ["gpu"] },
+    entities: [
+      { id: "scope", name: "증설 구매", kind: "group", document_roles: ["procurement_scope"] },
+      { id: "gpu", name: "GPU", kind: "equipment", document_roles: ["supply_target"] },
+      { id: "parent", name: "설비", kind: "equipment" },
+    ], relations: [], held_relations: [relation("gpu", "parent", "component_of", "ambiguous")],
+  }, "composition", true);
+  expect(graph.roots).toEqual([]);
+  expect(graph.unclassified.map((e) => e.id)).toContain("gpu");
 });

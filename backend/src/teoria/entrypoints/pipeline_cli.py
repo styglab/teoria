@@ -232,6 +232,10 @@ def main() -> int:
     evaluation_steps.add_parser(
         "schema", help="print the evaluation manifest JSON Schema"
     )
+    evaluation_steps.add_parser("status", help="show cycle decisions and pending cleanup")
+    evaluation_discover = evaluation_steps.add_parser("discover", help="inventory available local originals without extraction")
+    evaluation_discover.add_argument("--root", required=True, type=Path)
+    evaluation_discover.add_argument("--limit", type=int, default=100)
     evaluation_prepare = evaluation_steps.add_parser(
         "prepare", help="verify classification and freeze a grouped random sample"
     )
@@ -239,6 +243,11 @@ def main() -> int:
     for evaluation_step in ("baseline", "candidate", "finish", "abort"):
         step = evaluation_steps.add_parser(evaluation_step)
         step.add_argument("--cycle-id", required=True)
+    evaluation_compare = evaluation_steps.add_parser(
+        "compare", help="score external extraction corpora against a frozen baseline and clean the cycle"
+    )
+    evaluation_compare.add_argument("--cycle-id", required=True)
+    evaluation_compare.add_argument("--corpora", required=True, type=Path)
     specification_evaluate.add_argument(
         "--state-dir", type=Path, default=Path(".artifacts/specification_improvement")
     )

@@ -70,6 +70,28 @@ async def test_completed_replay_does_not_touch_inputs_or_model(tmp_path,undecora
     Path(request.documents[0].source_uri.removeprefix('file://')).unlink()
     assert await flows.execute_specification_run(request)==result
 
+
+async def test_pipeline_persists_three_level_policy_even_when_reusing_extraction(tmp_path,undecorated):
+    from .extraction.test_composition_hierarchy import nested_document
+    request=inputs(tmp_path)
+    checkpoint=Path(request.extraction_checkpoint.uri.removeprefix('file://'))
+    corpus=json.loads(checkpoint.read_text());document=corpus['documents'][0]
+    graph=nested_document()
+    document.update({key:graph[key] for key in ('composition_inventory','entities','relations','declared_quantities')})
+    document['composition_hierarchy']={'schema_version':1,'max_primary_levels':99}  # Recompute stale policy.
+    checkpoint.write_text(json.dumps(corpus));request.extraction_checkpoint.sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    result=await flows.execute_specification_run(request)
+    assert result.status=='completed'
+    folder=tmp_path/'objects/specification_processing/fixture_run'
+    stored=json.loads((folder/'extracted.json').read_text())['documents'][0]
+    assert stored['composition_hierarchy']['primary_entity_ids']==['goods','system','pc']
+    assert stored['composition_hierarchy']['detail_entity_ids']==['cpu','chip']
+    assert stored['attributes']==document['attributes']
+    assert stored['relations']==document['relations']
+    assert stored['declared_quantities']==document['declared_quantities']
+    projected=json.loads((folder/'documents/doc_1/result.json').read_text())['extracted']['documents'][0]
+    assert projected['composition_hierarchy']==stored['composition_hierarchy']
+
 async def test_standard_management_writes_only_draft_proposal(tmp_path,undecorated):
     request=inputs(tmp_path,'standard_management')
     result=await flows.execute_specification_run(request)

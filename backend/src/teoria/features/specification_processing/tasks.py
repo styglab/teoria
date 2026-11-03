@@ -209,6 +209,10 @@ async def resolve_attribute_semantics(request:SpecificationRun,workspace:str):
             else:
                 summary=await load(out/'summary.json')
                 semantic=await resolve(document,graph,graph['attributes'],model,out,checkpoints=checkpoints)
+                from teoria.features.specification_processing.extraction.table_attribute_context import recover_table_attribute_context
+                semantic['table_context']=recover_table_attribute_context(document,graph,graph['attributes'])
+                from teoria.features.specification_processing.extraction.inline_attribute_units import recover_inline_attribute_units
+                semantic['inline_units']=recover_inline_attribute_units(document,graph['attributes'])
                 summary['semantic_resolution']=semantic
             assert_composition_preserved(base,graph)
             summary['other_requirement_clauses']=sum(r.get('category')=='other' for r in graph.get('requirements',[]) if r.get('observation_type')=='source_clause')
@@ -267,6 +271,9 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                                          **held_relation_counts(graph)}})
         corpus={'schema_version':'specification_extraction_v1','classification_code':request.classification_code,'documents':documents,'unavailable_documents':failed,
             'extraction_policy':'product_specifications_with_bounded_recovery_and_other_source_clauses'}
+    from teoria.features.specification_processing.extraction.composition_hierarchy import composition_hierarchy
+    for document in corpus['documents']:
+        document['composition_hierarchy']=composition_hierarchy(document)
     validate_checkpoint(corpus,request,items)
     await save(Path(workspace)/'extracted.json',corpus)
     async with artifact_store(request.artifact_root) as store:

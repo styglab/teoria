@@ -74,6 +74,9 @@ def _run_evaluation(args):
         run_variant,
         finish_cycle,
         abort_cycle,
+        discover_sources,
+        cycle_status,
+        compare_corpora,
     )
 
     step = args.evaluation_step
@@ -88,10 +91,16 @@ def _run_evaluation(args):
             )
         )
         return 0
-    if step == "prepare":
+    if step == "discover":
+        result = discover_sources(args.root, args.state_dir, args.limit)
+    elif step == "status":
+        result = cycle_status(args.state_dir)
+    elif step == "prepare":
         result = prepare_cycle(args.manifest, args.state_dir)
     elif step == "abort":
         result = abort_cycle(args.cycle_id, args.state_dir)
+    elif step == "compare":
+        result = compare_corpora(args.cycle_id, args.corpora, args.state_dir)
     elif step == "finish":
         result = asyncio.run(finish_cycle(args.cycle_id, args.state_dir))
     else:

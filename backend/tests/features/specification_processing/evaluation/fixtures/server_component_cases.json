@@ -1,0 +1,182 @@
+{
+  "purpose": "Source-backed silver server cases: distinguish exact source-confirmed CPU/GPU aliases from missing entities, keep supplied capacity separate from support limits. Known-source calibration only.",
+  "case_contract_version": 2,
+  "source_location": "Sheet1!C2",
+  "documents": [
+    {
+      "document_id": "sample_09",
+      "notice_number": null,
+      "source_uri": "file:///workspace/.artifacts/sample/%EA%B5%AD%EA%B0%80%EB%B3%B4%EC%95%88%EA%B8%B0%EC%88%A0%EC%97%B0%EA%B5%AC%EC%86%8C%EC%9D%98%20%EB%8C%80%ED%98%95%EC%96%B8%EC%96%B4%EB%AA%A8%EB%8D%B8%20%EC%B6%94%EB%A1%A0%EC%8B%A4%ED%97%98%EC%9A%A9%20%EC%84%9C%EB%B2%84%20%EA%B7%9C%EA%B2%A9%EC%84%9C.xlsx",
+      "filename": "국가보안기술연구소의 대형언어모델 추론실험용 서버 규격서.xlsx",
+      "sha256": "a8c7ad031dc585cfd104df9c9d4d27b83f2a866838ed6beba6d7a71233ce7a60",
+      "classification_code": null,
+      "classification_evidence": null,
+      "template_family": null,
+      "layout": "unknown",
+      "label_status": "silver",
+      "entity_aliases": {
+        "Intel Xeon Processor 6507P": [
+          "Intel Xeon Processor 6507P 3.50GHz 8‑코어 16‑스레드 48MB"
+        ],
+        "Nvidia H200 NVL": [
+          "Nvidia H200 NVL 141GB / 600W (90SKC000‑M9GAN0)"
+        ]
+      },
+      "entities": [
+        {
+          "name": "대형언어모델 추론실험용 서버",
+          "source_text": "대형언어모델 추론실험용 서버",
+          "kind": null,
+          "evidence_mode": "existence",
+          "owner": null
+        },
+        {
+          "name": "Intel Xeon Processor 6507P",
+          "source_text": "Intel Xeon Processor 6507P"
+        },
+        {
+          "name": "DDR5 32GB 5600 RDIMM",
+          "source_text": "DDR5 32GB 5600 RDIMM"
+        },
+        {
+          "name": "Nvidia H200 NVL",
+          "source_text": "Nvidia H200 NVL"
+        }
+      ],
+      "relations": [
+        {
+          "source": "Intel Xeon Processor 6507P",
+          "target": "대형언어모델 추론실험용 서버",
+          "kind": "component_of",
+          "source_text": "Intel Xeon Processor 6507P",
+          "source_owner": null,
+          "target_owner": null
+        }
+      ],
+      "requirements": [
+        {
+          "subjects": [
+            "Intel Xeon Processor 6507P"
+          ],
+          "value_raw": "3.50",
+          "unit_raw": "GHz",
+          "operator": "eq",
+          "qualifiers_raw": null,
+          "qualifier_mode": "required_subset",
+          "forbidden_qualifiers": [],
+          "property_keys": [],
+          "role": null,
+          "scope": null,
+          "owner": null,
+          "source_text": "3.50GHz"
+        },
+        {
+          "subjects": [
+            "DDR5 32GB 5600 RDIMM"
+          ],
+          "value_raw": "32",
+          "unit_raw": "GB",
+          "operator": "eq",
+          "qualifiers_raw": null,
+          "qualifier_mode": "required_subset",
+          "forbidden_qualifiers": [],
+          "property_keys": [],
+          "role": null,
+          "scope": null,
+          "owner": null,
+          "source_text": "32GB"
+        },
+        {
+          "subjects": [
+            "Intel Xeon Processor 6507P"
+          ],
+          "value_raw": "8",
+          "unit_raw": "코어",
+          "operator": "eq",
+          "source_text": "8‑코어",
+          "scope": "per_processor"
+        },
+        {
+          "subjects": [
+            "Intel Xeon Processor 6507P"
+          ],
+          "value_raw": "16",
+          "unit_raw": "스레드",
+          "operator": "eq",
+          "source_text": "16‑스레드",
+          "scope": "per_processor"
+        },
+        {
+          "subjects": [
+            "Intel Xeon Processor 6507P"
+          ],
+          "value_raw": "48",
+          "unit_raw": "MB",
+          "operator": "eq",
+          "source_text": "48MB",
+          "scope": "per_processor"
+        },
+        {
+          "subjects": [
+            "Intel Xeon Processor 6507P"
+          ],
+          "value_raw": "2",
+          "unit_raw": "개",
+          "operator": "eq",
+          "source_text": "x 2개",
+          "scope": "system_total"
+        },
+        {
+          "subjects": [
+            "DDR5 32GB 5600 RDIMM"
+          ],
+          "value_raw": "2",
+          "unit_raw": "개",
+          "operator": "eq",
+          "source_text": "x 2개",
+          "scope": "system_total"
+        },
+        {
+          "subjects": [
+            "Nvidia H200 NVL"
+          ],
+          "value_raw": "141",
+          "unit_raw": "GB",
+          "operator": "eq",
+          "source_text": "141GB",
+          "scope": "per_component"
+        },
+        {
+          "subjects": [
+            "Nvidia H200 NVL"
+          ],
+          "value_raw": "600",
+          "unit_raw": "W",
+          "operator": "eq",
+          "source_text": "600W",
+          "scope": "per_component"
+        },
+        {
+          "subjects": [
+            "대형언어모델 추론실험용 서버"
+          ],
+          "value_raw": "6400",
+          "unit_raw": "MHz",
+          "operator": "lte",
+          "source_text": "6400MHz",
+          "scope": "support_limit"
+        },
+        {
+          "subjects": [
+            "대형언어모델 추론실험용 서버"
+          ],
+          "value_raw": "3",
+          "unit_raw": "TB",
+          "operator": "lte",
+          "source_text": "3TB",
+          "scope": "support_limit"
+        }
+      ]
+    }
+  ]
+}

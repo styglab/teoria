@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 UNITS={'GB':'GB','MB':'MB','TB':'TB','G':None,'GHz':'GHz','MHz':'MHz','kHz':'kHz','Hz':'Hz',
        'mm':'mm','㎜':'mm','cm':'cm','m':'m','kg':'kg','g':'g','V':'V','kV':'kV','W':'W','kW':'kW','MPa':'MPa',
        'mL/min':'mL/min','mL':'mL','uL':'µL','μL':'µL','µL':'µL','nm':'nm','m/z':'m/z','Core':'core','core':'core',
-       'Thread':'thread','thread':'thread',
+       'Thread':'thread','thread':'thread','코어':'core','스레드':'thread',
        'msec':'ms','ms':'ms','sec':'s','s':'s','min':'min','h':'h','일':'일','년':'년','개월':'개월','주일':'주일',
        'set':'set','SET':'set','System':'System','EA':'개','ea':'개','개':'개','대':'대','식':'식','부':'부','%':'%',
        '℃':'°C','°C':'°C','lux':'lux','L':'L','mmHg':'mmHg'}

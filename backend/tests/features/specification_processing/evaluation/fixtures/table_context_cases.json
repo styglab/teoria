@@ -1,0 +1,315 @@
+{
+  "purpose": "Frozen source-backed silver cases from the table-context evaluation; known sources, no independent gold claim. Inputs remain under .artifacts; bulk run outputs are removed.",
+  "case_contract_version": 2,
+  "parser_version": "0.9.16",
+  "documents": [
+    {
+      "document_id": "food",
+      "filename": "patient_food_specification.xlsx",
+      "sha256": "1b289ea52226c3b4d21c51e1934ca7087611c47fe8996f64a38bf226d5a6609a",
+      "template_family": "hospital_food_split_quantity",
+      "label_status": "silver",
+      "layout": "table",
+      "entities": [
+        {
+          "name": "우유,200ml",
+          "source_text": "우유,200ml"
+        },
+        {
+          "name": "저지방우유,180ml",
+          "source_text": "저지방우유,180ml"
+        }
+      ],
+      "relations": [],
+      "requirements": [
+        {
+          "subjects": [
+            "우유,200ml"
+          ],
+          "value_raw": "143000",
+          "unit_raw": "EA",
+          "operator": "eq",
+          "source_text": "143000",
+          "qualifiers_raw": null
+        },
+        {
+          "subjects": [
+            "우유,200ml"
+          ],
+          "value_raw": "92000",
+          "unit_raw": "EA",
+          "operator": "eq",
+          "source_text": "92000",
+          "qualifiers_raw": [
+            "영양팀(1동)"
+          ]
+        },
+        {
+          "subjects": [
+            "우유,200ml"
+          ],
+          "value_raw": "51000",
+          "unit_raw": "EA",
+          "operator": "eq",
+          "source_text": "51000",
+          "qualifiers_raw": [
+            "영양팀(8동)"
+          ]
+        },
+        {
+          "subjects": [
+            "저지방우유,180ml"
+          ],
+          "value_raw": "2",
+          "unit_raw": "%",
+          "operator": "lte",
+          "source_text": "지방 2% 이하",
+          "qualifiers_raw": null
+        }
+      ],
+      "source_path": ".artifacts/sample/patient_food_specification.xlsx"
+    },
+    {
+      "document_id": "vehicle",
+      "filename": "동물이송진료용 특수차량 규격서(수정안최종).hwpx",
+      "sha256": "40c6d6203877a0bdc50b8cbb4f2f71f3efcd5eb5a1c06bc9ac5756ac3c86289d",
+      "template_family": "custom_vehicle_dimension_header",
+      "label_status": "silver",
+      "layout": "table",
+      "entities": [
+        {
+          "name": "동물이송진료용 차량",
+          "source_text": "동물이송진료용 차량"
+        },
+        {
+          "name": "인버터",
+          "source_text": "인버터"
+        }
+      ],
+      "relations": [],
+      "requirements": [
+        {
+          "subjects": [
+            "동물이송진료용 차량"
+          ],
+          "value_raw": "6,195",
+          "unit_raw": "㎜",
+          "operator": "gte",
+          "source_text": "6,195 이상",
+          "qualifiers_raw": null
+        },
+        {
+          "subjects": [
+            "동물이송진료용 차량"
+          ],
+          "value_raw": "2,038",
+          "unit_raw": "㎜",
+          "operator": "gte",
+          "source_text": "2,038 이상",
+          "qualifiers_raw": null
+        },
+        {
+          "subjects": [
+            "동물이송진료용 차량"
+          ],
+          "value_raw": "2,665",
+          "unit_raw": "㎜",
+          "operator": "gte",
+          "source_text": "2,665 이상",
+          "qualifiers_raw": null
+        },
+        {
+          "subjects": [
+            "동물이송진료용 차량"
+          ],
+          "value_raw": "2,497",
+          "unit_raw": "cc",
+          "operator": "gte",
+          "source_text": "2,497 이상",
+          "qualifiers_raw": null
+        },
+        {
+          "subjects": [
+            "인버터"
+          ],
+          "value_raw": "3",
+          "unit_raw": "kW",
+          "operator": "gte",
+          "source_text": "정격출력 3kW 이상",
+          "qualifiers_raw": null
+        }
+      ],
+      "source_path": ".artifacts/sample/동물이송진료용 특수차량 규격서(수정안최종).hwpx"
+    },
+    {
+      "document_id": "electric_van",
+      "filename": "electric_van.pdf",
+      "sha256": "10bef52bf03c700fa7b7281899c7c27375e04a21757861129b138b1cad2ba0d3",
+      "template_family": "syu_single_vehicle_specification",
+      "label_status": "silver",
+      "layout": "table",
+      "entities": [
+        {
+          "name": "소형승합 전기모터 2WD",
+          "source_text": "소형승합 전기모터 2WD"
+        }
+      ],
+      "relations": [],
+      "requirements": [
+        {
+          "subjects": [
+            "소형승합 전기모터 2WD"
+          ],
+          "value_raw": "5,255",
+          "unit_raw": "mm",
+          "operator": "eq",
+          "source_text": "5,255mm",
+          "qualifiers_raw": null
+        },
+        {
+          "subjects": [
+            "소형승합 전기모터 2WD"
+          ],
+          "value_raw": "1,995",
+          "unit_raw": "mm",
+          "operator": "eq",
+          "source_text": "1,995mm",
+          "qualifiers_raw": null
+        },
+        {
+          "subjects": [
+            "소형승합 전기모터 2WD"
+          ],
+          "value_raw": "1,990",
+          "unit_raw": "mm",
+          "operator": "eq",
+          "source_text": "1,990mm",
+          "qualifiers_raw": null
+        }
+      ],
+      "source_path": ".artifacts/specification_inputs/table_context_20261103/electric_van.pdf"
+    },
+    {
+      "document_id": "server",
+      "filename": "국가보안기술연구소의 대형언어모델 추론실험용 서버 규격서.xlsx",
+      "sha256": "a8c7ad031dc585cfd104df9c9d4d27b83f2a866838ed6beba6d7a71233ce7a60",
+      "template_family": "single_server_xlsx",
+      "label_status": "silver",
+      "layout": "table",
+      "entities": [
+        {
+          "name": "대형언어모델 추론실험용 서버",
+          "source_text": "대형언어모델 추론실험용 서버"
+        }
+      ],
+      "relations": [
+        {
+          "source": "Intel Xeon Processor 6507P",
+          "target": "대형언어모델 추론실험용 서버",
+          "kind": "component_of",
+          "source_text": "Intel Xeon Processor 6507P"
+        }
+      ],
+      "requirements": [
+        {
+          "subjects": [
+            "Intel Xeon Processor 6507P"
+          ],
+          "value_raw": "3.50",
+          "unit_raw": "GHz",
+          "operator": "eq",
+          "source_text": "3.50GHz",
+          "qualifiers_raw": null
+        },
+        {
+          "subjects": [
+            "DDR5 32GB 5600 RDIMM"
+          ],
+          "value_raw": "32",
+          "unit_raw": "GB",
+          "operator": "eq",
+          "source_text": "32GB",
+          "qualifiers_raw": null
+        }
+      ],
+      "source_path": ".artifacts/sample/국가보안기술연구소의 대형언어모델 추론실험용 서버 규격서.xlsx"
+    },
+    {
+      "document_id": "lcms",
+      "filename": "(변환본)규격서_연천스마트팜(주)_액체크로마토그래프.pdf",
+      "sha256": "b7e8b9661be430a76de1688fee666004d561d70a0e8b3059367d509a5ce91781",
+      "template_family": "lcms_configurations_pdf",
+      "label_status": "silver",
+      "layout": "table",
+      "entities": [
+        {
+          "name": "액체크로마토그래프 질량분석기",
+          "source_text": "액체크로마토그래프 질량분석기"
+        },
+        {
+          "name": "PC SYSTEM",
+          "source_text": "PC SYSTEM"
+        }
+      ],
+      "relations": [
+        {
+          "source": "PC SYSTEM",
+          "target": "데이터 처리 시스템",
+          "kind": "component_of",
+          "source_text": "PC SYSTEM"
+        }
+      ],
+      "requirements": [
+        {
+          "subjects": [
+            "용매 운반용 펌프"
+          ],
+          "value_raw": "105",
+          "unit_raw": "MPa",
+          "operator": "eq",
+          "source_text": "105 MPa",
+          "qualifiers_raw": null
+        },
+        {
+          "subjects": [
+            "광다이오드어레이 검출기"
+          ],
+          "value_raw": "190~800",
+          "unit_raw": "nm",
+          "operator": "range",
+          "source_text": "190~800 nm",
+          "qualifiers_raw": null
+        }
+      ],
+      "source_path": ".artifacts/sample/(변환본)규격서_연천스마트팜(주)_액체크로마토그래프.pdf"
+    },
+    {
+      "document_id": "airway_training",
+      "filename": "airway_training.pdf",
+      "sha256": "e074d45b6cb2a27c72e728a6c4e70b92d33fe332e31c58c29d2f2eedf17384b3",
+      "template_family": "cku_clinical_training_equipment",
+      "label_status": "silver",
+      "layout": "table",
+      "entities": [
+        {
+          "name": "기도 유지 및 기관내 삽관 실습 모형",
+          "source_text": "기도 유지 및 기관내 삽관 실습 모형"
+        }
+      ],
+      "relations": [],
+      "requirements": [
+        {
+          "subjects": [
+            "기도 유지 및 기관내 삽관 실습 모형"
+          ],
+          "value_raw": "11.7",
+          "unit_raw": "kg",
+          "operator": "eq",
+          "source_text": "무게 : 11.7kg",
+          "qualifiers_raw": null
+        }
+      ],
+      "source_path": ".artifacts/specification_inputs/table_context_20261103/airway_training.pdf"
+    }
+  ]
+}

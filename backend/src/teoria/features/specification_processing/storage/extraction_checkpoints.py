@@ -18,7 +18,7 @@ STAGE_MODULES={
                   'extraction/document_context.py','extraction/target_recovery.py',
                   'extraction/value_normalization.py','extraction/requirement_clauses.py',
                   'parsing/document_assessment.py','parsing/document_evidence.py'),
-    'semantics':('extraction/attribute_resolution.py','extraction/composition_review.py',
+    'semantics':('extraction/attribute_resolution.py','extraction/table_attribute_context.py','extraction/inline_attribute_units.py','extraction/composition_review.py',
                  'extraction/entity_relation_extraction.py','extraction/attribute_extraction.py',
                  'extraction/attribute_validation.py','extraction/requirement_clauses.py',
                  'extraction/document_context.py','extraction/value_normalization.py',

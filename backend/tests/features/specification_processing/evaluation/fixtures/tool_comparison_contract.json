@@ -1,0 +1,257 @@
+{
+  "purpose": "Reproducibility inputs for the known-ten external tool study; this is not an active processing backend. No model responses or extracted document bodies retained.",
+  "model": "gpt-6.1-sol",
+  "prompt_rules": "한국어 물품 규격서에서 원문에 명시된 구매 물품, 구성품, 속성 및 직접 구성관계만 추출한다.\n목차·표·행·열·병합 헤더를 참고한다. 공급목록의 구매 범위와 실제 물리적 구성관계를 혼동하지 않는다.\n기존 장비·설치 작업·문서·지원 능력을 납품 구성품으로 만들지 않는다. 계층은 원문 근거가 있는 직접 관계만 만든다.\n명칭은 원문 그대로 유지한다. 속성마다 소유 대상, 값, 단위, 비교 연산자, 조건을 보존한다.\n수량의 합계와 부서/동별 수량, 포장당 함량을 구분한다. 단위·조건이 다른 셀에 있으면 그 셀 근거도 기록한다.\n설명·용도·일반 납품 조건을 물품의 수치 속성으로 만들지 않는다. 대상이 불명확하면 비워둔다.\n원문에 없는 루트·수량·관계·단위를 생성하지 않는다. 모든 source_node_ids는 입력의 실제 node_id만 사용한다.\n출력된 어떤 주장도 외부 지식으로 보완하지 않는다. property_key는 의미를 드러내는 영어 snake_case를 사용한다.",
+  "docling_graph_template": {
+    "$defs": {
+      "Entity": {
+        "properties": {
+          "name": {
+            "description": "Exact original name, never a generated or shortened replacement",
+            "title": "Name",
+            "type": "string"
+          },
+          "kind": {
+            "description": "equipment, software, material, group, product, document, activity or unknown",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source_node_ids": {
+            "description": "Original node IDs containing this exact name",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Node Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "source_node_ids"
+        ],
+        "title": "Entity",
+        "type": "object"
+      },
+      "Property": {
+        "properties": {
+          "subjects": {
+            "description": "Exact original entity names owning this requirement; empty when unknown",
+            "items": {
+              "type": "string"
+            },
+            "title": "Subjects",
+            "type": "array"
+          },
+          "property_key": {
+            "title": "Property Key",
+            "type": "string"
+          },
+          "value_raw": {
+            "description": "Literal value only, preserving commas/ranges and source spelling",
+            "title": "Value Raw",
+            "type": "string"
+          },
+          "unit_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Raw"
+          },
+          "operator": {
+            "description": "eq, gte, lte, gt, lt, range, contains or unspecified",
+            "title": "Operator",
+            "type": "string"
+          },
+          "operator_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Literal source comparator, e.g. 이상; null for eq",
+            "title": "Operator Raw"
+          },
+          "qualifiers_raw": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Qualifiers Raw",
+            "type": "array"
+          },
+          "semantic_scope": {
+            "description": "per_item, per_component, batch_total, per_package, per_reference_quantity, unknown",
+            "title": "Semantic Scope",
+            "type": "string"
+          },
+          "source_node_ids": {
+            "description": "Original cells/paragraphs proving value, unit, comparator and qualifiers",
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Node Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "subjects",
+          "property_key",
+          "value_raw",
+          "unit_raw",
+          "operator",
+          "operator_raw",
+          "qualifiers_raw",
+          "semantic_scope",
+          "source_node_ids"
+        ],
+        "title": "Property",
+        "type": "object"
+      },
+      "Relation": {
+        "properties": {
+          "source": {
+            "description": "Exact child entity name",
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "description": "Exact immediate parent entity name",
+            "title": "Target",
+            "type": "string"
+          },
+          "kind": {
+            "description": "component_of for explicitly supplied physical components; ingredient_of, material_of, packaging_for, pack_unit_of, installed_on, connected_to or other when explicit",
+            "title": "Kind",
+            "type": "string"
+          },
+          "source_node_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Node Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "kind",
+          "source_node_ids"
+        ],
+        "title": "Relation",
+        "type": "object"
+      }
+    },
+    "description": "Source-backed goods, their direct relationships and literal requirements. No invented entities.",
+    "properties": {
+      "entities": {
+        "items": {
+          "$ref": "#/$defs/Entity"
+        },
+        "title": "Entities",
+        "type": "array"
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/Property"
+        },
+        "title": "Properties"
+      },
+      "relations": {
+        "items": {
+          "$ref": "#/$defs/Relation"
+        },
+        "title": "Relations",
+        "type": "array"
+      }
+    },
+    "required": [
+      "entities",
+      "properties",
+      "relations"
+    ],
+    "title": "GoodsDocument",
+    "type": "object"
+  },
+  "source_serialization": "For each non-empty original node: [node_id|kind|parent_id|row|column|row_span|column_span] original text, joined by newline. GLiNER plain variant uses only original text with source character offsets retained.",
+  "settings": {
+    "comparison": "known_fixed_sources_tool_study",
+    "model": "gpt-6.1-sol",
+    "parser": "kory_parser 0.9.16 shared native nodes; structure-preserving serialization",
+    "docling": {
+      "version": "2.145.0",
+      "ocr": "RapidOCR Korean iso:ko / onnxruntime",
+      "threads": 4,
+      "hardware": "CPU",
+      "prefight_missing_onnxruntime_repaired": true
+    },
+    "docling_graph": {
+      "version": "1.9.1",
+      "extraction_contract": "direct",
+      "use_chunking": true,
+      "structured_output": true,
+      "provider": "actual custom LLMClientProtocol -> existing CodexRunner",
+      "schema": "GoodsDocument entities/properties/relations",
+      "same_llm": "gpt-6.1-sol",
+      "library_routing_output_budget": 32768,
+      "dense_bridge_preflight": "Codex schema incompatibility; excluded from final quality scores; initial three auto/direct completed documents retained"
+    },
+    "langextract": {
+      "version": "1.7.1",
+      "provider": "actual custom BaseLanguageModel -> existing CodexRunner",
+      "same_llm": "gpt-6.1-sol",
+      "max_char_buffer": 24000,
+      "extraction_passes": 1,
+      "max_workers": 1,
+      "fence_output": false,
+      "use_schema_constraints": false,
+      "example_alignment_warnings": false,
+      "tokenizer": "UnicodeTokenizer",
+      "preflight": "ordered example repaired; prior default-tokenizer outputs excluded; all ten replayed"
+    },
+    "gliner2": {
+      "version": "2.1.0",
+      "model": "fastino/gliner2-multi-v1",
+      "threshold": 0.5,
+      "chunk_size_words": 192,
+      "chunk_overlap_words": 32,
+      "batch_size": 2,
+      "threads": 4,
+      "hardware": "CPU",
+      "fine_tuning": false,
+      "original_markup_seconds": 447.603,
+      "plain_seconds": 196.245,
+      "source_span_projection": "explicit original node ranges; cached-output reprojection is not new model inference"
+    },
+    "limitations": [
+      "silver_cases_only",
+      "known_ten_not_independent_validation",
+      "different_prompts_and_orchestration",
+      "gliner_uses_different_non_generative_model",
+      "cost_not_measured_in_currency",
+      "no_operational_deployment",
+      "docling_graph_direct_mode_only_dense_not_certified",
+      "current_pipeline_includes_business_validation_external_tools_emit_unreviewed_candidates",
+      "external_partial_status_not_comparable",
+      "only_two_fixed_relation_cases",
+      "no_scanned_document_ocr_accuracy_measurement",
+      "single_run_shared_host_not_statistical_latency_benchmark"
+    ],
+    "model_revisions": {
+      "models--sentence-transformers--all-MiniLM-L6-v2": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+      "models--fastino--gliner2-multi-v1": "ce747d79a8e362d3dee0b0b26d1201f7f1a8615a",
+      "models--docling-project--docling-layout-heron": "8f39ad3c0b4c58e9c2d2c84a38465abf757272d8"
+    },
+    "adapter_source_sha256": "4422805a4a9fbf502bb77328db35f3f44c23569a8087d467cce522880e8a7add",
+    "adapter_optional_fields": "Empty strings for absent unit/comparator become null; empty qualifiers removed. No value/name/unit inference. Cached payload projection only, no additional model call."
+  }
+}

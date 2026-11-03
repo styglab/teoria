@@ -204,8 +204,16 @@ def test_abort_cannot_delete_another_live_controller_workspace(frame,tmp_path,mo
     ev.abort_cycle('cycle_1',directory)
 
 
-async def test_calibration_replay_preserves_source_split_history_and_cannot_be_promoted(frame,tmp_path,monkeypatch):
+@pytest.mark.parametrize('selection_mode',['classified_random','unclassified_random','fixed_sources'])
+@pytest.mark.parametrize('tests_exit_code',[0,1])
+async def test_calibration_replay_preserves_source_split_history_and_cannot_be_promoted(frame,tmp_path,monkeypatch,selection_mode,tests_exit_code):
     path,data=frame;directory=tmp_path/'summary'
+    if selection_mode!='classified_random':
+        data['classification_code']=None
+        for document in data['documents']+data['regression_documents']:
+            for field in ('notice_number','classification_code','classification_evidence'):document[field]=None
+    if selection_mode=='unclassified_random':data['history_reviewed']=False
+    data['selection_mode']=selection_mode;write_json(path,data)
     parent=ev.prepare_cycle(path,directory);ev.abort_cycle('cycle_1',directory)
     saved=ev._state(directory);old=saved['cycles']['cycle_1'];selected=set(sum(old['sampling']['splits'].values(),[]))
     replay=deepcopy(data);replay.update({'cycle_id':'calibration_1','purpose':'grader_calibration','replay_of':'cycle_1','seed':None})
@@ -219,12 +227,13 @@ async def test_calibration_replay_preserves_source_split_history_and_cannot_be_p
     assert state['used']==saved['used']
     docs={d.document_id:d for d in EvaluationManifest.model_validate(replay).documents+EvaluationManifest.model_validate(replay).regression_documents}
     async def execute(request,run_dir,manifest):return {'documents':[extracted(docs[d['document_id']]) for d in request['documents']]},1.0
-    async def passing(*args,**kwargs):return 0,b'passed',b''
-    monkeypatch.setattr(ev,'_execute',execute);monkeypatch.setattr(ev,'_launch',passing)
+    async def run_tests(*args,**kwargs):return tests_exit_code,b'test output',b''
+    monkeypatch.setattr(ev,'_execute',execute);monkeypatch.setattr(ev,'_launch',run_tests)
     with pytest.raises(ValueError,match='not an extraction candidate'):await ev.run_variant('calibration_1','candidate',directory)
     await ev.run_variant('calibration_1','baseline',directory)
     result=await ev.finish_cycle('calibration_1',directory)
-    assert result['decision']=='baseline_recorded' and 'no_extraction_improvement_claim' in result['reasons']
+    assert result['decision']==('baseline_recorded' if tests_exit_code==0 else 'rejected')
+    assert 'no_extraction_improvement_claim' in result['reasons']
     assert not Path(prepared['workspace']).exists()
 
 
@@ -358,3 +367,154 @@ def test_failed_prepare_report_can_be_aborted_without_an_orphaned_cycle(frame,tm
     monkeypatch.setattr(ev,'_report',original)
     result=ev.abort_cycle('cycle_1',directory,'failed_preflight')
     assert result['status']=='complete' and result['removed_bytes']==0
+
+
+def unclassified(data,mode='unclassified_random'):
+    data=deepcopy(data)
+    for document in data['documents']+data['regression_documents']:
+        for key in ('notice_number','classification_code','classification_evidence'):document.pop(key,None)
+    data.update(selection_mode=mode,classification_code=None)
+    return data
+
+
+def test_unclassified_random_does_not_group_absent_notices_or_exclude_every_regression(frame):
+    _,data=frame;data=unclassified(data)
+    data['documents'][1]['template_family']=data['documents'][0]['template_family']
+    manifest=EvaluationManifest.model_validate(data)
+    splits,aliases,sampling=sample_documents(manifest,{},42)
+    dev=set(splits['development']);validation=set(splits['validation'])
+    assert dev and validation and splits['regression']==['doc_6']
+    assert not dev&validation and sampling['independent_groups']>=2
+    assert not ({'doc_0','doc_1'}&dev and {'doc_0','doc_1'}&validation)
+    for document in aliases:verify_document(document,allow_unclassified=True)
+    # Exposure excludes the entire connected template, without treating None as a notice.
+    splits,_,_=sample_documents(manifest,{'used':[data['documents'][0]]},42)
+    assert not {'doc_0','doc_1'}&set(sum(splits.values(),[]))
+    assert splits['development'] and splits['validation']
+
+
+def test_local_discovery_reports_exposure_without_reading_links_or_generated_sources(frame,tmp_path):
+    _,data=frame;root=tmp_path/'originals';root.mkdir()
+    (root/'fresh.pdf').write_bytes(b'fresh original')
+    (root/'used.docx').write_bytes(Path(data['documents'][0]['source_uri'].removeprefix('file://')).read_bytes())
+    (root/'outside.pdf').symlink_to(tmp_path/'doc_1.hwp')
+    generated=root/'sources';generated.mkdir();(generated/'generated.pdf').write_bytes(b'copy')
+    directory=tmp_path/'discovery_state';directory.mkdir()
+    ev._save(directory,{'used':[data['documents'][0]],'cycles':{}})
+    result=ev.discover_sources(root,directory)
+    candidates={d['filename']:d for d in result['candidates']}
+    assert set(candidates)=={'fresh.pdf','used.docx'}
+    assert candidates['used.docx']['previously_used'] and not candidates['fresh.pdf']['previously_used']
+    assert all(d['classification_code'] is None and d['template_family'] is None for d in candidates.values())
+    assert len(ev.discover_sources(root,directory,1)['candidates'])==1
+    assert ev.discover_sources(root,directory,1)['bounded']
+
+
+@pytest.mark.parametrize('unpinned',[False,True])
+async def test_failed_pipeline_tests_remain_rejected_and_all_outputs_are_cleaned(frame,tmp_path,monkeypatch,unpinned):
+    path,data=frame;data=unclassified(data,'fixed_sources')
+    if unpinned:data['model']=None
+    write_json(path,data);directory=tmp_path/'rejected_state'
+    prepared=ev.prepare_cycle(path,directory)
+    async def execute(request,run_dir,manifest):
+        docs={d.document_id:d for d in manifest.documents+manifest.regression_documents}
+        (run_dir/'final.json').write_bytes(b'x'*1000)
+        intermediate=run_dir/'inference';intermediate.mkdir();(intermediate/'raw_response.json').write_bytes(b'x'*2000)
+        return {'documents':[extracted(docs[d['document_id']]) for d in request['documents']]},0.01
+    monkeypatch.setattr(ev,'_execute',execute)
+    await ev.run_variant('cycle_1','baseline',directory)
+    await ev.run_variant('cycle_1','candidate',directory)  # unchanged processor must not mask test failures
+    async def fail(*args,**kwargs):return 1,b'failed',b''
+    monkeypatch.setattr(ev,'_launch',fail)
+    result=await ev.finish_cycle('cycle_1',directory)
+    assert result['decision']=='rejected' and 'pipeline_tests_not_passed' in result['reasons']
+    assert not Path(prepared['workspace']).exists()
+    assert sorted(p.name for p in directory.iterdir())==['index.md','state.json']
+
+
+def test_partial_cleanup_failure_remains_retryable_without_losing_finished_verdict(frame,tmp_path,monkeypatch):
+    path,_=frame;directory=tmp_path/'cleanup_retry';prepared=ev.prepare_cycle(path,directory)
+    workspace=Path(prepared['workspace']);outside=tmp_path/'outside_original.pdf';outside.write_bytes(b'keep')
+    (workspace/'original_link.pdf').symlink_to(outside)
+    result_dir=workspace/'results';result_dir.mkdir()
+    (result_dir/'part.json').write_bytes(b'x'*3000)
+    (result_dir/'remaining.json').write_bytes(b'x'*1000)
+    state=ev._state(directory);cycle=state['cycles']['cycle_1']
+    cycle.update(status='finished',comparison={'decision':'rejected','reasons':['validation:requirement_regression']})
+    ev._save(directory,state)
+    original=ev.shutil.rmtree
+    def deny(path,*args,**kwargs):
+        (Path(path)/'part.json').unlink()
+        raise PermissionError('injected partial cleanup failure')
+    monkeypatch.setattr(ev.shutil,'rmtree',deny)
+    with pytest.raises(PermissionError):ev.abort_cycle('cycle_1',directory)
+    saved=ev._state(directory)['cycles']['cycle_1']
+    assert saved['cleanup']['status']=='pending' and saved['comparison']['decision']=='rejected'
+    assert (workspace/'.owner.json').exists() and saved['cleanup']['removed_bytes']>=3000
+    assert ev.cycle_status(directory)['cycles'][0]['cleanup']['error_code']=='PermissionError'
+    # Pending cleanup blocks another cycle; cleanup retry never follows the link to the input.
+    next_data=json.loads(path.read_text());next_data['cycle_id']='cycle_2'
+    with pytest.raises(ValueError,match='pending cycle'):
+        ev.prepare_cycle(write_json(tmp_path/'next.json',next_data),directory)
+    monkeypatch.setattr(ev.shutil,'rmtree',original)
+    assert ev.abort_cycle('cycle_1',directory)['status']=='complete'
+    assert not workspace.exists() and outside.read_bytes()==b'keep'
+    assert ev._state(directory)['cycles']['cycle_1']['comparison']['decision']=='rejected'
+
+
+def test_historical_regression_exposure_cannot_reenter_as_fresh_documents(frame):
+    _,data=frame;manifest=EvaluationManifest.model_validate(unclassified(data))
+    # Older cycles recorded selected aliases in used, but regression only in frozen_documents.
+    history={'used':[],'cycles':{'old':{'frozen_documents':[manifest.documents[0].model_dump()]}}}
+    splits,_,_=sample_documents(manifest,history,42)
+    assert 'doc_0' not in splits['development']+splits['validation']
+
+
+@pytest.mark.parametrize('reviewed',[False,True])
+async def test_unclassified_grouped_lifecycle_requires_reviewed_history(frame,tmp_path,monkeypatch,reviewed):
+    path,data=frame;data=unclassified(data);data['history_reviewed']=reviewed
+    write_json(path,data);directory=tmp_path/'mixed_state';revision=['before']
+    monkeypatch.setattr(ev,'_processor_revision',lambda:revision[0])
+    prepared=ev.prepare_cycle(path,directory)
+    async def execute(request,run_dir,manifest):
+        docs={d.document_id:d for d in manifest.documents+manifest.regression_documents}
+        return {'documents':[extracted(docs[d['document_id']],revision[0]=='after') for d in request['documents']]},0.01
+    monkeypatch.setattr(ev,'_execute',execute)
+    await ev.run_variant('cycle_1','baseline',directory);revision[0]='after'
+    await ev.run_variant('cycle_1','candidate',directory)
+    async def passing(*args,**kwargs):return 0,b'passed',b''
+    monkeypatch.setattr(ev,'_launch',passing)
+    result=await ev.finish_cycle('cycle_1',directory)
+    assert result['decision']==('accepted' if reviewed else 'inconclusive')
+    if not reviewed:assert 'source_history_or_template_review_incomplete' in result['reasons']
+    assert result['cleanup']['status']=='complete' and not Path(prepared['workspace']).exists()
+
+
+async def test_external_tool_comparison_uses_frozen_cases_and_cleans_owned_outputs(frame,tmp_path,monkeypatch):
+    path,data=frame;data=unclassified(data,'fixed_sources');write_json(path,data)
+    directory=tmp_path/'tool_study';prepared=ev.prepare_cycle(path,directory);workspace=Path(prepared['workspace'])
+    async def execute(request,run_dir,manifest):
+        docs={d.document_id:d for d in manifest.documents+manifest.regression_documents}
+        return {'documents':[extracted(docs[d['document_id']]) for d in request['documents']]},0.01
+    monkeypatch.setattr(ev,'_execute',execute)
+    await ev.run_variant('cycle_1','baseline',directory)
+    manifest=EvaluationManifest.model_validate(data)
+    corpus=write_json(workspace/'tool.json',{'documents':[extracted(d) for d in manifest.documents+manifest.regression_documents]})
+    bundle=write_json(workspace/'bundle.json',[{'name':'actual_tool','path':str(corpus),'settings':{'model':'pinned'}}])
+    result=ev.compare_corpora('cycle_1',bundle,directory)
+    assert result['decision']=='comparison_only'
+    assert result['scores']['actual_tool']['metrics']['requirement_cases_found']==7
+    assert result['cleanup']['status']=='complete' and not workspace.exists()
+    assert ev._state(directory)['cycles']['cycle_1']['tool_comparison']['settings']['actual_tool']['model']=='pinned'
+
+
+async def test_external_tool_comparison_rejects_corpora_outside_owned_workspace(frame,tmp_path,monkeypatch):
+    path,data=frame;data=unclassified(data,'fixed_sources');write_json(path,data)
+    directory=tmp_path/'tool_study';prepared=ev.prepare_cycle(path,directory);workspace=Path(prepared['workspace'])
+    async def execute(request,run_dir,manifest):return {'documents':[]},0.01
+    monkeypatch.setattr(ev,'_execute',execute)
+    await ev.run_variant('cycle_1','baseline',directory)
+    outside=write_json(tmp_path/'original.json',{'documents':[]})
+    bundle=write_json(workspace/'bundle.json',[{'name':'tool','path':str(outside)}])
+    with pytest.raises(ValueError,match='inside its cycle workspace'):ev.compare_corpora('cycle_1',outside,directory)
+    assert outside.exists() and not workspace.exists()

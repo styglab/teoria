@@ -22,6 +22,7 @@ const kindNames: Record<string, string> = {
   document: "문서",
   unknown: "유형 미확정",
 };
+const COMPOSITION_DISPLAY_LEVELS = 3;
 function isGoodsTarget(entity: Row) {
   return (
     !["activity", "document"].includes(String(entity.kind)) &&
@@ -143,34 +144,78 @@ export function composition(
         : ["component_of", "physical_part_of"].includes(String(r.kind)))
       .map((r) => String(r.source_id)),
   );
-  // Supply rows are purchase anchors, not invented component_of links to a title.
+  // Purchase evidence chooses anchors; category codes and titles never invent a product.
   const supplyBasis = mode === "composition" && inventory.basis === "supply_list";
-  const roots = supplyBasis
-    ? primaryIds.map((id) => entities.find((e) => String(e.id) === id))
-        .filter((e): e is Row => !!e && !related.has(String(e.id)) && !attached.has(String(e.id)))
+  const explicitlyPurchased = entities.filter((e) =>
+    Array.isArray(e.document_roles) && e.document_roles.includes("supply_target"));
+  const purchaseIds = new Set<string>(mode === "composition" ? [
+    ...(anchor ? [anchor] : []),
+    ...explicitlyPurchased.filter((e) => String(e.id) === String(inventory.root_id)).map((e) => String(e.id)),
+    ...(supplyBasis ? primaryIds : []),
+    ...explicitlyPurchased.map((e) => String(e.id)),
+  ] : []);
+  const purchaseAnchored = mode === "composition" && (purchaseIds.size > 0 || !!document.composition_inventory);
+  const inferredRoots = purchaseAnchored
+    ? [...purchaseIds].map((id) => entities.find((e) => String(e.id) === id))
+        .filter((e): e is Row => !!e && isGoodsTarget(e) && !related.has(String(e.id)) &&
+          ![...(parents.get(String(e.id)) || [])].some((parent) => !related.has(parent)) &&
+          ![...rows(document.relations), ...rows(document.held_relations)].some((r) =>
+            r.source_id === e.id && ["component_of", "physical_part_of"].includes(String(r.kind)) &&
+            !related.has(String(r.target_id))))
     : entities.filter((e) =>
         (!primaryOnly || !related.has(String(e.id))) && children.has(String(e.id)) &&
-        (anchor ? String(e.id) === anchor
-          : !attached.has(String(e.id)) && !proposedChildren.has(String(e.id))));
+        !attached.has(String(e.id)) && !proposedChildren.has(String(e.id)));
+  const hierarchy = (document.composition_hierarchy || {}) as Row;
+  const hasHierarchy = mode === "composition" && hierarchy.schema_version === 1 &&
+    hierarchy.max_primary_levels === COMPOSITION_DISPLAY_LEVELS &&
+    Array.isArray(hierarchy.root_ids) && Array.isArray(hierarchy.primary_entity_ids) &&
+    Array.isArray(hierarchy.detail_entity_ids);
+  const roots = hasHierarchy
+    ? (hierarchy.root_ids as string[]).flatMap((id) => entities.filter((e) => String(e.id) === id))
+    : inferredRoots;
   const treeIds = new Set<string>();
-  const pending = roots.map((e) => String(e.id));
+  const depths = new Map<string, number>();
+  const pending = roots.map((e) => ({ id: String(e.id), level: 1 }));
   while (pending.length) {
-    const id = pending.pop()!;
+    const { id, level } = pending.pop()!;
     if (treeIds.has(id)) continue;
     treeIds.add(id);
-    pending.push(...(children.get(id) || []));
+    depths.set(id, level);
+    pending.push(...(children.get(id) || []).map((child) => ({ id: child, level: level + 1 })));
   }
+  // Keep the full source graph for details and ancestry; bound only the default composition view.
+  const primaryIdsFromPipeline = new Set(hasHierarchy ? hierarchy.primary_entity_ids as string[] : []);
+  const detailIdsFromPipeline = new Set(hasHierarchy ? hierarchy.detail_entity_ids as string[] : []);
+  if (hasHierarchy) {
+    for (const [id, level] of Object.entries((hierarchy.levels || {}) as Row))
+      if (typeof level === "number") depths.set(id, level);
+  }
+  const displayChildren = new Map([...children].filter(([id]) =>
+    mode !== "composition" || (depths.get(id) ?? Infinity) < COMPOSITION_DISPLAY_LEVELS)
+    .map(([id, children]): [string, string[]] => [id, hasHierarchy ? children.filter((child) => primaryIdsFromPipeline.has(child)) : children])
+    .filter(([, children]) => children.length));
+  const detailTargets = entities.filter((e) =>
+    hasHierarchy ? detailIdsFromPipeline.has(String(e.id))
+      : mode === "composition" && (depths.get(String(e.id)) ?? 0) > COMPOSITION_DISPLAY_LEVELS);
+  const scopes = entities.filter((e) => !treeIds.has(String(e.id)) && !purchaseIds.has(String(e.id)) &&
+    !related.has(String(e.id)) && !explicitlyPurchased.some((item) => item.id === e.id) &&
+    Array.isArray(e.document_roles) && e.document_roles.includes("procurement_scope"));
   return {
     entities,
     supplyBasis,
+    purchaseAnchored,
+    scopes,
     children,
+    displayChildren,
+    detailTargets,
+    depths,
     roots,
     treeIds,
     pendingParents,
     unclassified: entities.filter(
       (e) =>
         (!primaryOnly || !related.has(String(e.id))) &&
-        !treeIds.has(String(e.id)),
+        !treeIds.has(String(e.id)) && !scopes.some((scope) => scope.id === e.id),
     ),
     related: entities.filter((e) => related.has(String(e.id))),
   };
@@ -280,7 +325,7 @@ function DocumentAnalysis({
   mappingStatus: MappingStatus;
 }) {
   const [navigation, setNavigation] = useState(() =>
-    composition(document, "composition").roots.length ? "composition" : "list",
+    composition(document, "composition", true).roots.length ? "composition" : "list",
   );
   const inventoryAssessment = (document.inventory_assessment || {}) as Row;
   const inventoryStatusNames: Record<string, string> = {
@@ -557,7 +602,7 @@ function DocumentAnalysis({
     visible.push(next);
     if (!closed.has(next.id))
       pending.push(
-        ...(graph.children.get(next.id) || [])
+        ...(graph.displayChildren.get(next.id) || [])
           .map((id) => ({ id, depth: next.depth + 1 }))
           .reverse(),
       );
@@ -568,6 +613,7 @@ function DocumentAnalysis({
       : [
           ...visible.map((e) => e.id),
           ...graph.unclassified.map((e) => String(e.id)),
+          ...graph.detailTargets.map((e) => String(e.id)),
         ];
   const itemRow = (id: string, depth = 0) => {
     const item = entitiesById.get(id)!;
@@ -575,7 +621,7 @@ function DocumentAnalysis({
       navigation === "list" || query || (scopeFilter === "purchase" || kindFilter !== "all")
         ? undefined
         : graph.treeIds.has(id)
-          ? graph.children.get(id)
+          ? graph.displayChildren.get(id)
           : undefined;
     return (
       <div
@@ -610,7 +656,7 @@ function DocumentAnalysis({
           aria-level={depth + 1}
           aria-expanded={children ? !closed.has(id) : undefined}
           tabIndex={
-            scopeFilter === "goods" && graph.related[0]?.id === id
+            graph.detailTargets[0]?.id === id || (scopeFilter === "goods" && (graph.related[0]?.id === id || graph.scopes[0]?.id === id))
               ? 0
               : id ===
                   (treeCandidates.includes(treeFocus)
@@ -821,7 +867,7 @@ function DocumentAnalysis({
           {navigation !== "list" && (
             <div className="analysis-tree-tools">
               <button onClick={() => setClosed(new Set())}>전체 펼치기</button>
-              <button onClick={() => setClosed(new Set(graph.children.keys()))}>
+              <button onClick={() => setClosed(new Set(graph.displayChildren.keys()))}>
                 전체 접기
               </button>
             </div>
@@ -845,19 +891,22 @@ function DocumentAnalysis({
                   <h4>
                     {navigation === "packaging"
                       ? "포장 단위 관계"
-                      : graph.supplyBasis ? "공급 목록 기준" : "구성 관계"}
+                      : graph.purchaseAnchored ? "구매 물품·구성" : "구성 관계"}
                   </h4>
+                )}
+                {navigation === "composition" && !!visible.length && (
+                  <p className="operations-note">최상위 물품 포함 3계층까지 표시합니다.</p>
                 )}
                 {visible.map(({ id, depth }) => itemRow(id, depth))}
                 {!graph.roots.length && (
                   <p className="operations-note">
-                    확인된 구성 계층이 없습니다.
+                    구매 물품과 상위 구성 연결을 확인할 수 없습니다.
                   </p>
                 )}
                 {!!graph.unclassified.length && (
                   <>
                     <h4>
-                      이 계층에 포함되지 않은 대상 · {graph.unclassified.length}
+                      상위 물품·구매 범위 확인 필요 · {graph.unclassified.length}
                     </h4>
                     {graph.unclassified.map((e) => itemRow(String(e.id)))}
                   </>
@@ -865,6 +914,36 @@ function DocumentAnalysis({
               </>
             )}
           </div>
+          {navigation === "composition" && !query && kindFilter === "all" && scopeFilter !== "purchase" && !!graph.detailTargets.length && (
+            <details className="analysis-scope-targets">
+              <summary>세부 구성 · {graph.detailTargets.length}</summary>
+              <p className="operations-note">
+                4계층 이하의 구성입니다. 원래 관계와 속성·원문 근거를 유지합니다.
+              </p>
+              <div role="tree" aria-label="세부 구성">
+                {graph.detailTargets.filter(matches).map((e) => (
+                  <div key={String(e.id)}>
+                    <p className="operations-note">
+                      {graph.depths.get(String(e.id))}계층 · 상위 구성: {label(entitiesById.get(parentOf.get(String(e.id)) || "")?.name)}
+                    </p>
+                    {itemRow(String(e.id))}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+          {scopeFilter === "goods" && !!graph.scopes.length && (
+            <details className="analysis-scope-targets">
+              <summary>구매 범위·공통 규격 · {graph.scopes.length}</summary>
+              <p className="operations-note">구매 전체의 범위와 공통 조건입니다. 구성품의 상위 물품으로 확정하지 않습니다.</p>
+              <div role="tree" aria-label="구매 범위">
+                {graph.scopes.filter((e) =>
+                  (kindFilter === "all" || String(e.kind ?? "unknown") === kindFilter) &&
+                  label(e.name).toLowerCase().includes(query.toLowerCase()),
+                ).map((e) => itemRow(String(e.id)))}
+              </div>
+            </details>
+          )}
           {scopeFilter === "goods" && !!graph.related.length && (
             <details className="analysis-related-targets">
               <summary>
