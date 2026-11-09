@@ -4,10 +4,10 @@ from __future__ import annotations
 from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI
 from teoria.settings import Settings
-from teoria.features.access_control.policy import PolicyEvaluator
-from teoria.features.runtime.capability.runner import CapabilityRunner
-from teoria.features.runtime.runtime_router import router
-from teoria.features.semantic_modeling.registry.loader import RegistryCatalog
+from teoria.platform.access_control.policy import PolicyEvaluator
+from teoria.platform.ontology.runtime.capability.runner import CapabilityRunner
+from teoria.platform.ontology.runtime.runtime_router import router
+from teoria.platform.ontology.contracts.loader import RegistryCatalog
 from teoria.entrypoints.composition.runtime import create_runtime_services
 
 

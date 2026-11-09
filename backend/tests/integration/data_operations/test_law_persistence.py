@@ -9,16 +9,16 @@ from uuid import uuid4
 import psycopg
 import pytest
 
-from teoria.features.legal_information.collection.models import (
+from teoria.domains.legal_information.collection.models import (
     LawTarget,
     LawVersion,
     LawResponse,
     LawCatalog,
 )
-from teoria.features.legal_information.collection.parsing import parse_law
-from teoria.features.legal_information.collection.repository import LawRepository
-from teoria.integrations.data_operations.models import CollectionWindow
-from teoria.integrations.data_operations.persistence import PostgresStore
+from teoria.domains.legal_information.collection.parsing import parse_law
+from teoria.domains.legal_information.collection.repository import LawRepository
+from teoria.platform.data.operations.models import CollectionWindow
+from teoria.platform.data.operations.persistence import PostgresStore
 
 DATABASE_URL = os.environ.get("TEORIA_TEST_DATA_DATABASE_URL")
 pytestmark = pytest.mark.skipif(

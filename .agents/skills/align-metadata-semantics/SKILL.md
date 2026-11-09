@@ -23,7 +23,7 @@ binding. Return `unbound`, alternatives or `needs_evidence` when the match is
 missing or ambiguous. Do not invent a concept to fill the gap.
 
 Create one independently reviewable `binding` suggestion per verified match.
-Use the actual contract in `backend/src/teoria/features/metadata_management/intelligence/suggestions/contracts.py` and the
+Use the actual contract in `backend/src/teoria/platform/data/metadata/intelligence/suggestions/contracts.py` and the
 [bundle schema](../enrich-metadata-asset/references/proposal_bundle.schema.json);
 do not invent new API fields. Include the published stable concept key, current
 OpenMetadata version, evidence, confidence and material alternatives.

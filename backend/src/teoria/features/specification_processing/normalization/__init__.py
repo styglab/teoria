@@ -1,1 +1,0 @@
-"""Standardization for procurement specifications."""

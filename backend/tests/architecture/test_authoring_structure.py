@@ -15,13 +15,13 @@ def imports(path):
 
 
 def test_runtime_does_not_import_vertical_features():
-    root = SOURCE_ROOT / "features/runtime"
+    root = SOURCE_ROOT / "platform/ontology/runtime"
     paths = list(root.rglob("*.py"))
     assert paths
     forbidden = (
-        "teoria.features.specification_processing",
-        "teoria.features.goods_normalization",
-        "teoria.features.legal_information",
+        "teoria.domains.goods.normalization",
+        "teoria.domains.goods.expression_links",
+        "teoria.domains.legal_information",
     )
     assert not [
         (str(p.relative_to(SOURCE_ROOT)), name)
@@ -31,11 +31,9 @@ def test_runtime_does_not_import_vertical_features():
     ]
 
 
-def test_semantic_modeling_does_not_own_procurement_rules():
-    root = SOURCE_ROOT / "features/semantic_modeling"
-    paths = list((root / "registry/validation").rglob("*.py")) + list(
-        (root / "ontology").glob("*.py")
-    )
+def test_platform_does_not_own_procurement_rules():
+    root = SOURCE_ROOT / "platform"
+    paths = list(root.rglob("*.py"))
     assert paths
     assert not [
         (str(p.relative_to(SOURCE_ROOT)), name)
@@ -43,8 +41,8 @@ def test_semantic_modeling_does_not_own_procurement_rules():
         for name in imports(p)
         if name.startswith(
             (
-                "teoria.features.specification_processing",
-                "teoria.features.goods_normalization",
+                "teoria.domains.goods.normalization",
+                "teoria.domains.goods.expression_links",
             )
         )
     ]
@@ -67,7 +65,7 @@ def test_active_source_has_no_retired_python_namespaces():
         "teoria_provider_api",
         "teoria_goods_normalization",
         "teoria_codex_inference",
-        "teoria.domains",
+        "teoria.features",
         "archive",
     )
     assert not [
@@ -89,9 +87,11 @@ def test_mcp_only_uses_runtime_http_and_protocol_dependencies():
         for name in imports(p)
         if name.startswith(
             (
-                "teoria.features.",
+                "teoria.platform.",
+                "teoria.domains.",
+                "teoria.apps.",
                 "teoria.integrations.application_database",
-                "teoria.integrations.data_operations",
+                "teoria.platform.data.operations",
                 "psycopg",
                 "sqlalchemy",
             )

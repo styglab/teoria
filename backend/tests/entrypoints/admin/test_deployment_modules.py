@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from teoria.entrypoints.admin_api import create_admin_app
-from teoria.features.workflow_management.catalog import workflow_catalog
+from teoria.entrypoints.composition.workflow_catalog import workflow_catalog
 from teoria.settings import Settings
 
 
@@ -74,3 +74,20 @@ def test_formatid_retains_authoring_routes_without_openmetadata_or_runtime():
         assert client.get("/v1/admin/deployment").json()["formatid"] is True
     assert app.state.admin_services.context_engine is None
     assert app.state.admin_services.metadata_service is None
+
+
+def test_platform_authoring_is_available_without_any_business_app():
+    app = create_admin_app(settings=Settings(
+        environment="test", semantic_modeling_enabled=True, formatid_enabled=False,
+        model_operations_enabled=False, legal_information_enabled=False,
+        openmetadata_enabled=False,
+    ))
+    with TestClient(app) as client:
+        # Routes belong to the platform even when their database is not configured.
+        assert client.get("/v1/admin/ontology-authoring/ontologies").status_code == 503
+        assert client.get("/v1/admin/deployment").json() == {
+            "semantic": True, "formatid": False, "mlops": False,
+        }
+        assert client.get("/v1/admin/specification-processing/status").json() == {
+            "uploads_enabled": False, "results_enabled": False,
+        }

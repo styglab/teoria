@@ -5,16 +5,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 from teoria.entrypoints.admin_api import create_admin_app
-from teoria.features.runtime.context.service import ContextEngine
-from teoria.features.semantic_modeling.ontology.blueprint import (
+from teoria.platform.ontology.runtime.context.service import ContextEngine
+from teoria.platform.ontology.authoring.blueprint import (
     OntologyBlueprint,
     apply_ontology_blueprint,
 )
-from teoria.features.semantic_modeling.ontology.migration import (
+from teoria.platform.ontology.contracts.ontology_migration import (
     OntologyMigrationManifest,
     build_migration_report,
 )
-from teoria.features.semantic_modeling.registry.loader import RegistryLoader
+from teoria.platform.ontology.contracts.loader import RegistryLoader
 from teoria.settings import Settings
 
 

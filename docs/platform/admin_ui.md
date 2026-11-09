@@ -3,9 +3,17 @@
 화면 사용 순서는 [사용 안내](../platform-guide.md)를 따른다. 이 문서는 경로·API 경계·현재 제한과 개발 위치를 정리한다.
 조회·승인·실행은 각각의 권한과 기능 활성화 상태를 따른다.
 
+프런트엔드 소유 위치는 백엔드와 같은 책임 이름을 사용한다. Metadata 조회·진단·제안은
+platform/data/metadata, Ontology·Binding은 platform/ontology/authoring·platform/ontology/bindings,
+Capability는 platform/ontology/runtime, 인증은 platform/access_control에 둔다.
+FormatID 화면은 apps/formatid이며 플랫폼 정의와 분리한다.
+고객 이탈 테스트 폼은 `examples/customer_churn/`에 두고 shell이 공통 서빙 화면에 주입한다.
+라우팅·메뉴는 shell에서 조립하고 기존 URL을 유지한다. 미사용 governance 전체 자산 스캔 화면은 제거했다.
+
 ## 작업 공간과 공통 운영
 
-`semantic` 기능은 **Ontology·업무 실행**, 선택형 `mlops`는 **모델 개발·운영** 작업 공간으로 표시한다.
+`semantic` 배포 모듈은 **데이터**와 **Ontology** 작업 공간을 제공한다.
+별도 선택 모듈 `mlops`는 **MLOps** 작업 공간으로 표시한다. AI/AIP는 미구현이며 메뉴를 노출하지 않는다.
 **공통 운영**에는 파이프라인과 연결·설정을, **업무 앱**에는 FormatID를 둔다.
 기존 사전·의미 연결 URL은 검색 조건과 선택 대상을 보존해 새 소유 화면으로 연결한다. 홈의 작업 공간별 시작 링크와 현재 위치도 같은 메뉴 정의를 사용한다.
 모듈 비활성화·모델 운영 권한 확인과 기존 관리자 인증은 그대로 적용한다.
@@ -35,8 +43,7 @@
 ## 데이터 자산과 변경안
 
 조회 결과는 OpenMetadata의 상태를 기준으로 표시한다. 공개 조회 허용과 변경·데이터 샘플 권한을 구분하고,
-조회 실패를 빈 값으로 처리하지 않는다. [자산 맥락](metadata/asset_context.md) ·
-[Codex 진단](metadata/asset_assessment.md) · [제안·적용](metadata/suggestions.md)을 참고한다.
+조회 실패를 빈 값으로 처리하지 않는다. [메타데이터 조회·진단·검토](metadata.md)를 참고한다.
 
 자산 목록은 `GET /v1/admin/metadata/table-search`에 검색어·스키마·누락 유형·정렬·offset·limit를
 전달한다. `GET /v1/admin/metadata/table-search/counts`는 동일 검색 범위의 전체·설명 없음·소유자 없음·태그 없음
@@ -67,7 +74,7 @@
 상세는 구성 트리와 속성의 기본 2열이며 요청한 원문 근거만 추가 패널로 연다. 트리의 위·아래/Home/End는 초점 이동, 좌·우는 접기·펼치기, Enter는 대상 선택이다.
 추출용 표준 초안을 Published Ontology로 표시하지 않는다. 미매핑은 추출 실패와 구별한다.
 
-단계와 결과 파일은 [규격서 파이프라인](../procurement_specification_processing/pipeline.md)을 따른다.
+단계와 결과 파일은 [규격서 파이프라인](../domains/goods/specifications/pipeline.md)을 따른다.
 
 ## 관리자 연결
 
@@ -81,13 +88,14 @@ Admin token으로 `/v1/admin/auth/session`을 확인한다. 공개 상태 응답
 
 | 위치 | 책임 |
 |---|---|
-| `frontend/src/app/` | 앱·라우팅·메뉴 |
-| `frontend/src/features/` | 기능별 화면 |
-| `frontend/src/api/` | API client·HTTP 계약 |
+| `frontend/src/shell/` | 플랫폼 화면 틀·라우팅·메뉴 |
+| `frontend/src/{platform,domains,apps}/` | 기능별 화면 |
+| `frontend/src/api/` | HTTP 전송·인증 오류·Query 공통 정책 |
+| 각 소유 모듈의 `api.ts` | 업무 API client·응답 타입 |
 | `frontend/src/components/ui/design_tokens.css` | 공통 색상·간격·글자 크기·컨트롤 크기 |
 | `frontend/src/components/ui/button.tsx`, `button.css`, `input.tsx` | 실제 공유 버튼·입력 컴포넌트 |
 | `frontend/src/components/ui/form_controls.css` | 관리자 화면의 입력 포커스·셀렉트 화살표·옵션 목록 |
-| `backend/src/teoria/features/` | 소유 기능의 HTTP 라우터 |
+| `backend/src/teoria/{platform,domains,apps}/` | 소유 기능의 HTTP 라우터 |
 | `backend/src/teoria/entrypoints/` | 앱·lifespan·조립 |
 
 ```bash
@@ -109,7 +117,7 @@ npm --prefix frontend run test:e2e
 
 탐색 상태는 URL로 복원하고 큰 관계도는 필요할 때 적재한다.
 Compose의 gateway는 UI와 내부 API proxy를, K3s는 UI와 서비스별 ingress 구성을 사용한다.
-[배포 안내](../deployment/compose.md)와 [개발 경계](development.md)를 따른다.
+[배포 안내](../deployment/compose.md)와 [개발 경계](../development.md)를 따른다.
 
 
 ## 화면 회귀 검사와 조회 정책

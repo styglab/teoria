@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 from teoria.entrypoints.admin_api import create_admin_app
 from teoria.entrypoints.runtime_api import create_runtime_app
 from teoria.integrations.openmetadata.client import OpenMetadataClient
-from teoria.features.runtime.context.runtime_client import ContextRuntimeClient
-from teoria.features.access_control.policy import OpaPolicyEvaluator, PolicyPrincipal
+from teoria.platform.ontology.runtime.context.runtime_client import ContextRuntimeClient
+from teoria.platform.access_control.policy import OpaPolicyEvaluator, PolicyPrincipal
 from teoria.settings import Settings
 
 

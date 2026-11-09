@@ -4,11 +4,11 @@ import psycopg
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.metadata_management.catalog.admin_router import (
+from teoria.platform.access_control.auth import AdminAuthorizer
+from teoria.platform.data.metadata.catalog.admin_router import (
     create_metadata_router,
 )
-from teoria.features.metadata_management.catalog.asset_context import (
+from teoria.platform.data.metadata.catalog.asset_context import (
     AssetContextService,
     asset_targets,
 )

@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 
-from teoria.features.goods_notice_collection.backup_restore import (
+from teoria.domains.goods.notice_collection.backup_restore import (
     BackupManifest,
     restore_backup,
 )

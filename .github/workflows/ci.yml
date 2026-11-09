@@ -132,7 +132,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - name: Test shared Prefect execution policies
-        run: uv run --project backend --locked --all-extras --group orchestration --group kubernetes-orchestration pytest backend/tests/integrations/data_operations/test_deployment_registration.py backend/tests/integration/data_operations/test_prefect_scheduling.py
+        run: uv run --project backend --locked --all-extras --group orchestration --group kubernetes-orchestration pytest backend/tests/platform/data/operations/test_deployment_registration.py backend/tests/integration/data_operations/test_prefect_scheduling.py
       - name: Validate Docker Compose
         env:
           TEORIA_ADMIN_API_TOKEN: validation

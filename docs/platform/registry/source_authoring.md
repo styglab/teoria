@@ -112,3 +112,10 @@ credential을 주입한 실제 검증은 `--profile live`를 사용한다. 원�
 - 모든 Operation에 verification case가 있다.
 - Static·Build가 통과하고 가능한 Operation은 Live도 통과한다.
 - API 키, 개인정보와 비공개 원본 응답이 커밋되지 않는다.
+
+## Provider 연결 구현
+
+`backend/src/teoria/integrations/provider_api/`가 Source와 Connector의 wire schema·검증,
+요청 생성·인증·HTTP 실행·retry·응답 record/type 검증을 공유한다. Registry·Ontology·Prefect·적재 정책은 소유하지 않는다.
+`schema.py`·`validator.py`·`request_builder.py`·`executor.py`·`response_validator.py` 순서로 읽는다.
+기능 구현을 역으로 import하지 않으며 테스트는 `backend/tests/integrations/provider_api/`에 둔다.

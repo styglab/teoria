@@ -9,16 +9,16 @@ from uuid import uuid4
 import psycopg
 import pytest
 
-from teoria.features.legal_information.collection.models import (
+from teoria.domains.legal_information.collection.models import (
     LawTarget,
     LawVersion,
     LawResponse,
     LawCatalog,
 )
-from teoria.features.legal_information.collection.parsing import parse_law
-from teoria.features.legal_information.collection.repository import LawRepository
-from teoria.integrations.data_operations.models import CollectionWindow
-from teoria.integrations.data_operations.persistence import PostgresStore
+from teoria.domains.legal_information.collection.parsing import parse_law
+from teoria.domains.legal_information.collection.repository import LawRepository
+from teoria.platform.data.operations.models import CollectionWindow
+from teoria.platform.data.operations.persistence import PostgresStore
 
 DATABASE_URL = os.environ.get("TEORIA_TEST_DATA_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -87,7 +87,7 @@ def test_runtime_has_no_law_archive_access(law_setup):
 
 
 async def test_keyword_search_finds_descendants_and_pins_old_snapshot(law_setup):
-    from teoria.features.legal_information.search import (
+    from teoria.domains.legal_information.search import (
         LawSearchReader,
         LawSearchRequest,
     )
@@ -132,7 +132,7 @@ async def test_keyword_search_finds_descendants_and_pins_old_snapshot(law_setup)
 async def test_keyword_search_does_not_mix_future_versions_or_treat_wildcards_as_query(
     law_setup,
 ):
-    from teoria.features.legal_information.search import (
+    from teoria.domains.legal_information.search import (
         LawSearchReader,
         LawSearchRequest,
     )
@@ -179,7 +179,7 @@ async def test_keyword_search_does_not_mix_future_versions_or_treat_wildcards_as
 
 
 async def test_repeal_does_not_resurrect_earlier_version(law_setup):
-    from teoria.features.legal_information.search import (
+    from teoria.domains.legal_information.search import (
         LawSearchReader,
         LawSearchRequest,
     )
@@ -226,7 +226,7 @@ async def test_repeal_does_not_resurrect_earlier_version(law_setup):
 async def test_keyword_search_reports_missing_new_version_instead_of_falling_back(
     law_setup,
 ):
-    from teoria.features.legal_information.search import (
+    from teoria.domains.legal_information.search import (
         LawSearchReader,
         LawSearchRequest,
     )

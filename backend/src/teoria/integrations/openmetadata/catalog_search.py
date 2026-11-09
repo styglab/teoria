@@ -3,7 +3,7 @@
 import json
 from typing import Literal
 
-from teoria.features.metadata_management.catalog.models import MetadataPage
+from teoria.platform.data.metadata.catalog.models import MetadataPage
 from teoria.integrations.openmetadata.client import OpenMetadataError
 from teoria.integrations.openmetadata.mapper import entity
 

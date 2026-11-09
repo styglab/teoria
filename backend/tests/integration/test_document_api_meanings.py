@@ -10,21 +10,21 @@ import pytest
 import yaml
 
 from backend.tests.integration.test_goods_normalization_contract import example, uid
-from teoria.features.goods_normalization.comparison import compare_property_observations
-from teoria.features.goods_normalization.contracts import checksum
-from teoria.features.goods_normalization.profiles.compiler import compile_package
-from teoria.features.specification_processing.normalization.profile_application import apply_profile
-from teoria.features.semantic_modeling.registry.loader import RegistryLoader
-from teoria.features.semantic_modeling.registry.mapping_semantics import compile_mapping_semantics
-from teoria.features.semantic_modeling.registry.schema.mapping import MappingDefinition
-from teoria.features.semantic_modeling.registry.schema.common import FieldDefinition
-from teoria.features.semantic_modeling.registry.schema.runtime_contract import RuntimeContractProperty
-from teoria.features.semantic_modeling.registry.artifact import RuntimeBundleCompiler, RuntimeBundleLoader, RegistryArtifactError
-from teoria.features.semantic_modeling.registry.release import publish_registry
-from teoria.features.runtime.mapping.decoder import MappingDecoder
-from teoria.features.runtime.mapping.materializer import OntologyMaterializer
-from teoria.features.runtime.capability.contracts import CapabilityResult
-from teoria.features.runtime.capability.presentation import serialize_capability_result
+from teoria.domains.goods.normalization.comparison import compare_property_observations
+from teoria.domains.goods.normalization.contracts import checksum
+from teoria.domains.goods.normalization.profiles.compiler import compile_package
+from teoria.domains.goods.normalization.application.profile_application import apply_profile
+from teoria.platform.ontology.contracts.loader import RegistryLoader
+from teoria.platform.ontology.contracts.mapping_semantics import compile_mapping_semantics
+from teoria.platform.ontology.contracts.schema.mapping import MappingDefinition
+from teoria.platform.ontology.contracts.schema.common import FieldDefinition
+from teoria.platform.ontology.contracts.schema.runtime_contract import RuntimeContractProperty
+from teoria.platform.ontology.contracts.artifact import RuntimeBundleCompiler, RuntimeBundleLoader, RegistryArtifactError
+from teoria.platform.ontology.contracts.release import publish_registry
+from teoria.platform.ontology.runtime.mapping.decoder import MappingDecoder
+from teoria.platform.ontology.runtime.mapping.materializer import OntologyMaterializer
+from teoria.platform.ontology.runtime.capability.contracts import CapabilityResult
+from teoria.platform.ontology.runtime.capability.presentation import serialize_capability_result
 from teoria.integrations.provider_api.models import ExecutionResponse
 
 
@@ -119,8 +119,8 @@ def test_memory_document_and_api_share_meaning_units_and_traceable_observations(
 
 async def test_disabling_expression_registration_does_not_bypass_approved_meaning_links(tmp_path):
     import json
-    from teoria.features.specification_processing.models import SpecificationRun
-    from teoria.features.specification_processing.tasks import select_and_map_standard
+    from teoria.domains.goods.contracts import SpecificationRun
+    from teoria.domains.goods.workflows.tasks import select_and_map_standard
     _, profile, ontology, corpus, _, _ = memory_case()
     original = deepcopy(corpus)
     package = compile_package(profile, ontology, revision_id=UUID(int=900), approval_actor='fixture:reviewer')

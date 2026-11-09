@@ -6,8 +6,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 import pytest
 from prefect.testing.utilities import prefect_test_harness
-from teoria.features.specification_processing import flows,tasks
-from teoria.features.specification_processing.parsing import document_parser
+from teoria.domains.goods.data_processing import flows
+from teoria.domains.goods.data_processing import tasks
+from teoria.domains.goods.data_processing.parsing import document_parser
 
 pytestmark=pytest.mark.skipif(os.getenv('TEORIA_TEST_SPECIFICATION_EVALUATION')!='1',reason='opt-in isolated Prefect evaluation integration')
 
@@ -68,7 +69,7 @@ async def test_real_prefect_runs_shared_extraction_without_operational_db(tmp_pa
 
 
 async def test_worker_subprocess_keeps_failed_documents_and_cleans_owned_artifacts(tmp_path):
-    from teoria.features.specification_processing import evaluation
+    from teoria.domains.goods.data_processing.evaluation import runner as evaluation
     metadata=tmp_path/'notice.json';metadata.write_text(json.dumps({'code':'4321150102','notice':'fixture_notice'}))
     documents=[]
     for i in range(2):

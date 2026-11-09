@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from teoria.features.semantic_modeling.ontology.property_context_router import (
+from teoria.platform.ontology.bindings.property_context_router import (
     create_property_context_router,
 )
 from fastapi import FastAPI

@@ -1,0 +1,1 @@
+"""Ontology platform area."""

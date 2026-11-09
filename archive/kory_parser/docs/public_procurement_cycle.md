@@ -180,7 +180,7 @@ uv run --locked python -m evaluations.public_procurement.report \
 보고서 생성 후에는 불필요한 성공 표본과 중복 중간 출력을 자동 정리한다. 고정 회귀 원문,
 정답·문제 사례, hash·이력·보고서·소스 snapshot은 남긴다. 평가 중인 새 표본이나 적용을
 검토 중인 후보는 정리하지 않는다. 전체 중간 자료가 필요한 실행은 report의
-`--keep-intermediates`를 사용한다. 세부 보관 기준은 [Git 보관 범위](git_storage.md)를 따른다.
+`--keep-intermediates`를 사용한다. 세부 보관 기준은 [보관과 정리](usage.md#보관과-정리)를 따른다.
 정답 검사가 붙은 정상 사례도 전체 파싱 JSON은 삭제하며, 원문·정답·측정값을 보존한다.
 실패·실제 출력 변경·미해결 문제의 전체 출력은 검토 근거로 남긴다.
 

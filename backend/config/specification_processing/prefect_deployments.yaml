@@ -7,7 +7,7 @@ deployments:
 - name: specification-standard-management
   version: 1.2.0
   description: 품목분류·목표 규격서 수로 문서를 선정하고 사전을 관리하거나 고정 사전의 품질을 평가한다.
-  entrypoint: teoria.features.specification_processing.flows.standard_management_flow
+  entrypoint: teoria.domains.goods.workflows.specifications.standard_management_flow
   tags:
   - domain:public_procurement
   - feature:specification_processing
@@ -36,7 +36,7 @@ deployments:
 - name: specification-document-processing
   version: 1.0.0
   description: 명시적으로 입력한 규격서에 고정된 표준 버전을 적용하고 결과와 근거를 보존한다.
-  entrypoint: teoria.features.specification_processing.flows.document_processing_flow
+  entrypoint: teoria.domains.goods.workflows.specifications.document_processing_flow
   tags:
   - domain:public_procurement
   - feature:specification_processing
@@ -48,7 +48,7 @@ deployments:
 - name: specification-standard-workflow
   version: 1.0.0
   description: 추출·Platform 의미 판정·승인 상태 확인·고정 표준 저장·재적용을 연결하고 체크포인트에서 재개한다.
-  entrypoint: teoria.features.specification_processing.standard_workflow.standard_workflow_flow
+  entrypoint: teoria.domains.goods.workflows.standard_authoring.standard_workflow_flow
   tags:
   - domain:public_procurement
   - feature:specification_processing

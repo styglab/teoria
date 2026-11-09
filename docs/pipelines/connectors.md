@@ -34,10 +34,10 @@ pps_contract_api → pps_contract_ingestion
   `pipeline:<definition_id>`·`domain:<domain_id>` tag는 수집 계약과 소유권을 연결한다.
   공고의 면허·지역 API 보강 등 후속 처리는 입력 공고를 제공하는 수집 계약에 연결한다.
 - 조회 대상 같은 업무 입력은 `config/`, schedule·work pool·실행 파라미터는
-  `deploy/compose/prefect/`와 `deploy/k3s/prefect/`에 둔다. 공통 파라미터·스케줄은 기능별 `backend/config/`에서만 정의한다. 선언된 운영 값은 [Deployment 목록](deployments.md)에서 확인한다.
+  `deploy/compose/prefect/`와 `deploy/k3s/prefect/`에 둔다. 공통 파라미터·스케줄은 기능별 `backend/config/`에서만 정의한다. 선언된 값은 `teoria-pipelines deployment-docs`로 조회한다.
 - Flow는 Task 조합만 담당한다.
 - API·DB side effect는 Task, 순수 정규화는 일반 함수로 구현한다.
-- API→DB 변환은 `backend/src/teoria/features/<feature>/normalization/`,
+- API→DB 변환은 `backend/src/teoria/domains/<domain>/`,
   DB→Runtime Object 변환은 Platform Mapping에 둔다.
   Ontology Concept와 자산의 업무 의미 연결은 별도 Semantic Binding으로 관리한다.
 - Python Flow·Task·API client는 기능 패키지에 함께 둔다. `backend/contracts/ingestion/connectors/`는
@@ -91,6 +91,5 @@ uv run --locked --project backend teoria-pipelines verify connector \
 
 ## 다음 작업
 
-- Flow·Task 작성은 [파이프라인 작성 안내](development.md)를 따른다. 실제 기능의 코드 배치는 [개발 안내](development.md)를 따른다.
+- Flow·Task 작성은 [파이프라인 작성 안내](../development.md)를 따른다. 실제 기능의 코드 배치는 [개발 안내](../development.md)를 따른다.
 - 스케줄 등록·재시도는 [Prefect 운영](prefect.md)을 따른다.
-- 개찰 보강의 완료 판정은 [공공조달 수집](../../archive/documentation/pipelines/domains/public_procurement.md)을 따른다.

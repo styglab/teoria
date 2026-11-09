@@ -1,7 +1,7 @@
 # Data DB와 migration
 
 Data DB migration은 `backend/migrations/data/`가 기준이다. 기능별 저장 책임은 소유 feature에,
-공통 실행·원본·checkpoint 기반은 `integrations/data_operations/`에 둔다.
+공통 실행·원본·checkpoint 기반은 `platform/data/operations/`에 둔다.
 Runtime은 게시된 Database Source 계약으로 정규 relation을 읽으며 migration을 실행하지 않는다.
 
 - `ingestion`: 실행 감사, 원본 Provider 응답, Checkpoint
@@ -44,8 +44,7 @@ uv run --locked --project backend \
 
 `101_goods_notice_evidence.sql`은 다음 네 테이블을 추가한다. 2026-10-28 운영 Data DB에
 물품 공고 758,443건·첨부 참조 1,848,691건을 복원했다.
-[운영 복원 기록](../../archive/documentation/verification/goods_notice_production_restore_2026_10_28.md)과
-[격리 검증 기록](../../archive/documentation/verification/goods_notice_restore_validation_2026_10_28.md)은 구분한다.
+정적 검사와 실제 DB에서의 검증 결과는 구분한다.
 
 | 테이블 | 저장 책임 |
 |---|---|
@@ -62,7 +61,7 @@ uv run --locked --project backend \
 불변 버전 본문을 각각 저장한다. 이후 동일 해시의 재관측은 버전을 재사용한다.
 백업 압축 크기만으로 DB 용량을 추산하지 않고 본문·TOAST·인덱스를 함께 고려한다.
 
-복원 코드는 `features/goods_notice_collection/backup_restore.py`, 프로세스 진입점은
+복원 코드는 `domains/goods/notice_collection/backup_restore.py`, 프로세스 진입점은
 `entrypoints/goods_notice_restore.py`다. 원본 백업에서 물품만 선별·별도 검증한 뒤
 manifest에 백업 식별자·원본/선별 파일 해시·공고/첨부 건수를 기록한다.
 연결 문자열은 환경변수로만 전달한다.
@@ -134,5 +133,5 @@ Prefect가 소유하며 Data DB 정리로 Prefect DB를 직접 삭제하지 않�
 업무 DB·역할·볼륨 경계를 유지하며 이번 ingestion 정리에서 컨테이너를 통합하지 않는다.
 
 migration은 적용된 파일을 수정하지 않고 새 순번으로 추가한다.
-현재 처리·저장 계약은 [규격서 파이프라인](../procurement_specification_processing/pipeline.md),
+현재 처리·저장 계약은 [규격서 파이프라인](../domains/goods/specifications/pipeline.md),
 실행·실패 대응은 [Prefect](prefect.md)를 따른다.

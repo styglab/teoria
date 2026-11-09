@@ -4,7 +4,7 @@ from typing import Any
 import math
 import asyncio
 
-from teoria.features.metadata_management.catalog.models import MetadataPage, MetadataStatus, TableDetail, TableSampleData, TableProfileData
+from teoria.platform.data.metadata.catalog.models import MetadataPage, MetadataStatus, TableDetail, TableSampleData, TableProfileData
 from teoria.integrations.openmetadata.client import OpenMetadataClient, OpenMetadataError
 from teoria.integrations.openmetadata.mapper import entity_reference, page, table_detail
 

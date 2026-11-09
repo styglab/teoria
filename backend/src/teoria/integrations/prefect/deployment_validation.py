@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import Any
 
-from teoria.integrations.data_operations.diagnostics import Diagnostic
-from teoria.integrations.data_operations.loader import PipelineCatalog
+from teoria.integrations.provider_api.diagnostics import Diagnostic
+from teoria.platform.data.operations.loader import PipelineCatalog
 
 
 def validate_deployment_contracts(
@@ -32,8 +32,8 @@ def validate_deployment_contracts(
         names.add(name)
         module = deployment["entrypoint"].rsplit(".", 1)[0]
         if module in {
-            "teoria.features.specification_processing.flows",
-            "teoria.features.specification_processing.standard_workflow",
+            "teoria.domains.goods.workflows.specifications",
+            "teoria.domains.goods.workflows.standard_authoring",
         }:
             if (
                 deployment["entrypoint"].rsplit(".", 1)[-1]
@@ -53,14 +53,14 @@ def validate_deployment_contracts(
                     )
                 )
             continue
-        if module == "teoria.features.model_operations.flows":
+        if module == "teoria.examples.customer_churn.flows":
             if deployment["entrypoint"].rsplit(".", 1)[-1] not in {
                 "seed_demo_customers", "train_demo_customer_churn", "deploy_demo_customer_churn", "customer_churn_pipeline"
             } or "feature:model_operations" not in deployment.get("tags", []) or deployment.get("schedules"):
                 diagnostics.append(Diagnostic("invalid_model_operations_deployment",
                     f"'{name}' must be an explicit manual model operations flow", path))
             continue
-        if module.startswith("teoria.features.metadata_management.ingestion."):
+        if module.startswith("teoria.platform.data.metadata.ingestion."):
             continue
         tags = deployment.get("tags", [])
         ids = [

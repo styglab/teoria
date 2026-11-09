@@ -58,22 +58,22 @@ class DocumentationChecks(unittest.TestCase):
         self.write('docs/index.md', '[guide][missing]\n')
         self.assertTrue(any('undefined link reference' in error for error in validate(self.root)[0]))
 
-    def test_archive_links_are_checked_from_current_navigation(self):
-        self.write('docs/index.md', '[archive](../archive/documentation/index.md)\n')
-        self.write('archive/documentation/index.md', '[record](record.md)\n')
-        self.write('archive/documentation/record.md', '[current](../../docs/index.md)\n')
+    def test_parser_links_are_checked_from_current_navigation(self):
+        self.write('docs/index.md', '[archive](../archive/kory_parser/docs/index.md)\n')
+        self.write('archive/kory_parser/docs/index.md', '[record](record.md)\n')
+        self.write('archive/kory_parser/docs/record.md', '[current](../../../docs/index.md)\n')
         self.assertEqual(validate(self.root)[0], [])
-        self.write('archive/documentation/record.md', '[missing](removed.md)\n')
+        self.write('archive/kory_parser/docs/record.md', '[missing](removed.md)\n')
         self.assertIn(
-            'archive/documentation/record.md:1: missing target: removed.md',
+            'archive/kory_parser/docs/record.md:1: missing target: removed.md',
             validate(self.root)[0],
         )
 
-    def test_unlinked_archived_document_is_reported(self):
+    def test_unlinked_parser_document_is_reported(self):
         self.write('docs/index.md', '# Docs\n')
-        self.write('archive/documentation/orphan.md', '# Historical record\n')
+        self.write('archive/kory_parser/docs/orphan.md', '# Historical record\n')
         self.assertIn(
-            'archive/documentation/orphan.md: unreachable from docs/index.md',
+            'archive/kory_parser/docs/orphan.md: unreachable from docs/index.md',
             validate(self.root)[0],
         )
 

@@ -5,9 +5,9 @@ from uuid import uuid4
 
 import psycopg
 import pytest
-from teoria.features.specification_processing.models import SpecificationRun, RunResult
-from teoria.features.specification_processing.storage.run_repository import SpecificationRepository
-from teoria.features.specification_processing.workspace_router import ProcessingWorkspaceRepository
+from teoria.domains.goods.contracts import SpecificationRun, RunResult
+from teoria.domains.goods.data_processing.storage.run_repository import SpecificationRepository
+from teoria.domains.goods.data_processing.queries import ProcessingQueries
 
 URL = os.getenv('TEORIA_TEST_PIPELINE_DATABASE_URL')
 pytestmark = pytest.mark.skipif(not URL, reason='isolated Data DB required')
@@ -23,7 +23,7 @@ async def test_verified_original_hashes_and_operation_counts(tmp_path):
             await conn.execute(Path('backend/migrations/data/104_specification_document_catalog.sql').read_text())
     run_id = 'workspace_' + uuid4().hex
     repository = SpecificationRepository(URL)
-    workspace = ProcessingWorkspaceRepository(URL)
+    workspace = ProcessingQueries(URL)
     request = SpecificationRun(run_id=run_id, mode='standard_management', classification_code='4321150102',
         artifact_root=tmp_path.as_uri(), documents=[{'document_id': 'doc_1', 'filename': 'original.pdf',
             'source_uri': (tmp_path/'original.pdf').as_uri()}])

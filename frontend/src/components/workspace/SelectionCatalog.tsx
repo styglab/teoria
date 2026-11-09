@@ -1,7 +1,7 @@
-import "./selection_catalog.css";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { ReactNode } from "react";
+import "./selection_catalog.css";
 import { CatalogLayout, SearchField } from "./WorkspaceLayout";
 
 export function SelectionCatalog({

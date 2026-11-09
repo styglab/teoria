@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.runtime.context.admin_router import create_context_router
+from teoria.platform.access_control.auth import AdminAuthorizer
+from teoria.platform.ontology.runtime.context.admin_router import create_context_router
 from teoria.settings import Settings
-from teoria.features.access_control.policy import PolicyDecision, PolicyDeniedError
+from teoria.platform.access_control.policy import PolicyDecision, PolicyDeniedError
 
 
 class ContextEngineStub:

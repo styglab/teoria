@@ -8,22 +8,23 @@ import pytest
 from fastapi import FastAPI
 
 from teoria.settings import Settings
-from teoria.features.access_control.auth import AdminAuthorizer
+from teoria.platform.access_control.auth import AdminAuthorizer
 from teoria.integrations.application_database import apply_migrations
-from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
-from teoria.features.semantic_modeling.goods_dictionary.ontology_service import OntologyDictionaryService
-from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import approved_dictionary_snapshot
-from teoria.features.semantic_modeling.goods_dictionary.admin_router import create_goods_dictionary_router
-from teoria.features.semantic_modeling.goods_dictionary.service import GoodsDictionaryService
-from teoria.features.specification_processing.application_standards_service import ApplicationStandardsService
-from teoria.features.specification_processing.application_standards_repository import ApplicationStandardsRepository
-from teoria.features.specification_processing.application_standards_router import create_application_standards_router
-from teoria.features.specification_processing.workspace_router import ProcessingWorkspaceRepository, verified_artifact
-from teoria.features.specification_processing.storage.run_repository import SpecificationRepository
-from teoria.features.specification_processing.storage.artifact_store import artifact_store
-from teoria.features.specification_processing.models import SpecificationRun, StandardArtifact, RunResult
-from teoria.features.specification_processing import application_standard_approval as automatic
-import teoria.features.specification_processing.authoring_client as client_module
+from teoria.platform.ontology.authoring.service import OntologyAuthoringService
+from teoria.domains.goods.expression_links.expression_link_service import ExpressionLinkService
+from teoria.domains.goods.expression_links.snapshot_contracts import approved_dictionary_snapshot
+from teoria.domains.goods.expression_links.admin_router import create_goods_dictionary_router
+from teoria.domains.goods.expression_links.registration_service import ExpressionRegistrationService
+from teoria.domains.goods.normalization.processing_criteria_service import ApplicationStandardsService
+from teoria.domains.goods.normalization.processing_criteria_repository import ApplicationStandardsRepository
+from teoria.domains.goods.normalization.processing_criteria_router import create_application_standards_router
+from teoria.domains.goods.data_processing.queries import ProcessingQueries
+from teoria.domains.goods.data_processing.storage.artifact_reader import verified_artifact
+from teoria.domains.goods.data_processing.storage.run_repository import SpecificationRepository
+from teoria.domains.goods.data_processing.storage.artifact_store import artifact_store
+from teoria.domains.goods.contracts import SpecificationRun, StandardArtifact, RunResult
+from teoria.domains.goods.workflows import processing_criteria_approval as automatic
+import teoria.domains.goods.authoring_client as client_module
 
 URL=os.getenv('TEORIA_TEST_APP_DATABASE_URL')
 DATA_URL=os.getenv('TEORIA_TEST_PIPELINE_DATABASE_URL')
@@ -38,16 +39,16 @@ async def test_automatic_approval_is_idempotent_and_records_the_verified_princip
         if exists[0] is None:
             for prefix in ('090','091','104'):
                 await conn.execute(next(Path('backend/migrations/data').glob(prefix+'*.sql')).read_text())
-    meanings=OntologyDictionaryService(URL,ontology_authoring=OntologyAuthoringService(URL))
+    meanings=ExpressionLinkService(URL,ontology_authoring=OntologyAuthoringService(URL))
     snapshot=await meanings.snapshot()
-    processing=ProcessingWorkspaceRepository(DATA_URL)
+    processing=ProcessingQueries(DATA_URL)
     releases=ApplicationStandardsRepository(URL)
     async def read(reference):return await verified_artifact(reference,tmp_path)
     service=ApplicationStandardsService(releases,processing,meanings,read,lambda:artifact_store(tmp_path.as_uri()))
     app=FastAPI()
     auth=AdminAuthorizer(Settings(admin_auth_mode='bearer',admin_api_token='fixture-token',admin_api_actor='verified:automatic-worker',admin_api_roles='ontology_owner'))
     app.include_router(create_application_standards_router(service,auth))
-    app.include_router(create_goods_dictionary_router(GoodsDictionaryService(URL),auth,meanings))
+    app.include_router(create_goods_dictionary_router(ExpressionRegistrationService(URL),auth,meanings))
     standard=StandardArtifact(version='fixture_source_literal',classification_code='4321150102',
         definitions=[{'id':'source_literal_test','label':'원문 값'}],bindings=[{
             'target_types':['equipment:fixture'],'property_key':'length','unit_context':'mm',

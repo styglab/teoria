@@ -7,7 +7,7 @@ from teoria.entrypoints.composition.admin import (
     create_admin_services,
     install_admin_routers,
 )
-from teoria.features.semantic_modeling.registry.loader import RegistryLoader
+from teoria.platform.ontology.contracts.loader import RegistryLoader
 from teoria.settings import Settings
 
 REGISTRIES = Path("backend/tests/fixtures/registry")

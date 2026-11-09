@@ -1,143 +1,117 @@
 # 저장소 구조와 소유권
 
-변경할 기능의 소유 위치를 먼저 정한다. Teoria는 AI-Native Metadata & Ontology Platform이며
-공공조달은 첫 업무 영역이다. 조달 규칙을 실제 재사용 근거 없이 플랫폼 공통 계층으로 옮기지 않는다.
+Teoria는 플랫폼·업무 도메인·앱으로 코드를 나눈다.
+변경 전에 아래 표에서 소유자를 정한다. FormatID는 플랫폼 전체가 아닌 업무 앱이다.
+플랫폼은 데이터·Ontology·향후 AI 영역과 별도 MLOps 영역으로 구분한다.
+`ai/`는 예약 폴더이며 AIP가 구현되었다는 의미가 아니다.
 
-## 기준 위치
+## 실행 코드
 
-| 위치 | 기준으로 관리하는 내용 |
-|---|---|
-| `backend/src/teoria/features/` | 기능별 실행 코드·타입·서비스·저장소·HTTP 라우터·Flow |
-| `backend/src/teoria/integrations/` | 외부 연결과 실제 재사용 기반 |
-| `backend/src/teoria/entrypoints/` | 프로세스 시작·FastAPI lifespan·객체 조립 |
-| `backend/contracts/runtime/` | Runtime Source·Object·Mapping·Capability 계약 |
-| `backend/contracts/ingestion/` | Pipeline Connector·수집 계약 |
-| `backend/config/` | 운영 입력 |
-| `backend/authoring/` | Ontology 작성 입력·문서 그래프 예시·이관 자료 |
-| `backend/migrations/application/` | Ontology·Binding·사전·승인 이력의 DB 변경 |
-| `backend/migrations/data/` | 수집·문서 처리 상태와 참조의 DB 변경 |
-| `backend/tests/` | 백엔드 기능·통합·구조 검사 |
-| `frontend/src/app/` | 앱 조립·라우팅·탐색 |
-| `frontend/src/features/` | 업무 화면 |
-| `frontend/src/api/` | HTTP 계약 |
-| `frontend/src/components/`, `frontend/src/lib/` | 프런트엔드에서 실제 공유하는 구성 |
-| `backend/config/<feature>/prefect_deployments.yaml` | 공통 Flow 등록 정보·기본 파라미터·기본 schedule |
-| `deploy/compose/prefect/`, `deploy/k3s/prefect/` | 환경별 Prefect pool·queue·실행 Job 정책 |
-| `deploy/compose/`, `deploy/k3s/` | 환경별 배포 설정 |
-| `docs/` | 현재 안내·문서용 예제·검증 기록 |
-| `tests/documentation/` | 문서 링크·목차 검증 코드 |
-| `archive/` | 비활성 업무 코드와 과거 문서 |
-
-Python 프로젝트와 의존성 기준은 `backend/pyproject.toml`·`backend/uv.lock` 한곳이다.
-별도 설치형 packages나 common/shared/utils 묶음을 미래 재사용만을 이유로 추가하지 않는다.
-
-## 기능별 소유권
-
-아래 위치는 `backend/src/teoria/` 기준이다.
-
-| 위치 | 책임 |
-|---|---|
-| `features/semantic_modeling/ontology/` | 지속 가능한 업무 개념·Draft·검토·게시 |
-| `features/semantic_modeling/ontology/publication_contracts.py` | 소스 독립 게시 참조·본문 검증·Stable Concept projection의 공개 값 계약 |
-| `features/semantic_modeling/ontology/review_contracts.py` | 작성 버전의 고정 검토 문맥·개념 소유 관계 값 계약; 게시·Runtime 계약과 구분 |
-| `features/semantic_modeling/binding/` | Stable Concept와 외부 의미 대상의 연결 |
-| `features/semantic_modeling/registry/` | 실행 계약 검증·고정 bundle·Mapping codec |
-| `features/semantic_modeling/goods_dictionary/` | 원문 표현·게시 Ontology 연결·과거 정의 이력·판정·감사 |
-| `features/specification_processing/` | 규격서 파싱·추출·검증·표준 적용·평가·Flow·입력/결과 HTTP |
-| `features/goods_normalization/` | 프로파일 후보·의미 판정·작성·승인·고정 계약 |
-| `features/goods_notice_collection/` | 물품 공고 백업 복원·원문 버전·관측·첨부 참조; 자동 수집 배포는 비활성 |
-| `features/metadata_management/` | 자산 맥락·제안/검토/적용·진단·metadata 수집 |
-| `features/legal_information/` | 법령 수집·구조화·조회 |
-| `features/runtime/` | 게시된 의미와 실행 계약의 조회·실행 |
-| `features/workflow_management/` | 허용된 Prefect 배포·스케줄·실행·취소 관리 |
-| `features/model_operations/` | 선택형 합성 데이터·학습·평가·등록·데모 배포 |
-| `features/access_control/` | 인증 principal·역할·정책 |
-| `integrations/provider_api/` | Provider wire·요청·응답·HTTP 실행 |
-| `integrations/codex/` | 제한된 JSON 추론 subprocess·시간 제한·취소 |
-| `integrations/prefect/` | 배포 등록·pool·queue 정책 |
-| `integrations/data_operations/` | 수집 실행·raw·checkpoint·Data DB 연결 |
-| `integrations/application_database/` | Application DB 연결·migration |
-| `integrations/openmetadata/` | OpenMetadata 연결 |
-| `integrations/mlflow/`, `integrations/model_serving/` | 모델 저장소·제한된 서빙 배포 연결 |
-| `integrations/runtime_http/` | Runtime HTTP client |
-| `entrypoints/composition/` | 기능 객체와 외부 client 조립 |
-| `entrypoints/mcp/` | MCP 프로토콜 진입점 |
-
-## 의존성과 데이터 권위
-
-기능의 실행 코드·타입·저장소는 같은 소유 기능에 둔다. 기능과 integration은 entrypoint를 역으로 import하지 않는다.
-기능 간 의존성은 순환하지 않아야 하며 공개 계약을 사용한다. 내부 저장소를 다른 기능이 직접 조작하지 않는다.
-
-- 규격서 처리는 `goods_normalization/contracts/`, Ontology의 공개 게시 값 계약과 인증된 Admin HTTP API를 사용한다. 사전은 표현 연결을 제공하며 게시 정의 조회의 필수 관문이 아니다.
-- 규격서의 소유 대상·scope 재해석은 `normalization/meaning_review.py`에서 원문과 분리한 제안 산출물로 보관한다. Draft 검토 문맥은 공개 값 계약과 Admin HTTP로 읽고 승인·Runtime·프로파일 적용의 근거로 사용하지 않는다.
-- Pipeline의 의미 작성은 인증된 Admin HTTP API를 호출한다. Capability·Mapping Runtime을 직접 호출하지 않는다.
-- MCP는 Runtime API만 사용한다. 직접 DB 접근·embedded 실행을 제공하지 않는다.
-- Provider·Codex·실행 기반은 기능 구현을 역으로 import하지 않는다.
-- OpenMetadata는 자산·기술·거버넌스 metadata의 기준이다. entity 본문을 Teoria DB에 복제하지 않는다.
-- Application DB는 업무 의미·제안·승인 이력, Data DB는 실행·참조, 파일/S3는 문서별 본문을 소유한다.
-- Runtime은 checksum을 검증한 게시 artifact를 적재한다. 운영에서 작성 DB나 원본 Registry를 직접 읽지 않는다.
-- API·DB·파일의 Data 관찰과 게시 개념 연결은 별도 책임이다. 원본 대상 식별자와 Stable Concept ID를 혼용하지 않으며, Mapping·사전·프로파일에 새 업무 정의 원장을 만들지 않는다.
-
-상세 승인·게시 정책은 [아키텍처](overview.md)와 [Ontology](../platform/ontology.md),
-Data DB 보존·정리는 [DB 안내](../pipelines/database.md)를 따른다.
-
-## 코드와 실행 환경
-
-API·MCP·각 Worker는 역할별 이미지·의존성·권한을 유지한다.
-소스 폴더 통합이 프로세스나 credential 통합을 뜻하지 않는다.
-파서는 별도 Python 환경에서 실행한다. 법령 Worker에는 문서 파서·Codex를 설치하지 않는다.
-OpenMetadata ingestion dependency는 전용 일회성 Job에 두며 일반 Prefect Worker와 분리한다.
-
-FastAPI 앱 생성·lifespan은 entrypoint, 기능별 HTTP는 소유 기능의 `*_router.py`에 둔다.
-HTTP·DB는 native async로 연결하고, 생성한 client는 소유 lifespan에서 재사용·종료한다.
-주입받은 client는 호출자가 소유한다. 승인·transaction·checkpoint 순서는 유지한다.
-
-```bash
-uv sync --project backend --locked --all-extras --all-groups
-uv run --project backend --locked --all-extras --group orchestration pytest backend/tests
-uv run --project backend --locked --extra api teoria validate backend/contracts/runtime
-uv run --project backend --locked teoria-pipelines validate backend
+```text
+backend/src/teoria/
+  platform/
+    data/
+      operations/          수집 계약·실행·원본·checkpoint
+      metadata/            OpenMetadata·진단·검토·적용
+    ontology/
+      authoring/           업무 개념 작성·승인·게시
+      bindings/            개념과 자산·용어·API 연결
+      contracts/           Source·Mapping·Capability 검증·artifact
+      runtime/             게시 계약 실행·Context
+    ai/                    향후 AIP 예약 영역; README만 있고 미구현
+    mlops/                 공통 모델 목록·버전·운영 API
+    access_control/        인증·권한·정책
+    workflow_management/   Prefect 실행·스케줄 관리
+  domains/
+    goods/
+      contracts.py         물품 처리 입력·산출물 값 계약
+      data_processing/     파싱·추출·저장·문서 목록·평가
+        tasks.py           원본 준비 → 파싱 → 추출 → 검증·저장
+        flows.py           추출 실행 순서
+      expression_links/    원문 표현 등록·게시 개념 연결
+      normalization/       후보·프로파일·검토·고정 표준 적용
+        meaning_proposals/ 의미 후보와 게시 정의 비교
+        application/       고정 프로파일·규칙 적용
+        legacy_dictionary/ 과거 v1 결과 재현
+      workflows/           추출·의미 적용을 연결하는 실행·품질·승인
+      notice_collection/   명시적 규격서 처리 입력 준비
+    legal_information/     법령 수집·검색
+  apps/
+    formatid/              업무 HTTP API·입력 권한·결과 조합
+  examples/customer_churn/ 합성 데이터·학습·평가·배포·추론 예제
+  integrations/            Provider·Codex·OpenMetadata·MLflow·Prefect·DB 연결
+  entrypoints/             API·MCP·CLI 프로세스 진입점
+    composition/           플랫폼·도메인·앱 객체 조립
 ```
 
-## 변경과 검증
+프런트엔드의 `shell/`은 전체 플랫폼 화면 틀이고 `apps/`는 FormatID 같은 업무 앱이다.
+Shell은 접근 경계와 화면 틀을 조립한다. 경로는 `shell/routes.tsx`, 메뉴 경로는 `shell/navigation.ts`가 관리한다.
+업무 API·응답 타입은 소유 화면 옆 `api.ts`에 둔다. 서버 조회는 TanStack Query로 관리한다.
 
-| 변경 | 함께 확인할 것 |
-|---|---|
-| 코드 이동·구조 변경 | import·진입점·테스트·배포·문서의 위치 일치 |
-| Source/Connector | 원문 문서·검증 사례·정적/build/live 계약 검사 |
-| Flow·Data DB migration | 기능 테스트와 Compose config |
-| Application DB migration | 새 순번 SQL·백엔드 검사·Compose config |
-| MCP | Runtime HTTP 통합 검사 |
-| 문서 이동·통합·삭제 | 링크·heading·목차와 과거 자료의 연결 |
-
-```bash
-python3 -m tests.documentation.check_docs
-uv run --project backend --locked --all-extras --group orchestration pytest tests/documentation
+```text
+frontend/src/
+  shell/                   플랫폼 화면 틀·라우팅·메뉴·홈
+  platform/
+    data/metadata/         자산·진단·제안 화면
+    ontology/              authoring·bindings·runtime 화면
+    ai/                    향후 AIP 예약 영역; 실행 화면 없음
+    mlops/                 별도 모델 학습·등록·서빙 화면
+    access_control/        인증·연결 상태
+    workflow_management/   공통 실행·스케줄 화면
+  domains/goods/           물품 표현 연결 화면
+  apps/formatid/           규격서 처리·결과 분석 화면
+  examples/customer_churn/ 고객 이탈 추론 테스트 폼
+  api/                     HTTP 전송·인증 오류·Query 공통 정책
+  components/, lib/        실제 공유하는 UI와 기반 코드
 ```
 
-현재 사용·설계·운영·개발 안내는 주제별 기준 문서 하나를 갱신하고 같은 설명을 여러 페이지에 복제하지 않는다.
-일반 변경의 테스트 결과마다 새 검증 문서를 만들지 않는다. 장기 추적이 필요한 배포·이관·품질 관측만
-입력·버전·결과·한계와 함께 기록하고, 지난 기록은 `archive/documentation/verification/`에 보존한다.
+## 어디를 수정하나
 
-테스트는 소유 프로젝트에 둔다. 루트 tests에는 저장소 공통·프로젝트 간 계약 검사를 둔다.
-적용된 SQL·게시 artifact·이관 이력은 수정하지 않는다. 실제 실행 전에는 템플릿 검증을 배포 성공으로 기록하지 않는다.
+| 변경 | 소유 위치 |
+|---|---|
+| 공통 수집 실행·checkpoint | `platform/data/operations/` |
+| 물품 문서 파싱·원문 근거·추출 결과 | `domains/goods/data_processing/` |
+| 물품 의미 후보·프로파일·표준 적용 | `domains/goods/normalization/` |
+| 표현과 게시 개념의 연결 | `domains/goods/expression_links/` |
+| 개념·속성·관계의 게시 정책 | `platform/ontology/authoring/` |
+| 용어·자산·API·Capability의 의미 연결 | `platform/ontology/bindings/` |
+| FormatID API·결과 조합 | `apps/formatid/` |
+| 합성 고객 데이터·학습·이탈 추론 | `examples/customer_churn/` |
+| 서비스 연결·주입·lifespan | `entrypoints/composition/` |
 
-Teoria 소유 이름은 snake_case, Python 클래스·React 컴포넌트는 PascalCase,
-환경변수는 UPPER_SNAKE_CASE, CLI·Docker·배포 리소스는 kebab-case를 사용한다.
-기존 docs 경로는 이름만 바꾸지 않는다. 이관 시 내부 링크와 보관 위치를 함께 정리한다.
+## 의존성
 
-## 백엔드 리소스의 용도
+`apps → domains → platform` 방향을 따른다. 외부 연결은 `integrations`, 객체 조립은 `entrypoints`가 맡는다.
+플랫폼은 도메인·앱·예제를 역으로 import하지 않는다.
+예제는 플랫폼·외부 연결을 소비하고 API와 테스트 폼 연결은 composition·shell이 주입한다. 실행 코드가 `entrypoints`를 import하지 않는다.
+기능 간 의존성은 순환하지 않는다. 이 규칙은 `backend/tests/architecture/`에서 검사한다.
 
-Source는 Runtime 직접 호출, Connector는 Pipeline 전용 호출 계약이다.
-Provider reference의 registry 경로는 backend 기준이며 원본 wire 이름은 보존한다.
-Runtime Mapping과 Semantic Binding을 혼용하지 않는다. 이전 codec은 호환 영역에만 두며 은퇴 업무를 재활성화하지 않는다.
+Workflow 플랫폼은 실행할 업무 목록이나 업무별 입력 규칙을 소유하지 않는다.
+허용 목록은 `entrypoints/composition/workflow_catalog.py`에서 선택하고 실행 입력 정책과 함께 주입한다.
 
-Flow·Task는 소유 기능에 둔다. 공통 등록 정보·기본 파라미터·스케줄은 backend/config/<feature>/prefect_deployments.yaml,
-환경별 pool·queue·Job 정책은 deploy/compose/prefect와 deploy/k3s/prefect에 둔다.
-Compose는 로컬 배포, K3s와 GitHub 자동 배포는 deploy/k3s와 .github/workflows/deploy_k3s.yaml이 맡는다.
-프런트엔드 빌드는 frontend/Dockerfile이 소유한다.
+다른 모듈은 공개 값 계약과 서비스 인터페이스를 사용한다. 앱에 SQL을 두지 않는다.
+Worker는 Ontology 저장소를 직접 변경하지 않고 인증된 Admin HTTP API를 사용한다.
+`common`·`shared`·`utils` 폴더나 이름만 바꾼 이전 namespace의 forwarding 파일은 만들지 않는다.
+클래스·함수마다 파일을 나누지 않는다. 같은 책임은 함께 두고 정책 없는 생성·전달 계층을 추가하지 않는다.
+수집 공통 기반은 `platform/data/operations/`의 `schema.py`·`execution.py`·`checkpoints.py`·`persistence.py`에서 읽는다.
+별도 설치 패키지는 둘 이상의 독립 프로젝트가 실제 소비할 때만 만든다.
 
-원본·운영 산출물·백업은 문서 정리 대상이 아니다. 루트 backups는 로컬 복구 자료이며,
-정기 백업은 deploy/compose/postgres/backup.sh와 TEORIA_BACKUP_ROOT로 관리한다.
-비활성 기업·조달 업무 코드는 archive/procurement_services, 과거 설명은
-[문서 보관함](../../archive/documentation/index.md)에 둔다. 현재 안내와 검증 이력은 구분한다.
+## 코드 밖의 기준 위치
+
+| 위치 | 내용 |
+|---|---|
+| `backend/contracts/runtime/` | Runtime Source·Object·Mapping·Capability 작성 계약 |
+| `backend/contracts/ingestion/` | Pipeline Connector 계약 |
+| `backend/config/` | 운영 입력·공통 Prefect 등록과 기본 파라미터 |
+| `backend/authoring/` | 작성 입력·Ontology 이관 |
+| `backend/migrations/application/`, `backend/migrations/data/` | 저장소별 순번 migration |
+| `deploy/compose/`, `deploy/k3s/` | 환경별 배포·pool·queue·Job 정책 |
+| `backend/tests/platform/`, `domains/`, `apps/`, `examples/` | 소유 코드에 대응하는 테스트 |
+| `backend/tests/integration/` | 백엔드 모듈 간 연동·실환경 검사 |
+| `tests/documentation/` | 문서 링크·목차 검사 |
+| `archive/kory_parser/` | 별도 설치·실행하는 문서 파서와 자체 검증 |
+
+Python 의존성과 잠금은 `backend/pyproject.toml`, `backend/uv.lock` 한곳에서 관리한다.
+역할별 이미지·권한은 유지한다. 기존 URL·CLI·산출물 ID·적용 migration·게시 artifact는 구조 변경으로 수정하지 않는다.
+
+[아키텍처](overview.md) · [개발 안내](../development.md)

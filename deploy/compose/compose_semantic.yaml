@@ -410,6 +410,6 @@ services:
     command:
     - python
     - -c
-    - from teoria.features.semantic_modeling.registry.artifact import RegistryArtifactStore; b=RegistryArtifactStore('/app/runtime_artifacts').load_active(); print('Verified artifact:', b.manifest.version)
+    - from teoria.platform.ontology.contracts.artifact import RegistryArtifactStore; b=RegistryArtifactStore('/app/runtime_artifacts').load_active(); print('Verified artifact:', b.manifest.version)
     volumes:
     - runtime-artifacts:/app/runtime_artifacts:ro

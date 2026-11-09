@@ -9,16 +9,16 @@ from teoria.entrypoints.composition.admin import (
     create_admin_services,
     install_admin_routers,
 )
-from teoria.features.access_control.auth import AdminPrincipal
-from teoria.features.semantic_modeling.binding.repository import BindingRepository
+from teoria.platform.access_control.auth import AdminPrincipal
+from teoria.platform.ontology.bindings.repository import BindingRepository
 from teoria.settings import Settings
-from teoria.features.runtime.context import ContextEngine
-from teoria.features.metadata_management.intelligence.suggestions.repository import (
+from teoria.platform.ontology.runtime.context import ContextEngine
+from teoria.platform.data.metadata.intelligence.suggestions.repository import (
     SuggestionRepository,
 )
 from teoria.integrations.openmetadata import OpenMetadataService
-from teoria.features.access_control.policy import PolicyEvaluator
-from teoria.features.semantic_modeling.registry.loader import RegistryCatalog
+from teoria.platform.access_control.policy import PolicyEvaluator
+from teoria.platform.ontology.contracts.loader import RegistryCatalog
 
 
 def create_admin_app(

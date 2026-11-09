@@ -6,11 +6,11 @@ from pathlib import Path
 from uuid import UUID, uuid4
 import pytest
 from teoria.integrations.application_database import apply_migrations
-from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
-from teoria.features.goods_normalization.profiles.service import (
+from teoria.platform.ontology.authoring.service import OntologyAuthoringService
+from teoria.domains.goods.normalization.profiles.service import (
     NormalizationProfileService,
 )
-from teoria.features.goods_normalization.contracts import NormalizationProfile
+from teoria.domains.goods.normalization.contracts import NormalizationProfile
 
 DATABASE_URL = os.environ.get("TEORIA_TEST_APP_DATABASE_URL")
 pytestmark = pytest.mark.skipif(
@@ -138,12 +138,12 @@ async def test_real_profile_approval_export_and_immutable_history(monkeypatch):
         "approve",
     ]
     # Candidate ingestion reuses the same persisted profile lifecycle and audit table.
-    from teoria.features.goods_normalization.contracts import checksum
-    from teoria.features.goods_normalization.contracts.candidates import (
+    from teoria.domains.goods.normalization.contracts import checksum
+    from teoria.domains.goods.normalization.contracts.candidates import (
         CandidateBundle,
         CandidateContext,
     )
-    from teoria.features.goods_normalization.candidates.proposals import (
+    from teoria.domains.goods.normalization.candidates.proposals import (
         CandidateSelection,
     )
 
@@ -202,15 +202,15 @@ async def test_real_profile_approval_export_and_immutable_history(monkeypatch):
 
 
 async def test_legacy_goods_extensions_and_template_use_the_existing_ontology_workflow():
-    from teoria.features.semantic_modeling.ontology.blueprint import (
+    from teoria.platform.ontology.authoring.blueprint import (
         OntologyBlueprint,
         apply_ontology_blueprint,
     )
-    from teoria.features.semantic_modeling.ontology.enrichment import (
+    from teoria.platform.ontology.authoring.enrichment import (
         OntologyEnrichmentManifest,
         apply_ontology_enrichment,
     )
-    from teoria.features.semantic_modeling.ontology.extension import (
+    from teoria.platform.ontology.authoring.extension import (
         OntologyExtensionManifest,
         apply_ontology_extension,
     )
@@ -293,12 +293,12 @@ async def test_legacy_goods_extensions_and_template_use_the_existing_ontology_wo
 async def test_semantic_workflow_creates_and_auto_approves_new_concepts_in_isolated_db(
     monkeypatch,
 ):
-    from teoria.features.goods_normalization.contracts import checksum
-    from teoria.features.goods_normalization.contracts.candidates import (
+    from teoria.domains.goods.normalization.contracts import checksum
+    from teoria.domains.goods.normalization.contracts.candidates import (
         CandidateBundle,
         CandidateContext,
     )
-    from teoria.features.goods_normalization.candidates.semantic_cycle import (
+    from teoria.domains.goods.normalization.candidates.semantic_cycle import (
         run_semantic_cycle,
     )
 
@@ -499,11 +499,11 @@ async def test_semantic_workflow_creates_and_auto_approves_new_concepts_in_isola
         == "Physical specification target containment"
     )
     # Durable operations recover missing checkpoint acknowledgements without duplicate authoring.
-    from teoria.features.goods_normalization.candidates.semantic_operation_service import (
+    from teoria.domains.goods.normalization.candidates.semantic_operation_service import (
         SemanticOperationService,
     )
     from teoria.integrations.application_database.postgres import connect
-    from teoria.features.goods_normalization.candidates.semantic_operation_repository import (
+    from teoria.domains.goods.normalization.candidates.semantic_operation_repository import (
         SemanticOperationRepository,
     )
 

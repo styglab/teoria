@@ -4,11 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 from fastapi import FastAPI
 from teoria.settings import Settings, bootstrap_settings
-from teoria.features.access_control.policy.telemetry_repository import (
+from teoria.platform.access_control.policy.telemetry_repository import (
     PolicyTelemetryRepository,
     PostgresPolicyTelemetryRepository,
 )
-from teoria.features.access_control.policy.control_plane_router import (
+from teoria.platform.access_control.policy.control_plane_router import (
     create_policy_control_plane_router,
 )
 

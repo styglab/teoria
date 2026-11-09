@@ -32,8 +32,7 @@ def render_deployment_docs(pipeline_root: Path) -> str:
         "저장소에 선언된 설정이며 실행 중인 Prefect Server 상태를 조회한 결과는 아니다.",
         "",
         "```bash",
-        "uv run --locked --project backend teoria-pipelines deployment-docs > docs/pipelines/deployments.md",
-        "uv run --locked --project backend teoria-pipelines deployment-docs --check docs/pipelines/deployments.md",
+        "uv run --locked --project backend teoria-pipelines deployment-docs",
         "```",
         "",
     ]

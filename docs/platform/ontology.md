@@ -46,9 +46,9 @@ entity 본문을 복제하지 않는다. API Field Binding은 활성 Source 계�
 
 | 문서 | 내용 |
 |---|---|
-| [물품 모델](../architecture/specification_goods_model.md) | 문서·물품·구성·속성·분류·서비스·근거 |
-| [사전](goods_dictionary.md) | 원문 표현·근거·게시 개념의 승인 연결 |
-| [프로파일](../procurement_specification_processing/normalization_profiles.md) | 게시 의미를 문서에 적용하는 고정 규칙 |
+| [물품 모델](../domains/goods/model.md) | 문서·물품·구성·속성·분류·서비스·근거 |
+| [사전](../domains/goods/expression_links.md) | 원문 표현·근거·게시 개념의 승인 연결 |
+| [프로파일](../domains/goods/specifications/normalization_profiles.md) | 게시 의미를 문서에 적용하는 고정 규칙 |
 
 현재 [goods 작성 입력](../../backend/authoring/ontology_blueprints/goods.yaml)은 2.0.0 Draft다.
 `server`·`memory_module`의 업무 속성을 native Property로 정의하고, 문서별 항목·속성 명세에는

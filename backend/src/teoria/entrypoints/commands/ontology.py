@@ -1,32 +1,32 @@
 import argparse
 import json
 
-from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
-from teoria.features.semantic_modeling.ontology.blueprint import (
+from teoria.platform.ontology.authoring.service import OntologyAuthoringService
+from teoria.platform.ontology.authoring.blueprint import (
     OntologyBlueprint,
     apply_ontology_blueprint,
 )
-from teoria.features.semantic_modeling.ontology.enrichment import (
+from teoria.platform.ontology.authoring.enrichment import (
     OntologyEnrichmentManifest,
     apply_ontology_enrichment,
 )
-from teoria.features.semantic_modeling.ontology.extension import (
+from teoria.platform.ontology.authoring.extension import (
     OntologyExtensionManifest,
     apply_ontology_extension,
 )
-from teoria.features.semantic_modeling.ontology.migration import (
+from teoria.platform.ontology.contracts.ontology_migration import (
     OntologyMigrationManifest,
     build_migration_report,
 )
-from teoria.features.semantic_modeling.ontology.promotion import (
+from teoria.platform.ontology.authoring.promotion import (
     BusinessConceptPromotion,
     apply_business_concept_promotion,
 )
-from teoria.features.semantic_modeling.ontology.rule_manifest import (
+from teoria.platform.ontology.authoring.rule_manifest import (
     BusinessRuleManifest,
     apply_business_rule_manifest,
 )
-from teoria.features.semantic_modeling.registry.loader import RegistryLoader
+from teoria.platform.ontology.contracts.loader import RegistryLoader
 from teoria.settings import Settings
 
 

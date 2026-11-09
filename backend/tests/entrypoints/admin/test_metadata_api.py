@@ -4,14 +4,14 @@ from fastapi.testclient import TestClient
 
 from teoria.entrypoints.admin_api import create_admin_app
 from teoria.settings import Settings
-from teoria.features.metadata_management.catalog.models import (
+from teoria.platform.data.metadata.catalog.models import (
     MetadataEntity,
     MetadataPage,
     MetadataStatus,
     MetadataTargetRef,
     TableDetail,
 )
-from teoria.features.semantic_modeling.registry.loader import RegistryLoader
+from teoria.platform.ontology.contracts.loader import RegistryLoader
 
 
 REGISTRIES = Path("backend/tests/fixtures/registry")
@@ -104,7 +104,7 @@ def test_metadata_routes_expose_stable_teoria_dtos() -> None:
 
 def test_sample_values_require_authentication_and_explicit_reader_role():
     from unittest.mock import AsyncMock
-    from teoria.features.metadata_management.catalog.models import TableSampleData
+    from teoria.platform.data.metadata.catalog.models import TableSampleData
 
     service = FakeMetadataService()
     service.get_table_samples = AsyncMock(

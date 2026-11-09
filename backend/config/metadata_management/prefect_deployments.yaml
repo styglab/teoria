@@ -8,7 +8,7 @@ deployments:
   version: 1.0.0
   description: Teoria Data PostgreSQL metadata를 격리된 OpenMetadata ingestion container로
     동기화한다.
-  entrypoint: teoria.features.metadata_management.ingestion.openmetadata.sync_openmetadata_postgres
+  entrypoint: teoria.platform.data.metadata.ingestion.openmetadata.sync_openmetadata_postgres
   concurrency_limit:
     limit: 1
     collision_strategy: CANCEL_NEW

@@ -8,18 +8,20 @@ import json
 from unittest.mock import AsyncMock
 import pytest
 from pydantic import ValidationError
-from teoria.features.goods_normalization.contracts import (
+from teoria.domains.goods.normalization.contracts import (
     NormalizationProfile,
     NormalizationPackage,
     canonical_bytes,
     checksum,
 )
-from teoria.features.goods_normalization.profiles.compiler import compile_package
-from teoria.features.specification_processing.normalization.profile_application import (
+from teoria.domains.goods.normalization.profiles.compiler import compile_package
+from teoria.domains.goods.normalization.application.profile_application import (
     apply_profile,
 )
-from teoria.features.specification_processing import flows, tasks
-from teoria.features.specification_processing.models import SpecificationRun
+from teoria.domains.goods.workflows import specifications as flows
+from teoria.domains.goods.workflows import tasks
+from teoria.domains.goods.data_processing import tasks as data_tasks
+from teoria.domains.goods.contracts import SpecificationRun
 
 
 def uid(n):
@@ -446,7 +448,8 @@ async def test_operational_standard_management_uses_package_and_saves_only_canon
         "persist_document_results",
         "persist_execution_receipt",
     ]:
-        monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
+        owner = data_tasks if hasattr(data_tasks, name) else tasks
+        monkeypatch.setattr(owner, name, getattr(owner, name).fn)
     monkeypatch.setattr(tasks, "resolve_dictionary", AsyncMock(return_value={
         "result":{"operation_id":"isolated_profile_fixture"}, "summary":{}, "alignment_ref":None, "artifacts":[],
     }))
@@ -481,7 +484,7 @@ def candidate_case():
     _, proposals = apply_profile(
         corpus, package(profile, ontology), run_id="candidate_test"
     )
-    from teoria.features.goods_normalization.contracts.candidates import CandidateBundle
+    from teoria.domains.goods.normalization.contracts.candidates import CandidateBundle
 
     bundle = CandidateBundle.model_validate(proposals["bundle"])
     group = next(g for g in bundle.groups if g.context.kind == "requirement")
@@ -489,12 +492,12 @@ def candidate_case():
 
 
 def test_candidates_roundtrip_deduplicate_and_build_compatible_draft():
-    from teoria.features.goods_normalization.candidates.proposals import (
+    from teoria.domains.goods.normalization.candidates.proposals import (
         CandidateSelection,
         draft_from_candidates,
         propose_candidates,
     )
-    from teoria.features.goods_normalization.contracts.candidates import CandidateBundle
+    from teoria.domains.goods.normalization.contracts.candidates import CandidateBundle
 
     profile, ontology, corpus, bundle, group = candidate_case()
     # Repeated processing of the same original must not inflate document frequency.
@@ -530,10 +533,10 @@ def test_candidates_roundtrip_deduplicate_and_build_compatible_draft():
 
 
 def test_candidate_groups_preserve_roles_scopes_units_and_source_conflicts():
-    from teoria.features.goods_normalization.candidates.proposals import (
+    from teoria.domains.goods.normalization.candidates.proposals import (
         propose_candidates,
     )
-    from teoria.features.goods_normalization.contracts.candidates import CandidateBundle
+    from teoria.domains.goods.normalization.contracts.candidates import CandidateBundle
 
     profile, ontology, corpus, bundle, _ = candidate_case()
     for a in corpus["documents"][0]["attributes"]:
@@ -572,11 +575,11 @@ def test_candidate_groups_preserve_roles_scopes_units_and_source_conflicts():
 
 @pytest.mark.parametrize("change", ["owner", "unit", "scope", "grounding", "overlap"])
 def test_candidate_draft_rejects_unsafe_selections(change):
-    from teoria.features.goods_normalization.candidates.proposals import (
+    from teoria.domains.goods.normalization.candidates.proposals import (
         CandidateSelection,
         draft_from_candidates,
     )
-    from teoria.features.goods_normalization.contracts.candidates import CandidateBundle
+    from teoria.domains.goods.normalization.contracts.candidates import CandidateBundle
 
     profile, ontology, corpus, bundle, group = candidate_case()
     concept_id = uid(2)
@@ -612,11 +615,11 @@ def test_candidate_draft_rejects_unsafe_selections(change):
 
 
 def test_relation_draft_requires_explicit_correct_direction_and_preserves_scope_kind():
-    from teoria.features.goods_normalization.candidates.proposals import (
+    from teoria.domains.goods.normalization.candidates.proposals import (
         CandidateSelection,
         draft_from_candidates,
     )
-    from teoria.features.goods_normalization.contracts.candidates import CandidateBundle
+    from teoria.domains.goods.normalization.contracts.candidates import CandidateBundle
 
     profile, ontology, corpus = example()
     corpus["documents"][0]["relations"][0]["kind"] = "memory_belongs_to_server"
@@ -687,7 +690,7 @@ def test_same_relation_label_can_map_to_distinct_published_endpoint_types():
     assert normalized["documents"][0]["relations"][1]["relationship_concept_id"] == uid(
         6
     )
-    from teoria.features.goods_normalization.candidates.proposals import (
+    from teoria.domains.goods.normalization.candidates.proposals import (
         _check_rule_overlap,
     )
 
@@ -711,13 +714,13 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
     import httpx
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from teoria.features.access_control.auth import AdminAuthorizer
+    from teoria.platform.access_control.auth import AdminAuthorizer
     from teoria.settings import Settings
-    from teoria.features.goods_normalization.profiles.admin_router import (
+    from teoria.domains.goods.normalization.profiles.admin_router import (
         create_normalization_profile_router,
     )
-    from teoria.features.specification_processing import standard_workflow as workflow
-    from teoria.features.specification_processing.authoring_client import (
+    from teoria.domains.goods.workflows import standard_authoring as workflow
+    from teoria.domains.goods.authoring_client import (
         GoodsAuthoringClient,
     )
 
@@ -847,7 +850,8 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
         "persist_document_results",
         "persist_execution_receipt",
     ]:
-        monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
+        owner = data_tasks if hasattr(data_tasks, name) else tasks
+        monkeypatch.setattr(owner, name, getattr(owner, name).fn)
     monkeypatch.setattr(tasks, "resolve_dictionary", AsyncMock(return_value={
         "result":{"operation_id":"isolated_profile_fixture"}, "summary":{}, "alignment_ref":None, "artifacts":[],
     }))

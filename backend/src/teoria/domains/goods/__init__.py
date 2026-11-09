@@ -1,0 +1,1 @@
+"""Domains goods ownership boundary."""

@@ -1,19 +1,19 @@
 import argparse
 import json
 
-from teoria.features.semantic_modeling.binding.capability_manifest import (
+from teoria.platform.ontology.bindings.capability_manifest import (
     CapabilityBindingManifest,
     apply_capability_binding_manifest,
 )
-from teoria.features.semantic_modeling.binding.openmetadata_manifest import (
+from teoria.platform.ontology.bindings.openmetadata_manifest import (
     OpenMetadataBindingManifest,
     apply_openmetadata_binding_manifest,
 )
-from teoria.features.semantic_modeling.binding.repository import BindingRepository
-from teoria.features.semantic_modeling.registry.artifact import (
+from teoria.platform.ontology.bindings.repository import BindingRepository
+from teoria.platform.ontology.contracts.artifact import (
     RegistryArtifactLoader,
 )
-from teoria.features.semantic_modeling.registry.loader import RegistryLoader
+from teoria.platform.ontology.contracts.loader import RegistryLoader
 from teoria.settings import Settings
 
 

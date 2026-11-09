@@ -5,11 +5,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.semantic_modeling.ontology.admin_router import (
+from teoria.platform.access_control.auth import AdminAuthorizer
+from teoria.platform.ontology.authoring.admin_router import (
     create_ontology_authoring_router,
 )
-from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
+from teoria.platform.ontology.authoring.service import OntologyAuthoringService
 from teoria.settings import Settings
 
 
@@ -77,7 +77,7 @@ def test_draft_creation_waits_for_repository_and_uses_authenticated_actor():
 
 
 def test_publication_read_is_authenticated_and_independent_of_goods_dictionary():
-    from teoria.features.semantic_modeling.ontology.publication_contracts import publication_checksum
+    from teoria.platform.ontology.authoring.publication_contracts import publication_checksum
     identifier = uuid4()
     content = {'namespace':'test', 'version':'1', 'objects':[], 'relationships':[]}
     repository = Mock(spec=OntologyAuthoringService)

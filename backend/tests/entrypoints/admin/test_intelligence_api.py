@@ -6,15 +6,15 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.metadata_management.intelligence.admin_router import (
+from teoria.platform.access_control.auth import AdminAuthorizer
+from teoria.platform.data.metadata.intelligence.admin_router import (
     create_intelligence_router,
 )
-from teoria.features.metadata_management.intelligence.suggestions.execution import (
+from teoria.platform.data.metadata.intelligence.suggestions.execution import (
     SuggestionApplicationError,
 )
 from teoria.settings import Settings
-from teoria.features.metadata_management.intelligence.suggestions.service import (
+from teoria.platform.data.metadata.intelligence.suggestions.service import (
     SuggestionService,
 )
 

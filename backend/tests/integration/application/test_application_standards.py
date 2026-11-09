@@ -5,14 +5,14 @@ from pathlib import Path
 from uuid import uuid4
 import pytest
 from teoria.integrations.application_database import apply_migrations
-from teoria.features.specification_processing.application_standards_repository import (
+from teoria.domains.goods.normalization.processing_criteria_repository import (
     ApplicationStandardsRepository,
 )
-from teoria.features.semantic_modeling.goods_dictionary.meaning_repository import (
-    GoodsMeaningRepository,
+from teoria.domains.goods.expression_links.legacy.meaning_repository import (
+    LegacyMeaningRepository,
 )
-from teoria.features.semantic_modeling.goods_dictionary.meaning_service import (
-    GoodsMeaningService,
+from teoria.domains.goods.expression_links.legacy.meaning_service import (
+    LegacyMeaningService,
 )
 
 URL = os.environ.get("TEORIA_TEST_APP_DATABASE_URL")
@@ -45,7 +45,7 @@ async def test_application_version_persists_refs_and_catalog_queries_are_bounded
     assert (await repo.get(id))["dictionary_ref"]["sha256"] == "b" * 64
     page = await repo.list(0, 1)
     assert len(page["items"]) == 1 and page["total"] >= 1
-    meaning = GoodsMeaningService(URL)
+    meaning = LegacyMeaningService(URL)
     for kind in ("concept", "mapping", "source"):
         page = await meaning.catalog(
             kind, query="' OR true --", status="approved", limit=1

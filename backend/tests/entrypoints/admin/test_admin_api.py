@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from teoria.entrypoints.admin_api import create_admin_app
 from teoria.settings import Settings
-from teoria.features.semantic_modeling.registry.loader import RegistryLoader
+from teoria.platform.ontology.contracts.loader import RegistryLoader
 
 
 REGISTRIES = Path("backend/tests/fixtures/registry")

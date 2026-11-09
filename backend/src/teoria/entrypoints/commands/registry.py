@@ -1,20 +1,20 @@
+from teoria.platform.ontology.bindings.publication_export import RuntimeBundleSnapshotRepository
 import argparse
 
 import psycopg
 
-from teoria.features.semantic_modeling.registry.artifact import (
+from teoria.platform.ontology.contracts.artifact import (
     RegistryArtifactError,
     RegistryArtifactLoader,
     RegistryArtifactStore,
     RuntimeBundleCompiler,
 )
-from teoria.features.semantic_modeling.registry.artifact_snapshot import (
-    RuntimeBundleSnapshotRepository,
+from teoria.platform.ontology.contracts.artifact_snapshot import (
     select_registry_bindings,
 )
-from teoria.features.semantic_modeling.registry.composition import create_registry_validator
-from teoria.features.semantic_modeling.registry.loader import RegistryLoader, RegistryLoadError
-from teoria.features.semantic_modeling.registry.release import publish_registry
+from teoria.platform.ontology.contracts.validation.registry import RegistryValidator
+from teoria.platform.ontology.contracts.loader import RegistryLoader, RegistryLoadError
+from teoria.platform.ontology.contracts.release import publish_registry
 from teoria.settings import Settings
 
 
@@ -65,7 +65,7 @@ def run_validate_or_publish(args: argparse.Namespace, settings: Settings) -> int
             print(diagnostic)
         return 1
 
-    diagnostics = create_registry_validator().validate(
+    diagnostics = RegistryValidator().validate(
         catalog, source_id=getattr(args, "source", None)
     )
     for diagnostic in diagnostics:

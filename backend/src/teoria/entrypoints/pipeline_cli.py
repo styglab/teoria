@@ -12,11 +12,11 @@ from psycopg import Error as PostgresError
 from teoria.integrations.provider_api.executor import ProviderExecutor
 from teoria.integrations.provider_api.secrets import EnvironmentSecretProvider
 
-from teoria.integrations.data_operations.loader import PipelineLoader, PipelineLoadError
-from teoria.integrations.data_operations.persistence import PostgresStore
-from teoria.integrations.data_operations.settings import bootstrap_pipeline_settings
-from teoria.integrations.data_operations.validator import PipelineValidator
-from teoria.integrations.data_operations.verification import verify_connector
+from teoria.platform.data.operations.loader import PipelineLoader, PipelineLoadError
+from teoria.platform.data.operations.persistence import PostgresStore
+from teoria.platform.data.operations.settings import bootstrap_pipeline_settings
+from teoria.platform.data.operations.validator import PipelineValidator
+from teoria.platform.data.operations.verification import verify_connector
 
 
 def _default_pipeline_root() -> Path:
@@ -57,7 +57,7 @@ async def _verify(args: argparse.Namespace) -> int:
             print(f"ERROR invalid_verification_input: {exc}")
         return 1
     if args.platform_registries:
-        from teoria.features.semantic_modeling.registry.loader import (
+        from teoria.platform.ontology.contracts.loader import (
             RegistryLoader,
             RegistryLoadError,
         )
@@ -260,7 +260,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "specification":
-        from teoria.features.specification_processing.cli import run_command
+        from teoria.domains.goods.cli import run_command
 
         return run_command(args)
 
@@ -281,12 +281,12 @@ def main() -> int:
 
     if args.command == "law":
         settings = bootstrap_pipeline_settings()
-        from teoria.features.legal_information.collection.repository import (
+        from teoria.domains.legal_information.collection.repository import (
             LawRepository,
         )
 
         if args.law_command == "sync":
-            from teoria.features.legal_information.collection.flows import (
+            from teoria.domains.legal_information.collection.flows import (
                 sync_moleg_laws,
             )
 
@@ -299,7 +299,7 @@ def main() -> int:
                 )
             )
         elif args.law_command == "reparse":
-            from teoria.features.legal_information.collection.flows import (
+            from teoria.domains.legal_information.collection.flows import (
                 reparse_moleg_laws,
             )
 
@@ -313,7 +313,7 @@ def main() -> int:
                 )
             )
         else:
-            from teoria.features.legal_information.collection.parsing import (
+            from teoria.domains.legal_information.collection.parsing import (
                 provider_id,
             )
 
@@ -380,12 +380,12 @@ def main() -> int:
         return 1
     if args.command == "validate-integration":
         try:
-            from teoria.features.semantic_modeling.registry.loader import (
+            from teoria.platform.ontology.contracts.loader import (
                 RegistryLoader,
                 RegistryLoadError,
             )
 
-            from teoria.integrations.data_operations.integration import (
+            from teoria.platform.data.operations.integration import (
                 PlatformIntegrationValidator,
             )
 

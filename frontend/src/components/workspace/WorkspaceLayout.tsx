@@ -1,6 +1,6 @@
-import { Input } from "../ui/input";
-import type { ReactNode } from "react";
 import { Search } from "lucide-react";
+import type { ReactNode } from "react";
+import { Input } from "../ui/input";
 
 export function WorkspaceFrame({ children }: { children: ReactNode }) {
   return (

@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from teoria.settings import Settings, bootstrap_settings
-from teoria.features.runtime.services import RuntimeServices
-from teoria.features.runtime.capability.runner import CapabilityRunner
-from teoria.features.runtime.cache import create_runtime_cache
-from teoria.features.access_control.policy import (
+from teoria.platform.ontology.runtime.dependencies import RuntimeServices
+from teoria.platform.ontology.runtime.capability.runner import CapabilityRunner
+from teoria.platform.ontology.runtime.cache import create_runtime_cache
+from teoria.platform.access_control.policy import (
     PolicyEvaluator,
     OpaPolicyEvaluator,
     create_policy_evaluator,
 )
-from teoria.features.semantic_modeling.registry.loader import (
+from teoria.platform.ontology.contracts.loader import (
     RegistryCatalog,
     RegistryLoader,
 )
-from teoria.features.semantic_modeling.registry.artifact import (
+from teoria.platform.ontology.contracts.artifact import (
     RuntimeBundleLoader,
     RegistryArtifactStore,
 )
@@ -59,9 +59,9 @@ def create_runtime_services(
         or resolved_catalog.release.status != "published"
     ):
         raise RuntimeError("a published, checksum-valid Registry release is required")
-    from teoria.features.runtime.composition import create_capability_handlers
+    from teoria.platform.ontology.runtime.capability.handlers import CapabilityHandlers
 
-    handlers = create_capability_handlers()
+    handlers = CapabilityHandlers()
     resolved_runner = runner or CapabilityRunner(
         ProviderExecutor(
             timeout_seconds=resolved_settings.source_timeout_seconds,

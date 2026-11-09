@@ -9,10 +9,10 @@ from fastapi import FastAPI
 import httpx
 import pytest
 
-from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.semantic_modeling.ontology.admin_router import create_ontology_authoring_router
-from teoria.features.semantic_modeling.ontology.blueprint import OntologyBlueprint, apply_ontology_blueprint
-from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
+from teoria.platform.access_control.auth import AdminAuthorizer
+from teoria.platform.ontology.authoring.admin_router import create_ontology_authoring_router
+from teoria.platform.ontology.authoring.blueprint import OntologyBlueprint, apply_ontology_blueprint
+from teoria.platform.ontology.authoring.service import OntologyAuthoringService
 from teoria.integrations.application_database import apply_migrations
 from teoria.settings import Settings
 

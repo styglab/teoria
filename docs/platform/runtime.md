@@ -6,7 +6,6 @@ Runtime은 Source record를 Mapping으로 Runtime Object·Link에 변환하고 C
 
 현재 활성 bundle `2026.10.25.1`에는 업무 Capability가 없다.
 과거 조달 실행은 제공하지 않으며 물품 검색·비교는 후속 구현이다.
-[배포 검증](../../archive/documentation/verification/goods_focus_deployment_2026_10_25.md)의 실제 상태를 따른다.
 
 ## 요청이 처리되는 순서
 
@@ -24,7 +23,7 @@ HTTP 요청 → Bearer 인증·OPA 정책 → 입력 검증 → Capability Runne
 
 실행 결과에는 식별자로 병합한 Object·Link와 원천 근거가 포함된다. Runner는
 Source timeout, 재시도, 최대 페이지와 Capability deadline을 적용한다. 입력 계약과
-실행 종류는 [Capability](registry/capabilities.md), 값 변환은 [Mapping](registry/mappings.md)을
+실행 종류는 [Capability](registry/guide.md), 값 변환은 [Mapping](registry/guide.md)을
 참고한다. API의 전체 요청·응답 schema는 실행 중인 `/docs`가 기준이다.
 
 ## Registry release와 Runtime bundle
@@ -82,14 +81,31 @@ bundle 선택은 `TEORIA_RUNTIME_ARTIFACT_PATH`로 version 디렉터리를 직�
 
 ## 구현과 검증 위치
 
-HTTP는 `backend/src/teoria/entrypoints/runtime_api.py`, 실행 조립은 `runtime/composition.py`,
-Runner는 `runtime/capability/runner.py`, Source 실행은 `runtime/source/`, 값 변환은
-`runtime/mapping/transforms/`가 소유한다. Domain handler는 공통 Runner에 등록한다.
+HTTP는 `backend/src/teoria/entrypoints/runtime_api.py`, 실행 조립은 `entrypoints/composition/runtime.py`,
+Runner는 `platform/ontology/runtime/capability/runner.py`, Source 실행은 `platform/ontology/runtime/source/`,
+값 변환은 `platform/ontology/contracts/codecs/`가 소유한다. Domain handler는 조립 시 공통 Runner에 주입한다.
 
-artifact 검증·구성은 `registry/artifact.py`와 관련 모듈, App DB snapshot 조회는
-`registry/artifact_snapshot.py`, 명령은 `cli/registry.py`에서 찾는다.
+artifact 검증·구성은 `platform/ontology/contracts/artifact.py`, App DB snapshot 조회는
+`platform/ontology/bindings/publication_export.py`, 명령은 `entrypoints/commands/registry.py`에서 찾는다.
 Runtime cache는 `runtime/cache/`가 소유한다. Redis 장애는 실행을 막지 않고 캐시 없이
 동작한다. 정책 bundle 빌드·서명·서비스 시작 순서는 [Compose](../deployment/compose.md)를 따른다.
 
 Source DB 실행은 native async PostgreSQL을 사용한다. HTTP부터 Repository까지 `await`를
 연결하며 transaction·승인·취소 경계를 보존한다. 이전 시장 분석 reader는 비활성 보관했다.
+
+## Context
+
+Context는 게시 의미·승인 Binding 조회와 업무 query handler의 계획·실행 정책 검증을 맡는다.
+현재 물품 검색·비교 handler는 미등록이며 `plan`·`execute`는 미구성 오류를 반환한다.
+과거 조달 질문으로 fallback하지 않는다.
+
+| Admin API | 역할 |
+|---|---|
+| `GET /v1/admin/context/resolve?term=...` | 게시 의미·활성 bundle 연결 조회 |
+| `POST /v1/admin/context/plan` | 등록 handler의 실행계획 작성 |
+| `POST /v1/admin/context/execute` | 질문으로 계획을 다시 만들고 실행 |
+| `POST /v1/admin/context/query` | execute의 deprecated 호환 경로 |
+
+plan·execute는 관리자 인증과 각 단계 OPA 검증을 거친다. execute는 plan JSON/ID 재생 API가 아니다.
+새 handler는 `platform/ontology/runtime/context/query.py` 계약을 구현해 `entrypoints/composition/`에서 주입한다.
+업무 handler가 질문 해석·입력·결과를 맡고 공통 Engine은 의미 조회·정책 검증을 맡는다.

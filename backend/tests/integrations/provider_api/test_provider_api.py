@@ -43,7 +43,7 @@ def test_provider_adapter_does_not_import_feature_implementations() -> None:
                 names = [alias.name for alias in node.names]
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module]
-            if any(name.startswith(("teoria.features.", "teoria.entrypoints.", "teoria.integrations.data_operations", "teoria.integrations.runtime_http")) for name in names):
+            if any(name.startswith(("teoria.platform.", "teoria.domains.", "teoria.apps.", "teoria.entrypoints.", "teoria.platform.data.operations", "teoria.integrations.runtime_http")) for name in names):
                 violations.append(f"{path.name}:{node.lineno}")
     assert violations == []
 

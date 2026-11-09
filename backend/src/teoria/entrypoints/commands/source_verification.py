@@ -7,7 +7,7 @@ import yaml
 from teoria.integrations.provider_api.executor import ProviderExecutor
 from teoria.integrations.provider_api.secrets import EnvironmentSecretProvider
 
-from teoria.features.semantic_modeling.registry.verification.source.graph import (
+from teoria.platform.ontology.contracts.verification.source import (
     SourceVerificationServices,
     create_source_verification_graph,
 )

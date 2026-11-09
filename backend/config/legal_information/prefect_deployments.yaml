@@ -8,7 +8,7 @@ deployments:
   version: 1.0.0
   description: 지정 법령의 전체 버전 목록을 확인하고 신규·변경·현행·시행예정 본문을 수집한다. 독립 법령 pool에서 실행하며 조달
     Backfill은 재개하지 않는다.
-  entrypoint: teoria.features.legal_information.collection.flows.sync_moleg_laws
+  entrypoint: teoria.domains.legal_information.collection.flows.sync_moleg_laws
   tags:
   - domain:legal_information
   - pipeline:moleg_law_ingestion
@@ -27,7 +27,7 @@ deployments:
   version: 1.0.0
   description: 지정 법령의 모든 연혁 본문을 재조회해 기존 식별자의 원문 정정도 보존한다. 독립 법령 pool에서 실행하며 조달 Backfill은
     재개하지 않는다.
-  entrypoint: teoria.features.legal_information.collection.flows.sync_moleg_laws
+  entrypoint: teoria.domains.legal_information.collection.flows.sync_moleg_laws
   tags:
   - domain:legal_information
   - pipeline:moleg_law_ingestion

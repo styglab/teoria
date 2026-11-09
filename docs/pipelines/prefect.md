@@ -2,7 +2,7 @@
 
 현재 Prefect는 명시적으로 입력한 규격서의 두 작업, 법령 전용 수집과 OpenMetadata 동기화를 관리한다.
 이전 공고·계약·낙찰·개찰·업종 수집과 Backfill은 중단 상태다. 법령 작업은 독립 pool로 재개했다.
-저장소의 선언값은 [배포 목록](deployments.md), 실제 운영 확인은 [배포 검증 기록](../../archive/documentation/verification/goods_focus_deployment_2026_10_25.md)을 따른다.
+배포 선언의 기준은 `backend/config/*/prefect_deployments.yaml`이다. 실제 등록·실행은 Prefect UI에서 확인한다.
 
 ## 실행할 Deployment 찾기
 
@@ -25,7 +25,7 @@ Metadata는 별도 `teoria-metadata` pool에서 동시 실행 1개다.
 월~토 04:15 변경 동기화, 일요일 04:15 전체 연혁 보정이며 시간대는 Asia/Seoul이다.
 일요일 법령 보정은 법령 저장소 전용이며 조달 Backfill을 재개하지 않는다.
 등록은 `prefect-law-deploy`, 실행은 `prefect-law-worker`가 담당한다.
-[상세 운영](domains/legal_information.md)과 [배포 목록](deployments.md)을 따른다.
+세부 수집 정책은 [법령 운영](domains/legal_information.md)을 따른다.
 
 ## 등록과 실행
 
@@ -41,7 +41,7 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml -f 
 자동화 등록은 과거 수집 pool을 재개하지 않는다.
 
 Prefect UI의 규격서 Deployment에서 `manifest` 객체를 입력해 실행하거나,
-[규격서 파이프라인](../procurement_specification_processing/pipeline.md)의 CLI를 사용한다.
+[규격서 파이프라인](../domains/goods/specifications/pipeline.md)의 CLI를 사용한다.
 배포된 Worker에서 로컬 문서를 처리하려면 컨테이너 기준의 입력·산출물 URI를 사용한다.
 문서 처리 mode는 표준의 URI와 SHA-256을 반드시 고정한다.
 
@@ -66,8 +66,16 @@ Worker 교체 → heartbeat·기동 검사 → 원래 pool 상태 복원 순서�
 
 ```bash
 docker compose -f deploy/compose/compose.yaml -f deploy/compose/compose_formatid.yaml logs --tail 100 prefect-worker
-uv run --locked --project backend teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
+uv run --locked --project backend teoria-pipelines deployment-docs
 ```
 
 운영 절차와 볼륨·인증은 [Compose](../deployment/compose.md), Metadata 격리는
-[OpenMetadata Job](openmetadata.md)을 따른다.
+[OpenMetadata Job](../deployment/openmetadata.md)을 따른다.
+
+## MLOps 예제
+
+공통 모델 목록·버전 조회는 `platform/mlops/`가 맡는다. 합성 고객 데이터·학습·품질 기준·서빙은
+`examples/customer_churn/`에 격리한다. 예제는 명시적 수동 실행이며 일반 업무 모델로 간주하지 않는다.
+`backend/config/model_operations/prefect_deployments.yaml`의 기존 배포 이름은 유지한다.
+학습 Worker에는 Docker socket을 주지 않고 별도 배포 Worker가 checksum·readiness를 검증한 뒤 전환한다.
+실패하면 이전 release를 복원한다.

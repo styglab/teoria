@@ -5,15 +5,15 @@ import logging
 import signal
 
 
-from teoria.features.semantic_modeling.binding.repository import BindingRepository
-from teoria.features.legal_information.search import LawSearchReader
-from teoria.features.metadata_management.intelligence.asset_assessment.model_client import (
+from teoria.platform.ontology.bindings.repository import BindingRepository
+from teoria.domains.legal_information.search import LawSearchReader
+from teoria.platform.data.metadata.intelligence.asset_assessment.model_client import (
     AssessmentModelClient,
 )
-from teoria.features.metadata_management.intelligence.asset_assessment.repository import (
+from teoria.platform.data.metadata.intelligence.asset_assessment.repository import (
     AssessmentRepository,
 )
-from teoria.features.metadata_management.intelligence.asset_assessment.service import (
+from teoria.platform.data.metadata.intelligence.asset_assessment.service import (
     AssetAssessmentService,
 )
 from teoria.integrations.openmetadata import OpenMetadataClient

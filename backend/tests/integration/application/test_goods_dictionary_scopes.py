@@ -5,22 +5,22 @@ from pathlib import Path
 from uuid import uuid4
 import pytest
 from teoria.integrations.application_database import apply_migrations
-from teoria.features.semantic_modeling.goods_dictionary.contracts import (
+from teoria.domains.goods.expression_links.contracts import (
     DictionarySubmission,
     source_literal_definition,
 )
-from teoria.features.semantic_modeling.goods_dictionary.service import (
-    GoodsDictionaryService,
+from teoria.domains.goods.expression_links.registration_service import (
+    ExpressionRegistrationService,
 )
-from teoria.features.semantic_modeling.goods_dictionary.meaning_service import (
-    GoodsMeaningService,
+from teoria.domains.goods.expression_links.legacy.meaning_service import (
+    LegacyMeaningService,
 )
-from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import (
+from teoria.domains.goods.expression_links.snapshot_contracts import (
     ConceptDefinition,
     MappingProposal,
     MeaningDecision,
 )
-from teoria.features.semantic_modeling.binding.repository import BindingRepository
+from teoria.platform.ontology.bindings.repository import BindingRepository
 
 URL = os.environ.get("TEORIA_TEST_APP_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not URL, reason="isolated Application DB required")
@@ -30,8 +30,8 @@ async def test_scoped_catalog_preserves_shared_definitions_and_unmapped_observat
     await apply_migrations(URL, Path("backend/migrations/application"))
     key = "scope_" + uuid4().hex
     source_name = "검증 물품 " + key
-    dictionary = GoodsDictionaryService(URL)
-    meanings = GoodsMeaningService(URL)
+    dictionary = ExpressionRegistrationService(URL)
+    meanings = LegacyMeaningService(URL)
 
     def body(code):
         return DictionarySubmission(

@@ -8,13 +8,13 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 
-from teoria.features.metadata_management.intelligence.asset_assessment.models import (
+from teoria.platform.data.metadata.intelligence.asset_assessment.models import (
     AssessmentOutput,
     AssessmentRequest,
 )
-from teoria.features.metadata_management.intelligence.asset_assessment.repository import AssessmentRepository
-from teoria.features.metadata_management.intelligence.asset_assessment.service import AssetAssessmentService
-from teoria.features.metadata_management.intelligence.suggestions.repository import SuggestionRepository
+from teoria.platform.data.metadata.intelligence.asset_assessment.repository import AssessmentRepository
+from teoria.platform.data.metadata.intelligence.asset_assessment.service import AssetAssessmentService
+from teoria.platform.data.metadata.intelligence.suggestions.repository import SuggestionRepository
 from teoria.integrations.application_database import apply_migrations
 
 DATABASE_URL = os.environ.get("TEORIA_TEST_APP_DATABASE_URL")

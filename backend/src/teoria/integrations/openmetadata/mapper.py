@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from teoria.features.metadata_management.catalog.models import MetadataEntity, MetadataPage, MetadataTargetRef, TableDetail
+from teoria.platform.data.metadata.catalog.models import MetadataEntity, MetadataPage, MetadataTargetRef, TableDetail
 
 
 def entity_reference(payload: dict[str, Any], entity_type: str) -> MetadataTargetRef:

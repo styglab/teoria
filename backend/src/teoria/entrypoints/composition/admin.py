@@ -1,101 +1,57 @@
 from __future__ import annotations
 
-from teoria.features.metadata_management.intelligence.asset_assessment.model_client import (
-    assessment_model_identity,
-)
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import httpx
 from fastapi import FastAPI
-from teoria.features.specification_processing.workspace_router import (
-    create_processing_workspace_router,
-)
-from teoria.features.model_operations.admin_router import create_model_operations_router
-from teoria.features.workflow_management.admin_router import create_workflow_router
-from teoria.features.semantic_modeling.goods_dictionary.admin_router import (
-    create_goods_dictionary_router,
-)
-from teoria.features.semantic_modeling.goods_dictionary.service import (
-    GoodsDictionaryService,
-)
-from teoria.features.semantic_modeling.goods_dictionary.ontology_service import (
-    OntologyDictionaryService,
-)
 
-from teoria.features.metadata_management.intelligence.asset_assessment.admin_router import (
-    create_asset_assessment_router,
-)
-from teoria.features.access_control.auth import AdminAuthorizer
-from teoria.features.semantic_modeling.binding.admin_router import create_binding_router
-from teoria.features.runtime.context.admin_router import create_context_router
-from teoria.features.metadata_management.intelligence.admin_router import (
-    create_intelligence_router,
-)
-from teoria.features.metadata_management.catalog.admin_router import (
-    create_metadata_router,
-)
-from teoria.features.semantic_modeling.ontology.admin_router import (
-    create_ontology_authoring_router,
-)
-from teoria.features.semantic_modeling.ontology.migration_router import (
-    create_ontology_migration_router,
-)
-from teoria.features.semantic_modeling.ontology.property_context_router import (
-    create_property_context_router,
-)
-from teoria.features.semantic_modeling.registry.admin_router import (
-    create_registry_router,
-)
-from teoria.features.semantic_modeling.binding.repository import BindingRepository
-from teoria.features.runtime.context import ContextEngine
-from teoria.features.runtime.context.repository import (
+from teoria.platform.access_control.auth import AdminAuthorizer
+from teoria.platform.ontology.bindings.repository import BindingRepository
+from teoria.platform.ontology.runtime.context import ContextEngine
+from teoria.platform.ontology.runtime.context.repository import (
     BundleContextRepository,
     ContextRepository,
 )
-from teoria.features.runtime.context.runtime_client import ContextRuntimeClient
-from teoria.features.runtime.context.service import ContextExecutionPolicy
-from teoria.features.legal_information.admin_router import create_law_search_router
-from teoria.features.legal_information.search import LawSearchReader
-from teoria.features.goods_normalization.profiles.admin_router import (
-    create_normalization_profile_router,
-)
-from teoria.features.goods_normalization.profiles.service import (
-    NormalizationProfileService,
-)
-from teoria.features.goods_normalization.candidates.semantic_operation_repository import (
-    SemanticOperationRepository,
-)
-from teoria.features.goods_normalization.candidates.semantic_operation_service import (
-    SemanticOperationService,
-)
-from teoria.features.metadata_management.intelligence.asset_assessment.repository import (
+from teoria.platform.ontology.runtime.context.runtime_client import ContextRuntimeClient
+from teoria.platform.ontology.runtime.context.service import ContextExecutionPolicy
+from teoria.domains.legal_information.search import LawSearchReader
+from teoria.platform.data.metadata.intelligence.asset_assessment.repository import (
     AssessmentRepository,
 )
-from teoria.features.metadata_management.intelligence.suggestions.repository import (
+from teoria.platform.data.metadata.intelligence.suggestions.repository import (
     SuggestionRepository,
 )
-from teoria.features.metadata_management.intelligence.suggestions.service import (
+from teoria.platform.data.metadata.intelligence.suggestions.service import (
     SuggestionService,
 )
-from teoria.features.metadata_management.catalog.asset_context import (
+from teoria.platform.data.metadata.catalog.asset_context import (
     AssetApplicationReader,
     AssetContextService,
 )
-from teoria.integrations.openmetadata import OpenMetadataClient, OpenMetadataService
-from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
-from teoria.features.access_control.policy import (
+from teoria.integrations.openmetadata import OpenMetadataClient
+from teoria.integrations.openmetadata import OpenMetadataService
+from teoria.platform.ontology.authoring.service import OntologyAuthoringService
+from teoria.platform.access_control.policy import (
     PolicyEvaluator,
     OpaPolicyEvaluator,
     create_policy_evaluator,
 )
-from teoria.features.semantic_modeling.registry.loader import (
+from teoria.platform.ontology.contracts.loader import (
     RegistryCatalog,
     RegistryLoader,
 )
-from teoria.settings import Settings, bootstrap_settings
+from teoria.settings import Settings
+from teoria.settings import bootstrap_settings
+
+from teoria.entrypoints.composition.formatid import install_formatid_routers
+from teoria.entrypoints.composition.goods_authoring import install_goods_authoring_routers
+from teoria.entrypoints.composition.metadata_management import install_metadata_routers
+from teoria.entrypoints.composition.legal_information import install_legal_routers
+from teoria.entrypoints.composition.semantic_modeling import install_semantic_routers
+from teoria.entrypoints.composition.model_operations import install_model_operations_router
+from teoria.entrypoints.composition.workflow_management import install_workflow_management_router
 
 
 @dataclass(frozen=True)
@@ -276,161 +232,13 @@ def create_admin_services(
 
 
 def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
-    import os
-    from teoria.features.specification_processing.application_standards_repository import ApplicationStandardsRepository
-    from teoria.features.specification_processing.application_standards_service import ApplicationStandardsService
-    from teoria.features.specification_processing.application_standards_router import create_application_standards_router
-    from teoria.features.specification_processing.workspace_router import ProcessingWorkspaceRepository, verified_artifact
-    from teoria.features.specification_processing.storage.artifact_store import artifact_store
-
-    application_standards = None
-    if services.settings.formatid_enabled and services.settings.app_database_url and services.settings.admin_data_database_url:
-        object_root = os.getenv('TEORIA_SPECIFICATION_ARTIFACT_ROOT','s3://teoria-artifacts')
-        async def read_standard(reference):
-            return await verified_artifact(reference,Path('/app/specification_artifacts'),object_root)
-        application_standards = ApplicationStandardsService(
-            ApplicationStandardsRepository(services.settings.app_database_url),
-            ProcessingWorkspaceRepository(services.settings.admin_data_database_url),
-            OntologyDictionaryService(services.settings.app_database_url, ontology_authoring=services.ontology_authoring_service), read_standard,
-            lambda: artifact_store(object_root))
-    app.include_router(create_application_standards_router(application_standards,services.authorizer))
-    model_client = httpx.AsyncClient(timeout=15)
-    services.resources.append(model_client)
-    app.include_router(
-        create_model_operations_router(
-            authorizer=services.authorizer,
-            client=model_client,
-            enabled=services.settings.model_operations_enabled,
-            prefect_url=services.settings.model_prefect_url,
-            prefect_auth=services.settings.model_prefect_auth,
-            mlflow_url=services.settings.model_mlflow_url,
-            inference_url=services.settings.model_inference_url,
-            inference_token=services.settings.demo_inference_token,
-        )
-    )
-    app.include_router(
-        create_workflow_router(
-            application_standards=application_standards,
-            authorizer=services.authorizer,
-            client=model_client,
-            prefect_url=services.settings.model_prefect_url,
-            prefect_auth=services.settings.model_prefect_auth,
-            mlops_enabled=services.settings.model_operations_enabled,
-            semantic_enabled=services.settings.semantic_modeling_enabled,
-            formatid_enabled=services.settings.formatid_enabled,
-            legal_enabled=services.settings.legal_information_enabled,
-            inference_token=services.settings.demo_inference_token,
-        )
-    )
-    app.include_router(
-        create_processing_workspace_router(
-            authorizer=services.authorizer,
-            database_url=services.settings.admin_data_database_url
-            if services.settings.formatid_enabled
-            else None,
-            uploads_enabled=services.settings.formatid_enabled
-            and services.settings.specification_upload_enabled,
-        )
-    )
-    if (
-        services.settings.semantic_modeling_enabled
-        or services.settings.formatid_enabled
-    ):
-        profiles = (
-            NormalizationProfileService(
-                services.settings.app_database_url,
-                ontology_authoring=services.ontology_authoring_service,
-            )
-            if services.settings.app_database_url
-            else None
-        )
-        operations = (
-            SemanticOperationService(
-                profiles,
-                SemanticOperationRepository(services.settings.app_database_url),
-                services.ontology_authoring_service,
-            )
-            if profiles
-            else None
-        )
-        expressions = (OntologyDictionaryService(services.settings.app_database_url,
-            ontology_authoring=services.ontology_authoring_service) if services.settings.app_database_url else None)
-        dependency_reader = None
-        if profiles is not None and expressions is not None and services.binding_repository is not None:
-            from teoria.features.goods_normalization.ontology_impact import GoodsOntologyImpactService
-            dependency_reader = GoodsOntologyImpactService(services.ontology_authoring_service, profiles,
-                expressions, services.binding_repository, services.catalog).report
-        app.include_router(
-            create_normalization_profile_router(
-                profiles, services.authorizer, operations
-            )
-        )
-        app.include_router(
-            create_goods_dictionary_router(
-                GoodsDictionaryService(services.settings.app_database_url)
-                if services.settings.app_database_url
-                else None,
-                services.authorizer,
-                expressions,
-            )
-        )
-    if services.settings.semantic_modeling_enabled:
-        app.include_router(
-            create_asset_assessment_router(
-                services.assessment_repository,
-                getattr(services.metadata_service, "client", None),
-                services.authorizer,
-                enabled=bool(services.settings.assessment_enabled),
-                model_name=assessment_model_identity(
-                    services.settings.assessment_codex_model
-                ),
-            )
-        )
-    app.include_router(
-        create_metadata_router(
-            services.metadata_service,
-            services.authorizer,
-            services.asset_context_service,
-            public_read=services.settings.admin_metadata_public_read,
-        )
-    )
-    if services.settings.legal_information_enabled:
-        app.include_router(
-            create_law_search_router(services.law_search_reader, services.authorizer)
-        )
-    if not (
-        services.settings.semantic_modeling_enabled
-        or services.settings.formatid_enabled
-    ):
-        return
-    app.include_router(create_property_context_router(services.binding_repository))
-    app.include_router(
-        create_binding_router(
-            services.binding_repository, services.authorizer, services.catalog
-        )
-    )
-    app.include_router(
-        create_ontology_authoring_router(
-            services.ontology_authoring_service, services.authorizer, dependency_reader=dependency_reader,
-        )
-    )
-    app.include_router(
-        create_intelligence_router(
-            services.suggestion_service,
-            services.authorizer,
-        )
-    )
-    if not services.settings.semantic_modeling_enabled:
-        return
-    app.include_router(
-        create_context_router(services.context_engine, services.authorizer)
-    )
-
-    app.include_router(create_registry_router(services.catalog))
-    app.include_router(
-        create_ontology_migration_router(
-            services.catalog,
-            services.ontology_migration_manifest,
-            services.settings.app_database_url,
-        )
-    )
+    """Compose platform features, domain authoring and business applications explicitly."""
+    application_standards = install_formatid_routers(app, services)
+    operations_client = httpx.AsyncClient(timeout=15)
+    services.resources.append(operations_client)
+    install_model_operations_router(app, services, operations_client)
+    install_workflow_management_router(app, services, operations_client, application_standards)
+    dependency_reader = install_goods_authoring_routers(app, services)
+    install_metadata_routers(app, services)
+    install_legal_routers(app, services)
+    install_semantic_routers(app, services, dependency_reader)

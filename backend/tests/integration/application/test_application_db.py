@@ -9,21 +9,21 @@ import psycopg
 from psycopg.rows import dict_row
 import pytest
 
-from teoria.features.semantic_modeling.binding.repository import BindingRepository
-from teoria.features.metadata_management.intelligence.suggestions.execution import (
+from teoria.platform.ontology.bindings.repository import BindingRepository
+from teoria.platform.data.metadata.intelligence.suggestions.execution import (
     ApplicationStateError,
 )
-from teoria.features.metadata_management.intelligence.suggestions.repository import (
+from teoria.platform.data.metadata.intelligence.suggestions.repository import (
     SuggestionRepository,
 )
-from teoria.features.metadata_management.intelligence.suggestions.execution import (
+from teoria.platform.data.metadata.intelligence.suggestions.execution import (
     SuggestionApplicationError,
 )
-from teoria.features.metadata_management.intelligence.suggestions.service import (
+from teoria.platform.data.metadata.intelligence.suggestions.service import (
     SuggestionService,
 )
-from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
-from teoria.features.semantic_modeling.ontology.repository import OntologyRepository
+from teoria.platform.ontology.authoring.service import OntologyAuthoringService
+from teoria.platform.ontology.authoring.repository import OntologyRepository
 from teoria.integrations.application_database import apply_migrations
 
 DATABASE_URL = os.environ.get("TEORIA_TEST_APP_DATABASE_URL")
@@ -187,8 +187,8 @@ async def test_successful_draft_reference_survives_suggestion_reload():
 async def test_retry_api_reuses_approval_and_records_authenticated_actor():
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from teoria.features.access_control.auth import AdminAuthorizer
-    from teoria.features.metadata_management.intelligence.admin_router import (
+    from teoria.platform.access_control.auth import AdminAuthorizer
+    from teoria.platform.data.metadata.intelligence.admin_router import (
         create_intelligence_router,
     )
     from teoria.integrations.openmetadata import OpenMetadataError
@@ -600,8 +600,8 @@ async def test_recovery_does_not_confirm_an_unproven_effect(case):
 async def test_recovery_api_requires_authentication_and_records_principal():
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from teoria.features.access_control.auth import AdminAuthorizer
-    from teoria.features.metadata_management.intelligence.admin_router import (
+    from teoria.platform.access_control.auth import AdminAuthorizer
+    from teoria.platform.data.metadata.intelligence.admin_router import (
         create_intelligence_router,
     )
     from teoria.settings import Settings

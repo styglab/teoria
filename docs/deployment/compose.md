@@ -187,8 +187,8 @@ bash deploy/compose/postgres/backup.sh
 ```
 
 DB 백업 기준은 [Data DB 운영](../pipelines/database.md), 게시 artifact는 [Runtime](../platform/runtime.md),
-FormatID 실행은 [파이프라인](../procurement_specification_processing/pipeline.md),
-Metadata ingestion은 [수집 안내](../pipelines/openmetadata.md)를 따른다.
+FormatID 실행은 [파이프라인](../domains/goods/specifications/pipeline.md),
+Metadata ingestion은 [수집 안내](openmetadata.md)를 따른다.
 객체 저장소의 원본·산출물, 모델·인증 볼륨은 PostgreSQL 백업과 별도로 보존한다.
 
 ## CPU·메모리 예산

@@ -3,7 +3,7 @@
 
 법제처 공식 API를 직접 호출하는 독립 수집 기능이다. `korean-law-mcp`는
 요청·연혁 처리의 참고 자료이며 실행 의존성이 아니다. 수집·파싱·Data DB는
-`backend/src/teoria/features/legal_information/collection/`가 소유한다. 이번 단계는 법령 근거
+`backend/src/teoria/domains/legal_information/collection/`가 소유한다. 이번 단계는 법령 근거
 저장소이며 개인정보 위험등급, 적법성 판정, Ontology와 OpenMetadata 쓰기는
 구현 범위에 포함하지 않는다.
 
@@ -103,7 +103,7 @@ Raw 저장 후 구조 검증에 실패한 응답은 근거 추적을 위해 남�
 snapshot으로 승격되지 않는다. 다른 버전은 계속 수집하고 실패 버전은 다음 실행에
 재시도한다. 한 버전이라도 미완료이면 전체 checkpoint는 갱신하지 않는다.
 
-예약 시각과 활성 여부는 [자동 생성 배포 목록](../deployments.md)을 따른다.
+배포 선언은 `teoria-pipelines deployment-docs`, 실제 등록·활성 여부는 Prefect UI에서 확인한다.
 일별 수집과 전체 연혁 재확인은 별도 Deployment다.
 매일 전체 목록을 확인하고 신규·파서 변경·목록 정보 변경·현행·시행예정 본문을
 수집한다. 일요일에는 모든 본문을 다시 받아 오래된 원문의 정정도 확인한다.
@@ -139,7 +139,7 @@ Suggestion→Review→Application 절차를 거쳐 OpenMetadata에 적용해야 
 ## 조회 기능과의 연결
 
 수집된 snapshot을 사용하는 Admin 진단 API와 기준일별 검색 규칙은
-[법령 근거 검색](../../platform/metadata/law_evidence.md)에 설명한다. Pipeline은 원문·버전·
+[법령 근거 검색](../../platform/metadata.md)에 설명한다. Pipeline은 원문·버전·
 검색용 read view를 소유하고 Platform은 조회·진단을 소유한다.
 
 ## 현재 전용 배포
@@ -150,4 +150,3 @@ Compose `prefect-law-deploy`가 `teoria-legal-information` pool과 `laws` queue�
 기존 조달 수집 pool을 재개하지 않는다. 월~토 04:15 변경 동기화,
 일요일 04:15 전체 연혁 보정을 실행한다(Asia/Seoul).
 K3s는 전용 dispatcher와 `teoria-legal-information-secrets`를 사용하며 실제 클러스터 검증은 별도다.
-[복구 검증](../../../archive/documentation/verification/law_recovery_2026_10_25.md)을 따른다.

@@ -19,8 +19,8 @@ API·MCP extra와 Worker별 dependency group으로 실행 환경을 구분한다
 | 대상 | 기준 코드·설정 |
 |---|---|
 | Platform·Runtime·Admin | `backend/src/teoria/settings.py` |
-| Pipelines | `backend/src/teoria/integrations/data_operations/settings.py` |
-| DB 연결 상한 | Platform `persistence/postgres.py`, Pipelines `persistence/connection.py`의 환경변수 |
+| Pipelines | `backend/src/teoria/platform/data/operations/settings.py` |
+| DB 연결 상한 | Application DB `integrations/application_database/postgres.py`, Data DB `integrations/data_database/connection.py`의 환경변수 |
 | MCP | `backend/src/teoria/entrypoints/mcp/settings.py` |
 | Compose 서비스·포트·이미지·필수 인증 | `deploy/compose/compose*.yaml`, `.env.example` |
 | EC2 K3s·GitHub CD | `deploy/k3s/`, `.github/workflows/deploy_k3s.yaml` |
@@ -212,7 +212,7 @@ DB URL도 설정해야 한다. Compose 내부 DB 포트를 기본 공개하지 �
 
 이전 HTTP 모델 주소·이름·토큰·출력 토큰 설정은 사용하지 않는다. Codex 인증은 Compose의
 `metadata-model-auth` 전용 볼륨에 두며 `.env`에 저장하지 않는다.
-요청·응답 계약과 시작 방법은 [자산 진단](../platform/metadata/asset_assessment.md)을 따른다.
+요청·응답 계약과 시작 방법은 [자산 진단](../platform/metadata.md)을 따른다.
 
 ## Secret 규칙
 

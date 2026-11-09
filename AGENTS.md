@@ -9,10 +9,16 @@ Teoria의 제품 경계는 AI-Native Metadata & Ontology Platform이다. 공공�
 Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 domain에서 실제
 재사용이 확인되기 전에는 Platform 공통 추상화로 승격하지 않는다.
 
-- Python 실행 코드는 `backend/src/teoria/` 하나의 프로젝트에 둔다. 기능 소유권은 `features/`, 외부 연결과 실제 재사용 기반은 `integrations/`, 프로세스 조립은 `entrypoints/`가 맡는다.
-- Ontology·Binding·작성·Registry는 `features/semantic_modeling/`, Runtime·Context는 `features/runtime/`에 둔다.
-- 규격서 처리와 Prefect Flow는 `features/specification_processing/`, 물품 후보·프로파일 승인은 `features/goods_normalization/`에 둔다.
-- 법령 수집·조회는 `features/legal_information/`, 메타데이터 진단·ingestion은 `features/metadata_management/`에 둔다.
+- Python 실행 코드는 `backend/src/teoria/` 하나의 프로젝트에 둔다. 플랫폼은 `platform/`, 업무 규칙은 `domains/`, 업무 앱은 `apps/`, 외부 연결은 `integrations/`, 프로세스 조립은 `entrypoints/`가 맡는다.
+- 플랫폼 주 영역은 `platform/data/`, `platform/ontology/`, `platform/ai/`이며 MLOps는 별도 `platform/mlops/`에 둔다.
+  `ai/`는 향후 AIP를 위한 예약 영역으로 README만 유지한다. 현재 AIP·Agent·Tool 실행 계층은 미구현이다.
+  기존 Codex 연결·자산 진단·문서 추출을 AIP 구현으로 표시하지 않고 소유 기능에 유지한다.
+  MLOps를 AIP와 동일시하거나 `ai/` 아래로 옮기지 않는다. 구현되지 않은 AI API·메뉴·배포를 만들지 않는다.
+- 고객 이탈 전용 데이터·학습·평가·배포·추론은 `examples/customer_churn/`, 공통 모델 운영은 `platform/mlops/`, MLflow 연결은 `integrations/mlflow/`에 둔다. 플랫폼·도메인·연결 모듈은 예제를 import하지 않는다. 예제 API·프런트엔드 테스트 폼은 composition·shell에서 주입한다.
+- Ontology는 `platform/ontology/authoring/`, Binding은 `platform/ontology/bindings/`, Source·Mapping·Capability 계약은 `platform/ontology/contracts/`, Runtime·Context는 `platform/ontology/runtime/`에 둔다.
+- 규격서 추출은 `domains/goods/data_processing/`, 복합 Prefect Flow는 `domains/goods/workflows/`, 물품 후보·프로파일 승인은 `domains/goods/normalization/`에 둔다.
+- 물품 원문 표현 등록·게시 개념 연결은 `domains/goods/expression_links/`에 둔다. 새 업무 정의는 Ontology가 소유하며, v1 사전 쓰기는 `domains/goods/expression_links/legacy/`와 규격서의 `legacy_dictionary/` 호환 영역에 격리한다.
+- 법령 수집·조회는 `domains/legal_information/`, 메타데이터 진단·ingestion은 `platform/data/metadata/`에 둔다.
 - MCP protocol 진입점은 `entrypoints/mcp/`, Runtime HTTP client는 `integrations/runtime_http/`에 둔다. MCP는 Runtime API만 호출하며 직접 DB 접근과 embedded mode는 지원하지 않는다.
 - Pipeline 실행 코드에서 Capability 또는 Mapping Runtime을 직접 호출하지 않는다. 표준관리 Flow의 의미 작성 요청은 인증된 Admin HTTP API를 사용한다.
 - Provider wire 계약·요청·응답·HTTP 실행은 `integrations/provider_api/`, Codex subprocess 추론은 `integrations/codex/`, Prefect 배포·pool·queue 정책은 `integrations/prefect/`가 소유한다.
@@ -20,10 +26,12 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - Prefect Flow·Task는 소유 기능에 둔다. 공통 Flow 등록 정보·기본 파라미터·스케줄은 `backend/config/<feature>/prefect_deployments.yaml`, 환경별 pool·queue·Job 정책은 `deploy/compose/prefect/`와 `deploy/k3s/prefect/`에 둔다.
 - Python 의존성은 `backend/pyproject.toml`, 잠금은 `backend/uv.lock` 한곳에서 관리한다. API·MCP·각 Worker는 별도 이미지와 역할별 의존성·권한을 유지한다.
 - 별도 설치형 `packages/`는 둘 이상의 독립 프로젝트가 실제 소비할 때만 추가한다. 현재 통합한 내부 코드를 다시 패키지로 분리하거나 `common`, `shared`, `utils` 묶음을 만들지 않는다.
-- 프런트엔드는 `frontend/src/`에 두며 앱 조립은 `app/`, 업무 화면은 `features/`에 둔다.
+- 프런트엔드는 `frontend/src/`에 두며 플랫폼 화면 조립은 `shell/`, 플랫폼 화면은 `platform/`, 도메인 화면은 `domains/`, FormatID는 `apps/formatid/`에 둔다.
+- 프런트엔드 업무 API·응답 타입은 소유 모듈의 `api.ts`, 공통 HTTP·Query 정책은 `api/`에 둔다. 서버 조회는 TanStack Query로 관리하고 요청 취소 신호를 전달한다. 토큰은 캐시 키에 넣지 않으며 인증 변경 시 캐시를 비운다. 승인·게시 자동 재시도는 금지한다.
+- 라우트는 `shell/routes.tsx`, 메뉴 경로는 `shell/navigation.ts`에 둔다. 공유할 필터·페이지·탭은 URL, 편집 중 값·대화상자는 화면 상태로 관리한다.
 - 로컬 Compose 배포는 `deploy/compose/`, EC2 K3s 배포와 GitHub 자동 배포는 `deploy/k3s/`와 `.github/workflows/deploy_k3s.yaml`에 둔다. 실제 환경 검증 전에는 템플릿 검증을 운영 배포 성공으로 기록하지 않는다.
 - 명시적으로 입력한 규격서의 파싱·정보 추출·표준 후보 관리·고정 표준 적용은
-  `backend/src/teoria/features/specification_processing/`에서 재개한다.
+  `backend/src/teoria/domains/goods/`에서 재개한다.
   산출물 본문은 객체 저장소, 실행 상태·산출물 참조·문서별 결과는 Data DB에 둔다.
   자동 채택은 추출 표준 draft이며 Published Ontology나 authoritative metadata로 승격하지 않는다.
   구형 공고 첨부 자동 수집·참가자격 판단과 `archive/bid_document_processing/`의 실행 경로는
@@ -32,6 +40,33 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
   수집과 기업·조달 분석은 `archive/procurement_services/`에 비활성 보관하며 활성 배포에 연결하지 않는다.
   Ontology·Binding·Mapping·Capability·Runtime·OpenMetadata·Prefect 기반과 기존 게시·DB 이력은 유지한다.
   메타데이터 진단용 법령 수집·조회는 활성화하며 `legal_information` 패키지와 전용 Prefect pool에서 운영한다.
+
+## Palantir architecture reference
+
+플랫폼 구조·모듈 경계·새 기능을 설계할 때 Palantir Foundry·Ontology·AIP의
+공개 아키텍처와 관련 구성요소를 참고한다. 설계 대상의 공식 문서를 확인하고,
+이미 확인한 동일 근거는 재사용한다. 출발점은
+[Architecture Center](https://www.palantir.com/docs/foundry/architecture-center/overview/)다.
+
+아래 대응은 Teoria의 설계 참고 기준이며 기능 동등성이나 Palantir 내부 코드 구조를 뜻하지 않는다.
+
+| 참고 구성요소 | Teoria에 적용할 판단 기준 |
+|---|---|
+| [Foundry 플랫폼](https://www.palantir.com/docs/foundry/platform-overview/overview/)의 데이터 통합 | 수집·변환·품질·재실행은 데이터 처리 책임이다. 공통 기반은 `platform/data/operations/`, 업무 Flow·Task는 소유 도메인에 둔다. |
+| [Ontology](https://www.palantir.com/docs/foundry/ontology/overview/)의 Objects·Properties·Links | 지속 가능한 업무 의미와 원문 관찰·물리 스키마·실행 응답을 구분한다. 정의는 `platform/ontology/authoring/`, 물품 고유 의미 자산과 적용 규칙은 `domains/goods/`가 맡는다. |
+| [Actions](https://www.palantir.com/docs/foundry/action-types/overview/)·Functions | 업무 변경은 소유 서비스에서 입력·권한·상태 전이·transaction·감사를 함께 검증한다. 앱이나 AI가 DB를 직접 변경하지 않는다. |
+| [Workshop](https://www.palantir.com/docs/foundry/workshop/overview/)·Ontology 기반 앱 | FormatID는 플랫폼·도메인의 공개 계약을 소비한다. 화면·앱에 의미 원장이나 승인 규칙을 중복 구현하지 않는다. |
+| [Automate](https://www.palantir.com/docs/foundry/automate/overview/) | 실행 조건·스케줄·재시도와 업무 정책을 구분한다. 현재 실행 기반은 Prefect이며, 의미 작성·승인은 인증된 소유 API를 거친다. |
+| [AIP를 포함한 플랫폼 구성](https://www.palantir.com/docs/foundry/platform-overview/overview/) | AI 호출도 동일한 데이터 접근·승인·감사 경계를 따른다. 모델·입력·근거·적용 결과와 평가 범위를 추적한다. |
+
+- 업무 객체 값의 변경과 Ontology 정의의 Draft·검토·승인·게시를 구분한다.
+  Palantir Actions를 참고한다는 이유로 Published Ontology 정의를 직접 수정하지 않는다.
+- OpenMetadata·Application DB·Data DB·객체 저장소의 기존 권위를 유지한다.
+  Palantir 구성요소와 Teoria Capability·Binding·Prefect를 같은 개념으로 간주하지 않는다.
+- 이름을 맞추기 위한 폴더·Registry·범용 엔진·별도 패키지를 추가하지 않는다.
+  새 공통 추상화는 실제 반복 사용이 확인된 경우에만 도입한다.
+- 설계 변경 설명에는 참고한 공식 문서, Teoria에 적용한 원칙과 차이를 간단히 기록한다.
+  현재 구현·미구현·운영 검증 여부를 구분하고, 책임 경계가 바뀌면 기존 아키텍처 문서를 갱신한다.
 
 ## Understandability and maintainability
 
@@ -49,6 +84,8 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - `docs/`에는 문서와 문서용 예제·템플릿을 둔다. 문서 검증 코드는 `tests/documentation/`에
   두며 이를 위해 루트 `tools/` 또는 `docs/` 아래 실행 코드 폴더를 만들지 않는다.
 - 파일 수나 줄 수만을 이유로 분리하거나 미래 재사용을 위한 추상화를 추가하지 않는다.
+- 클래스·함수마다 파일을 만들지 않는다. 같은 책임과 변경 이유를 가진 계약·변환·실행 코드는 함께 둔다.
+  단순 생성·재노출·호출 전달만 하는 파일과 한 구현만 담은 중간 폴더는 유지할 이유가 없으면 제거한다.
 
 ## Asynchronous I/O
 
@@ -166,7 +203,7 @@ uv run --project backend --locked --all-extras --group orchestration pytest back
 ## Backend HTTP and module boundaries
 
 - FastAPI 앱 생성·lifespan은 `backend/src/teoria/entrypoints/`, 객체 조립은 `entrypoints/composition/`, 기능별 HTTP 처리는 소유 기능의 `*_router.py`에 둔다.
-- `features/`와 `integrations/`는 `entrypoints/`를 역으로 import하지 않는다. 기능 간 의존성은 순환하지 않아야 한다.
+- `platform/`은 `domains/`·`apps/`·`examples/`를 import하지 않는다. `domains/`는 `apps/`를 import하지 않는다. 실행 코드와 `integrations/`는 `entrypoints/`를 역으로 import하지 않는다. 앱에 SQL을 두지 않는다. 기능 간 의존성은 순환하지 않아야 한다.
 - API가 생성한 HTTP client는 lifespan에서 재사용·종료하고 주입받은 client는 호출자의 소유권을 유지한다.
 - Ontology와 프로파일 Service의 승인·게시 정책 및 Repository의 SQL·감사를 분리하되 connection·transaction·잠금 순서를 유지한다.
 - Mapping codec의 외부 ID는 게시 artifact 호환을 보존한다. 기업·과세 codec은 명시적인 `registry/codecs/legacy/` 호환 영역이며 업무 Source·Capability 재활성화 근거가 아니다.

@@ -4,10 +4,10 @@ import shutil
 
 import yaml
 
-from teoria.features.semantic_modeling.registry.loader import RegistryLoader
-from teoria.features.semantic_modeling.registry.validation.registry import RegistryValidator
-from teoria.integrations.data_operations.loader import PipelineLoader
-from teoria.integrations.data_operations.validator import PipelineValidator
+from teoria.platform.ontology.contracts.loader import RegistryLoader
+from teoria.platform.ontology.contracts.validation.registry import RegistryValidator
+from teoria.platform.data.operations.loader import PipelineLoader
+from teoria.platform.data.operations.validator import PipelineValidator
 
 BACKEND = Path(__file__).resolve().parents[2]
 

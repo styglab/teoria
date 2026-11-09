@@ -1,0 +1,539 @@
+import { Check, Link2, Plus, ShieldCheck, X } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useServerQuery } from "../../../api/server_queries";
+import { Button } from "../../../components/ui/button";
+import {
+  CatalogPagination,
+  useCatalogPagination,
+} from "../../../components/workspace/CatalogPagination";
+import {
+  FilterTabs,
+  PageHeader,
+  PageState,
+  SearchField,
+} from "../../../components/workspace/WorkspaceLayout";
+import { metadataApi } from "../../data/metadata/catalog/api";
+import { ontologyApi } from "../authoring/api";
+import { bindingApi, type SemanticBinding } from "./api";
+
+const statuses = [
+  "all",
+  "draft",
+  "approved",
+  "rejected",
+  "deprecated",
+] as const;
+const statusLabels: Record<string, string> = {
+  all: "전체",
+  draft: "초안",
+  approved: "승인됨",
+  rejected: "거절됨",
+  deprecated: "사용 종료",
+  valid: "정상",
+  checking: "확인 중",
+};
+const conceptLabels: Record<string, string> = {
+  object: "업무 개념",
+  property: "속성",
+  relationship: "관계",
+  rule: "규칙",
+};
+const authorityLabels: Record<string, string> = {
+  preferred: "우선",
+  authoritative: "권위",
+  supplemental: "보조",
+};
+const targetLabels: Record<string, string> = {
+  glossary_term: "업무 용어",
+  data_asset: "데이터 자산",
+};
+
+export function BindingManager() {
+  const [params, setParams] = useSearchParams();
+  const update = (values: Record<string, string>) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.delete("page");
+      Object.entries(values).forEach(([k, v]) =>
+        v ? next.set(k, v) : next.delete(k),
+      );
+      return next;
+    });
+  const namespace = params.get("namespace") || undefined;
+  const conceptId = params.get("binding_concept") || undefined;
+  const scope = { namespace, conceptId };
+  const connectionsPath = "/admin/semantic-model/ontology?view=connections";
+  const asset = params.get("asset");
+  const assetId = params.get("assetId");
+  const selectedId = params.get("binding");
+
+  const status = (statuses as readonly string[]).includes(
+    params.get("status") || "",
+  )
+    ? (params.get("status") as (typeof statuses)[number])
+    : "all";
+  const setStatus = (status: (typeof statuses)[number]) =>
+    update({ status, binding: "" });
+  const query = params.get("q") || "";
+  const setQuery = (q: string) => update({ q, binding: "" });
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    conceptId: conceptId || "",
+    targetType: "glossary_term",
+    entityId: "",
+    entityType: "glossaryTerm",
+    fqn: "",
+    bindingType: "equivalent_to",
+    authority: "preferred",
+    purpose: "semantic_resolution",
+  });
+
+  useEffect(() => {
+    setForm((value) => ({ ...value, conceptId: conceptId || "" }));
+    setFormOpen(false);
+  }, [conceptId, namespace]);
+  const result = useServerQuery(
+    [
+      "ontology",
+      "binding-manager",
+      status,
+      assetId,
+      selectedId,
+      namespace,
+      conceptId,
+    ],
+    async (signal) => {
+      let truncated = false;
+      let ids: string[] | undefined;
+      if (selectedId && assetId) ids = [selectedId];
+      else if (assetId) {
+        const context = await metadataApi.assetContext(assetId, signal);
+        if (context.business.status !== "available")
+          throw new Error("자산의 의미 연결 원천을 조회할 수 없습니다.");
+        ids =
+          context.business.data?.bindings.map((item) => item.binding_id) || [];
+        truncated = Boolean(context.business.data?.bindings_truncated);
+      }
+      const [bindingResponse, conceptResponse, validationResponse] =
+        await Promise.all([
+          ids?.length === 0
+            ? Promise.resolve({ items: [] })
+            : bindingApi.bindings(
+                status === "all" ? undefined : status,
+                ids,
+                scope,
+                signal,
+              ),
+          ontologyApi.ontologyConcepts(namespace, signal),
+          bindingApi.bindingValidation(signal),
+        ]);
+      if (
+        selectedId &&
+        !bindingResponse.items.some((item) => item.binding_id === selectedId)
+      ) {
+        const focused = await bindingApi.bindings(
+          undefined,
+          [selectedId],
+          scope,
+          signal,
+        );
+        bindingResponse.items.push(...focused.items);
+      }
+
+      return {
+        items: bindingResponse.items,
+        concepts: conceptResponse.items.filter(
+          (item) => !conceptId || item.concept_id === conceptId,
+        ),
+        validation: validationResponse,
+        truncated,
+      };
+    },
+  );
+  const items = result.data?.items ?? [];
+  const concepts = result.data?.concepts ?? [];
+  const validation = result.data?.validation ?? null;
+  const contextTruncated = result.data?.truncated ?? false;
+  const loading = result.loading;
+  const error = actionError || result.error || null;
+  const load = () => result.refetch();
+
+  const selected = useMemo(
+    () => concepts.find((item) => item.concept_id === form.conceptId),
+    [concepts, form.conceptId],
+  );
+
+  const review = async (
+    item: SemanticBinding,
+    decision: "approve" | "reject" | "deprecate",
+  ) => {
+    setBusy(item.binding_id);
+    try {
+      await bindingApi.reviewBinding(item.binding_id, decision);
+      await load();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selected) return;
+    setBusy("create");
+    try {
+      await bindingApi.createBinding({
+        ontology_ref_type: selected.concept_kind,
+        ontology_concept_id: selected.concept_id,
+        target_type: form.targetType,
+        external_entity_id: form.entityId,
+        entity_type: form.entityType,
+        fully_qualified_name: form.fqn,
+        binding_type: form.bindingType,
+        purpose: form.purpose,
+        authority: form.authority,
+        priority: 100,
+        provenance: { source: "admin_ui", resolution: "review_required" },
+      });
+      setFormOpen(false);
+      setForm((value) => ({ ...value, entityId: "", fqn: "" }));
+      await load();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const filtered = items.filter((item) =>
+    [item.ontology_stable_key, item.fully_qualified_name, item.purpose].some(
+      (value) =>
+        value?.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+    ),
+  );
+
+  const pagination = useCatalogPagination(
+    filtered.length,
+    JSON.stringify([
+      status,
+      query.trim().toLocaleLowerCase(),
+      assetId,
+      selectedId,
+    ]),
+  );
+
+  const activeBindingId = selectedId || filtered[pagination.start]?.binding_id;
+
+  return (
+    <div className="binding-manager">
+      <PageHeader
+        title="데이터·용어 연결"
+        description="업무 개념과 데이터 자산·용어의 연결을 검토하고 관리합니다."
+        actions={
+          <Button
+            disabled={!!busy || loading || !concepts.length}
+            onClick={() => setFormOpen((value) => !value)}
+          >
+            {formOpen ? <X size={14} /> : <Plus size={14} />}{" "}
+            {formOpen ? "닫기" : "데이터·용어 연결 추가"}
+          </Button>
+        }
+      />
+      <SearchField
+        label="의미 연결 검색"
+        placeholder="업무 개념, 자산 이름, 사용 목적 검색"
+        value={query}
+        onChange={setQuery}
+      />
+      {!loading && !error && !concepts.length && (
+        <p className="operations-note">
+          선택 범위에 게시된 개념이 없습니다. 연결 제안은 Ontology 게시 후에
+          만들 수 있습니다.
+        </p>
+      )}
+      {conceptId && (
+        <div className="context-banner">
+          <span>선택한 Ontology 개념의 연결을 관리합니다.</span>
+          <Link
+            to={`${connectionsPath}${namespace ? `&namespace=${encodeURIComponent(namespace)}` : ""}`}
+          >
+            모델 전체 연결
+          </Link>
+        </div>
+      )}
+      {selectedId && (
+        <div className="context-banner">
+          <span>선택한 의미 연결의 근거와 승인 상태를 확인합니다.</span>
+          <Link to={connectionsPath}>모든 연결 보기</Link>
+        </div>
+      )}
+      {asset && (
+        <div className="context-banner">
+          <span>
+            선택한 자산: <strong>{asset}</strong>
+          </span>
+          <Link
+            to={`/admin/data-catalog/assets/${encodeURIComponent(asset)}?tab=business`}
+          >
+            자산으로 돌아가기
+          </Link>
+          <Link to={connectionsPath}>범위 해제</Link>
+          {contextTruncated && <small>최근 50개 연결 범위입니다.</small>}
+        </div>
+      )}
+      <div className="page-controls">
+        <FilterTabs
+          label="의미 연결 상태"
+          items={statuses.map((id) => ({ id, label: statusLabels[id] }))}
+          value={status}
+          onChange={setStatus}
+          disabled={!!busy}
+        />
+        <div className={`binding-health ${validation?.status ?? "unknown"}`}>
+          <ShieldCheck size={15} />
+          <strong>
+            {statusLabels[validation?.status ?? "checking"] ??
+              validation?.status}
+          </strong>
+          <span>
+            이 범위 연결 {items.length}개 · 전체 연결 진단{" "}
+            {validation?.diagnostic_count ?? 0}개
+          </span>
+        </div>
+      </div>
+      {formOpen && (
+        <form className="binding-form" onSubmit={create}>
+          <label>
+            온톨로지 개념
+            <select
+              required
+              value={form.conceptId}
+              disabled={!!conceptId}
+              onChange={(e) => setForm({ ...form, conceptId: e.target.value })}
+            >
+              <option value="">선택</option>
+              {concepts.map((item) => (
+                <option key={item.concept_id} value={item.concept_id}>
+                  {item.stable_key} ·{" "}
+                  {conceptLabels[item.concept_kind] ?? item.concept_kind}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            연결 대상
+            <select
+              value={form.targetType}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  targetType: e.target.value,
+                  entityType:
+                    e.target.value === "glossary_term"
+                      ? "glossaryTerm"
+                      : "column",
+                })
+              }
+            >
+              <option value="glossary_term">업무 용어</option>
+              <option value="data_asset">데이터 자산</option>
+            </select>
+          </label>
+          <label>
+            OpenMetadata 엔터티 ID
+            <input
+              required
+              value={form.entityId}
+              onChange={(e) => setForm({ ...form, entityId: e.target.value })}
+            />
+          </label>
+          <label>
+            정규 이름(FQN)
+            <input
+              required
+              value={form.fqn}
+              onChange={(e) => setForm({ ...form, fqn: e.target.value })}
+              placeholder="Procurement.ContractAmount"
+            />
+          </label>
+          <label>
+            엔터티 유형
+            <input
+              required
+              value={form.entityType}
+              onChange={(e) => setForm({ ...form, entityType: e.target.value })}
+            />
+          </label>
+          <label>
+            권위 수준
+            <select
+              value={form.authority}
+              onChange={(e) => setForm({ ...form, authority: e.target.value })}
+            >
+              <option value="preferred">우선</option>
+              <option value="authoritative">권위</option>
+              <option value="supplemental">보조</option>
+            </select>
+          </label>
+          <button disabled={busy === "create"} type="submit">
+            연결 초안 생성
+          </button>
+        </form>
+      )}
+      {error && <div className="binding-error">{error}</div>}
+      <div
+        className="binding-results"
+        key={JSON.stringify([
+          pagination.page,
+          pagination.pageSize,
+          status,
+          query,
+          assetId,
+          selectedId,
+        ])}
+      >
+        <div className="binding-selection" data-selected={!!selectedId}>
+          <button
+            className="binding-mobile-back"
+            onClick={() => update({ binding: "" })}
+          >
+            ← 의미 연결 목록
+          </button>
+          <nav className="binding-selection-list" aria-label="의미 연결 목록">
+            {filtered.slice(pagination.start, pagination.end).map((item) => (
+              <button
+                type="button"
+                key={item.binding_id}
+                aria-pressed={activeBindingId === item.binding_id}
+                onClick={() =>
+                  update({
+                    binding: item.binding_id,
+                    page: String(pagination.page),
+                  })
+                }
+              >
+                <strong>{item.ontology_stable_key}</strong>
+                <span>{item.fully_qualified_name}</span>
+                <small>{statusLabels[item.status]}</small>
+              </button>
+            ))}
+          </nav>
+          <div className="binding-list">
+            {!loading &&
+              filtered
+                .filter((item) => item.binding_id === activeBindingId)
+                .map((item) => (
+                  <article key={item.binding_id}>
+                    <header>
+                      <div className="binding-icon">
+                        <Link2 size={15} />
+                      </div>
+                      <div>
+                        <small>
+                          {conceptLabels[item.ontology_concept_kind] ??
+                            item.ontology_concept_kind}
+                        </small>
+                        <h3>{item.ontology_stable_key}</h3>
+                      </div>
+                      <b className={`binding-status ${item.status}`}>
+                        {statusLabels[item.status] ?? item.status}
+                      </b>
+                    </header>
+                    <div className="binding-direction">
+                      <span>↕</span>
+                      <div>
+                        <strong>{item.fully_qualified_name}</strong>
+                        <small>
+                          OpenMetadata · {item.entity_type} ·{" "}
+                          {targetLabels[item.target_type] ?? item.target_type}
+                        </small>
+                      </div>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>연결 유형</dt>
+                        <dd>{item.binding_type}</dd>
+                      </div>
+                      <div>
+                        <dt>권위 수준</dt>
+                        <dd>
+                          {authorityLabels[item.authority] ?? item.authority}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>사용 목적</dt>
+                        <dd>{item.purpose ?? "—"}</dd>
+                      </div>
+                      <div>
+                        <dt>최근 검증</dt>
+                        <dd>
+                          {item.last_verified_at
+                            ? item.last_verified_at.slice(0, 10)
+                            : "검증 기록 없음"}
+                        </dd>
+                      </div>
+                    </dl>
+                    <footer>
+                      <small>
+                        생성 {item.created_by}
+                        {item.approved_by ? ` · 승인 ${item.approved_by}` : ""}
+                      </small>
+                      <div>
+                        {item.status === "draft" && (
+                          <>
+                            <button
+                              disabled={busy === item.binding_id}
+                              onClick={() => review(item, "reject")}
+                            >
+                              거절
+                            </button>
+                            <button
+                              className="primary"
+                              disabled={busy === item.binding_id}
+                              onClick={() => review(item, "approve")}
+                            >
+                              <Check size={13} />
+                              승인
+                            </button>
+                          </>
+                        )}
+                        {item.status === "approved" && (
+                          <button
+                            disabled={busy === item.binding_id}
+                            onClick={() => review(item, "deprecate")}
+                          >
+                            사용 종료
+                          </button>
+                        )}
+                      </div>
+                    </footer>
+                  </article>
+                ))}
+          </div>
+        </div>
+        {loading && (
+          <PageState loading title="의미 연결을 불러오고 있습니다…" />
+        )}
+        {!loading && !error && !filtered.length && (
+          <PageState
+            title={
+              query
+                ? "조건에 맞는 의미 연결이 없습니다"
+                : "해당 상태의 의미 연결이 없습니다."
+            }
+          />
+        )}
+      </div>
+      <CatalogPagination
+        {...pagination}
+        loading={loading}
+        error={!!error}
+        disabled={!!busy}
+      />
+    </div>
+  );
+}

@@ -8,15 +8,15 @@ import pytest
 from fastapi import FastAPI
 
 from teoria.integrations.application_database import apply_migrations
-from teoria.features.access_control.auth import AdminAuthorizer
+from teoria.platform.access_control.auth import AdminAuthorizer
 from teoria.settings import Settings
-from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
-from teoria.features.semantic_modeling.goods_dictionary.service import GoodsDictionaryService
-from teoria.features.semantic_modeling.goods_dictionary.meaning_service import GoodsMeaningService
-from teoria.features.semantic_modeling.goods_dictionary.ontology_service import OntologyDictionaryService
-from teoria.features.semantic_modeling.goods_dictionary.admin_router import create_goods_dictionary_router
-from teoria.features.semantic_modeling.goods_dictionary.contracts import DictionarySubmission, source_literal_definition
-from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import (
+from teoria.platform.ontology.authoring.service import OntologyAuthoringService
+from teoria.domains.goods.expression_links.registration_service import ExpressionRegistrationService
+from teoria.domains.goods.expression_links.legacy.meaning_service import LegacyMeaningService
+from teoria.domains.goods.expression_links.expression_link_service import ExpressionLinkService
+from teoria.domains.goods.expression_links.admin_router import create_goods_dictionary_router
+from teoria.domains.goods.expression_links.contracts import DictionarySubmission, source_literal_definition
+from teoria.domains.goods.expression_links.snapshot_contracts import (
     ConceptDefinition, MeaningDecision, MeaningResolution, parse_dictionary_snapshot, resolve_snapshot,
 )
 
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.skipif(not URL, reason='isolated Application DB require
 async def test_real_dictionary_migrates_to_draft_and_only_published_links_apply():
     await apply_migrations(URL, Path('backend/migrations/application'))
     key='dictionary_test_'+uuid4().hex
-    legacy=GoodsMeaningService(URL)
+    legacy=LegacyMeaningService(URL)
     decision=MeaningDecision(action='approve',rationale='합성 데이터의 정의와 원문 문맥을 확인했습니다.')
     item=ConceptDefinition(key=key,kind='item_type',preferred_name='검증 인버터',
         definition='직류 입력을 교류 출력으로 변환하는 합성 검증용 장치입니다.',references=['synthetic:test'])
@@ -40,8 +40,8 @@ async def test_real_dictionary_migrates_to_draft_and_only_published_links_apply(
     ontology=OntologyAuthoringService(URL)
     draft=await ontology.create_ontology(namespace=key,name='검증 물품',description='Synthetic only',version='1',actor='fixture:owner')
     vid=UUID(draft['ontology_version_id'])
-    dictionary=GoodsDictionaryService(URL)
-    service=OntologyDictionaryService(URL,ontology_authoring=ontology)
+    dictionary=ExpressionRegistrationService(URL)
+    service=ExpressionLinkService(URL,ontology_authoring=ontology)
     app=FastAPI()
     authorizer=AdminAuthorizer(Settings(admin_auth_mode='bearer',admin_api_token='fixture-token',
         admin_api_actor='fixture:authenticated',admin_api_roles='ontology_owner'))
@@ -114,10 +114,10 @@ async def test_real_dictionary_migrates_to_draft_and_only_published_links_apply(
         assert any(r['requires_review'] for r in (await service.catalog('mapping'))['items'])
         assert (await client.post(root+'/ontology-draft-imports',json=proposal)).status_code==409
         # Dependency discovery reads each feature's public boundary against real SQL.
-        from teoria.features.goods_normalization.profiles.service import NormalizationProfileService
-        from teoria.features.goods_normalization.ontology_impact import GoodsOntologyImpactService
-        from teoria.features.semantic_modeling.binding.repository import BindingRepository
-        from teoria.features.semantic_modeling.registry.loader import RegistryCatalog
+        from teoria.domains.goods.normalization.profiles.service import NormalizationProfileService
+        from teoria.domains.goods.normalization.ontology_impact import GoodsOntologyImpactService
+        from teoria.platform.ontology.bindings.repository import BindingRepository
+        from teoria.platform.ontology.contracts.loader import RegistryCatalog
         profiles=NormalizationProfileService(URL,ontology_authoring=ontology)
         await profiles.create_from_template(next_id, {
             'profile_key':key, 'version':'1', 'classification_code':'1234567890',

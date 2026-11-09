@@ -1,5 +1,5 @@
-import { useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 export function useCatalogPagination(total: number, _scope: string) {
   const [params, setParams] = useSearchParams();

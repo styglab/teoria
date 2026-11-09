@@ -1,18 +1,21 @@
+import "@xyflow/react/dist/style.css";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "@xyflow/react/dist/style.css";
+import { BrowserRouter } from "react-router-dom";
+import { ServerQueryProvider } from "./api/server_queries";
 import "./components/ui/design_tokens.css";
+import "./components/ui/form_controls.css";
+import { PlatformShell } from "./shell/PlatformShell";
+import "./shell/workspace_experience.css";
 import "./styles.css";
 import "./workspace.css";
-import { App } from "./app/App";
-import "./app/workspace_experience.css";
-import "./components/ui/form_controls.css";
-import { BrowserRouter } from "react-router-dom";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ServerQueryProvider>
+      <BrowserRouter>
+        <PlatformShell />
+      </BrowserRouter>
+    </ServerQueryProvider>
   </React.StrictMode>,
 );

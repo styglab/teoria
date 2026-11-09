@@ -4,7 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 import psycopg
 import pytest
-from teoria.features.specification_processing.standard_workflow_repository import StandardWorkflowRepository
+from teoria.domains.goods.workflows.standard_authoring_repository import StandardWorkflowRepository
 
 DATABASE_URL=os.getenv('TEORIA_TEST_PIPELINE_DATABASE_URL')
 pytestmark=pytest.mark.skipif(not DATABASE_URL,reason='isolated Data DB required')

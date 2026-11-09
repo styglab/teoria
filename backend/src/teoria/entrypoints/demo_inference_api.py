@@ -1,6 +1,6 @@
 """Standalone demo inference process; never loaded into the Admin or Runtime API."""
 
-from teoria.features.model_operations.inference import create_inference_app
+from teoria.examples.customer_churn.inference import create_inference_app
 
 
 def main():

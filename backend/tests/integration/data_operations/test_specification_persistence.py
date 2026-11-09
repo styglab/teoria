@@ -7,9 +7,9 @@ from uuid import uuid4
 import psycopg
 import pytest
 from prefect.testing.utilities import prefect_test_harness
-from teoria.features.specification_processing.storage.artifact_store import artifact_store,S3ArtifactStore
-from teoria.features.specification_processing.flows import document_processing_flow,standard_management_flow
-from teoria.features.specification_processing.models import StandardArtifact,ContextBinding,PropertyBinding
+from teoria.domains.goods.data_processing.storage.artifact_store import artifact_store,S3ArtifactStore
+from teoria.domains.goods.workflows.specifications import document_processing_flow,standard_management_flow
+from teoria.domains.goods.contracts import StandardArtifact,ContextBinding,PropertyBinding
 
 DATABASE_URL=os.getenv('TEORIA_TEST_SPECIFICATION_DATABASE_URL')
 ARTIFACT_ROOT=os.getenv('TEORIA_TEST_SPECIFICATION_ARTIFACT_ROOT')

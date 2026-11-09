@@ -6,8 +6,8 @@ description: "Improve Teoria specification extraction through bounded real-pipel
 # Improve Specification Processing
 
 Read the [ownership rules](../../../docs/architecture/repository-structure.md) and
-[evaluation/execution contract](../../../docs/procurement_specification_processing/evaluation.md).
-Code belongs to `backend/src/teoria/features/specification_processing/`; tests follow the same feature under `backend/tests/`.
+[evaluation/execution contract](../../../docs/domains/goods/specifications/evaluation.md).
+Code belongs to `backend/src/teoria/domains/goods/`; tests follow the same feature under `backend/tests/`.
 Use its evaluation entrypoint rather than creating a second sampler, scorer or cleanup script.
 The evaluation Flow runs the actual shared extraction Tasks 00–05; it does not measure standardization,
 operational DB completion, or deployment. Source-only extraction must remain independent of server catalogs.
