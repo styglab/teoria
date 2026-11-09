@@ -12,6 +12,7 @@ from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import DictionaryChangeSet
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import RelatedMeaningContext
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import DictionaryMeaningReset
+from teoria.features.semantic_modeling.goods_dictionary.ontology_contracts import OntologyMappingProposal, DictionaryDraftImport
 
 
 def create_goods_dictionary_router(service, authorizer, meaning_service=None):
@@ -46,6 +47,10 @@ def create_goods_dictionary_router(service, authorizer, meaning_service=None):
                       actor: AdminPrincipal = Depends(principal)):
         return {'items':await translate(require_service().list_entries(query=query,kind=kind,limit=limit))}
 
+    @router.get('/entries/{entry_id}/evidence')
+    async def source_evidence(entry_id: UUID, actor: AdminPrincipal = Depends(principal)):
+        return {'items':await translate(meanings().source_evidence(entry_id))}
+
     @router.get('/entries/{entry_id}/audit')
     async def audit(entry_id: UUID, actor: AdminPrincipal = Depends(principal)):
         return {'items':await translate(require_service().audit(entry_id))}
@@ -55,16 +60,41 @@ def create_goods_dictionary_router(service, authorizer, meaning_service=None):
             raise HTTPException(503, detail={'code':'app_database_unavailable'})
         return meaning_service
 
+    @router.get('/classifications')
+    async def classifications(query: str = Query('',max_length=10,pattern=r'^[0-9]*$'),
+                              offset: int = Query(0,ge=0), limit: int = Query(25,ge=1,le=100),
+                              actor: AdminPrincipal = Depends(principal)):
+        return await translate(meanings().classifications(query=query,offset=offset,limit=limit))
+
+    @router.get('/catalog')
+    async def catalog(kind: Literal['concept','mapping','source'] = 'concept',
+                      query: str = Query('',max_length=300),
+                      status: Literal['draft','approved','rejected','deprecated'] | None = None,
+                      concept_kind: Literal['item_type','characteristic'] | None = None,
+                      classification: str | None = Query(None,pattern=r'^(?:[0-9]{10}|unclassified)$'),
+                      unresolved: bool = False,
+                      historical: bool = False,
+                      offset: int = Query(0,ge=0), limit: int = Query(25,ge=1,le=500),
+                      actor: AdminPrincipal = Depends(principal)):
+        if unresolved and (kind != "source" or classification is None):
+            raise HTTPException(422,detail={"code":"unresolved_requires_scoped_source"})
+        options = {'historical': True} if historical else {}
+        return await translate(meanings().catalog(kind,query=query,status=status,concept_kind=concept_kind,offset=offset,limit=limit,classification=classification,unresolved=unresolved,**options))
+
     @router.post('/concepts')
     async def propose_concept(payload: ConceptDefinition, actor: AdminPrincipal = Depends(principal)):
         return await translate(meanings().propose_concept(payload, actor=actor.actor))
+
+    @router.post('/ontology-draft-imports')
+    async def import_legacy(payload: DictionaryDraftImport, actor: AdminPrincipal = Depends(principal)):
+        return await translate(meanings().import_legacy_definitions(payload, actor=actor.actor))
 
     @router.get('/concepts')
     async def concepts(actor: AdminPrincipal = Depends(principal)):
         return {'items':await translate(meanings().list_records('concept'))}
 
     @router.post('/mappings')
-    async def propose_mapping(payload: MappingProposal, actor: AdminPrincipal = Depends(principal)):
+    async def propose_mapping(payload: OntologyMappingProposal | MappingProposal, actor: AdminPrincipal = Depends(principal)):
         return await translate(meanings().propose_mapping(payload, actor=actor.actor))
 
     @router.get('/mappings')

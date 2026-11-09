@@ -35,7 +35,13 @@ class GoodsDictionaryService:
     async def author(self, operation_id, submission: DictionarySubmission, *, actor):
         if not re.fullmatch(r'[a-z][a-z0-9_]{0,119}', operation_id):
             raise ValueError('invalid dictionary operation ID')
-        digest = checksum(submission)
+        request = submission.model_dump(mode="json")
+        if submission.classification_code is None:
+            request.pop("classification_code")  # Preserve existing operation replay checksums.
+        for source in request["sources"]:
+            if source["classification_code"] is None:
+                source.pop("classification_code")
+        digest = checksum(request)
         sources = {s.document_id:s for s in submission.sources}
         reasons = {c.candidate_key:grounding_error(c,sources) for c in submission.candidates}
         repo = self.repository
@@ -92,6 +98,12 @@ class GoodsDictionaryService:
                       'status':'partial' if counts['held'] else 'completed','input_checksum':digest,
                       'summary':{k:counts[k] for k in ['approved','reused','held','proposed']},
                       'decisions':list(decisions.values())}
+            if submission.classification_code is not None:
+                result["classification_code"] = submission.classification_code
+            scopes = {source.document_id: source.classification_code or submission.classification_code
+                      for source in submission.sources if source.classification_code or submission.classification_code}
+            if scopes:
+                result["source_classifications"] = scopes
             await repo.finish(conn,operation_id,result)
             return result
 

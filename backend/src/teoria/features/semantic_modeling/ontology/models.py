@@ -4,12 +4,20 @@ from datetime import date
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 OntologyStatus = Literal["draft", "in_review", "approved", "published", "deprecated"]
 BusinessObjectId = Annotated[UUID, Field(description="Stable Business Object identifier")]
 OntologyPropertyId = Annotated[UUID, Field(description="Stable Ontology Property identifier")]
+
+
+class OntologyPublicationRef(BaseModel):
+    model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
+    version_id: UUID
+    namespace: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    checksum: str = Field(pattern=r'^[a-f0-9]{64}$')
 
 
 class OntologyVersion(BaseModel):
@@ -40,6 +48,8 @@ class OntologyProperty(BaseModel):
     value_type: str
     cardinality: Literal["one", "optional", "many"] = "optional"
     unit: str | None = None
+    quantity_dimension: str | None = None
+    allowed_units: list[str] = Field(default_factory=list)
     temporal: bool = False
     status: OntologyStatus = "draft"
 

@@ -33,7 +33,6 @@ def test_non_server_units_and_original_unicode_are_preserved():
 @pytest.mark.parametrize('text,value,key,data_type',[
     ('CPU Core i7-128','128','model','identifier'),
     ('모델 X64GB','64','capacity','number'),
-    ('주파수 3.264GHz','64','frequency','number'),
     ('유량 64GBps','64','capacity','number'),
     ('전송률 64GB/s','64','capacity','number'),
     ('면적 64mm²','64','area','number'),

@@ -197,7 +197,7 @@ class DeploymentTests(unittest.TestCase):
             ]
         )
 
-    def test_cleanup_preserves_current_rollback_and_container_references(self):
+    def test_cleanup_removes_previous_dangling_images_and_preserves_current_and_container_references(self):
         folder = self.root / ".state/teoria"
         folder.mkdir(parents=True)
         (folder / "deployment.json").write_text(
@@ -225,7 +225,7 @@ class DeploymentTests(unittest.TestCase):
                     [
                         {
                             "Id": "sha256:" + command[-1],
-                            "RepoTags": ["teoria-test:" + command[-1]],
+                            "RepoTags": [] if command[-1] == "rollback" else ["teoria-test:" + command[-1]],
                         }
                     ]
                 )
@@ -234,7 +234,10 @@ class DeploymentTests(unittest.TestCase):
         self.call = inventory
         self.execute("cleanup", "--apply")
         removals = [c for c in self.calls if c[:3] == ["docker", "image", "rm"]]
-        self.assertEqual(removals, [["docker", "image", "rm", "teoria-test:old"]])
+        self.assertEqual(removals, [
+            ["docker", "image", "rm", "sha256:rollback"],
+            ["docker", "image", "rm", "teoria-test:old"],
+        ])
         self.assertFalse(any("prune" in c or "volume" in c for c in self.calls))
 
     def test_stop_shuts_application_services_down_before_infrastructure(self):

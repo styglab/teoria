@@ -32,3 +32,11 @@ def test_named_property_keeps_its_actual_owner_and_evidence():
     assert attribute.preferred_name=='허용하중' and attribute.owner_candidate_key==item.candidate_key
     assert attribute.evidence[0].locator=='/blocks/39/table/cells/3/1'
     assert item.evidence[0].locator=='/blocks/39/table/cells/3/1'
+
+
+def test_registration_preserves_document_product_scope_with_corpus_fallback():
+    data=corpus('허용하중')
+    data['classification_code']='1111111111'
+    assert submission_from_corpus(data).sources[0].classification_code=='1111111111'
+    data['documents'][0]['classification_code']='2222222222'
+    assert submission_from_corpus(data).sources[0].classification_code=='2222222222'

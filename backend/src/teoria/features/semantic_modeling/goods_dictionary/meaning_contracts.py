@@ -157,6 +157,9 @@ def snapshot_from_records(concepts, mappings, sources):
 
 def approved_dictionary_snapshot(snapshot):
     """Unresolved source registrations do not create new semantic releases."""
+    from teoria.features.semantic_modeling.goods_dictionary.ontology_contracts import OntologyDictionarySnapshot, approved_expression_snapshot
+    if isinstance(snapshot, OntologyDictionarySnapshot) or (isinstance(snapshot, dict) and snapshot.get('schema_version') == 2):
+        return approved_expression_snapshot(parse_dictionary_snapshot(snapshot))
     snapshot=DictionarySnapshot.model_validate(snapshot)
     concepts=[c for c in snapshot.concepts if c['status']=='approved']
     revisions={c['revision_id'] for c in concepts}
@@ -181,6 +184,9 @@ def scope_matches(mapping, classification_code, *, legacy=False):
 
 def resolve_snapshot(snapshot, source_entry_ids, classification_code=None):
     """Pure resolution shared by pinned document runs and change impact checks."""
+    from teoria.features.semantic_modeling.goods_dictionary.ontology_contracts import OntologyDictionarySnapshot, resolve_expression_snapshot
+    if isinstance(snapshot, OntologyDictionarySnapshot) or (isinstance(snapshot, dict) and snapshot.get('schema_version') == 2):
+        return resolve_expression_snapshot(parse_dictionary_snapshot(snapshot), source_entry_ids, classification_code)
     snapshot = DictionarySnapshot.model_validate(snapshot)
     concepts = {str(c['revision_id']): c for c in snapshot.concepts if c['status']=='approved'}
     sources = {str(s['entry_id']): s for s in snapshot.sources}
@@ -214,3 +220,15 @@ def resolve_snapshot(snapshot, source_entry_ids, classification_code=None):
         return row
     return {'policy_version':'approved_scoped_equivalence_v1', 'snapshot_checksum':snapshot.checksum,
             'items':[resolve(entry) for entry in source_entry_ids]}
+
+
+def parse_dictionary_snapshot(value):
+    """Preserve historical v1 interpretation; v2 contains published Ontology references."""
+    import json
+    from teoria.features.semantic_modeling.goods_dictionary.ontology_contracts import OntologyDictionarySnapshot
+    if isinstance(value, (str, bytes)):
+        value = json.loads(value)
+    if isinstance(value, (DictionarySnapshot, OntologyDictionarySnapshot)):
+        return value
+    model = OntologyDictionarySnapshot if value.get('schema_version') == 2 else DictionarySnapshot
+    return model.model_validate(value)

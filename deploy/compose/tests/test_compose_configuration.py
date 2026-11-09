@@ -65,6 +65,21 @@ class ComposeConfigurationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, "Compose configuration must resolve")
         return json.loads(result.stdout)
 
+    def test_prefect_redis_health_rejects_loading_and_error_replies(self):
+        health = self.resolved("teoria-test-redis-ready")["services"]["prefect-redis"]["healthcheck"]["test"]
+        self.assertEqual(health[0], "CMD-SHELL")
+        cli = Path(self.directory.name) / "redis-cli"
+        cli.write_text('#!/bin/sh\nprintf "%s\\n" "$REDIS_TEST_REPLY"\nexit "$REDIS_TEST_EXIT"\n')
+        cli.chmod(0o700)
+        for reply, code, ready in (("PONG", "0", True), ("LOADING Redis is loading the dataset", "0", False), ("ERR unavailable", "0", False), ("", "1", False)):
+            with self.subTest(reply=reply, code=code):
+                # Compose unescapes $$ before delivering the command to Docker.
+                result = subprocess.run(["sh", "-c", health[1].replace("$$", "$")],
+                    env={**self.environment, "PATH": self.directory.name + os.pathsep + os.defpath,
+                         "REDIS_TEST_REPLY": reply, "REDIS_TEST_EXIT": code},
+                    capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, ready)
+
     def test_env_example_has_unique_inputs_consumed_by_compose(self):
         keys = [
             line.split("=", 1)[0]

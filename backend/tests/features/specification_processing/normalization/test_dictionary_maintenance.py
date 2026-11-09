@@ -156,7 +156,7 @@ async def test_rebuild_alignment_cannot_fall_back_to_previously_approved_meaning
         async def resolve_dictionary_meanings(self,*args):
             raise AssertionError('rebuild cannot reuse old meanings')
     monkeypatch.setattr(dictionary_alignment,'GoodsAuthoringClient',StageAPI)
-    req=SimpleNamespace(mode='standard_management',run_id='fresh_alignment',dictionary_standard=None,
+    req=SimpleNamespace(mode='standard_management',run_id='fresh_alignment',dictionary_standard=None,dictionary_baseline=None,
         artifact_root=(tmp_path/'fresh_alignment').as_uri(),dictionary_auto_approve=False,
         dictionary_meaning_auto_approve=False,dictionary_rebuild_from_sources=True,classification_code=None)
     data=corpus('허용하중');data['documents'][0]['relations']=[]
@@ -198,13 +198,20 @@ async def test_validation_documents_are_used_only_after_plan_freezes(tmp_path):
     assert 'validation_only_marker' in json.dumps(runner.calls[-1])
 
 
-@pytest.mark.parametrize('overlap',['hash','family'])
+@pytest.mark.parametrize('overlap',['hash','family','notice'])
 async def test_overlapping_development_and_validation_are_rejected_before_registration(tmp_path,overlap):
     manifest=request(tmp_path)
     if overlap=='hash':manifest['validation_extractions']=[manifest['extractions'][0]]
-    else:
+    elif overlap=='family':
         manifest['extractions'][0]['template_family']='shared_template'
         manifest['validation_extractions']=[{**input_file(tmp_path,'validation','3'*64),'template_family':'shared_template'}]
+    else:
+        manifest['validation_extractions']=[input_file(tmp_path,'validation','3'*64)]
+        for ref in [manifest['extractions'][0],manifest['validation_extractions'][0]]:
+            path=Path(ref['uri'].removeprefix('file://'))
+            data=json.loads(path.read_text());data['documents'][0]['notice_number']='same_notice'
+            raw=json.dumps(data,ensure_ascii=False).encode();path.write_bytes(raw)
+            ref['sha256']=hashlib.sha256(raw).hexdigest()
     api=API()
     with pytest.raises(ValueError,match='overlap'):
         await maintain_dictionary(manifest,api=api,runner=Runner())

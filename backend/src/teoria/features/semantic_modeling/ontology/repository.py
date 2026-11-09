@@ -5,6 +5,7 @@ import json
 from typing import Any
 from uuid import UUID, uuid4
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 from teoria.integrations.application_database.postgres import connect
 
 
@@ -185,8 +186,8 @@ class OntologyRepository:
                 ).fetchall():
                     await conn.execute(
                         """INSERT INTO ontology.object_properties
-                           (property_id,business_object_id,code,name,description,value_type,cardinality,unit,temporal,status,concept_id)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s)""",
+                           (property_id,business_object_id,code,name,description,value_type,cardinality,unit,temporal,status,concept_id,quantity_dimension,allowed_units)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s)""",
                         (
                             uuid4(),
                             new_object,
@@ -198,6 +199,8 @@ class OntologyRepository:
                             item["unit"],
                             item["temporal"],
                             item["concept_id"],
+                            item.get("quantity_dimension"),
+                            Jsonb(item.get("allowed_units", [])),
                         ),
                     )
             for table, id_col in (
@@ -301,6 +304,43 @@ class OntologyRepository:
     async def get_version(self, version_id: UUID) -> dict[str, Any]:
         async with connect(self.database_url, row_factory=dict_row) as conn:
             return await self.read_version(conn, version_id)
+
+    async def blueprint_dependencies(self, conn, ontology_id):
+        concepts = await (await conn.execute(
+            'SELECT concept_id,stable_key,concept_kind,retired_at FROM ontology.concepts WHERE ontology_id=%s',
+            (ontology_id,))).fetchall()
+        bindings = await (await conn.execute(
+            "SELECT b.binding_id,b.ontology_concept_id FROM binding.ontology_bindings b "
+            "JOIN ontology.concepts c ON c.concept_id=b.ontology_concept_id "
+            "WHERE c.ontology_id=%s AND b.status='approved'", (ontology_id,))).fetchall()
+        return concepts, bindings
+
+    async def version_by_name(self, conn, ontology_id, version):
+        return await (await conn.execute(
+            'SELECT * FROM ontology.ontology_versions WHERE ontology_id=%s AND version=%s',
+            (ontology_id, version))).fetchone()
+
+    async def blueprint_preparation_event(self, conn, version_id):
+        return await (await conn.execute(
+            "SELECT actor,after_value FROM ontology.audit_events WHERE ontology_version_id=%s "
+            "AND event_type='blueprint_draft_prepared' ORDER BY created_at DESC LIMIT 1", (version_id,))).fetchone()
+
+    async def insert_blueprint_draft(self, conn, source, *, target_version, members, actor):
+        """Insert under the caller's ontology lock/transaction; never edit the source."""
+        identifier = uuid4()
+        await conn.execute(
+            "INSERT INTO ontology.ontology_versions "
+            "(ontology_version_id,ontology_id,version,status,based_on_version_id,created_by) "
+            "VALUES (%s,%s,%s,'draft',%s,%s)",
+            (identifier, source['ontology_id'], target_version,
+             source['ontology_version_id'] if source['status'] == 'published' else None, actor))
+        for item in members:
+            if item['new_concept']:
+                await conn.execute(
+                    'INSERT INTO ontology.concepts (concept_id,ontology_id,concept_kind,stable_key) VALUES (%s,%s,%s,%s)',
+                    (item['concept_id'], source['ontology_id'], item['kind'], item['payload']['stable_key']))
+            await self._insert_item(conn, identifier, item['kind'], item['concept_id'], item['payload'])
+        return identifier
 
     async def read_version(self, conn, version_id: UUID) -> dict[str, Any]:
         version = await (
@@ -416,6 +456,8 @@ class OntologyRepository:
                     "value_type",
                     "cardinality",
                     "unit",
+                    "quantity_dimension",
+                    "allowed_units",
                     "temporal",
                 },
             ),
@@ -498,6 +540,7 @@ class OntologyRepository:
                         "formula",
                         "grain",
                         "dimensions",
+                        "allowed_units",
                     }
                     else value
                 )
@@ -610,8 +653,8 @@ class OntologyRepository:
             return await (
                 await conn.execute(
                     """INSERT INTO ontology.object_properties
-              (property_id,business_object_id,code,name,description,value_type,cardinality,unit,temporal,status,concept_id)
-              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s) RETURNING *""",
+              (property_id,business_object_id,code,name,description,value_type,cardinality,unit,temporal,status,concept_id,quantity_dimension,allowed_units)
+              VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'draft',%s,%s,%s) RETURNING *""",
                     (
                         uuid4(),
                         owner,
@@ -623,6 +666,8 @@ class OntologyRepository:
                         p.get("unit"),
                         p.get("temporal", False),
                         concept_id,
+                        p.get("quantity_dimension"),
+                        Jsonb(p.get("allowed_units", [])),
                     ),
                 )
             ).fetchone()

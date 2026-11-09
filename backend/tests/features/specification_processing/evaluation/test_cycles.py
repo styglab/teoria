@@ -139,6 +139,41 @@ async def test_failure_and_cancellation_cleanup_before_return(frame,tmp_path,mon
     assert not Path(prepared['workspace']).exists()
 
 
+async def test_worker_failure_retains_completed_split_and_safe_diagnostics(frame,tmp_path,monkeypatch):
+    path,_=frame;directory=tmp_path/'summary';prepared=ev.prepare_cycle(path,directory)
+    failure=ev.EvaluationWorkerError(1,b'',b'Traceback (most recent call last):\n  File "/app/teoria/features/specification_processing/tasks.py", line 44, in parse_documents\nValueError: PRIVATE_DOCUMENT_TEXT secret-key-value\n')
+    async def execute(request,run_dir,manifest):
+        if run_dir.name=='validation':raise failure
+        docs={d.document_id:d for d in manifest.documents+manifest.regression_documents}
+        return {'documents':[extracted(docs[d['document_id']]) for d in request['documents']]},0.01
+    monkeypatch.setattr(ev,'_execute',execute)
+    with pytest.raises(ev.EvaluationWorkerError):await ev.run_variant('cycle_1','baseline',directory)
+    cycle=ev._state(directory)['cycles']['cycle_1']
+    assert cycle['results']['baseline']['development']['metrics']['requirement_cases_found']>0
+    assert cycle['progress']['baseline']['development']=='scored'
+    assert cycle['executor_failure']=={'exit_code':1,'exception_type':'ValueError','frames':[{
+        'module':'features/specification_processing/tasks.py','line':44,'function':'parse_documents'}]}
+    assert cycle['status']=='aborted' and cycle['cleanup']['status']=='complete'
+    assert not Path(prepared['workspace']).exists()
+    retained=''.join(p.read_text() for p in directory.iterdir())
+    assert 'PRIVATE_DOCUMENT_TEXT' not in retained and 'secret-key-value' not in retained
+
+
+async def test_executor_retains_source_identifiers_without_values(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    async def fail(*args,**kwargs):
+        write_json(tmp_path/'worker_failure.json',{'code':'source_numeric_literal_mismatch','details':{
+            'document_id':'doc_1','attribute_id':'attribute_quantity_root','node_id':'n00001',
+            'value_raw':'PRIVATE_VALUE','quote':'PRIVATE_DOCUMENT'}})
+        return 1,b'',b'ValueError: PRIVATE_EXCEPTION\n'
+    monkeypatch.setattr(ev,'_launch',fail)
+    with pytest.raises(ev.EvaluationWorkerError) as error:
+        await ev._execute({'run_id':'fixture'},tmp_path,SimpleNamespace(run_timeout_seconds=5))
+    assert error.value.diagnostic['context']=={'code':'source_numeric_literal_mismatch','details':{
+        'document_id':'doc_1','attribute_id':'attribute_quantity_root','node_id':'n00001'}}
+    assert 'PRIVATE' not in json.dumps(error.value.diagnostic)
+
+
 def test_cleanup_refuses_an_input_directory(frame,tmp_path):
     path,_=frame;directory=tmp_path/'summary';ev.prepare_cycle(path,directory)
     state=ev._state(directory);cycle=state['cycles']['cycle_1'];original=cycle['workspace'];cycle['workspace']=str(tmp_path)
@@ -206,7 +241,8 @@ def test_abort_cannot_delete_another_live_controller_workspace(frame,tmp_path,mo
 
 @pytest.mark.parametrize('selection_mode',['classified_random','unclassified_random','fixed_sources'])
 @pytest.mark.parametrize('tests_exit_code',[0,1])
-async def test_calibration_replay_preserves_source_split_history_and_cannot_be_promoted(frame,tmp_path,monkeypatch,selection_mode,tests_exit_code):
+@pytest.mark.parametrize('purpose',['grader_calibration','quality_assessment'])
+async def test_calibration_replay_preserves_source_split_history_and_cannot_be_promoted(frame,tmp_path,monkeypatch,selection_mode,tests_exit_code,purpose):
     path,data=frame;directory=tmp_path/'summary'
     if selection_mode!='classified_random':
         data['classification_code']=None
@@ -216,14 +252,14 @@ async def test_calibration_replay_preserves_source_split_history_and_cannot_be_p
     data['selection_mode']=selection_mode;write_json(path,data)
     parent=ev.prepare_cycle(path,directory);ev.abort_cycle('cycle_1',directory)
     saved=ev._state(directory);old=saved['cycles']['cycle_1'];selected=set(sum(old['sampling']['splits'].values(),[]))
-    replay=deepcopy(data);replay.update({'cycle_id':'calibration_1','purpose':'grader_calibration','replay_of':'cycle_1','seed':None})
+    replay=deepcopy(data);replay.update({'cycle_id':'calibration_1','purpose':purpose,'replay_of':'cycle_1','seed':None})
     replay['documents']=[d for d in replay['documents'] if d['document_id'] in selected]
-    replay['documents'][0]['requirements'][0]['qualifiers_raw']=None
+    if purpose=='grader_calibration':replay['documents'][0]['requirements'][0]['qualifiers_raw']=None
     replay_path=write_json(tmp_path/'replay.json',replay)
     prepared=ev.prepare_cycle(replay_path,directory)
     state=ev._state(directory)
     assert prepared['sampling']['splits']==old['sampling']['splits']
-    assert prepared['sampling']['freshness']=='exposed_calibration_replay'
+    assert prepared['sampling']['freshness']==('exposed_assessment_replay' if purpose=='quality_assessment' else 'exposed_calibration_replay')
     assert state['used']==saved['used']
     docs={d.document_id:d for d in EvaluationManifest.model_validate(replay).documents+EvaluationManifest.model_validate(replay).regression_documents}
     async def execute(request,run_dir,manifest):return {'documents':[extracted(docs[d['document_id']]) for d in request['documents']]},1.0
@@ -232,9 +268,25 @@ async def test_calibration_replay_preserves_source_split_history_and_cannot_be_p
     with pytest.raises(ValueError,match='not an extraction candidate'):await ev.run_variant('calibration_1','candidate',directory)
     await ev.run_variant('calibration_1','baseline',directory)
     result=await ev.finish_cycle('calibration_1',directory)
-    assert result['decision']==('baseline_recorded' if tests_exit_code==0 else 'rejected')
+    expected='assessment_recorded' if purpose=='quality_assessment' else 'baseline_recorded'
+    assert result['decision']==(expected if tests_exit_code==0 else 'rejected')
     assert 'no_extraction_improvement_claim' in result['reasons']
     assert not Path(prepared['workspace']).exists()
+
+
+@pytest.mark.parametrize('change',['cases','subset'])
+def test_quality_assessment_preserves_all_frozen_cases(frame,tmp_path,change):
+    path,data=frame;directory=tmp_path/'summary'
+    ev.prepare_cycle(path,directory);ev.abort_cycle('cycle_1',directory)
+    old=ev._state(directory)['cycles']['cycle_1']
+    selected=set(sum(old['sampling']['splits'].values(),[]))
+    replay=deepcopy(data)
+    replay.update(cycle_id='assessment_1',purpose='quality_assessment',replay_of='cycle_1',seed=None)
+    replay['documents']=[d for d in replay['documents'] if d['document_id'] in selected]
+    if change=='cases':replay['documents'][0]['requirements'][0]['value_raw']='999'
+    else:replay['documents'].pop()
+    with pytest.raises(ValueError,match='quality assessment must retain'):
+        ev.prepare_cycle(write_json(tmp_path/'replay.json',replay),directory)
 
 
 def test_calibration_replay_cannot_replace_sources_or_reset_history(frame,tmp_path):

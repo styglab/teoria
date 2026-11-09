@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     admin_api_token: str | None = None
     admin_api_actor: str = "system:admin"
     admin_api_roles: str = "metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner"
+    admin_oidc_issuer: str | None = None
+    admin_oidc_audience: str | None = None
+    admin_oidc_jwks_url: str | None = None
+    admin_oidc_roles_claim: str = "roles"
+    admin_oidc_role_mapping: dict[str, list[str]] = Field(default_factory=dict)
     admin_data_database_url: str | None = None
     app_database_url: str | None = None
     specification_upload_enabled: bool = False

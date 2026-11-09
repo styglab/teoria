@@ -24,7 +24,7 @@ def submission_from_corpus(corpus, *, auto_approve=True):
     for document in corpus['documents']:
         doc_id = document['document_id']
         raw_nodes = document['parsed_document']['nodes']
-        source = DictionarySource(document_id=doc_id,source_sha256=document['source']['sha256'],
+        source = DictionarySource(classification_code=document.get("classification_code") or corpus.get("classification_code"),document_id=doc_id,source_sha256=document['source']['sha256'],
             parser_version=document['parser']['version'],nodes=[DictionarySourceNode(
                 locator=n.get('native_ref') or 'node:'+n['node_id'],text=n['text']) for n in raw_nodes if n['text'].strip()])
         sources.append(source)
@@ -53,4 +53,4 @@ def submission_from_corpus(corpus, *, auto_approve=True):
                 name,source,attr['id'],
                 owner=doc_id+':item:'+item['id'],owner_name=item['name'],value_kind=value_kind,
                 locators={nodes[n] for n in node_ids if n in nodes}))
-    return DictionarySubmission(auto_approve=auto_approve,sources=sources,candidates=candidates)
+    return DictionarySubmission(classification_code=corpus.get("classification_code"), auto_approve=auto_approve,sources=sources,candidates=candidates)

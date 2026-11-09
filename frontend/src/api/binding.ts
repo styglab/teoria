@@ -33,9 +33,11 @@ export type BindingValidation = {
 };
 
 export const bindingApi = {
-  bindings: (status?: string, ids?: string[]) => {
+  bindings: (status?: string, ids?: string[], scope?: { namespace?: string; conceptId?: string }) => {
     const params = new URLSearchParams();
     if (status) params.set("status", status);
+    if (scope?.namespace) params.set("ontology_namespace",scope.namespace);
+    if (scope?.conceptId) params.set("ontology_concept_id",scope.conceptId);
     ids?.forEach((id) => params.append("binding_id", id));
     return getJson<{ items: SemanticBinding[] }>(
       `/bindings${params.size ? `?${params}` : ""}`,

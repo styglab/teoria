@@ -21,7 +21,7 @@ describe("OntologyAuthoring", () => {
       if (url.endsWith("/ontology-authoring/ontologies/teoria/versions")) return response({ items: [{ ontology_version_id: "version-1", version: "0.1.0", status: "draft", created_at: "2026-10-06" }] });
       if (url.endsWith("/ontology-authoring/versions/version-1")) return response({ ontology_version_id: "version-1", version: "0.1.0", status: "draft", created_at: "2026-10-06", namespace: "teoria", ontology_name: "Teoria Business Ontology", objects: [{ business_object_id: "object-1", concept_id: "concept-1", stable_key: "party.BusinessEntity", code: "BusinessEntity", name: "업체", description: "업체", identity_policy: { properties: ["businessEntityId"] }, properties: [] }], relationships: [{ concept_id: "link-1", stable_key: "party.HAS_REGISTRATION", code: "HAS_REGISTRATION", name: "사업자등록 보유", source_object_id: "object-1", target_object_id: "object-1", source_cardinality: "one", target_cardinality: "many", temporal: true }], rules: [{ concept_id: "rule-1", stable_key: "party.ENTITY_RULE", code: "ENTITY_RULE", name: "업체 규칙", description: "규칙", evaluator_key: "party.rule.v1" }], metrics: [] });
       if (url.endsWith("/ontology-authoring/versions/version-1/validation")) return response({ status: "valid", diagnostic_count: 0, diagnostics: [], binding_impact: { compatible: true, incompatible_binding_count: 0, incompatible_bindings: [] } });
-      if (url.endsWith("/ontology-authoring/versions/version-1/binding-impact")) return response({ compatible: true, incompatible_binding_count: 0, incompatible_bindings: [] });
+      if (url.endsWith("/ontology-authoring/versions/version-1/binding-impact")) return response({ compatible: true, incompatible_binding_count: 0, incompatible_bindings: [], dependency_impact: {status:"review_required",review_required_count:2,dependencies:[{kind:"profile",id:"memory-profile",reason:"concept_changed",affected_concept_ids:["capacity"]},{kind:"api_mapping",id:"memory-api:capacity:0",reason:"pinned_version_review",affected_concept_ids:[]}] } });
       throw new Error(`unexpected request: ${url}`);
     });
 
@@ -44,6 +44,9 @@ describe("OntologyAuthoring", () => {
     fireEvent.click(screen.getByText("버전 검토"));
     expect(await screen.findByText("구조 검증 통과")).toBeTruthy();
     expect(screen.getByText("호환 가능")).toBeTruthy();
+    expect(await screen.findByText("연결·적용 규칙 재검토 2건")).toBeTruthy();
+    expect(screen.getByText("memory-profile")).toBeTruthy();
+    expect(screen.getByText("memory-api:capacity:0")).toBeTruthy();
   });
 
   it("opens the persisted draft in its owning ontology instead of the published version", async () => {

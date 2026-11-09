@@ -13,6 +13,11 @@ class NormalizationProfileRepository:
     def transaction(self):
         return connect(self.database_url, row_factory=dict_row)
 
+    async def ontology_dependencies(self, conn, namespace):
+        return await (await conn.execute("""SELECT revision_id,status,content FROM goods.normalization_profile_revisions
+            WHERE content#>>'{ontology,namespace}'=%s AND status IN ('draft','in_review','approved')
+            ORDER BY revision_id""", (namespace,))).fetchall()
+
     async def get(self, conn, revision_id, *, lock=False):
         row = await (
             await conn.execute(

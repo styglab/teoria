@@ -75,6 +75,23 @@ def test_connector_contract_loading_does_not_depend_on_prefect():
     ]
 
 
+def test_published_ontology_contract_is_independent_of_data_sources_and_authoring_services():
+    path = SOURCE / 'features/semantic_modeling/ontology/publication_contracts.py'
+    assert not [name for name in imports(path)
+                if name.startswith(('teoria.integrations', 'teoria.entrypoints',
+                                    'httpx', 'psycopg', 'prefect'))
+                or (name.startswith('teoria.features.') and
+                    name != 'teoria.features.semantic_modeling.ontology.models')]
+
+
+def test_ontology_review_contract_has_no_authoring_or_source_io_dependencies():
+    path = SOURCE / 'features/semantic_modeling/ontology/review_contracts.py'
+    assert not [name for name in imports(path)
+                if name.startswith(('teoria.integrations', 'teoria.entrypoints', 'httpx', 'psycopg', 'prefect'))
+                or (name.startswith('teoria.features.') and name !=
+                    'teoria.features.semantic_modeling.ontology.publication_contracts')]
+
+
 def test_profile_and_ontology_policies_have_no_inline_sql():
     paths = [
         SOURCE / "features/goods_normalization/profiles/service.py",

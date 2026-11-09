@@ -76,8 +76,7 @@ test("a registry API failure does not block the metadata catalog", async () => {
     "href",
     "/admin/overview",
   );
-  expect(screen.getByRole("button", { name: "의미 모델" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "의미 모델" }));
+  expect(screen.getByRole("button", { name: "Ontology·업무 실행" })).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByRole("link", { name: /데이터 자산/ })).toHaveAttribute(
     "href",
     "/admin/data-catalog",

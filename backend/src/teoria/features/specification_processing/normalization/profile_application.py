@@ -1,9 +1,8 @@
 """Apply a pinned semantic package to observations without calling Platform services."""
 from collections import Counter
-from decimal import Decimal,localcontext
 import hashlib
 import json
-from teoria.features.goods_normalization.contracts import NormalizationPackage
+from teoria.features.goods_normalization.contracts import NormalizationPackage, normalize_property_number, SemanticObservation
 from teoria.features.specification_processing.parsing.document_evidence import attribute_is_grounded,literal
 from teoria.features.specification_processing.extraction.value_normalization import number
 from teoria.features.specification_processing.normalization.candidate_collection import observation_role
@@ -14,22 +13,35 @@ def observation_id(document,run_id,kind,local_id):
     return hashlib.sha256(json.dumps(key,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
 
 
-def apply_profile(corpus,package: NormalizationPackage,*,run_id: str):
+def apply_profile(corpus,package: NormalizationPackage,*,run_id: str, meaning_alignment=None):
+    if meaning_alignment and meaning_alignment.get('artifact_kind') in {
+        'specification_meaning_review', 'specification_ontology_alignment_comparison',
+    }:
+        raise ValueError('review suggestions cannot authorize profile application')
     if corpus['classification_code']!=package.profile.classification_code:raise ValueError('normalization profile classification mismatch')
     profile=package.profile;concepts={str(c.concept_id):c for c in package.concepts}
+    governed = bool(meaning_alignment and meaning_alignment.get('policy_version') == 'published_ontology_expression_v2')
+    aligned = {d['document_id']: d for d in (meaning_alignment or {}).get('documents', [])}
+    def interpretation(document_id, collection, local_id):
+        row = next((o for o in aligned.get(document_id, {}).get(collection, []) if o['id'] == local_id), {})
+        if row.get('meaning_status') != 'resolved' or row.get('ontology') != profile.ontology.model_dump(mode='json'):
+            return None
+        return row.get('ontology_concept_ref')
     documents=[];attribute_rows=[];candidates=[];entity_counts=Counter();relation_counts=Counter()
     for doc in corpus['documents']:
         entities={};nodes={n['node_id']:n['text'] for n in doc['parsed_document']['nodes']}
         for entity in doc['entities']:
             evidence=entity.get('evidence',[])
             grounded=bool(literal(entity['name'])) and any(literal(entity['name']) in literal(nodes.get(e.get('node_id'),'')) for e in evidence)
-            choices=[r for r in profile.entities if entity['kind'] in r.source_kinds and literal(entity['name']) in {literal(a) for a in r.aliases}]
+            meaning = interpretation(doc['document_id'], 'entities', entity['id']) if governed else None
+            choices=[r for r in profile.entities if entity['kind'] in r.source_kinds and
+                     (str(r.concept_id) == meaning if governed else literal(entity['name']) in {literal(a) for a in r.aliases})]
             row={'observation_id':observation_id(doc,run_id,'entity',entity['id']),'source_entity_id':entity['id'],
                  'name_raw':entity['name'],'evidence':evidence,'status':'applied' if grounded and len(choices)==1 else 'automatically_deferred'}
             if row['status']=='applied':row.update(concept_id=str(choices[0].concept_id),
                 concept_key=concepts[str(choices[0].concept_id)].stable_key,rule_id=choices[0].rule_id)
             else:
-                row['reason']='ungrounded_entity' if not grounded else 'ambiguous_entity_rule' if choices else 'no_entity_rule'
+                row['reason']='ungrounded_entity' if not grounded else 'unresolved_ontology_mapping' if governed and meaning is None else 'ambiguous_entity_rule' if choices else 'no_entity_rule'
                 candidates.append({'kind':'entity','document_id':doc['document_id'],**row})
             entities[entity['id']]=row;entity_counts[row['status']]+=1
         requirements=[]
@@ -40,11 +52,14 @@ def apply_profile(corpus,package: NormalizationPackage,*,run_id: str):
             if ('semantic_scope' not in a and a.get('origin')=='validated_inventory_quantity'
                     and a['property_key']=='quantity' and a.get('evidence',{}).get('scope')=='explicit inventory target only'):
                 scope='per_component'
+            meaning = interpretation(doc['document_id'], 'attributes', a['id']) if governed else None
             choices=[r for r in profile.requirements if target_types=={str(r.target_concept_id)} and
-                     a['property_key'] in r.source_property_keys and role in r.roles and scope in r.scopes]
+                     (str(r.property_concept_id) == meaning if governed else a['property_key'] in r.source_property_keys)
+                     and role in r.roles and scope in r.scopes]
             reason=None;value=None;chosen=None
             if not subjects or len(subjects)!=len(a['subject_ids']) or None in target_types:reason='unresolved_subject'
             elif not attribute_is_grounded(doc,a):reason='source_condition_mismatch'
+            elif governed and meaning is None:reason='unresolved_ontology_mapping'
             elif len(choices)!=1:reason='ambiguous_requirement_rule' if choices else 'no_requirement_rule'
             else:
                 chosen=choices[0]
@@ -54,12 +69,10 @@ def apply_profile(corpus,package: NormalizationPackage,*,run_id: str):
                     if policy is None:reason='unsupported_source_unit'
                     elif raw is None or a['operator'] not in {'eq','gte','lte','gt','lt'}:reason='unsupported_numeric_predicate'
                     else:
-                        with localcontext() as context:
-                            context.prec=max(28,len(raw)+len(str(policy.multiplier))+10)
-                            converted=Decimal(raw)*policy.multiplier
-                        if concepts[str(chosen.property_concept_id)].value_type=='integer' and converted!=converted.to_integral_value():
-                            reason='non_integral_count'
-                        else:value={'kind':'number','decimal':format(converted,'f'),'unit':policy.canonical_unit}
+                        try:
+                            value=normalize_property_number(raw,concepts[str(chosen.property_concept_id)].value_type,policy)
+                        except ValueError as exc:
+                            reason=str(exc)
                 elif a['operator'] not in {'raw','eq','one_of'}:reason='text_ordering_unresolved'
                 elif a.get('unit_raw') is not None:reason='unexpected_unit_on_text_value'
                 else:value={'kind':chosen.value_type,'text':a['value_raw']}
@@ -77,6 +90,19 @@ def apply_profile(corpus,package: NormalizationPackage,*,run_id: str):
                       'qualifiers_raw':a.get('qualifiers_raw',[]),'role':role,'semantic_scope':scope,'value':value,
                       'value_raw':a['value_raw'],'unit_raw':a.get('unit_raw'),'evidence':a['evidence'],
                       'evidence_ref':f"{doc['document_id']}:{a['id']}"}
+                information_kind = {'requirement_candidate':'requirement','supported_capability':'capability',
+                                    'existing_reference':'reference','recommended':'recommendation','optional':'option'}[role]
+                observation = SemanticObservation(
+                    observation_id=fact['observation_id'],ontology=profile.ontology,concept_id=chosen.property_concept_id,
+                    subject_refs=fact['subject_observation_ids'],information_kind=information_kind,
+                    operator=a['operator'],scope=scope,value=value,value_raw=a['value_raw'],unit_raw=a.get('unit_raw'),
+                    conditions=a.get('qualifiers_raw', []),
+                    source={'kind':'document','document_id':doc['document_id'],'source_sha256':doc['source']['sha256'],
+                            'attribute_id':a['id'],'evidence':a['evidence'],'run_id':run_id,
+                            'package_checksum':package.checksum,
+                            'unit_conversion':policy.model_dump(mode='json') if chosen.value_type=='number' else None,
+                            'profile_revision_id':str(package.profile_revision_id),'rule_id':chosen.rule_id})
+                fact['semantic_observation']=observation.model_dump(mode='json')
                 row['facts']=[fact];requirements.append(fact)
             attribute_rows.append(row)
         relations=[]

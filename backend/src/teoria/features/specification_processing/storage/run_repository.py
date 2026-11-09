@@ -119,3 +119,26 @@ class SpecificationRepository:
     async def fail(self,run_id,error_code):
         async with connect(self.database_url) as connection:
             await connection.execute("UPDATE public_procurement.specification_processing_runs SET status='failed',error_code=%s,finished_at=now(),updated_at=now() WHERE run_id=%s AND status='running'",(error_code,run_id))
+
+    async def record_application_standard(self, run_id, approval):
+        async with connect(self.database_url) as connection:
+            row = await (await connection.execute(
+                """UPDATE public_procurement.specification_processing_runs
+                SET summary=jsonb_set(summary,'{automatic_application_standard}',%s,true),updated_at=now()
+                WHERE run_id=%s AND status IN ('completed','partial') RETURNING run_id""",
+                (Jsonb(approval), run_id),
+            )).fetchone()
+            if row is None:
+                raise ValueError('completed_processing_run_required_for_approval_record')
+
+    async def previous_quality(self,run_id,quality):
+        async with connect(self.database_url) as connection:
+            row=await(await connection.execute("""SELECT run_id,summary->'quality'
+                FROM public_procurement.specification_processing_runs
+                WHERE run_id<>%s AND status IN ('completed','partial')
+                AND summary->'quality'->>'source_group_sha256'=%s
+                AND summary->'quality'->>'model_requested'=%s
+                AND summary->'quality'->'parser_versions'=%s
+                AND summary->'quality'->>'classification_code' IS NOT DISTINCT FROM %s
+                ORDER BY finished_at DESC LIMIT 1""",(run_id,quality['source_group_sha256'],quality['model_requested'],Jsonb(quality['parser_versions']),quality.get('classification_code')))).fetchone()
+            return {'run_id':row[0],**row[1]} if row else None

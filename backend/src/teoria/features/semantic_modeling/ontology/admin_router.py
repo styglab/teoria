@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 from teoria.features.access_control.auth import AdminAuthorizer, AdminPrincipal
 from teoria.features.semantic_modeling.ontology.service import OntologyAuthoringService
+from teoria.features.semantic_modeling.ontology.publication_contracts import PublishedOntology
+from teoria.features.semantic_modeling.ontology.blueprint import OntologyBlueprint
 
 
 class DraftInput(BaseModel):
@@ -40,6 +42,8 @@ class AuthoringItemInput(BaseModel):
     value_type: str | None = None
     cardinality: Literal["one", "optional", "many"] = "optional"
     unit: str | None = None
+    quantity_dimension: str | None = None
+    allowed_units: list[str] = Field(default_factory=list)
     temporal: bool = False
     transitive: bool = False
     source_cardinality: str = "many"
@@ -60,8 +64,18 @@ class AuthoringPatchInput(BaseModel):
     changes: dict[str, Any]
 
 
+class BlueprintPreviewInput(BaseModel):
+    blueprint: OntologyBlueprint
+
+
+class BlueprintDraftInput(BlueprintPreviewInput):
+    expected_plan_checksum: str = Field(pattern=r'^[a-f0-9]{64}$')
+    rationale: str = Field(min_length=10, max_length=4000)
+
+
 def create_ontology_authoring_router(
-    repository: OntologyAuthoringService | None, authorizer: AdminAuthorizer
+    repository: OntologyAuthoringService | None, authorizer: AdminAuthorizer,
+    *, dependency_reader=None,
 ) -> APIRouter:
     router = APIRouter(
         prefix="/v1/admin/ontology-authoring", tags=["ontology-authoring"]
@@ -131,6 +145,24 @@ def create_ontology_authoring_router(
     async def get_version(version_id: UUID):
         return await translate(repo().get_version(version_id))
 
+    @router.post('/versions/{version_id}/blueprint-preview')
+    async def preview_blueprint(version_id: UUID, payload: BlueprintPreviewInput,
+                                principal: AdminPrincipal = Depends(authorizer.require('ontology_owner'))):
+        return await translate(repo().preview_blueprint(version_id, payload.blueprint))
+
+    @router.post('/versions/{version_id}/blueprint-drafts', status_code=201)
+    async def prepare_blueprint_draft(version_id: UUID, payload: BlueprintDraftInput,
+                                     principal: AdminPrincipal = Depends(authorizer.require('ontology_owner'))):
+        return await translate(repo().prepare_blueprint_draft(version_id, payload.blueprint,
+            expected_plan_checksum=payload.expected_plan_checksum, actor=principal.actor, rationale=payload.rationale))
+
+    @router.get("/versions/{version_id}/publication", response_model=PublishedOntology)
+    async def publication(
+        version_id: UUID,
+        principal: AdminPrincipal = Depends(authorizer.require()),
+    ):
+        return await translate(repo().publication(version_id))
+
     @router.post("/versions/{version_id}/items/{kind}", status_code=201)
     async def add_item(
         version_id: UUID,
@@ -180,7 +212,10 @@ def create_ontology_authoring_router(
 
     @router.get("/versions/{version_id}/binding-impact")
     async def binding_impact(version_id: UUID):
-        return await translate(repo().binding_impact(version_id))
+        result = await translate(repo().binding_impact(version_id))
+        if dependency_reader is not None:
+            result['dependency_impact'] = await translate(dependency_reader(version_id))
+        return result
 
     @router.get("/versions/{version_id}/diff")
     async def diff(version_id: UUID, against: UUID):

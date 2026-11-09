@@ -1,11 +1,15 @@
-"""Semantic references and executable, context-specific normalization policies."""
-from decimal import Decimal
+"""Semantic references and executable, context-specific normalization policies.
+
+Publication identity is an Ontology-owned value contract; no authoring service is imported.
+"""
 import hashlib
 import json
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from teoria.features.semantic_modeling.ontology.models import OntologyPublicationRef as OntologyReference
+from teoria.features.semantic_modeling.ontology.value_policy import UnitConversion as UnitRule
 
 
 def canonical_bytes(value):
@@ -18,13 +22,6 @@ def checksum(value):return hashlib.sha256(canonical_bytes(value)).hexdigest()
 
 class Record(BaseModel):
     model_config=ConfigDict(extra='forbid', hide_input_in_errors=True)
-
-
-class OntologyReference(Record):
-    version_id: UUID
-    namespace: str = Field(min_length=1)
-    version: str = Field(min_length=1)
-    checksum: str = Field(pattern=r'^[a-f0-9]{64}$')
 
 
 class Concept(Record):
@@ -40,37 +37,19 @@ class Concept(Record):
 
 class EntityRule(Record):
     rule_id: str = Field(pattern=r'^[a-z][a-z0-9_]*$')
-    aliases: list[str] = Field(min_length=1)
+    # Retained for v1 alias application. Governed expression links need no duplicate labels.
+    aliases: list[str] = Field(default_factory=list)
     source_kinds: list[str] = Field(default_factory=lambda:['equipment'])
     concept_id: UUID
-
-
-class UnitRule(Record):
-    source_unit: str = Field(min_length=1)
-    canonical_unit: str = Field(min_length=1)
-    multiplier: Decimal = Field(default=Decimal('1'), gt=0, allow_inf_nan=False)
-
-    @model_validator(mode='after')
-    def supported_conversion(self):
-        scales={'B':Decimal(1),'kB':Decimal(1000),'MB':Decimal(1000)**2,'GB':Decimal(1000)**3,
-                'TB':Decimal(1000)**4,'KiB':Decimal(1024),'MiB':Decimal(1024)**2,
-                'GiB':Decimal(1024)**3,'TiB':Decimal(1024)**4}
-        count_aliases={'EA':'개','ea':'개'}
-        if count_aliases.get(self.source_unit,self.source_unit)==count_aliases.get(self.canonical_unit,self.canonical_unit):expected=Decimal(1)
-        elif self.source_unit in scales and self.canonical_unit in scales:
-            expected=scales[self.source_unit]/scales[self.canonical_unit]
-        else:raise ValueError('unsupported unit conversion; preserve as an unresolved candidate')
-        if self.multiplier!=expected:raise ValueError('incorrect unit conversion multiplier')
-        return self
 
 
 class RequirementRule(Record):
     rule_id: str = Field(pattern=r'^[a-z][a-z0-9_]*$')
     target_concept_id: UUID
     property_concept_id: UUID
-    source_property_keys: list[str] = Field(min_length=1)
+    source_property_keys: list[str] = Field(default_factory=list)
     roles: list[Literal['requirement_candidate','supported_capability','existing_reference','recommended','optional']] = Field(min_length=1)
-    scopes: list[Literal['per_item','per_package','per_reference_quantity','batch_total','per_component','system_total','per_module','per_processor','support_limit','service']] = Field(min_length=1)
+    scopes: list[Literal['per_item','per_package','per_reference_quantity','batch_total','per_component','system_total','per_module','per_processor','per_socket','support_limit','service']] = Field(min_length=1)
     value_type: Literal['number','text','identifier']
     units: list[UnitRule] = Field(default_factory=list)
 
@@ -93,7 +72,7 @@ class NormalizationProfile(Record):
     schema_version: Literal[1] = 1
     profile_key: str = Field(pattern=r'^[a-z][a-z0-9_]*$')
     version: str = Field(min_length=1)
-    classification_code: str = Field(pattern=r'^\d{10}$')
+    classification_code: str | None = Field(default=None, pattern=r'^\d{10}$')
     ontology: OntologyReference
     entities: list[EntityRule] = Field(min_length=1)
     requirements: list[RequirementRule] = Field(default_factory=list)

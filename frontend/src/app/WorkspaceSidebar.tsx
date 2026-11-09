@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  AppWindow,
   Braces,
   ChevronDown,
   ChevronRight,
@@ -9,7 +8,7 @@ import {
 } from "lucide-react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useDeploymentModules } from "../features/access/DeploymentAvailability";
-import { navigationItems, type NavigationItem } from "./navigation";
+import { navigationGroups, navigationItems, navigationAvailable, type NavigationItem } from "./navigation";
 
 export function WorkspaceSidebar({
   expanded,
@@ -34,7 +33,7 @@ export function WorkspaceSidebar({
   }, [activeGroup]);
   const items = navigationItems.filter(
     (item) =>
-      (!item.module || modules[item.module]) &&
+      navigationAvailable(item, modules) &&
       (!item.modelOperations || modelOperationsEnabled),
   );
   const main = items.filter((item) => item.placement !== "footer");
@@ -76,57 +75,44 @@ export function WorkspaceSidebar({
         {expanded && (
           <span>
             <strong>Teoria</strong>
-            <small>메타데이터·온톨로지</small>
+            <small>의미·모델·실행</small>
           </span>
         )}
       </Link>
       <nav className="workspace-primary-nav" aria-label="주요 메뉴">
-        {main
-          .filter(
-            (item, index) =>
-              !["의미 모델", "모델 운영", "앱"].includes(item.group) ||
-              main.findIndex((other) => other.group === item.group) === index,
-          )
-          .map((item) => {
-            if (!["의미 모델", "모델 운영", "앱"].includes(item.group))
-              return renderLink(item);
-            const children = main.filter((other) => other.group === item.group);
-            if (!expanded)
-              return <div key={item.group}>{children.map(renderLink)}</div>;
-            const Icon = item.group === "앱" ? AppWindow : item.icon;
-            const open = Boolean(groups[item.group]);
-            return (
-              <div key={item.group} className="workspace-nav-section">
-                <button
-                  className="workspace-nav-parent"
-                  aria-expanded={open}
-                  onClick={() =>
-                    setGroups((previous) => ({
-                      ...previous,
-                      [item.group]: !open,
-                    }))
-                  }
-                >
-                  <Icon size={17} />
-                  <span>{item.group}</span>
-                  {open ? (
-                    <ChevronDown size={13} />
-                  ) : (
-                    <ChevronRight size={13} />
-                  )}
-                </button>
-                {open && (
-                  <div className="workspace-nav-children">
-                    {children.map(renderLink)}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        {main.filter((item) => !item.group).map(renderLink)}
+        {navigationGroups.map((group) => {
+          const children = main.filter((item) => item.group === group.id);
+          if (!children.length) return null;
+          if (!expanded)
+            return <div key={group.id} role="group" aria-label={group.label}>{children.map(renderLink)}</div>;
+          const Icon = group.icon;
+          const open = Boolean(groups[group.id]);
+          return (
+            <div key={group.id} className="workspace-nav-section">
+              <button
+                className="workspace-nav-parent"
+                aria-expanded={open}
+                aria-controls={`workspace-nav-${group.id}`}
+                title={group.description}
+                onClick={() => setGroups((previous) => ({ ...previous, [group.id]: !open }))}
+              >
+                <Icon size={17} aria-hidden="true" />
+                <span>{group.label}</span>
+                {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              </button>
+              {open && (
+                <div id={`workspace-nav-${group.id}`} className="workspace-nav-children">
+                  {children.map(renderLink)}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
       <div className="workspace-sidebar-footer">
-        <nav aria-label="플랫폼 관리">
-          {expanded && <p className="workspace-nav-group">플랫폼 관리</p>}
+        <nav aria-label="공통 운영">
+          {expanded && <p className="workspace-nav-group">공통 운영</p>}
           {footer.map(renderLink)}
         </nav>
         <button

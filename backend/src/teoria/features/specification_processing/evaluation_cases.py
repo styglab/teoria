@@ -39,6 +39,20 @@ class RelationCase(Record):
     target_owner: str | None = None
 
 
+class CompositionCase(Record):
+    """A source-confirmed complete set of direct children, not a whole-document oracle."""
+    parent: str = Field(min_length=1)
+    children: list[str] = Field(min_length=1)
+    source_text: str = Field(min_length=1, max_length=1000)
+
+
+class QuantityCase(Record):
+    subject: str = Field(min_length=1)
+    value_raw: str = Field(min_length=1)
+    unit_raw: str | None = None
+    source_text: str = Field(min_length=1, max_length=1000)
+
+
 class RequirementCase(Record):
     subjects: list[str] = Field(min_length=1)
     value_raw: str = Field(min_length=1)
@@ -71,6 +85,8 @@ class EvaluationDocument(SourceDocument):
     entity_aliases: dict[str,list[str]] = Field(default_factory=dict)
     entities: list[EntityCase] = Field(default_factory=list)
     relations: list[RelationCase] = Field(default_factory=list)
+    compositions: list[CompositionCase] = Field(default_factory=list)
+    quantities: list[QuantityCase] = Field(default_factory=list)
     requirements: list[RequirementCase] = Field(default_factory=list)
 
     @model_validator(mode='after')
@@ -87,7 +103,7 @@ class EvaluationDocument(SourceDocument):
                 if not key or key in aliases and aliases[key]!=canonical:
                     raise ValueError('empty or ambiguous entity alias')
                 aliases[key]=canonical
-        for cases in (self.entities,self.relations,self.requirements):
+        for cases in (self.entities,self.relations,self.requirements,self.compositions,self.quantities):
             keys=[json.dumps(c.model_dump(),sort_keys=True,ensure_ascii=False) for c in cases]
             if len(keys)!=len(set(keys)):raise ValueError('duplicate frozen evaluation cases')
         return self
@@ -98,8 +114,9 @@ class EvaluationManifest(Record):
     classification_code: str | None = Field(default='4321150102', pattern=r'^\d{10}$')
     selection_mode: Literal['classified_random','unclassified_random','fixed_sources'] = 'classified_random'
     case_contract_version: Literal[2] = 2
-    purpose: Literal['extraction_improvement','grader_calibration'] = 'extraction_improvement'
+    purpose: Literal['extraction_improvement','grader_calibration','quality_assessment'] = 'extraction_improvement'
     replay_of: str | None = None
+    resume_from: str | None = None
     documents: list[EvaluationDocument] = Field(min_length=1, max_length=1000)
     regression_documents: list[EvaluationDocument] = Field(default_factory=list, max_length=100)
     sample_size: int = Field(default=10, ge=2, le=100)
@@ -124,8 +141,10 @@ class EvaluationManifest(Record):
             raise ValueError('unclassified checks require explicitly absent classification')
         ids=[d.document_id for d in all_documents]
         if len(ids)!=len(set(ids)):raise ValueError('evaluation document IDs must be unique')
-        if (self.purpose=='grader_calibration')!=(self.replay_of is not None):
-            raise ValueError('grader calibration requires an explicit prior-cycle replay')
+        if (self.purpose in {'grader_calibration','quality_assessment'})!=(self.replay_of is not None):
+            raise ValueError('calibration or assessment requires an explicit prior-cycle replay')
+        if self.resume_from is not None and self.purpose!='quality_assessment':
+            raise ValueError('only quality assessment can resume completed observations')
         return self
 
 

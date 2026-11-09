@@ -88,8 +88,15 @@ class CapabilityRunner:
                 f"{', '.join(capability.lifecycle.replacement_ids) or 'none'}",
                 capability_id=capability_id,
             )
+        if capability.lifecycle.status != "active":
+            raise CapabilityExecutionError(
+                "inactive_capability",
+                f"capability '{capability_id}' is {capability.lifecycle.status}",
+                capability_id=capability_id,
+            )
+        timeout_seconds = min(self.timeout_seconds, capability.policy.timeout_seconds or self.timeout_seconds)
         try:
-            async with asyncio.timeout(self.timeout_seconds):
+            async with asyncio.timeout(timeout_seconds):
                 return await self._run(
                     catalog,
                     capability_id,
@@ -99,7 +106,7 @@ class CapabilityRunner:
         except TimeoutError as exc:
             raise CapabilityExecutionError(
                 "capability_timeout",
-                f"capability exceeded its {self.timeout_seconds:g} second deadline",
+                f"capability exceeded its {timeout_seconds:g} second deadline",
                 capability_id=capability_id,
                 retryable=True,
             ) from exc
@@ -123,12 +130,12 @@ class CapabilityRunner:
                 )
             return await handler(self, catalog, capability_id, inputs)
         allowed_objects = {
-            item.split(".", 1)[1]
+            item
             for item in capability.returns
             if self._is_object(catalog, item)
         }
         allowed_links = {
-            item.split(".", 1)[1]
+            item
             for item in capability.returns
             if not self._is_object(catalog, item)
         }
@@ -266,16 +273,21 @@ class CapabilityRunner:
                             )
                             for record in records
                         )
-                fragments.extend(
-                    self.decoder.decode(
+                try:
+                    decoded = self.decoder.decode(
                         catalog,
                         source_id,
                         operation_id,
                         response,
                         request=request,
                         record_key_prefix=str(page),
+                        observed_at=observed_at,
                     )
-                )
+                except (ValueError, KeyError, TypeError) as exc:
+                    raise CapabilityExecutionError('mapping_value_validation_failed',
+                        'Source record does not satisfy the Mapping value policy.',
+                        capability_id=capability_id,source_id=source_id,operation_id=operation_id) from exc
+                fragments.extend(decoded)
                 if not operation.pagination or not self._has_next_page(
                     operation, request, response, page
                 ):

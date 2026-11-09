@@ -47,9 +47,9 @@ def qualifiers_match(case,attribute):
     return actual==expected if case.qualifier_mode=='exact' else expected<=actual
 
 
-CASE_NAMES=('entity','relation','requirement')
+CASE_NAMES=('entity','relation','requirement','composition','quantity')
 ERROR_NAMES=('failed_documents','partial_documents','ungrounded_entities','invalid_relations',
-             'ungrounded_attributes','unassigned_attributes','duplicate_attributes')
+             'ungrounded_attributes','unassigned_attributes','duplicate_attributes','quarantined_attributes')
 
 
 def _refs_text(row,nodes):
@@ -65,16 +65,19 @@ def score_extraction(corpus,documents):
     for expected in documents:
         actual=found.get(expected.document_id)
         row={'document_id':expected.document_id,'label_status':expected.label_status,'missing_cases':[]}
-        for kind,cases in [('entity',expected.entities),('relation',expected.relations),('requirement',expected.requirements)]:
+        groups=[('entity',expected.entities),('relation',expected.relations),('requirement',expected.requirements),
+                ('composition',expected.compositions),('quantity',expected.quantities)]
+        for kind,cases in groups:
             metrics[kind+'_cases_total']+=len(cases)
         if actual is None:
             metrics['failed_documents']+=1
-            row['missing_cases']=['entity:'+str(i) for i in range(len(expected.entities))]+['relation:'+str(i) for i in range(len(expected.relations))]+['requirement:'+str(i) for i in range(len(expected.requirements))]
+            row['missing_cases']=[kind+':'+str(i) for kind,cases in groups for i in range(len(cases))]
             details.append(row);continue
         if actual['source']['sha256']!=expected.sha256:raise ValueError('scoring source identity mismatch')
         entities={e['id']:e for e in actual['entities']}
         nodes={n['node_id']:n['text'] for n in actual['parsed_document']['nodes']}
         metrics['partial_documents']+=actual.get('extraction_status')=='partial'
+        metrics['quarantined_attributes']+=len(actual.get('quarantined_attributes',[]))
         for entity in entities.values():
             text=literal(_refs_text(entity,nodes))
             metrics['ungrounded_entities']+=not literal(entity['name']) or literal(entity['name']) not in text
@@ -105,6 +108,30 @@ def score_extraction(corpus,documents):
                 if item in entities and entity_name(entities[item]['name'])==entity_name(owner):return True
                 pending.extend(parents.get(item,set()))
             return False
+        for i,case in enumerate(expected.compositions):
+            targets=[e['id'] for e in entities.values() if entity_name(e['name'])==entity_name(case.parent) and grounded_entity(e)]
+            children={source for source,targets_ in parents.items() if any(target in targets_ for target in targets)}
+            actual_names=Counter(names(children));expected_names=Counter(entity_name(name) for name in case.children)
+            grounded=all(grounded_entity(entities[key]) for key in children)
+            context=literal(case.source_text) in literal('\n'.join(nodes.values()))
+            matched=len(targets)==1 and grounded and context and actual_names==expected_names
+            metrics['composition_cases_found']+=matched
+            if not matched:
+                row['missing_cases'].append('composition:'+str(i))
+                row.setdefault('composition_differences',[]).append({'case':i,'parent':case.parent,
+                    'parent_matches':len(targets),'missing':list((expected_names-actual_names).elements()),
+                    'unexpected':list((actual_names-expected_names).elements())})
+        for i,case in enumerate(expected.quantities):
+            targets=[e['id'] for e in entities.values() if entity_name(e['name'])==entity_name(case.subject) and grounded_entity(e)]
+            values=[q for q in actual.get('declared_quantities',[]) if q['entity_id'] in targets]
+            matched=False
+            if len(targets)==1 and len(values)==1:
+                q=values[0];text=literal('\n'.join(nodes.get(key,'') for key in q.get('source_node_ids',[])))
+                matched=(literal(q['value_raw'])==literal(case.value_raw) and q.get('unit_raw')==case.unit_raw
+                         and literal(case.source_text) in text and literal(case.value_raw) in text
+                         and (case.unit_raw is None or literal(case.unit_raw) in text))
+            metrics['quantity_cases_found']+=matched
+            if not matched:row['missing_cases'].append('quantity:'+str(i))
         seen=set()
         for attribute in actual['attributes']:
             metrics['ungrounded_attributes']+=not attribute_is_grounded(actual,attribute)
@@ -169,9 +196,9 @@ def compare_runs(baseline,candidate,tests_passed):
             reasons.append(split+':changed_case_contract')
         if not sum(b.get(k+'_cases_total',0) for k in CASE_NAMES):reasons.append(split+':no_frozen_cases')
         for kind in CASE_NAMES:
-            if b[kind+'_cases_total']!=a[kind+'_cases_total']:reasons.append(split+':changed_case_denominator')
-            if a[kind+'_cases_found']<b[kind+'_cases_found']:reasons.append(split+':'+kind+'_regression')
-            if split=='development' and a[kind+'_cases_found']>b[kind+'_cases_found']:improved=True
+            if b.get(kind+'_cases_total',0)!=a.get(kind+'_cases_total',0):reasons.append(split+':changed_case_denominator')
+            if a.get(kind+'_cases_found',0)<b.get(kind+'_cases_found',0):reasons.append(split+':'+kind+'_regression')
+            if split=='development' and a.get(kind+'_cases_found',0)>b.get(kind+'_cases_found',0):improved=True
         for key in ERROR_NAMES:
             if a[key]>b[key]:reasons.append(split+':'+key+'_regression')
             if split=='development' and a[key]<b[key]:improved=True

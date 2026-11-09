@@ -118,15 +118,31 @@ async def update_standard_dictionary(request, corpus, extraction_ref, *, api=Non
     prefix='specification_processing/'+request.run_id+'/'
     async with artifact_store(request.artifact_root) as store:
         artifacts=[]
+        baseline_ref=None
         async def save(name,body):
             ref=await store.put(prefix+name,(json.dumps(body,ensure_ascii=False,indent=2,default=str)+'\n').encode())
             artifacts.append(ref.model_dump());return ref
         async def finish(result):
+            if baseline_ref is not None:result['baseline_dictionary']=baseline_ref
             result['artifacts']=[*artifacts,*result.get('artifacts',[])]
             ref=await save('dictionary_incremental.json',{k:v for k,v in result.items() if k!='artifacts'})
             result['artifacts'].append(ref.model_dump())
             return result
         await repo.register_extraction(request.run_id,extraction_ref,corpus)
+        from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import parse_dictionary_snapshot
+        current_snapshot = await api.dictionary_meaning('GET', '/snapshot')
+        if current_snapshot.get('schema_version') == 2:
+            from teoria.features.specification_processing.normalization.ontology_candidates import collect_ontology_candidates
+            baseline = parse_dictionary_snapshot(current_snapshot)
+            if request.dictionary_baseline:
+                raw = await read_uri(request.dictionary_baseline.uri)
+                if hashlib.sha256(raw).hexdigest() != request.dictionary_baseline.sha256:
+                    raise ValueError('baseline dictionary checksum mismatch')
+                if approved_dictionary_snapshot(parse_dictionary_snapshot(raw)).checksum != approved_dictionary_snapshot(baseline).checksum:
+                    return await finish({'status':'held','reason':'baseline_dictionary_changed','blocked_source_ids':[]})
+            candidates, decisions = await register_corpus(api, corpus, 'dictionary_'+request.run_id+'_scan', auto_approve=request.dictionary_auto_approve)
+            return await finish(await collect_ontology_candidates(baseline, corpus, candidates, decisions,
+                artifact_root=request.artifact_root, prefix=prefix))
         if getattr(request,'dictionary_rebuild_from_sources',False):
             rebuilt=await maintain_dictionary({'batch_id':'rebuild_'+hashlib.sha256(request.run_id.encode()).hexdigest()[:24],
                 'artifact_root':request.artifact_root,'classification_code':request.classification_code,
@@ -134,9 +150,9 @@ async def update_standard_dictionary(request, corpus, extraction_ref, *, api=Non
                 'auto_apply':False,'rebuild_from_sources':True,
                 'extractions':[{'uri':extraction_ref['uri'],'sha256':extraction_ref['sha256']}]},api=api,runner=runner)
             return await finish(rebuilt)
+        baseline=DictionarySnapshot.model_validate(current_snapshot)
         candidates,decisions=await register_corpus(api,corpus,'dictionary_'+request.run_id+'_scan',auto_approve=request.dictionary_auto_approve)
         entries={str(d['entry_id']) for d in decisions if d.get('entry_id') and d['status'] in {'approved','reused'}}
-        baseline=DictionarySnapshot.model_validate(await api.dictionary_meaning('GET','/snapshot'))
         if request.dictionary_baseline:
             raw=await read_uri(request.dictionary_baseline.uri)
             if hashlib.sha256(raw).hexdigest()!=request.dictionary_baseline.sha256:
@@ -144,6 +160,8 @@ async def update_standard_dictionary(request, corpus, extraction_ref, *, api=Non
             expected=approved_dictionary_snapshot(DictionarySnapshot.model_validate_json(raw))
             if expected.checksum!=approved_dictionary_snapshot(baseline).checksum:
                 return await finish({'status':'held','reason':'baseline_dictionary_changed','blocked_source_ids':sorted(entries)})
+        baseline_artifact=await save('dictionary_baseline.json',approved_dictionary_snapshot(baseline).model_dump(mode='json'))
+        baseline_ref={'uri':baseline_artifact.uri,'sha256':baseline_artifact.sha256}
         current=accepted_contexts(corpus,candidates,decisions,baseline)
         asked=[{'source_entry_id':id,'context_sha256':v['signature'],'definition_revision_id':v['meaning']['revision_id']}
                for id,values in current.items() for v in values if v['meaning']['status']=='resolved']
@@ -246,6 +264,7 @@ async def update_standard_dictionary(request, corpus, extraction_ref, *, api=Non
             try:
                 planned=await maintain_dictionary({'batch_id':batch,'artifact_root':request.artifact_root,
                 'model':request.model or 'configured_default','auto_apply':False,'model_timeout_seconds':request.model_timeout_seconds,
+                'baseline_dictionary':baseline_ref,
                 'extractions':[{'uri':extraction_ref['uri'],'sha256':extraction_ref['sha256']},*history_refs,
                     *[r.model_dump(mode='json') for r in request.dictionary_corpus]],
                     'validation_extractions':[r.model_dump(mode='json') for r in request.dictionary_validation_corpus]},api=api,runner=runner)
@@ -268,7 +287,7 @@ async def update_standard_dictionary(request, corpus, extraction_ref, *, api=Non
                         artifacts.extend(planned['artifacts']);continue
                 return await finish({**planned,'blocked_source_ids':sorted(needs_review)})
             if request.dictionary_meaning_auto_approve:
-                if request.dictionary_require_validation and not planned.get('validation_documents'):
+                if not planned.get('validation_documents'):
                     return await finish({**planned,'status':'held','reason':'independent_validation_required',
                         'blocked_source_ids':sorted(needs_review)})
                 if request.dictionary_max_held_source_ids is not None and len(planned.get('held_source_ids',[]))>request.dictionary_max_held_source_ids:

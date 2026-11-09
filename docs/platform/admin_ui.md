@@ -3,6 +3,14 @@
 화면 사용 순서는 [사용 안내](../platform-guide.md)를 따른다. 이 문서는 경로·API 경계·현재 제한과 개발 위치를 정리한다.
 조회·승인·실행은 각각의 권한과 기능 활성화 상태를 따른다.
 
+## 작업 공간과 공통 운영
+
+`semantic` 기능은 **Ontology·업무 실행**, 선택형 `mlops`는 **모델 개발·운영** 작업 공간으로 표시한다.
+**공통 운영**에는 파이프라인과 연결·설정을, **업무 앱**에는 FormatID를 둔다.
+기존 사전·의미 연결 URL은 검색 조건과 선택 대상을 보존해 새 소유 화면으로 연결한다. 홈의 작업 공간별 시작 링크와 현재 위치도 같은 메뉴 정의를 사용한다.
+모듈 비활성화·모델 운영 권한 확인과 기존 관리자 인증은 그대로 적용한다.
+도메인 관리의 물품 사전은 `semantic` 또는 `formatid` 활성화 시 표시한다. 프로파일 전용 편집과 범용 학습·모델 승인은 로드맵을 따른다.
+
 ## 작업에 맞는 화면 찾기
 
 | 메뉴 | URL | 주요 작업 |
@@ -10,14 +18,16 @@
 | 홈 | `/admin/overview` | 검토 대기·실패한 실행·최근 작업 |
 | 데이터 자산 | `/admin/data-catalog` | 자산 검색·설명·스키마·품질·계보·진단 |
 | 온톨로지 | `/admin/semantic-model/ontology` | 개념·관계·Draft·검토·게시 |
-| 의미 연결 | `/admin/semantic-model/bindings` | 자산·용어·개념 연결 |
+| 온톨로지 → 데이터·용어 연결 | `/admin/semantic-model/ontology?view=connections` | 개념·모델 범위의 자산·용어 연결 |
 | 검토함 | `/admin/changes/review` | 제안·Binding·Ontology의 소유 검토 화면으로 이동 |
 | 파이프라인 | `/admin/workflows` | 허용된 실행·스케줄·취소 요청·이력 |
-| 앱 → FormatID | `/admin/specifications` | 문서 입력·실행·저장 결과·원문 근거 |
+| 업무 앱 → FormatID | `/admin/specifications` | 문서 입력·실행·저장 결과·원문 근거 |
 | 모델 레지스트리 | `/admin/models` | 선택형 모델·버전·평가·학습 이력 |
 | 추론 서비스 | `/admin/serving` | 선택형 배포 버전·추론 테스트·이력 |
 | 연결 및 설정 | `/admin/operations` | 연결·관리자 인증·실행 도구 |
-| 개발 도구 | `/admin/developer/capabilities` | 실행 계약·Runtime 개발 |
+| 도메인 관리 → 물품 사전 | `/admin/domains/goods/dictionary` | 품목별 유형·속성·표현·연결·검토 대기, 게시 Ontology 조회·표현 연결 판정·과거 정의의 Draft 이관 |
+| FormatID → 처리 기준 | `/admin/specifications/standards` | 규격서 처리용 표준·사전 묶음 승인 |
+| 실행 계약·Capability | `/admin/developer/capabilities` | Source·Mapping·Capability의 연결·정적 검증 조회 |
 
 모델 운영은 선택 기능이다. 파이프라인 화면은 모델 운영 활성화와 독립적이다.
 홈·검토함은 조회 범위를 표시하며 전체 누적 통계나 개인 할당 작업으로 해석하지 않는다.
@@ -121,3 +131,5 @@ CI의 `admin-ui-visual`과 같은 고정 Playwright 컨테이너에서 생성·�
 3열로 제공하고 작은 화면에서는 세로로 배치한다. 원문 값과 내부 식별자는 펼쳐 확인한다.
 문서 비교는 표준·단위·범위·역할·대상 연결이 다른 경우 빈 셀의 이유를 표시한다.
 주요 업무 화면은 방문 시 적재하고 화면 오류에는 전체 앱 탐색을 유지하는 복구 화면을 제공한다.
+
+Ontology 개념 상세의 데이터·용어 연결은 Stable Concept ID로 조회한다. 게시된 개념이 없는 범위에서는 새 연결 제안을 비활성화하고 게시 필요 사유를 표시한다. 기존 연결의 조회·검토는 유지한다.

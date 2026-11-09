@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -69,6 +70,10 @@ export function BindingManager() {
       );
       return next;
     });
+  const namespace = params.get("namespace") || undefined;
+  const conceptId = params.get("binding_concept") || undefined;
+  const scope = { namespace, conceptId };
+  const connectionsPath = "/admin/semantic-model/ontology?view=connections";
   const asset = params.get("asset");
   const assetId = params.get("assetId");
   const selectedId = params.get("binding");
@@ -90,7 +95,7 @@ export function BindingManager() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
-    conceptId: "",
+    conceptId: conceptId || "",
     targetType: "glossary_term",
     entityId: "",
     entityType: "glossaryTerm",
@@ -100,7 +105,10 @@ export function BindingManager() {
     purpose: "semantic_resolution",
   });
 
+  const sequence = useRef(0);
+  useEffect(()=>{setForm(value=>({...value,conceptId:conceptId || ""}));setFormOpen(false);},[conceptId,namespace]);
   const load = useCallback(async () => {
+    const requestId=++sequence.current;
     setLoading(true);
     try {
       let ids: string[] | undefined;
@@ -117,27 +125,40 @@ export function BindingManager() {
         await Promise.all([
           ids?.length === 0
             ? Promise.resolve({ items: [] })
-            : bindingApi.bindings(status === "all" ? undefined : status, ids),
-          ontologyApi.ontologyConcepts(),
+            : bindingApi.bindings(
+                status === "all" ? undefined : status,
+                ids,
+                scope,
+              ),
+          ontologyApi.ontologyConcepts(namespace),
           bindingApi.bindingValidation(),
         ]);
       if (
         selectedId &&
         !bindingResponse.items.some((item) => item.binding_id === selectedId)
       ) {
-        const focused = await bindingApi.bindings(undefined, [selectedId]);
+        const focused = await bindingApi.bindings(
+          undefined,
+          [selectedId],
+          scope,
+        );
         bindingResponse.items.push(...focused.items);
       }
+      if(requestId!==sequence.current)return;
       setItems(bindingResponse.items);
-      setConcepts(conceptResponse.items);
+      setConcepts(
+        conceptResponse.items.filter(
+          (item) => !conceptId || item.concept_id === conceptId,
+        ),
+      );
       setValidation(validationResponse);
       setError(null);
     } catch (reason) {
-      setError((reason as Error).message);
+      if(requestId===sequence.current)setError((reason as Error).message);
     } finally {
-      setLoading(false);
+      if(requestId===sequence.current)setLoading(false);
     }
-  }, [status, assetId, selectedId]);
+  }, [status, assetId, selectedId, namespace, conceptId]);
   useEffect(() => {
     load();
   }, [load]);
@@ -210,15 +231,15 @@ export function BindingManager() {
   return (
     <div className="binding-manager">
       <PageHeader
-        title="의미 연결"
+        title="데이터·용어 연결"
         description="업무 개념과 데이터 자산·용어의 연결을 검토하고 관리합니다."
         actions={
           <Button
-            disabled={!!busy}
+            disabled={!!busy || loading || !concepts.length}
             onClick={() => setFormOpen((value) => !value)}
           >
             {formOpen ? <X size={14} /> : <Plus size={14} />}{" "}
-            {formOpen ? "닫기" : "의미 연결 추가"}
+            {formOpen ? "닫기" : "데이터·용어 연결 추가"}
           </Button>
         }
       />
@@ -228,10 +249,21 @@ export function BindingManager() {
         value={query}
         onChange={setQuery}
       />
+      {!loading && !error && !concepts.length && <p className="operations-note">선택 범위에 게시된 개념이 없습니다. 연결 제안은 Ontology 게시 후에 만들 수 있습니다.</p>}
+      {conceptId && (
+        <div className="context-banner">
+          <span>선택한 Ontology 개념의 연결을 관리합니다.</span>
+          <Link
+            to={`${connectionsPath}${namespace ? `&namespace=${encodeURIComponent(namespace)}` : ""}`}
+          >
+            모델 전체 연결
+          </Link>
+        </div>
+      )}
       {selectedId && (
         <div className="context-banner">
           <span>선택한 의미 연결의 근거와 승인 상태를 확인합니다.</span>
-          <Link to="/admin/semantic-model/bindings">모든 연결 보기</Link>
+          <Link to={connectionsPath}>모든 연결 보기</Link>
         </div>
       )}
       {asset && (
@@ -244,7 +276,7 @@ export function BindingManager() {
           >
             자산으로 돌아가기
           </Link>
-          <Link to="/admin/semantic-model/bindings">범위 해제</Link>
+          <Link to={connectionsPath}>범위 해제</Link>
           {contextTruncated && <small>최근 50개 연결 범위입니다.</small>}
         </div>
       )}
@@ -263,7 +295,7 @@ export function BindingManager() {
               validation?.status}
           </strong>
           <span>
-            연결 {validation?.binding_count ?? 0}개 · 진단{" "}
+            이 범위 연결 {items.length}개 · 전체 연결 진단{" "}
             {validation?.diagnostic_count ?? 0}개
           </span>
         </div>
@@ -275,6 +307,7 @@ export function BindingManager() {
             <select
               required
               value={form.conceptId}
+              disabled={!!conceptId}
               onChange={(e) => setForm({ ...form, conceptId: e.target.value })}
             >
               <option value="">선택</option>

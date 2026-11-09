@@ -10,6 +10,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { SpecificationWorkspace } from "./SpecificationWorkspace";
 import { processingApi } from "../../api/specification_processing";
+import { goodsDictionaryApi } from "../../api/goods_dictionary";
 import { workflowsApi } from "../../api/workflows";
 import * as access from "../access/AdminAccess";
 
@@ -19,7 +20,7 @@ afterEach(() => {
 });
 function setup() {
   vi.spyOn(access, "useAdminAccess").mockReturnValue({
-    principal: { actor: "operator", roles: ["metadata_admin"] },
+    principal: { actor: "operator", roles: ["metadata_admin", "ontology_owner"] },
     requestLogin: vi.fn(),
   });
   vi.spyOn(processingApi, "status").mockResolvedValue({
@@ -28,7 +29,7 @@ function setup() {
   });
   vi.spyOn(processingApi, "runs").mockResolvedValue({ items: [], total: 0 });
 }
-it("uploads selected files and submits a typed manual run without auto approval", async () => {
+it("uploads files with source registration and extraction-standard auto approval enabled", async () => {
   setup();
   const upload = vi.spyOn(processingApi, "upload").mockResolvedValue({
     document_id: "doc_1",
@@ -58,7 +59,10 @@ it("uploads selected files and submits a typed manual run without auto approval"
       expect.stringMatching(/^[a-f0-9-]{36}$/),
       expect.objectContaining({
         manifest: expect.objectContaining({
-          dictionary_auto_approve: false,
+          dictionary_auto_approve: true,
+          dictionary_meaning_auto_approve: false,
+          auto_apply_source_literals: true,
+          auto_approve_application_standard: true,
           documents: [expect.objectContaining({ document_id: "doc_1" })],
         }),
       }),
@@ -68,6 +72,19 @@ it("uploads selected files and submits a typed manual run without auto approval"
   expect(
     await screen.findByRole("link", { name: "실행 상태 확인" }),
   ).toBeTruthy();
+});
+it("enables automatic approval when the authenticated owner session finishes loading", async () => {
+  setup();
+  vi.mocked(access.useAdminAccess).mockReturnValue({ principal: null, requestLogin: vi.fn() });
+  const view = render(<MemoryRouter initialEntries={["/?new=1"]}><SpecificationWorkspace /></MemoryRouter>);
+  const option = await screen.findByRole("checkbox", { name: /원문 표현과 추출 기준을 자동/ });
+  expect((option as HTMLInputElement).checked).toBe(false);
+  vi.mocked(access.useAdminAccess).mockReturnValue({ principal: { actor: "owner", roles: ["metadata_admin", "ontology_owner"] }, requestLogin: vi.fn() });
+  view.rerender(<MemoryRouter initialEntries={["/?new=1"]}><SpecificationWorkspace /></MemoryRouter>);
+  expect((option as HTMLInputElement).checked).toBe(true);
+  fireEvent.click(option);
+  view.rerender(<MemoryRouter initialEntries={["/?new=1"]}><SpecificationWorkspace /></MemoryRouter>);
+  expect((option as HTMLInputElement).checked).toBe(false);
 });
 it("loads extracted properties and opens checksum-verified source evidence", async () => {
   setup();
@@ -276,4 +293,66 @@ it("opens the selected document from its result row and preserves its selection 
   expect(
     (screen.getByLabelText("규격서 선택") as HTMLSelectElement).value,
   ).toBe("1");
+});
+
+it("submits the selected standard and dictionary as one approved application version", async () => {
+  setup();
+  const release = {release_id:"12345678-1234-1234-1234-123456789abc",name:"서버 기준 v1",source_run_id:"source_run",
+    classification_code:"4321150102",standard_kind:"extraction_draft" as const,status:"approved" as const,
+    standard_ref:{uri:"s3://teoria-artifacts/standard.json",sha256:"a".repeat(64)},
+    dictionary_ref:{uri:"s3://teoria-artifacts/dictionary.json",sha256:"b".repeat(64)},
+    dictionary_checksum:"c".repeat(64),approved_by:"owner",rationale:"검토한 기준",created_at:"2026-11-04"};
+  vi.spyOn(goodsDictionaryApi,"standards").mockResolvedValue({items:[release],total:1});
+  vi.spyOn(processingApi,"upload").mockResolvedValue({document_id:"doc",filename:"sample.pdf",source_uri:"s3://teoria-artifacts/specification_inputs/doc.pdf",sha256:"d".repeat(64)});
+  const run=vi.spyOn(workflowsApi,"run").mockResolvedValue({flow_run_id:"flow",name:"processing"});
+  render(<MemoryRouter initialEntries={["/?new=1"]}><SpecificationWorkspace/></MemoryRouter>);
+  fireEvent.change(await screen.findByLabelText("작업"),{target:{value:"document_processing"}});
+  await screen.findByRole("option",{name:/서버 기준 v1/});
+  fireEvent.change(screen.getByLabelText("승인된 처리 기준"),{target:{value:release.release_id}});
+  fireEvent.change(screen.getByLabelText(/규격서 파일/),{target:{files:[new File(["synthetic"],"sample.pdf",{type:"application/pdf"})]}});
+  fireEvent.submit(screen.getByRole("button",{name:"문서 처리 실행"}).closest("form")!);
+  await waitFor(()=>expect(run).toHaveBeenCalledWith("specification-document-processing",expect.any(String),expect.objectContaining({
+    manifest:expect.objectContaining({application_release_id:release.release_id,standard:release.standard_ref,
+      dictionary_standard:release.dictionary_ref,classification_code:"4321150102",dictionary_auto_approve:false,dictionary_meaning_auto_approve:false})})));
+});
+
+it("reprocesses stored original hashes with an explicitly approved fixed version", async () => {
+  setup();
+  const original = { document_id: "doc_original", filename: "original.pdf", source_uri: "s3://test/inputs/original.pdf", sha256: "c".repeat(64) };
+  vi.spyOn(processingApi, "inputs").mockResolvedValue({ source_run_id: "source_run", documents: [original], classification_code: null });
+  const release = {
+    release_id: "00000000-0000-4000-8000-000000000001", name: "검토한 기준", status: "approved" as const,
+    source_run_id: "source_run", classification_code: null, standard_kind: "extraction_draft" as const,
+    standard_ref: { uri: "s3://test/standard.json", sha256: "a".repeat(64) },
+    dictionary_ref: { uri: "s3://test/dictionary.json", sha256: "b".repeat(64) },
+    dictionary_checksum: "d".repeat(64), content_checksum: "e".repeat(64), approved_by: "reviewer", rationale: "검토 완료", created_at: "2026-11-08",
+  };
+  vi.spyOn(goodsDictionaryApi, "standards").mockResolvedValue({ items: [], total: 0 });
+  vi.spyOn(goodsDictionaryApi, "standard").mockResolvedValue(release);
+  const upload = vi.spyOn(processingApi, "upload");
+  const execute = vi.spyOn(workflowsApi, "run").mockResolvedValue({ flow_run_id: "new-flow", name: "new-run" });
+  render(<MemoryRouter initialEntries={[`/?new=1&reprocess=source_run&release=${release.release_id}`]}><SpecificationWorkspace /></MemoryRouter>);
+  await screen.findByText("original.pdf");
+  const submit = screen.getByRole("button", { name: "문서 처리 실행" });
+  await waitFor(() => expect((submit as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.submit(submit.closest("form")!);
+  await waitFor(() => expect(execute).toHaveBeenCalledWith("specification-document-processing", expect.any(String), {
+    manifest: expect.objectContaining({ application_release_id: release.release_id, standard: release.standard_ref,
+      dictionary_standard: release.dictionary_ref, documents: [original], dictionary_auto_approve: false, dictionary_meaning_auto_approve: false }),
+  }));
+  expect(upload).not.toHaveBeenCalled();
+  expect(await screen.findByRole("link", { name: "처리 결과 확인" })).toBeTruthy();
+});
+
+it("retries only selected failed originals in extraction mode", async () => {
+  setup();
+  const inputs=vi.spyOn(processingApi,"inputs").mockResolvedValue({source_run_id:"previous",classification_code:null,
+    documents:[{document_id:"failed_doc",filename:"failed.pdf",source_uri:"s3://fixture/failed.pdf",sha256:"b".repeat(64)}]});
+  const run=vi.spyOn(workflowsApi,"run").mockResolvedValue({flow_run_id:"retry_flow",name:"retry"});
+  render(<MemoryRouter initialEntries={["/?new=1&reprocess=previous&retry=failed"]}><SpecificationWorkspace /></MemoryRouter>);
+  await screen.findByText("failed.pdf");
+  expect(inputs).toHaveBeenCalledWith("previous",true);
+  fireEvent.submit(screen.getByRole("button",{name:"문서 처리 실행"}).closest("form")!);
+  await waitFor(()=>expect(run).toHaveBeenCalledWith("specification-standard-management",expect.any(String),
+    expect.objectContaining({manifest:expect.objectContaining({mode:"standard_management",documents:[expect.objectContaining({document_id:"failed_doc"})]})})));
 });

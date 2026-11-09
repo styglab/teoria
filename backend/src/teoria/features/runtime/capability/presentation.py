@@ -29,6 +29,10 @@ def serialize_capability_result(
             output["property_provenance"] = {
                 key: _serialize_provenance(values) for key, values in item.property_provenance.items()
             }
+        if item.semantic_observations:
+            output['semantic_observations'] = [o.model_dump(mode='json') for o in item.semantic_observations]
+        if item.semantic_conflicts:
+            output['semantic_conflicts'] = item.semantic_conflicts
         objects.append(output)
     links = [
         {

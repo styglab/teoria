@@ -35,6 +35,7 @@ class DictionarySourceNode(Record):
 
 
 class DictionarySource(Record):
+    classification_code: str | None = Field(default=None, pattern=r"^[0-9]{10}$")
     document_id: str = Field(min_length=1, max_length=200)
     source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     parser_version: str = Field(min_length=1, max_length=100)
@@ -77,6 +78,7 @@ class DictionaryCandidate(Record):
 
 
 class DictionarySubmission(Record):
+    classification_code: str | None = Field(default=None, pattern=r"^[0-9]{10}$")
     schema_version: Literal[1] = 1
     auto_approve: bool = True
     sources: list[DictionarySource] = Field(min_length=1, max_length=100)

@@ -247,3 +247,32 @@ Compose의 CPU·메모리 상한은 `deploy/compose/compose.yaml`이 기준이�
 
 MCP bridge의 자원 변수는 실행 프로세스 환경에서 읽는다. `.env`에서 자동으로 읽는 값은
 기존 Runtime token이며, 자원 변수는 필요한 경우 Codex server env나 실행 환경으로 전달한다.
+
+## 개인·서비스 계정의 OIDC 토큰 검증
+
+Admin API는 `TEORIA_ADMIN_AUTH_MODE=bearer`를 유지하면서 다음 설정으로
+OIDC 제공자가 서명한 API access token을 검증할 수 있다.
+
+| 환경변수 | 설정 |
+|---|---|
+| `TEORIA_ADMIN_OIDC_ISSUER` | 토큰의 정확한 HTTPS issuer |
+| `TEORIA_ADMIN_OIDC_AUDIENCE` | Teoria Admin API에 할당한 audience |
+| `TEORIA_ADMIN_OIDC_JWKS_URL` | 운영자가 고정한 HTTPS 공개 서명키 주소 |
+| `TEORIA_ADMIN_OIDC_ROLES_CLAIM` | 역할 목록 경로. 기본 `roles`, 예: `realm_access.roles` |
+| `TEORIA_ADMIN_OIDC_ROLE_MAPPING` | 외부 역할에서 Teoria 역할 목록으로의 JSON 매핑 |
+
+매핑 예시는 `{"teoria_reviewers":["binding_reviewer"],"teoria_owners":["ontology_owner"]}`다.
+기존 기본 관리자 역할을 토큰 사용자에게 부여하지 않는다. 매핑된 역할이 없으면 접근을 거절한다.
+서명 알고리즘은 RS256으로 제한하고 issuer·audience·sub·exp·iat와 서명을 확인한다.
+actor는 변경 가능한 표시명 대신 issuer와 sub로 구성하며 자동 작업도 고유 sub를 사용한다.
+
+issuer를 설정하면 공용 Admin token으로 되돌아가는 인증 경로는 없다. Worker와 배포 검증
+요청도 API audience를 가진 유효한 서비스 access token을 공급해야 한다. Compose의 기존
+`TEORIA_ADMIN_API_TOKEN` 필수 입력은 호환을 위해 유지하지만 OIDC 모드의 인증 근거가 되지 않는다.
+ID token의 브라우저 client audience를 API audience로 지정하지 않는다.
+
+Compose는 위 설정을 Admin API에 전달한다. K3s는 해당 환경변수를 Admin Deployment에
+명시적으로 설정해야 한다. 제공자별 로그인 redirect·PKCE·서비스 토큰 자동 갱신은 아직 연결하지
+않았으며 현재 관리자 연결창은 access token 입력을 사용한다. 실제 SSO 구성은 issuer·client와
+역할 설정, 만료·키 교체·개인별 승인 기록을 해당 환경에서 확인한 뒤 완료로 기록한다.
+OIDC 연결만으로 문서·속성 단위 접근 정책이나 작성자/승인자 분리가 완성되는 것은 아니다.

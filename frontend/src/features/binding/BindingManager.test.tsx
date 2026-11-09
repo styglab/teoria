@@ -6,8 +6,9 @@ import { bindingApi, type SemanticBinding } from "../../api/binding";
 import { ontologyApi } from "../../api/ontology";
 import { metadataApi } from "../../api/metadata";
 
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
 describe("BindingManager", () => {
-  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
   it("shows stable ontology concepts and reviews draft bindings", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -31,7 +32,7 @@ describe("BindingManager", () => {
     vi.spyOn(bindingApi, "bindingValidation").mockResolvedValue({ status: "valid", binding_count: 0, diagnostic_count: 0, diagnostics: [] });
     const context = vi.spyOn(metadataApi, "assetContext");
     render(<MemoryRouter initialEntries={["/?binding=draft-id&assetId=table-id"]}><BindingManager /></MemoryRouter>);
-    await waitFor(() => expect(bindings).toHaveBeenCalledWith(undefined, ["draft-id"]));
+    await waitFor(() => expect(bindings).toHaveBeenCalledWith(undefined, ["draft-id"],{namespace:undefined,conceptId:undefined}));
     expect(context).not.toHaveBeenCalled();
   });
 
@@ -76,3 +77,13 @@ describe("BindingManager", () => {
 function response(body: unknown): Promise<Response> {
   return Promise.resolve({ ok: true, status: 200, json: async () => body } as Response);
 }
+
+it("keeps the selected draft concept in view and explains why published-only authoring is unavailable",async()=>{
+  const bindings=vi.spyOn(bindingApi,"bindings").mockResolvedValue({items:[]});
+  vi.spyOn(ontologyApi,"ontologyConcepts").mockResolvedValue({items:[]});
+  vi.spyOn(bindingApi,"bindingValidation").mockResolvedValue({status:"valid",binding_count:0,diagnostic_count:0,diagnostics:[]});
+  render(<MemoryRouter initialEntries={["/?namespace=teoria&binding_concept=draft-concept"]}><BindingManager /></MemoryRouter>);
+  expect(await screen.findByText("선택 범위에 게시된 개념이 없습니다. 연결 제안은 Ontology 게시 후에 만들 수 있습니다.")).toBeTruthy();
+  expect((screen.getByRole("button",{name:"데이터·용어 연결 추가"}) as HTMLButtonElement).disabled).toBe(true);
+  expect(bindings).toHaveBeenCalledWith(undefined,undefined,{namespace:"teoria",conceptId:"draft-concept"});
+});

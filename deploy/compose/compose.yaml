@@ -58,6 +58,11 @@ services:
       TEORIA_ADMIN_API_TOKEN: ${TEORIA_ADMIN_API_TOKEN:?set TEORIA_ADMIN_API_TOKEN}
       TEORIA_ADMIN_API_ACTOR: ${TEORIA_ADMIN_API_ACTOR:-system:admin}
       TEORIA_ADMIN_API_ROLES: ${TEORIA_ADMIN_API_ROLES:-metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner}
+      TEORIA_ADMIN_OIDC_ISSUER: ${TEORIA_ADMIN_OIDC_ISSUER:-}
+      TEORIA_ADMIN_OIDC_AUDIENCE: ${TEORIA_ADMIN_OIDC_AUDIENCE:-}
+      TEORIA_ADMIN_OIDC_JWKS_URL: ${TEORIA_ADMIN_OIDC_JWKS_URL:-}
+      TEORIA_ADMIN_OIDC_ROLES_CLAIM: ${TEORIA_ADMIN_OIDC_ROLES_CLAIM:-roles}
+      TEORIA_ADMIN_OIDC_ROLE_MAPPING: "${TEORIA_ADMIN_OIDC_ROLE_MAPPING:-{}}"
       TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
       TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
       TEORIA_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_DATABASE_CONCURRENCY_LIMIT:-10}
@@ -171,9 +176,8 @@ services:
     - noeviction
     healthcheck:
       test:
-      - CMD
-      - redis-cli
-      - ping
+      - CMD-SHELL
+      - '[ "$$(redis-cli ping)" = PONG ]'
       interval: 5s
       timeout: 5s
       retries: 20

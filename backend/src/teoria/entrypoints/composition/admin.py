@@ -21,8 +21,8 @@ from teoria.features.semantic_modeling.goods_dictionary.admin_router import (
 from teoria.features.semantic_modeling.goods_dictionary.service import (
     GoodsDictionaryService,
 )
-from teoria.features.semantic_modeling.goods_dictionary.meaning_service import (
-    GoodsMeaningService,
+from teoria.features.semantic_modeling.goods_dictionary.ontology_service import (
+    OntologyDictionaryService,
 )
 
 from teoria.features.metadata_management.intelligence.asset_assessment.admin_router import (
@@ -133,6 +133,7 @@ def create_admin_services(
     resolved_settings = settings or bootstrap_settings()
     resources = []
     authorizer = AdminAuthorizer(resolved_settings)
+    resources.append(authorizer)
     resolved_policy_evaluator = policy_evaluator or create_policy_evaluator(
         resolved_settings
     )
@@ -275,6 +276,24 @@ def create_admin_services(
 
 
 def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
+    import os
+    from teoria.features.specification_processing.application_standards_repository import ApplicationStandardsRepository
+    from teoria.features.specification_processing.application_standards_service import ApplicationStandardsService
+    from teoria.features.specification_processing.application_standards_router import create_application_standards_router
+    from teoria.features.specification_processing.workspace_router import ProcessingWorkspaceRepository, verified_artifact
+    from teoria.features.specification_processing.storage.artifact_store import artifact_store
+
+    application_standards = None
+    if services.settings.formatid_enabled and services.settings.app_database_url and services.settings.admin_data_database_url:
+        object_root = os.getenv('TEORIA_SPECIFICATION_ARTIFACT_ROOT','s3://teoria-artifacts')
+        async def read_standard(reference):
+            return await verified_artifact(reference,Path('/app/specification_artifacts'),object_root)
+        application_standards = ApplicationStandardsService(
+            ApplicationStandardsRepository(services.settings.app_database_url),
+            ProcessingWorkspaceRepository(services.settings.admin_data_database_url),
+            OntologyDictionaryService(services.settings.app_database_url, ontology_authoring=services.ontology_authoring_service), read_standard,
+            lambda: artifact_store(object_root))
+    app.include_router(create_application_standards_router(application_standards,services.authorizer))
     model_client = httpx.AsyncClient(timeout=15)
     services.resources.append(model_client)
     app.include_router(
@@ -291,6 +310,7 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
     )
     app.include_router(
         create_workflow_router(
+            application_standards=application_standards,
             authorizer=services.authorizer,
             client=model_client,
             prefect_url=services.settings.model_prefect_url,
@@ -333,6 +353,13 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
             if profiles
             else None
         )
+        expressions = (OntologyDictionaryService(services.settings.app_database_url,
+            ontology_authoring=services.ontology_authoring_service) if services.settings.app_database_url else None)
+        dependency_reader = None
+        if profiles is not None and expressions is not None and services.binding_repository is not None:
+            from teoria.features.goods_normalization.ontology_impact import GoodsOntologyImpactService
+            dependency_reader = GoodsOntologyImpactService(services.ontology_authoring_service, profiles,
+                expressions, services.binding_repository, services.catalog).report
         app.include_router(
             create_normalization_profile_router(
                 profiles, services.authorizer, operations
@@ -344,9 +371,7 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
                 if services.settings.app_database_url
                 else None,
                 services.authorizer,
-                GoodsMeaningService(services.settings.app_database_url)
-                if services.settings.app_database_url
-                else None,
+                expressions,
             )
         )
     if services.settings.semantic_modeling_enabled:
@@ -386,7 +411,7 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
     )
     app.include_router(
         create_ontology_authoring_router(
-            services.ontology_authoring_service, services.authorizer
+            services.ontology_authoring_service, services.authorizer, dependency_reader=dependency_reader,
         )
     )
     app.include_router(

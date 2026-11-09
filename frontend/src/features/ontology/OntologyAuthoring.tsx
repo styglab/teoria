@@ -28,7 +28,7 @@ import {
   PageState,
   SearchField,
 } from "../../components/workspace/WorkspaceLayout";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   type LinkEdge,
   type ObjectNode,
@@ -43,7 +43,13 @@ import {
   type OntologyVersion,
   type OntologyVersionDetail,
 } from "../../api/ontology";
+import { ConceptConnections } from "./ConceptConnections";
 import { DetailPanel } from "./DetailPanel";
+const BindingManager = lazy(() =>
+  import("../binding/BindingManager").then((module) => ({
+    default: module.BindingManager,
+  })),
+);
 const OntologyGraph = lazy(() =>
   import("./OntologyGraph").then((module) => ({
     default: module.OntologyGraph,
@@ -65,6 +71,31 @@ const diffLabels: Record<string, string> = {
 };
 
 export function OntologyAuthoring() {
+  const [params] = useSearchParams();
+  if (params.get("view") === "connections") {
+    const back = new URLSearchParams(params);
+    back.delete("view");
+    back.delete("binding_concept");
+    back.delete("binding");
+    back.delete("asset");
+    back.delete("assetId");
+    return (
+      <div className="workspace-page">
+        <Link to={`/admin/semantic-model/ontology?${back}`}>
+          ← 온톨로지 개념으로 돌아가기
+        </Link>
+        <Suspense
+          fallback={<PageState loading title="연결을 불러오고 있습니다…" />}
+        >
+          <BindingManager />
+        </Suspense>
+      </div>
+    );
+  }
+  return <OntologyWorkspace />;
+}
+
+function OntologyWorkspace() {
   const [params, setParams] = useSearchParams();
   const requestedVersion = params.get("version");
   const [namespace, setNamespace] = useState(params.get("namespace") || "");
@@ -599,6 +630,13 @@ export function OntologyAuthoring() {
             />
           )}
           <div className="page-controls">
+            <Button asChild variant="outline">
+              <Link
+                to={`/admin/semantic-model/ontology?view=connections&namespace=${encodeURIComponent(detail.namespace)}`}
+              >
+                데이터·용어 연결
+              </Link>
+            </Button>
             <FilterTabs<View>
               label="온톨로지 보기"
               value={view}
@@ -711,6 +749,10 @@ export function OntologyAuthoring() {
                     </button>
                     {expanded && (
                       <div className="ontology-object-detail">
+                        <ConceptConnections
+                          conceptId={object.concept_id}
+                          namespace={detail.namespace}
+                        />
                         <div className="ontology-identity">
                           <span>식별 기준</span>
                           <code>
@@ -733,7 +775,11 @@ export function OntologyAuthoring() {
                                 {object.properties.map((property) => (
                                   <tr key={property.concept_id}>
                                     <td>
-                                      <strong>{property.name}</strong>
+                                      <Link
+                                        to={`/admin/semantic-model/ontology?view=connections&namespace=${encodeURIComponent(detail.namespace)}&binding_concept=${encodeURIComponent(property.concept_id)}`}
+                                      >
+                                        {property.name} · 연결 보기
+                                      </Link>
                                       <code>{property.stable_key}</code>
                                     </td>
                                     <td>
@@ -751,6 +797,8 @@ export function OntologyAuthoring() {
                                       {[
                                         property.cardinality,
                                         property.unit,
+                                        property.quantity_dimension,
+                                        property.allowed_units?.length ? `허용 단위: ${property.allowed_units.join(", ")}` : null,
                                         property.temporal ? "시점 속성" : null,
                                       ]
                                         .filter(Boolean)
@@ -932,6 +980,15 @@ export function OntologyAuthoring() {
                         <p>{statusLabels[binding.status] ?? binding.status}</p>
                       </div>
                     ))}
+                    {bindingImpact?.dependency_impact && <section aria-label="개념 변경 영향">
+                      <h4>연결·적용 규칙 재검토 {bindingImpact.dependency_impact.review_required_count}건</h4>
+                      <p>기존 고정 버전은 유지됩니다. 새 버전 적용 전에 관련 연결과 규칙을 검증하세요.</p>
+                      {bindingImpact.dependency_impact.dependencies.map(dependency => <div className="review-diagnostic" key={`${dependency.kind}:${dependency.id}`}>
+                        <strong>{({profile:"문서 프로파일",expression_mapping:"사전 표현 연결",api_mapping:"API Mapping",semantic_binding:"의미 연결"} as Record<string, string>)[dependency.kind] || dependency.kind}</strong>
+                        <code>{dependency.id}</code>
+                        <p>{({concept_removed:"참조 개념 제거",concept_changed:"개념 정의·제약 변경",pinned_version_review:"적용 버전 재검토"} as Record<string, string>)[dependency.reason] || dependency.reason}</p>
+                      </div>)}
+                    </section>}
                   </article>
                   <article className="ontology-diff">
                     <header>

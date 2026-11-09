@@ -7,7 +7,7 @@ from teoria.features.specification_processing.normalization.standard_application
 from teoria.features.specification_processing.normalization.candidate_selection import select_definition
 
 
-def manage_standard(corpus,baseline:StandardArtifact|None=None,parent_sha256=None):
+def manage_standard(corpus,baseline:StandardArtifact|None=None,parent_sha256=None,*,auto_apply_source_literals=False):
     baseline=baseline or StandardArtifact(version='initial',classification_code=corpus['classification_code'],definitions=[],bindings=[])
     initial=map_standard(corpus,baseline)
     # Candidate collection consumes the still-unmapped universe, not an artificial failure score.
@@ -20,7 +20,8 @@ def manage_standard(corpus,baseline:StandardArtifact|None=None,parent_sha256=Non
         adopted=0;held=0;reasons={}
         for ref in candidate['observations']:
             doc,a=observations[(ref['document_id'],ref['attribute_id'])]
-            choice,kind,reason=select_definition(candidate,doc,a,baseline.rule_set)
+            choice,kind,reason=select_definition(candidate,doc,a,baseline.rule_set,
+                auto_apply_source_literals=auto_apply_source_literals)
             if choice is None:
                 held+=1;reasons[reason]=reasons.get(reason,0)+1;continue
             pid=choice.get('property_id',choice.get('definition',{}).get('id'))
@@ -39,4 +40,5 @@ def manage_standard(corpus,baseline:StandardArtifact|None=None,parent_sha256=Non
     version='proposal_'+hashlib.sha256(canonical(draft)).hexdigest()[:20]
     standard=StandardArtifact(version=version,**draft)
     candidates['selection_mode']='automatic_without_human_gate'
+    candidates['source_literal_auto_application'] = auto_apply_source_literals
     return standard,candidates,map_standard(corpus,standard)

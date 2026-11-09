@@ -74,3 +74,26 @@ def test_draft_creation_waits_for_repository_and_uses_authenticated_actor():
         based_on_version_id=None,
         actor="user:owner",
     )
+
+
+def test_publication_read_is_authenticated_and_independent_of_goods_dictionary():
+    from teoria.features.semantic_modeling.ontology.publication_contracts import publication_checksum
+    identifier = uuid4()
+    content = {'namespace':'test', 'version':'1', 'objects':[], 'relationships':[]}
+    repository = Mock(spec=OntologyAuthoringService)
+    repository.publication.return_value = {
+        'ontology': {'version_id':str(identifier), 'namespace':'test', 'version':'1',
+                     'checksum':publication_checksum(content)}, 'content':content}
+    app = FastAPI()
+    app.include_router(create_ontology_authoring_router(repository, AdminAuthorizer(Settings(
+        admin_auth_mode='bearer', admin_api_token='synthetic-token',
+        admin_api_actor='service:reader', admin_api_roles='ontology_owner'))))
+    client = TestClient(app)
+    path = f'/v1/admin/ontology-authoring/versions/{identifier}/publication'
+    assert client.get(path).status_code == 401
+    repository.publication.assert_not_awaited()
+    response = client.get(path, headers={'Authorization':'Bearer synthetic-token'})
+    assert response.status_code == 200
+    repository.publication.assert_awaited_once_with(identifier)
+    repository.publication.side_effect = KeyError('unpublished')
+    assert client.get(path, headers={'Authorization':'Bearer synthetic-token'}).status_code == 404

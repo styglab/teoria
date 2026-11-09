@@ -65,7 +65,7 @@ async def test_goods_blueprint_creates_a_draft_without_publication():
         "specification_document", "specified_item", "property_statement",
         "composition_statement", "requirement_statement", "evidence",
         "classification_scheme", "classification_entry", "classification_assignment",
-        "item_type", "characteristic_definition", "specified_service",
+        "server", "memory_module", "specified_service",
         "supply_scope", "supply_membership", "specified_context",
         "specified_deliverable", "item_relation_statement",
     }

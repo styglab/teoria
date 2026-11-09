@@ -1,5 +1,6 @@
 """Source-backed examples and failures that previously produced false components."""
 from copy import deepcopy
+import json
 from pathlib import Path
 
 import pytest
@@ -171,3 +172,14 @@ def test_proposed_graphs_do_not_claim_other_source_documents():
     ledger = yaml.safe_load((ROOT.parent / "docs/architecture/examples/goods_four_sample_evidence.yaml").read_text())
     hashes = {d["document_id"]: d["source_sha256"] for d in ledger["documents"]}
     assert {g["document_id"]: g["source_sha256"] for g in examples()} == hashes
+
+
+def test_server_memory_example_preserves_source_quantities_and_support_scope():
+    batch = yaml.safe_load((ROOT / 'authoring/specification_examples/server_memory_graph.yaml').read_text())
+    graph = DocumentGoodsGraph.model_validate(batch['graphs'][0])
+    fixture = json.loads((ROOT / 'tests/features/specification_processing/evaluation/fixtures/server_component_cases.json').read_text())
+    assert graph.source_sha256 == fixture['documents'][0]['sha256']
+    assert graph.compositions[0].quantity.value == 2
+    assert all('system_memory_capacity' not in p.characteristic_ref for p in graph.properties)
+    limit = next(p for p in graph.properties if p.statement_id == 'socket_capacity_limit')
+    assert limit.semantic_scope == 'per_socket' and limit.assertion_role == 'supported_capability'

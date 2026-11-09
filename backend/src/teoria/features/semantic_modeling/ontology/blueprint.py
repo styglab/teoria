@@ -18,6 +18,8 @@ class BlueprintProperty(BaseModel):
     description: str = ""
     cardinality: str = "optional"
     unit: str | None = None
+    quantity_dimension: str | None = None
+    allowed_units: list[str] = Field(default_factory=list)
     temporal: bool = False
 
 
@@ -32,6 +34,8 @@ class BlueprintObject(BaseModel):
     @model_validator(mode="after")
     def identity_properties_exist(self) -> "BlueprintObject":
         property_codes = {item.code for item in self.properties}
+        if len(property_codes) != len(self.properties):
+            raise ValueError('Blueprint property codes must be unique within an object')
         missing = set(self.identity_properties) - property_codes
         if missing:
             raise ValueError(
@@ -70,9 +74,13 @@ class OntologyBlueprint(BaseModel):
     def references_are_unambiguous(self) -> "OntologyBlueprint":
         codes = [item.code for item in self.objects]
         stable_keys = [item.stable_key for item in self.objects]
+        stable_keys += [prop.stable_key for item in self.objects for prop in item.properties]
+        stable_keys += [relationship.stable_key for relationship in self.relationships]
         if len(codes) != len(set(codes)) or len(stable_keys) != len(set(stable_keys)):
-            raise ValueError("Blueprint object codes and stable keys must be unique")
+            raise ValueError("Blueprint object codes and all stable keys must be unique")
         known = set(codes)
+        if len({item.code for item in self.relationships}) != len(self.relationships):
+            raise ValueError('Blueprint relationship codes must be unique')
         for relationship in self.relationships:
             if relationship.source not in known or relationship.target not in known:
                 raise ValueError(f"Unknown relationship endpoint: {relationship.code}")

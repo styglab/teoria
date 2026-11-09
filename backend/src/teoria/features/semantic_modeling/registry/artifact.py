@@ -18,6 +18,7 @@ from teoria.features.semantic_modeling.registry.artifact_format import (
     get_runtime_bundle_format,
 )
 from teoria.features.semantic_modeling.registry.compatibility import validate_capability_compatibility
+from teoria.features.semantic_modeling.registry.mapping_semantics import compile_mapping_semantics
 from teoria.features.semantic_modeling.registry.loader import RegistryCatalog, RegistryLoader
 from teoria.features.semantic_modeling.registry.release import CALVER_PATTERN, RegistryRelease, calculate_registry_checksum
 
@@ -116,6 +117,11 @@ class RuntimeBundleCompiler:
         compatibility = validate_capability_compatibility(
             catalog, normalized_ontologies, normalized_bindings,
         )
+        try:
+            catalog.mapping_semantics = compile_mapping_semantics(catalog, normalized_ontologies, normalized_bindings,
+                on_date=(created_at or datetime.now(timezone.utc)).date())
+        except ValueError as exc:
+            raise RegistryArtifactError(f'incompatible Mapping semantics: {exc}') from exc
         incompatible = [item for item in compatibility if item["status"] == "incompatible"]
         if incompatible:
             details = ", ".join(
@@ -215,6 +221,11 @@ class RuntimeBundleLoader:
             )
         except RuntimeBundleFormatError as exc:
             raise RegistryArtifactError(str(exc)) from exc
+        try:
+            catalog.mapping_semantics = compile_mapping_semantics(catalog, bundle_components.ontologies, bundle_components.bindings,
+                on_date=manifest.created_at.date())
+        except ValueError as exc:
+            raise RegistryArtifactError(f'incompatible Mapping semantics: {exc}') from exc
         return LoadedRuntimeBundle(
             manifest=manifest,
             catalog=catalog,

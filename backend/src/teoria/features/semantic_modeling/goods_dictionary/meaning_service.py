@@ -1,4 +1,8 @@
-"""Govern definitions explicitly; automatically reuse only approved scoped equivalences."""
+"""Legacy v1 definition compatibility used by historical replay and migration fixtures.
+
+The Admin application wires ontology_service.OntologyDictionaryService. New business
+definitions are authored through Ontology, never through this legacy service.
+"""
 from uuid import UUID, uuid5
 
 from teoria.features.semantic_modeling.goods_dictionary.contracts import dictionary_checksum
@@ -207,3 +211,17 @@ class GoodsMeaningService:
     async def audit(self, kind, entity_id):
         async with self.repository.transaction() as conn:
             return await self.repository.meaning_audit(conn,kind,entity_id)
+
+    async def catalog(self, kind, *, query='', status=None, concept_kind=None, offset=0, limit=25, classification=None, unresolved=False):
+        async with self.repository.transaction() as conn:
+            return await self.repository.catalog(conn,kind,query,status,concept_kind,offset,limit,classification,unresolved)
+
+    async def source_evidence(self, entry_id):
+        async with self.repository.transaction() as conn:
+            if await self.repository.by_id(conn,entry_id) is None:
+                raise KeyError(entry_id)
+            return await self.repository.source_evidence(conn,entry_id)
+
+    async def classifications(self, *, query='', offset=0, limit=25):
+        async with self.repository.transaction() as conn:
+            return await self.repository.classifications(conn,query,offset,limit)

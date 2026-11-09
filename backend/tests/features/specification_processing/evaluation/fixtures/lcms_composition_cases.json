@@ -1,0 +1,235 @@
+{
+  "source_name": "(변환본)규격서_연천스마트팜(주)_액체크로마토그래프.pdf",
+  "source_sha256": "b7e8b9661be430a76de1688fee666004d561d70a0e8b3059367d509a5ce91781",
+  "label_status": "silver",
+  "scope": "Complete direct configuration list only; PC parent and nine explicit quantities. Not a complete deeper graph.",
+  "source_nodes": [
+    {
+      "node_id": "n00012",
+      "text": "액체크로마토그래프 질량분석기\n(Liquid Chromatograph\nMass Spectrometer)"
+    },
+    {
+      "node_id": "n00013",
+      "text": "System"
+    },
+    {
+      "node_id": "n00014",
+      "text": "1"
+    },
+    {
+      "node_id": "n00020",
+      "text": "나. 장비의 구성(Configurations of Goods)"
+    },
+    {
+      "node_id": "n00021",
+      "text": "1. 질량분석기"
+    },
+    {
+      "node_id": "n00022",
+      "text": "1 set"
+    },
+    {
+      "node_id": "n00023",
+      "text": "2. 시스템 컨트롤러"
+    },
+    {
+      "node_id": "n00024",
+      "text": "1 set"
+    },
+    {
+      "node_id": "n00025",
+      "text": "3. 용매 운반용 펌프"
+    },
+    {
+      "node_id": "n00026",
+      "text": "2 set"
+    },
+    {
+      "node_id": "n00027",
+      "text": "4. 자동시료주입기"
+    },
+    {
+      "node_id": "n00028",
+      "text": "1 set"
+    },
+    {
+      "node_id": "n00029",
+      "text": "5. 컬럼오븐"
+    },
+    {
+      "node_id": "n00030",
+      "text": "1 set"
+    },
+    {
+      "node_id": "n00031",
+      "text": "6. 광다이오드어레이 검출기"
+    },
+    {
+      "node_id": "n00032",
+      "text": "1 set"
+    },
+    {
+      "node_id": "n00033",
+      "text": "7. 온라인 가스제거 유닛"
+    },
+    {
+      "node_id": "n00034",
+      "text": "1 set"
+    },
+    {
+      "node_id": "n00035",
+      "text": "8. 데이터 처리 시스템"
+    },
+    {
+      "node_id": "n00036",
+      "text": "1 set"
+    },
+    {
+      "node_id": "n00037",
+      "text": "9. 악세서리"
+    },
+    {
+      "node_id": "n00126",
+      "text": "8. 데이터 처리 시스템"
+    },
+    {
+      "node_id": "n00151",
+      "text": "(4) PC SYSTEM"
+    }
+  ],
+  "cases": {
+    "entity_aliases": {
+      "액체크로마토그래프 질량분석기": [
+        "액체크로마토그래프 질량분석기\n(Liquid Chromatograph\nMass Spectrometer)"
+      ]
+    },
+    "entities": [
+      {
+        "name": "액체크로마토그래프 질량분석기",
+        "source_text": "액체크로마토그래프 질량분석기"
+      },
+      {
+        "name": "질량분석기",
+        "source_text": "질량분석기"
+      },
+      {
+        "name": "시스템 컨트롤러",
+        "source_text": "시스템 컨트롤러"
+      },
+      {
+        "name": "용매 운반용 펌프",
+        "source_text": "용매 운반용 펌프"
+      },
+      {
+        "name": "자동시료주입기",
+        "source_text": "자동시료주입기"
+      },
+      {
+        "name": "컬럼오븐",
+        "source_text": "컬럼오븐"
+      },
+      {
+        "name": "광다이오드어레이 검출기",
+        "source_text": "광다이오드어레이 검출기"
+      },
+      {
+        "name": "온라인 가스제거 유닛",
+        "source_text": "온라인 가스제거 유닛"
+      },
+      {
+        "name": "데이터 처리 시스템",
+        "source_text": "데이터 처리 시스템"
+      },
+      {
+        "name": "악세서리",
+        "source_text": "악세서리"
+      },
+      {
+        "name": "PC SYSTEM",
+        "source_text": "(4) PC SYSTEM",
+        "owner": "데이터 처리 시스템"
+      }
+    ],
+    "relations": [
+      {
+        "source": "PC SYSTEM",
+        "target": "데이터 처리 시스템",
+        "kind": "component_of",
+        "source_text": "(4) PC SYSTEM"
+      }
+    ],
+    "compositions": [
+      {
+        "parent": "액체크로마토그래프 질량분석기",
+        "children": [
+          "질량분석기",
+          "시스템 컨트롤러",
+          "용매 운반용 펌프",
+          "자동시료주입기",
+          "컬럼오븐",
+          "광다이오드어레이 검출기",
+          "온라인 가스제거 유닛",
+          "데이터 처리 시스템",
+          "악세서리"
+        ],
+        "source_text": "나. 장비의 구성(Configurations of Goods)"
+      }
+    ],
+    "quantities": [
+      {
+        "subject": "액체크로마토그래프 질량분석기",
+        "value_raw": "1",
+        "unit_raw": "System",
+        "source_text": "액체크로마토그래프 질량분석기"
+      },
+      {
+        "subject": "질량분석기",
+        "value_raw": "1",
+        "unit_raw": "set",
+        "source_text": "질량분석기"
+      },
+      {
+        "subject": "시스템 컨트롤러",
+        "value_raw": "1",
+        "unit_raw": "set",
+        "source_text": "시스템 컨트롤러"
+      },
+      {
+        "subject": "용매 운반용 펌프",
+        "value_raw": "2",
+        "unit_raw": "set",
+        "source_text": "용매 운반용 펌프"
+      },
+      {
+        "subject": "자동시료주입기",
+        "value_raw": "1",
+        "unit_raw": "set",
+        "source_text": "자동시료주입기"
+      },
+      {
+        "subject": "컬럼오븐",
+        "value_raw": "1",
+        "unit_raw": "set",
+        "source_text": "컬럼오븐"
+      },
+      {
+        "subject": "광다이오드어레이 검출기",
+        "value_raw": "1",
+        "unit_raw": "set",
+        "source_text": "광다이오드어레이 검출기"
+      },
+      {
+        "subject": "온라인 가스제거 유닛",
+        "value_raw": "1",
+        "unit_raw": "set",
+        "source_text": "온라인 가스제거 유닛"
+      },
+      {
+        "subject": "데이터 처리 시스템",
+        "value_raw": "1",
+        "unit_raw": "set",
+        "source_text": "데이터 처리 시스템"
+      }
+    ]
+  }
+}

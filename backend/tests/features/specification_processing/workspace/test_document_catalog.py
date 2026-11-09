@@ -66,3 +66,18 @@ def test_catalog_routes_auth_validation_and_document_identity(tmp_path, monkeypa
         assert client.get(prefix+'/documents/catalog/result',headers=headers).json()['result']['document_id']=='doc'
         entry['source_sha256']='b'*64
         assert client.get(prefix+'/documents/catalog/result',headers=headers).status_code==409
+
+
+def test_ontology_comparison_is_scoped_and_keeps_suggestions_separate():
+    from copy import deepcopy
+    corpus={'documents':[{'document_id':'a','source':{'sha256':'a'*64}}, {'document_id':'b'}]}
+    normalization={'standard_version':'draft','attributes':[], 'ontology_alignment':{
+        'mode':'comparison_only','authority':'suggestion','unavailable_document_ids':['b'],
+        'observations':[{'document_id':'a','kind':'entity','observation_id':'e','status':'proposed','baseline':None},
+                        {'document_id':'b','kind':'entity','observation_id':'private','status':'held','baseline':None}]}}
+    before=deepcopy(normalization)
+    result=document_result(corpus,normalization,'a')
+    report=result['normalization']['ontology_alignment']
+    assert len(report['observations'])==1 and report['observations'][0]['observation_id']=='e'
+    assert report['summary']['proposed']==1 and report['unavailable_document_ids']==[]
+    assert normalization==before and result['result_kind']=='extraction_standard'

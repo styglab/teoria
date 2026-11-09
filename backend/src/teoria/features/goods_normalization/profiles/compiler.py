@@ -1,6 +1,8 @@
 """Project referenced concepts from a verified published Ontology snapshot."""
 from uuid import UUID
 from teoria.features.goods_normalization.contracts import Concept, NormalizationPackage, NormalizationProfile, checksum
+from teoria.features.semantic_modeling.ontology.value_policy import validate_property_unit
+from teoria.features.semantic_modeling.ontology.publication_contracts import PublishedOntology
 
 
 def resolve_profile_template(template: dict,ontology: dict,*,version_id: UUID) -> NormalizationProfile:
@@ -30,6 +32,12 @@ def compile_package(profile: NormalizationProfile, ontology: dict, *, revision_i
     if checksum(ontology)!=profile.ontology.checksum:raise ValueError('ontology artifact checksum mismatch')
     if (ontology['namespace'],ontology['version'])!=(profile.ontology.namespace,profile.ontology.version):
         raise ValueError('ontology namespace or version mismatch')
+    PublishedOntology(ontology=profile.ontology, content=ontology)
+    properties = {str(p['concept_id']): p for o in ontology['objects'] for p in o['properties']}
+    for rule in profile.requirements:
+        prop = properties.get(str(rule.property_concept_id), {})
+        for conversion in rule.units:
+            validate_property_unit(prop, conversion)
     concepts=[]
     objects={str(o['business_object_id']):o['concept_id'] for o in ontology['objects']}
     for obj in ontology['objects']:

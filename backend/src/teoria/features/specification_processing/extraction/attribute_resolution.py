@@ -14,7 +14,7 @@ class Resolution(BaseModel):
     attribute_id:str
     subject_ids:list[str]
     role:Literal['requirement_candidate','supported_capability','existing_reference','recommended','optional','unknown']
-    scope:Literal['per_item','per_package','per_reference_quantity','batch_total','per_component','system_total','per_module','per_processor','support_limit','service','unknown']
+    scope:Literal['per_item','per_package','per_reference_quantity','batch_total','per_component','system_total','per_module','per_processor','per_socket','support_limit','service','unknown']
     evidence_node_ids:list[str]
 
 class Batch(BaseModel):

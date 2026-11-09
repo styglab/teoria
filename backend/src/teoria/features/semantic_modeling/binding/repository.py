@@ -154,6 +154,8 @@ class BindingRepository:
         status: str | None = None,
         limit: int = 100,
         binding_ids: list[UUID] | None = None,
+        ontology_namespace: str | None = None,
+        ontology_concept_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
         conditions = []
         values: list[Any] = []
@@ -163,6 +165,12 @@ class BindingRepository:
         if binding_ids is not None:
             conditions.append("ob.binding_id = ANY(%s)")
             values.append(binding_ids)
+        if ontology_namespace is not None:
+            conditions.append("o.namespace = %s")
+            values.append(ontology_namespace)
+        if ontology_concept_id is not None:
+            conditions.append("ob.ontology_concept_id = %s")
+            values.append(ontology_concept_id)
         where = "WHERE " + " AND ".join(conditions) if conditions else ""
         params = tuple(values + [limit])
         async with connect(self.database_url, row_factory=dict_row) as connection:

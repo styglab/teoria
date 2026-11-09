@@ -113,8 +113,12 @@ def create_binding_router(
         status: str | None = None,
         limit: int = Query(100, ge=1, le=500),
         binding_id: list[UUID] | None = Query(None, max_length=50),
+        ontology_namespace: str | None = Query(None,max_length=200),
+        ontology_concept_id: UUID | None = None,
     ) -> dict:
         filters = {"binding_ids": binding_id} if binding_id is not None else {}
+        if ontology_namespace is not None: filters["ontology_namespace"] = ontology_namespace
+        if ontology_concept_id is not None: filters["ontology_concept_id"] = ontology_concept_id
         return {
             "items": (
                 await require_repository().list_bindings(

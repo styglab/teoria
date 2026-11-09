@@ -131,6 +131,8 @@ def norm(text):return re.sub(r'\s+','',unicodedata.normalize('NFKC',text or ''))
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 
 def validate_inventory(value,document):
+    from teoria.features.specification_processing.extraction.attribute_extraction import spans
+    from teoria.features.specification_processing.extraction.value_normalization import number
     nodes={n['node_id']:n for n in document['nodes']};errors=[]
     navigation={key for key,role in document.get('document_assessment',{}).get('node_roles',{}).items() if role=='table_of_contents'}
     def anchored(node,label):return node in nodes and node not in navigation and bool(norm(label)) and norm(label) in norm(nodes[node]['text'])
@@ -145,6 +147,9 @@ def validate_inventory(value,document):
         if node not in refs or not set(refs)<=allowed:errors.append(f'{id}: invalid item evidence');continue
         for raw in [quantity,unit]:
             if raw is not None and (not norm(raw) or not any(norm(raw) in norm(nodes[n]['text']) for n in refs)):errors.append(f'{id}: raw quantity/unit not grounded')
+        if quantity is not None and number(quantity) is not None and not any(
+                spans(nodes[n]['text'],quantity,complete_number=True) for n in refs):
+            errors.append(f'{id}: numeric quantity not complete in source')
     return errors
 
 

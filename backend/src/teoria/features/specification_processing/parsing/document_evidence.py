@@ -142,10 +142,16 @@ def source_quote(doc,a):
 def attribute_is_grounded(document,attribute):
     """Check literal conditions without deciding their domain meaning."""
     try:
-        quote=literal(source_quote(document,attribute))
+        raw_quote=source_quote(document,attribute)
+        quote=literal(raw_quote)
     except (KeyError,TypeError,ValueError):
         return False
     value=attribute.get('value_raw')
     if not value or not literal(value) or literal(value) not in quote:return False
+    from teoria.features.specification_processing.extraction.attribute_extraction import spans
+    from teoria.features.specification_processing.extraction.value_normalization import number
+    if (attribute.get('data_type')=='number' and number(value) is not None
+            and not spans(raw_quote,value,complete_number=True)):
+        return False
     fields=[attribute.get('unit_raw'),attribute.get('operator_raw'),*attribute.get('qualifiers_raw',[])]
     return all(not value or bool(literal(value)) and literal(value) in quote for value in fields)

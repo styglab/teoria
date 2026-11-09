@@ -48,6 +48,44 @@ class ProcessingWorkspaceRepository:
             ).fetchone()
             return {"items": rows, "total": total["total"]}
 
+    async def operations(self, days: int):
+        async with connect(self.database_url, row_factory=dict_row) as conn:
+            runs = await (await conn.execute(
+                """SELECT status,count(*) AS count FROM public_procurement.specification_processing_runs
+                WHERE started_at >= now() - make_interval(days => %s) GROUP BY status""", (days,)
+            )).fetchall()
+            documents = await (await conn.execute(
+                """SELECT d.status,count(*) AS count FROM public_procurement.specification_processing_documents d
+                JOIN public_procurement.specification_processing_runs r USING(run_id)
+                WHERE r.started_at >= now() - make_interval(days => %s) GROUP BY d.status""", (days,)
+            )).fetchall()
+            versions=await(await conn.execute("""SELECT summary->>'processor_revision' AS processor_revision,
+                summary->'quality'->>'model_requested' AS model_requested,count(*) AS runs,
+                count(*) FILTER (WHERE summary ? 'quality') AS measured_runs,
+                count(*) FILTER (WHERE summary->'automatic_application_standard'->>'status'='approved') AS approved,
+                count(*) FILTER (WHERE summary->'automatic_application_standard'->>'status'='held') AS held,
+                sum(COALESCE((summary->'quality'->>'validation_errors')::int,0)) AS validation_errors,
+                sum(COALESCE((summary->'quality'->>'accepted_attributes')::int,0)) AS accepted_attributes,
+                sum(COALESCE((summary->'quality'->>'quarantined_attributes')::int,0)) AS quarantined_attributes,
+                sum(COALESCE((summary->'quality'->>'applied_attributes')::int,0)) AS applied_attributes,
+                sum(COALESCE((summary->'quality'->>'held_attributes')::int,0)) AS held_attributes
+                FROM public_procurement.specification_processing_runs
+                WHERE started_at >= now()-make_interval(days => %s)
+                GROUP BY 1,2 ORDER BY max(started_at) DESC LIMIT 20""",(days,))).fetchall()
+            return {"days": days, "runs": {r['status']: r['count'] for r in runs},
+                    "documents": {d['status']: d['count'] for d in documents},
+                    "quality_versions":versions,
+                    "quality_evaluation": "not_attached"}
+
+    async def standard_candidates(self, offset, limit):
+        async with connect(self.database_url, row_factory=dict_row) as conn:
+            condition = "mode='standard_management' AND status IN ('completed','partial') AND standard_uri IS NOT NULL"
+            rows = await (await conn.execute(
+                f"SELECT run_id,classification_code,status,started_at FROM public_procurement.specification_processing_runs WHERE {condition} ORDER BY started_at DESC,run_id LIMIT %s OFFSET %s",
+                (limit,offset))).fetchall()
+            total = await (await conn.execute(f"SELECT count(*) AS total FROM public_procurement.specification_processing_runs WHERE {condition}")).fetchone()
+            return {'items':rows,'total':total['total']}
+
     async def detail(self, run_id: str):
         async with connect(self.database_url, row_factory=dict_row) as conn:
             row = await (
@@ -74,6 +112,16 @@ class ProcessingWorkspaceRepository:
                 )
             ).fetchall()
             return {"run": row, "documents": documents, "artifacts": artifacts}
+
+    async def inputs(self, run_id: str):
+        async with connect(self.database_url, row_factory=dict_row) as conn:
+            return await (await conn.execute(
+                """SELECT i.document_id,i.filename,i.source_uri,
+                COALESCE(d.source_sha256,i.source_sha256) AS sha256,i.notice_number
+                FROM public_procurement.specification_processing_inputs i
+                LEFT JOIN public_procurement.specification_processing_documents d USING(run_id,document_id)
+                WHERE i.run_id=%s ORDER BY i.document_id""", (run_id,)
+            )).fetchall()
 
 
 async def verified_artifact(reference: dict, root: Path, object_root: str | None = None, *, limit: int = 5*1024*1024) -> dict:
@@ -224,6 +272,18 @@ def create_processing_workspace_router(
             raise HTTPException(404, "processing_run_not_found")
         return result
 
+    @router.get("/operations")
+    async def operations(
+        days: int = Query(7, ge=1, le=90),
+        principal: AdminPrincipal = Depends(authorizer.require()),
+    ):
+        if repo is None:
+            raise HTTPException(503, "processing_database_not_configured")
+        try:
+            return await repo.operations(days)
+        except psycopg.Error:
+            raise HTTPException(503, "processing_results_unavailable") from None
+
     @router.get("/runs/{run_id}/artifact")
     async def artifact(
         run_id: str, key: str, principal: AdminPrincipal = Depends(authorizer.require())
@@ -236,6 +296,34 @@ def create_processing_workspace_router(
             raise HTTPException(404, "artifact_not_found")
         async with preview_slots:
             return await verified_artifact(reference, artifact_root, object_root)
+
+    @router.get("/runs/{run_id}/inputs")
+    async def replay_inputs(
+        run_id: str,
+        failed_only: bool = False,
+        principal: AdminPrincipal = Depends(authorizer.require("metadata_admin")),
+    ):
+        result = await detail(run_id, principal)
+        if result["run"].get("status") not in {"completed", "partial", "failed"}:
+            raise HTTPException(409, "processing_run_not_finished")
+        try:
+            documents = await repo.inputs(run_id)
+        except psycopg.Error:
+            raise HTTPException(503, "processing_results_unavailable") from None
+        if not documents:
+            raise HTTPException(409, "processing_inputs_not_available")
+        if failed_only:
+            failed_ids={d['document_id'] for d in result['documents'] if d['status']=='failed' or d.get('result_summary',{}).get('quarantined_attributes',0)>0}
+            documents=[d for d in documents if d['document_id'] in failed_ids]
+            if not documents:raise HTTPException(409,'no_failed_documents_to_retry')
+        try:
+            if any(not d.get("sha256") for d in documents):
+                raise ValueError("verified source hash required")
+            documents = [SourceDocument.model_validate(d).model_dump(mode="json") for d in documents]
+        except ValueError:
+            raise HTTPException(409, "processing_inputs_incomplete_register_originals_again") from None
+        return {"source_run_id": run_id, "documents": documents,
+                "classification_code": result["run"].get("classification_code")}
 
     catalog = DocumentCatalogRepository(database_url) if database_url else None
 
@@ -300,5 +388,21 @@ def create_processing_workspace_router(
                 except (KeyError, ValueError):
                     raise HTTPException(409, 'invalid_document_result') from None
         return {"document": entry, "result": payload}
+
+    @router.get('/runs/{run_id}/validation/{document_id}/{attribute_id}')
+    async def reproduce_validation(run_id:str,document_id:str,attribute_id:str,
+                                   principal:AdminPrincipal=Depends(authorizer.require())):
+        from teoria.features.specification_processing.extraction.extraction_validation import reproduce_attribute_validation
+        run=await detail(run_id,principal)
+        key=f'specification_processing/{run_id}/documents/{document_id}/result.json'
+        ref=next((a for a in run['artifacts'] if a['key']==key),None)
+        if ref is None:raise HTTPException(404,'document_result_not_found')
+        async with preview_slots:
+            payload=await verified_artifact(ref,artifact_root,object_root)
+            if payload.get('document_id')!=document_id:raise HTTPException(409,'document_result_identity_mismatch')
+            document=next((d for d in payload.get('extracted',{}).get('documents',[]) if d['document_id']==document_id),None)
+            if document is None:raise HTTPException(404,'extracted_document_not_found')
+            try:return await asyncio.to_thread(reproduce_attribute_validation,document,attribute_id)
+            except KeyError:raise HTTPException(404,'attribute_not_found') from None
 
     return router

@@ -31,6 +31,19 @@ def profile_result(row):
 
 
 class NormalizationProfileService:
+    async def ontology_dependencies(self, namespace):
+        async with self.repository.transaction() as conn:
+            rows = await self.repository.ontology_dependencies(conn, namespace)
+        result = []
+        for row in rows:
+            profile = NormalizationProfile.model_validate(row['content'])
+            concepts = {str(r.concept_id) for r in profile.entities}
+            concepts.update(str(x) for r in profile.requirements for x in (r.target_concept_id,r.property_concept_id))
+            concepts.update(str(r.relationship_concept_id) for r in profile.relations)
+            result.append({'kind':'profile','id':str(row['revision_id']),'status':row['status'],
+                           'ontology':profile.ontology.model_dump(mode='json'),'concept_ids':sorted(concepts)})
+        return result
+
     def __init__(
         self,
         database_url: str | None = None,

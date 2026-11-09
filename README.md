@@ -1,7 +1,9 @@
 # Teoria
 
 Teoria는 데이터 자산과 업무 의미를 연결하는 **AI-Native Metadata & Ontology Platform**이다.
-OpenMetadata의 데이터 자산을 탐색하고, Ontology와 의미 연결을 작성하며, AI가 만든 변경안을 검토한다.
+두 작업 공간인 **Ontology·업무 실행**과 선택형 **모델 개발·운영**을 제공한다.
+전자는 데이터 자산·업무 의미·실행 계약을, 후자는 모델 평가·등록·배포를 다룬다.
+Prefect 실행·스케줄과 연결·접근 설정은 공통 운영에서 관리한다.
 **FormatID — 규격서 기반 물품 구조화·분석**은 첫 업무 앱이다. 물품·구성품·속성·조건을 원문 근거와 함께 추출한다.
 
 ## 어디서 시작하나
@@ -46,7 +48,7 @@ bash deploy/compose/deploy.sh down
 
 `start`는 재빌드·migration을 하지 않는다. 초기화 작업은 완료 후 컨테이너를 제거하며,
 `down`도 데이터 볼륨·이미지를 보존한다. 구성 변경 전에는 기존 구성으로 `down`한다.
-배포 성공 후 현재·직전 이미지를 보존하고 사용하지 않는 Teoria 이미지를 정리한다.
+배포 성공 후 현재 이미지를 보존하고 사용하지 않는 과거 Teoria 이미지와 `<none>` 이미지를 정리한다.
 자세한 준비·종료·정리 기준은 [Compose 운영 안내](docs/deployment/compose.md)를 따른다.
 
 ### K3s

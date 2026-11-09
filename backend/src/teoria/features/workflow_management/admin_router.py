@@ -58,6 +58,7 @@ def create_workflow_router(
     semantic_enabled: bool = True,
     formatid_enabled: bool = True,
     legal_enabled: bool = True,
+    application_standards=None,
 ):
     router = APIRouter(prefix=prefix, tags=["workflows"])
     prefect = (
@@ -282,7 +283,7 @@ def create_workflow_router(
             "logs_limited": len(logs) >= 100,
         }
 
-    def validate_manifest(pipeline_id, manifest):
+    async def validate_manifest(pipeline_id, manifest, principal):
         from teoria.features.specification_processing.models import (
             SpecificationRun,
             StandardWorkflow,
@@ -301,9 +302,11 @@ def create_workflow_router(
                         StandardManagementParameters,
                     )
 
-                    return StandardManagementParameters.model_validate(
-                        manifest
-                    ).model_dump(mode="json", exclude_none=True)
+                    parameters = StandardManagementParameters.model_validate(manifest)
+                    if (parameters.management.purpose == 'dictionary_management'
+                            and parameters.management.auto_apply and 'ontology_owner' not in principal.roles):
+                        raise HTTPException(403, detail={'code':'automatic_standard_approval_role_required'})
+                    return parameters.model_dump(mode="json", exclude_none=True)
                 request = SpecificationRun.model_validate(manifest)
                 extraction = request
                 expected = (
@@ -315,8 +318,18 @@ def create_workflow_router(
                     raise ValueError("manifest mode does not match pipeline")
             if extraction.parser_python is not None:
                 raise ValueError("parser executable is configured by the worker")
-            return request.model_dump(mode="json", exclude_none=True)
-        except (ValidationError, ValueError):
+            if extraction.auto_approve_application_standard and 'ontology_owner' not in principal.roles:
+                raise HTTPException(403, detail={'code':'automatic_standard_approval_role_required'})
+            import os
+            if configured_root := os.getenv('TEORIA_SPECIFICATION_ARTIFACT_ROOT'):
+                extraction.artifact_root = configured_root
+            validated = request.model_dump(mode="json", exclude_none=True)
+            if extraction.application_release_id:
+                if application_standards is None:
+                    raise ValueError('application standards unavailable')
+                await application_standards.validate_execution(validated)
+            return validated
+        except (ValidationError, ValueError, KeyError):
             raise HTTPException(
                 422,
                 detail={
@@ -348,7 +361,7 @@ def create_workflow_router(
         ):
             raise HTTPException(422, "model_version_not_applicable")
         manifest = (
-            validate_manifest(pipeline_id, payload.manifest)
+            await validate_manifest(pipeline_id, payload.manifest, principal)
             if payload.manifest is not None
             else None
         )

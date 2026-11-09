@@ -22,7 +22,8 @@ import {
   useModelOperationsAvailability,
 } from "../features/model_operations/ModelOperationsAvailability";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
-import { currentNavigation } from "./navigation";
+import { WorkspaceChoices } from "./WorkspaceChoices";
+import { currentNavigation, navigationGroups, navigationAvailable } from "./navigation";
 const Pipelines = lazy(() =>
   import("../features/workflow_management/Pipelines").then((module) => ({
     default: module.Pipelines,
@@ -33,11 +34,8 @@ const ModelOperations = lazy(() =>
     default: module.ModelOperations,
   })),
 );
-const BindingManager = lazy(() =>
-  import("../features/binding/BindingManager").then((module) => ({
-    default: module.BindingManager,
-  })),
-);
+const GoodsDictionary = lazy(() => import("../features/goods_dictionary/GoodsDictionary").then(module => ({default: module.GoodsDictionary})));
+const ApplicationStandards = lazy(() => import("../features/specification_processing/ApplicationStandards").then(module => ({default:module.ApplicationStandards})));
 const CapabilityStudio = lazy(() =>
   import("../features/capability/CapabilityStudio").then((module) => ({
     default: module.CapabilityStudio,
@@ -181,6 +179,7 @@ function AdminWorkspace() {
   }, [location.pathname, modules.semantic]);
 
   const current = currentNavigation(location.pathname);
+  const currentGroup = navigationGroups.find((group) => group.id === current.group);
   const wideSidebar = sidebarOpen && !compact;
   return (
     <div
@@ -218,9 +217,9 @@ function AdminWorkspace() {
             {current.path !== "/admin/overview" && (
               <>
                 <span aria-hidden="true">/</span>
-                {["의미 모델", "모델 운영"].includes(current.group) && (
+                {currentGroup && (
                   <>
-                    <span>{current.group}</span>
+                    <span>{currentGroup.label}</span>
                     <span aria-hidden="true">/</span>
                   </>
                 )}
@@ -249,7 +248,7 @@ function AdminWorkspace() {
       </header>
 
       <main className="workspace-main h-screen pt-16">
-        {current.module && !modules[current.module] ? (
+        {!navigationAvailable(current, modules) ? (
           <div className="workspace-empty">
             <h2>{current.label}</h2>
             <p>현재 실행 구성에서 사용하지 않는 기능입니다.</p>
@@ -276,7 +275,7 @@ function AdminWorkspace() {
                   path="/admin/overview"
                   element={
                     <WorkspaceFrame>
-                      <Overview />
+                      <Overview workspaceChoices={<WorkspaceChoices modelOperationsEnabled={modelOperationsEnabled} />} />
                     </WorkspaceFrame>
                   }
                 />
@@ -361,7 +360,7 @@ function AdminWorkspace() {
                         lineage={lineage}
                         validation={validation}
                         onOpenBindings={() =>
-                          navigate("/admin/semantic-model/bindings")
+                          navigate("/admin/semantic-model/ontology?view=connections")
                         }
                       />
                     </WorkspaceFrame>
@@ -393,16 +392,10 @@ function AdminWorkspace() {
                     </AdminAccess>
                   }
                 />
-                <Route
-                  path="/admin/semantic-model/bindings"
-                  element={
-                    <AdminAccess>
-                      <WorkspaceFrame>
-                        <BindingManager />
-                      </WorkspaceFrame>
-                    </AdminAccess>
-                  }
-                />
+                <Route path="/admin/domains/goods/dictionary" element={<AdminAccess><WorkspaceFrame><GoodsDictionary /></WorkspaceFrame></AdminAccess>} />
+                <Route path="/admin/semantic-model/goods-dictionary" element={<LegacySemanticRoute kind="dictionary" />} />
+                <Route path="/admin/specifications/standards" element={<AdminAccess><WorkspaceFrame><ApplicationStandards /></WorkspaceFrame></AdminAccess>} />
+                <Route path="/admin/semantic-model/bindings" element={<LegacySemanticRoute kind="bindings" />} />
                 <Route
                   path="/admin/semantic-model/ontology"
                   element={
@@ -470,4 +463,12 @@ function LegacyModelRoute() {
       replace
     />
   );
+}
+
+function LegacySemanticRoute({kind}: {kind:"bindings"|"dictionary"}) {
+  const location=useLocation(); const params=new URLSearchParams(location.search);
+  let path="/admin/domains/goods/dictionary";
+  if(kind==="bindings") {path="/admin/semantic-model/ontology"; params.set("view","connections");}
+  else if(params.get("kind")==="releases") {path="/admin/specifications/standards"; params.delete("kind");}
+  return <Navigate to={{pathname:path,search:params.toString(),hash:location.hash}} replace />;
 }

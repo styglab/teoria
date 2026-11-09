@@ -1,0 +1,47 @@
+{
+  "label_status": "silver",
+  "scope": "Literal source unit spellings only; no complete document oracle or inferred conversion.",
+  "cases": [
+    {
+      "source_name": "deep_freezer.pdf",
+      "source_sha256": "876ee8de58c407898b2e8b00c3e35b9f7c76c29bb6b98a17c1ba9065e71a2223",
+      "page": 2,
+      "text": "770ℓ",
+      "value_raw": "770",
+      "unit_raw": "ℓ",
+      "canonical_unit": "L",
+      "property_key": "capacity"
+    },
+    {
+      "source_name": "centrifuge.pdf",
+      "source_sha256": "0a90df58dc0d88e4475e3e36610b08cffcdf40afd783cac0ba4b72704a3c7ae0",
+      "page": 1,
+      "text": "230 Kg",
+      "value_raw": "230",
+      "unit_raw": "Kg",
+      "canonical_unit": "kg",
+      "property_key": "weight"
+    },
+    {
+      "source_name": "centrifuge.pdf",
+      "source_sha256": "0a90df58dc0d88e4475e3e36610b08cffcdf40afd783cac0ba4b72704a3c7ae0",
+      "page": 1,
+      "text": "22,000 RPM",
+      "value_raw": "22,000",
+      "unit_raw": "RPM",
+      "canonical_unit": "rpm",
+      "property_key": "maximum_rotation_speed"
+    },
+    {
+      "source_name": "centrifuge.pdf",
+      "source_sha256": "0a90df58dc0d88e4475e3e36610b08cffcdf40afd783cac0ba4b72704a3c7ae0",
+      "page": 1,
+      "text": "22,000rpm",
+      "value_raw": "22,000",
+      "unit_raw": "rpm",
+      "canonical_unit": "rpm",
+      "property_key": "maximum_rotation_speed"
+    }
+  ],
+  "status": "known_unresolved_after_rejected_repair"
+}

@@ -3,11 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime, timezone
 from itertools import product
+from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from teoria.features.semantic_modeling.ontology.observations import SemanticObservation
 
 from teoria.features.runtime.mapping.decoder import MappedFragment
 from teoria.features.runtime.provenance import Provenance
@@ -21,6 +23,8 @@ class MaterializedObject(BaseModel):
     properties: dict[str, Any]
     provenance: list[Provenance]
     property_provenance: dict[str, list[Provenance]]
+    semantic_observations: list[SemanticObservation] = Field(default_factory=list)
+    semantic_conflicts: dict[str, str] = Field(default_factory=dict)
 
 
 class MaterializedLink(BaseModel):
@@ -41,7 +45,7 @@ class OntologyMaterializer:
         allowed_links: set[str],
     ) -> tuple[list[MaterializedObject], list[MaterializedLink]]:
         objects: dict[str, MaterializedObject] = {}
-        object_order: dict[str, str] = {}
+        object_order: dict[str, tuple] = {}
         links: dict[tuple[str, str, str], MaterializedLink] = {}
         by_operation: dict[tuple[str, str], list[MappedFragment]] = defaultdict(list)
         for fragment in fragments:
@@ -88,7 +92,7 @@ class OntologyMaterializer:
                                 for key in properties
                             }
                             current = objects.get(object_id)
-                            order = candidate.record_order or ""
+                            order = self._order_key(candidate.record_order)
                             if current is None:
                                 objects[object_id] = MaterializedObject(
                                     ontology=object_ontology,
@@ -116,6 +120,12 @@ class OntologyMaterializer:
                                 self._append_provenance(current.provenance, provenance)
                                 if generated_properties:
                                     self._append_provenance(current.provenance, execution_provenance)
+                            for body in candidate.semantic_observations:
+                                observation = SemanticObservation.model_validate({**body,
+                                    'subject_refs':[object_id], 'observed_at':observed_at})
+                                current_object = objects[object_id]
+                                if not any(o.observation_id == observation.observation_id for o in current_object.semantic_observations):
+                                    current_object.semantic_observations.append(observation)
                             record_instances[role].append(object_id)
 
                 for link in definition.links:
@@ -133,10 +143,47 @@ class OntologyMaterializer:
                         else:
                             self._append_provenance(links[key].provenance, provenance)
 
+        for obj in objects.values():
+            values = defaultdict(set)
+            for observation in obj.semantic_observations:
+                property_id = observation.source.get('runtime_property')
+                if property_id is None:
+                    continue
+                value = dict(observation.value)
+                if value.get('kind') == 'number':
+                    value['decimal'] = str(Decimal(value['decimal']).normalize())
+                values[property_id].add(json.dumps([str(observation.concept_id),
+                    observation.ontology.model_dump(mode='json'), observation.information_kind,
+                    observation.operator, observation.scope, observation.effective_at, observation.conditions, value],
+                    sort_keys=True, default=str))
+            for property_id, interpretations in values.items():
+                if len(interpretations) > 1:
+                    obj.semantic_conflicts[property_id] = 'multiple_observations_require_review'
+                    obj.properties.pop(property_id, None)
+                    obj.property_provenance.pop(property_id, None)
         return (
-            [item for item in objects.values() if item.object_type in allowed_objects],
-            [item for item in links.values() if item.link_type in allowed_links],
+            [item for item in objects.values() if f"{item.ontology}.{item.object_type}" in allowed_objects],
+            [item for item in links.values() if f"{item.ontology}.{item.link_type}" in allowed_links],
         )
+
+    @staticmethod
+    def _order_key(value: Any) -> tuple:
+        if value is None:
+            return (0, "")
+        if isinstance(value, bool):
+            raise ValueError("record order cannot be boolean")
+        if isinstance(value, (int, float, Decimal)):
+            number = Decimal(str(value))
+            if not number.is_finite():
+                raise ValueError("record order must be finite")
+            return (1, number)
+        if isinstance(value, datetime):
+            return (2, value.replace(tzinfo=timezone.utc).timestamp() if value.tzinfo is None else value.timestamp())
+        if isinstance(value, date):
+            return (2, datetime.combine(value, datetime.min.time(), timezone.utc).timestamp())
+        if isinstance(value, str):
+            return (3, value)
+        raise ValueError("record order must be a number, date or string")
 
     @staticmethod
     def _id(ontology: str, object_type: str, identity: dict[str, Any]) -> str:

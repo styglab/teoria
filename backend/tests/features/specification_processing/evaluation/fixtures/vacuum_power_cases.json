@@ -1,0 +1,88 @@
+{
+  "source_name": "vacuum_system.pdf",
+  "source_sha256": "e54683a4c617c5500803586adc864abf2a7b2b438a453f5e255c4edcc04633e3",
+  "label_status": "silver",
+  "scope": "Page 6 has one supplied pump. Names in the purchase scope and its technical table refer to that item. These explicit aliases do not merge entity IDs or admit name similarity. Two power values only; not whole-document recall.",
+  "source_nodes": [
+    {
+      "node_id": "n00109",
+      "text": "가. 고효율 진공펌프 구매 및 설치 1식"
+    },
+    {
+      "node_id": "n00121",
+      "text": "진공펌프"
+    },
+    {
+      "node_id": "n00124",
+      "text": "Power\n(install)"
+    },
+    {
+      "node_id": "n00125",
+      "text": "600kW"
+    },
+    {
+      "node_id": "n00130",
+      "text": "Power\nOperating\nDesign Point"
+    },
+    {
+      "node_id": "n00131",
+      "text": "425kW"
+    },
+    {
+      "node_id": "n00002",
+      "text": "인버터제어형 진공펌프 물품 설비구매 규격서"
+    }
+  ],
+  "cases": {
+    "label_status": "silver",
+    "entity_aliases": {
+      "진공펌프": [
+        "고효율 진공펌프",
+        "인버터제어형 진공펌프"
+      ]
+    },
+    "entities": [
+      {
+        "name": "진공펌프",
+        "source_text": "진공펌프",
+        "kind": null,
+        "evidence_mode": "existence",
+        "owner": null
+      }
+    ],
+    "requirements": [
+      {
+        "subjects": [
+          "진공펌프"
+        ],
+        "value_raw": "600",
+        "unit_raw": "kW",
+        "operator": "eq",
+        "qualifiers_raw": null,
+        "qualifier_mode": "required_subset",
+        "forbidden_qualifiers": [],
+        "property_keys": [],
+        "role": null,
+        "scope": null,
+        "owner": null,
+        "source_text": "600kW"
+      },
+      {
+        "subjects": [
+          "진공펌프"
+        ],
+        "value_raw": "425",
+        "unit_raw": "kW",
+        "operator": "eq",
+        "qualifiers_raw": null,
+        "qualifier_mode": "required_subset",
+        "forbidden_qualifiers": [],
+        "property_keys": [],
+        "role": null,
+        "scope": null,
+        "owner": null,
+        "source_text": "425kW"
+      }
+    ]
+  }
+}

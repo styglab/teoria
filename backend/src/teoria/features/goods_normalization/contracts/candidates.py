@@ -47,7 +47,7 @@ class CandidateGroup(Record):
 class CandidateBundle(Record):
     schema_version: Literal[1] = 1
     artifact_kind: Literal['goods_meaning_candidates'] = 'goods_meaning_candidates'
-    classification_code: str = Field(pattern=r'^\d{10}$')
+    classification_code: str | None = Field(default=None, pattern=r'^\d{10}$')
     ontology: OntologyReference
     groups: list[CandidateGroup] = Field(max_length=5000)
     checksum: str = Field(pattern=r'^[a-f0-9]{64}$')

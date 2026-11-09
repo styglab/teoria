@@ -10,7 +10,7 @@ from prefect.cache_policies import NO_CACHE
 from teoria.features.specification_processing.storage.artifact_store import artifact_store,read_uri
 from teoria.integrations.codex import CodexRunner
 from teoria.features.specification_processing.models import SpecificationRun,StandardArtifact
-from teoria.features.specification_processing.parsing.document_evidence import source_quote,literal
+from teoria.features.specification_processing.extraction.extraction_validation import validate_checkpoint,isolate_extraction_failures
 
 MAX_SOURCE_BYTES=25*1024*1024
 TASK_OPTIONS={'persist_result':False,'cache_policy':NO_CACHE,'retries':0,'log_prints':False}
@@ -40,41 +40,6 @@ async def each_document(workspace,request,operation):
     await asyncio.gather(*(one(e) for e in items))
     await save(path,items)
 
-
-def validate_checkpoint(corpus,request,source_items):
-    if corpus.get('classification_code')!=request.classification_code:raise ValueError('checkpoint classification mismatch')
-    expected={e['document_id']:e['source']['sha256'] for e in source_items}
-    actual=corpus['documents']+corpus['unavailable_documents']
-    if len(actual)!=len(expected) or {d['document_id'] for d in actual}!=set(expected):raise ValueError('checkpoint document set mismatch')
-    for d in actual:
-        if d['source']['sha256']!=expected[d['document_id']]:raise ValueError('checkpoint source mismatch')
-    for d in corpus['documents']:
-        ids={e['id'] for e in d['entities']};nodes={n['node_id'] for n in d['parsed_document']['nodes']}
-        if len(ids)!=len(d['entities']):raise ValueError('duplicate entity ID')
-        if any(r['source_id'] not in ids or r['target_id'] not in ids for r in d['relations']):raise ValueError('invalid relation')
-        from teoria.features.specification_processing.extraction.entity_relation_extraction import relation_type_errors
-        kinds={e['id']:e.get('kind') for e in d['entities']}
-        for relation in d['relations']:
-            errors=relation_type_errors(relation['kind'],kinds[relation['source_id']],kinds[relation['target_id']])
-            if errors:raise ValueError('invalid relation type: '+'; '.join(errors))
-        from teoria.features.specification_processing.extraction.requirement_clauses import validate_legacy_obligation
-        for requirement in d.get('requirements',[]):
-            if requirement.get('observation_type')=='obligation':
-                validate_legacy_obligation(requirement,ids,d['parsed_document'])
-            elif requirement.get('observation_type')=='source_clause' and requirement.get('category')=='description':
-                from teoria.features.specification_processing.extraction.requirement_clauses import validate_description_clause
-                validate_description_clause(requirement,ids,d['parsed_document'])
-        from teoria.features.specification_processing.extraction.target_names import validate_materialized_names
-        for entity in d['entities']:
-            validate_materialized_names(entity,d['parsed_document'])
-        attribute_ids=set()
-        for a in d['attributes']:
-            if a['id'] in attribute_ids or not set(a['subject_ids'])<=ids:raise ValueError('invalid attribute ID or subject')
-            attribute_ids.add(a['id']);quote=literal(source_quote(d,a))
-            for key in ['value_raw','unit_raw','operator_raw']:
-                if a.get(key) and literal(a[key]) not in quote:raise ValueError('source literal mismatch')
-            if any(literal(q) not in quote for q in a.get('qualifiers_raw',[])):raise ValueError('source qualifier mismatch')
-            if not set(a.get('resolution_evidence_node_ids',[]))<=nodes:raise ValueError('invalid resolution evidence')
 
 @task(name='00 규격서 원본 준비',**TASK_OPTIONS)
 async def stage_original_documents(request:SpecificationRun,workspace:str):
@@ -271,6 +236,8 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
                                          **held_relation_counts(graph)}})
         corpus={'schema_version':'specification_extraction_v1','classification_code':request.classification_code,'documents':documents,'unavailable_documents':failed,
             'extraction_policy':'product_specifications_with_bounded_recovery_and_other_source_clauses'}
+    if not reused:
+        corpus=isolate_extraction_failures(corpus,request,items)
     from teoria.features.specification_processing.extraction.composition_hierarchy import composition_hierarchy
     for document in corpus['documents']:
         document['composition_hierarchy']=composition_hierarchy(document)
@@ -281,6 +248,8 @@ async def persist_extraction(request:SpecificationRun,workspace:str,reused:bool)
 
 @task(name='06 표준 사전 관리·연결',**TASK_OPTIONS)
 async def resolve_dictionary(request:SpecificationRun,workspace:str,extraction_ref:dict):
+    if not request.use_expression_dictionary:
+        return None
     from teoria.features.specification_processing.normalization.dictionary_alignment import align_dictionary
     corpus=await load(Path(workspace)/'extracted.json')
     maintenance=None
@@ -299,8 +268,37 @@ def attach_source_term_alignment(normalized,dictionary):
             'meaning_summary':dictionary.get('meaning_summary',{})}
 
 
+@task(name='06b 게시 Ontology 참고·의미 연결 비교', **TASK_OPTIONS)
+async def align_with_ontology(request:SpecificationRun,workspace:str,extraction_ref:dict,dictionary):
+    from teoria.features.specification_processing.authoring_client import GoodsAuthoringClient
+    from teoria.features.specification_processing.normalization.ontology_context import load_published_context
+    from teoria.features.specification_processing.normalization.ontology_alignment import propose_links
+    corpus=await load(Path(workspace)/'extracted.json')
+    async with GoodsAuthoringClient() as api:
+        snapshot,catalog=await load_published_context(request.ontology_alignment,api,standard=request.standard)
+    report=await propose_links(corpus,snapshot,catalog,(dictionary or {}).get('meaning_alignment'),runner(request),
+                               Path(workspace)/'ontology_alignment_inference')
+    context_input = request.ontology_alignment
+    report.update(extraction_ref=extraction_ref, context_input_ref=(
+        context_input.snapshot.model_dump(mode='json') if context_input.snapshot is not None
+        else {'publications': [ref.model_dump(mode='json') for ref in context_input.publications]}))
+    async with artifact_store(request.artifact_root) as store:
+        context_ref=await store.put(run_key(request,'ontology_context.json'),snapshot.model_dump_json().encode())
+        report['context_artifact']=context_ref.model_dump(mode='json')
+        report_ref=await store.put(run_key(request,'ontology_alignment.json'),
+                                   (json.dumps(report,ensure_ascii=False,sort_keys=True)+'\n').encode())
+        candidates={'schema_version':1,'artifact_kind':'specification_ontology_context_review_candidates',
+            'authority':'suggestion','auto_approve':False,'reason':'selected_context_or_ontology_gap',
+            'extraction_ref':extraction_ref,'context_artifact':context_ref.model_dump(mode='json'),
+            'observations':[row for row in report['observations'] if row['ontology_review_candidate']]}
+        unresolved_ref=await store.put(run_key(request,'ontology_alignment_unresolved.json'),
+                                       (json.dumps(candidates,ensure_ascii=False,sort_keys=True)+'\n').encode())
+    return {'report':report,'artifacts':[context_ref.model_dump(mode='json'),report_ref.model_dump(mode='json'),
+                                        unresolved_ref.model_dump(mode='json')]}
+
+
 @task(name='07 표준 의미 적용',**TASK_OPTIONS)
-async def select_and_map_standard(request:SpecificationRun,workspace:str,extraction_ref:dict|None=None,dictionary=None):
+async def select_and_map_standard(request:SpecificationRun,workspace:str,extraction_ref:dict|None=None,dictionary=None,*,ontology_alignment=None):
     from teoria.features.specification_processing.normalization.standard_versioning import manage_standard
     from teoria.features.specification_processing.normalization.standard_application import map_standard
     from teoria.features.specification_processing.models import StandardReference
@@ -313,10 +311,17 @@ async def select_and_map_standard(request:SpecificationRun,workspace:str,extract
             from teoria.features.goods_normalization.contracts import NormalizationPackage
             from teoria.features.specification_processing.normalization.profile_application import apply_profile
             package=NormalizationPackage.model_validate(payload)
-            normalized,candidates=apply_profile(corpus,package,run_id=request.run_id)
+            meaning_alignment = dictionary.get('meaning_alignment') if dictionary else None
+            if not request.use_expression_dictionary:
+                # Disabling registration must not turn unreviewed aliases into approved meaning.
+                meaning_alignment = {'policy_version':'published_ontology_expression_v2', 'documents':[]}
+            normalized,candidates=apply_profile(corpus,package,run_id=request.run_id,
+                meaning_alignment=meaning_alignment)
             normalized['standard_ref']=request.standard.model_dump()
             normalized['extraction_ref']=extraction_ref
             attach_source_term_alignment(normalized,dictionary)
+            if ontology_alignment is not None:
+                normalized['ontology_alignment']=ontology_alignment['report']
             candidates['extraction_ref']=extraction_ref
             artifacts=[]
             async with artifact_store(request.artifact_root) as store:
@@ -328,7 +333,9 @@ async def select_and_map_standard(request:SpecificationRun,workspace:str,extract
             return {'artifacts':artifacts,'standard':request.standard.model_dump()}
         standard=StandardArtifact.model_validate(payload)
     candidates=None
-    if request.mode=='standard_management':standard,candidates,normalized=manage_standard(corpus,standard,request.standard.sha256 if request.standard else None)
+    if request.mode=='standard_management':standard,candidates,normalized=manage_standard(
+        corpus,standard,request.standard.sha256 if request.standard else None,
+        auto_apply_source_literals=request.auto_apply_source_literals)
     else:normalized=map_standard(corpus,standard)
     artifacts=[]
     async with artifact_store(request.artifact_root) as store:
@@ -341,6 +348,8 @@ async def select_and_map_standard(request:SpecificationRun,workspace:str,extract
         await save(Path(workspace)/'standard_definitions.json', [d.model_dump() if hasattr(d, 'model_dump') else d for d in standard.definitions])
         normalized['standard_ref']=standard_ref.model_dump()
         attach_source_term_alignment(normalized,dictionary)
+        if ontology_alignment is not None:
+            normalized['ontology_alignment']=ontology_alignment['report']
         await save(Path(workspace)/'normalized.json',normalized)
         ref=await store.put(run_key(request,'normalized.json'),await asyncio.to_thread((Path(workspace)/'normalized.json').read_bytes));artifacts.append(ref.model_dump())
     if candidates is not None:await save(Path(workspace)/'meaning_candidates.json',candidates)
@@ -364,3 +373,28 @@ async def persist_document_results(request: SpecificationRun, workspace: str):
     async with artifact_store(request.artifact_root) as store:
         definitions = await load(Path(workspace)/'standard_definitions.json') if (Path(workspace)/'standard_definitions.json').exists() else []
         return await store_document_results(store, request.run_id, corpus, normalized, definitions=definitions)
+
+
+@task(name='10 처리 버전·출처 기록 저장', **TASK_OPTIONS)
+async def persist_execution_receipt(request: SpecificationRun, workspace: str, revision: str, references: list):
+    corpus = await load(Path(workspace) / 'extracted.json')
+    normalized = await load(Path(workspace) / 'normalized.json')
+    source_hashes = {d['document_id']: d['source']['sha256']
+                     for d in [*corpus['documents'], *corpus['unavailable_documents']]}
+    receipt = {
+        'schema_version': 1, 'run_id': request.run_id, 'mode': request.mode,
+        'input_fingerprint': request.input_fingerprint(), 'processor_revision': revision,
+        'model': {'requested': request.model, 'immutable_identity_verified': False},
+        'parser_versions': sorted({d['parser']['version'] for d in corpus['documents']}),
+        'sources': [{'document_id': d.document_id, 'sha256': source_hashes[d.document_id]} for d in request.documents],
+        'application_release_id': str(request.application_release_id) if request.application_release_id else None,
+        'standard': request.standard.model_dump(mode='json') if request.standard else None,
+        'dictionary': request.dictionary_standard.model_dump(mode='json') if request.dictionary_standard else None,
+        'ontology': normalized.get('ontology'),
+        'ontology_alignment': request.ontology_alignment.model_dump(mode='json') if request.ontology_alignment else None,
+        'artifacts': [{'key': a['key'], 'uri': a['uri'], 'sha256': a['sha256']} for a in references],
+        'quality_evaluation': 'not_attached',
+    }
+    async with artifact_store(request.artifact_root) as store:
+        return (await store.put(run_key(request, 'execution_receipt.json'),
+            (json.dumps(receipt, ensure_ascii=False, sort_keys=True) + '\n').encode())).model_dump()

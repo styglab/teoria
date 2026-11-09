@@ -1,3 +1,5 @@
+# .devcontainer/Dockerfile
+
 FROM node:20
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.0 /uv /uvx /usr/local/bin/

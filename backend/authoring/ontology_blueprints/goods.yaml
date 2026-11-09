@@ -1,9 +1,9 @@
 schema_version: '1.0'
 namespace: goods
 name: 규격서 물품
-description: 문서별 납품 범위·물품·서비스·자료·적용 문맥과 구성·연계·구조화한 규격·기능·검수·근거를 연결한다. 외부 분류 없이 기술할 수 있으며 분류·유형·특성 사전을 선택적으로
-  참조한다.
-target_version: 1.0.0
+description: 소스와 독립적인 물품 유형·속성·관계와 문서별 대상·요구조건·구성·원문 근거를 구분한다. 업무 정의는 Ontology가 소유하며 문서 관찰은 게시 개념을 참조한다. 사전은 원문
+  표현의 연결만 관리한다.
+target_version: 2.0.0
 objects:
 - code: classification_scheme
   name: 물품 분류체계
@@ -137,105 +137,6 @@ objects:
     value_type: string
     cardinality: optional
     description: 기존 인증된 제안·검토·승인 이력의 참조. actor 문자열을 권위 정보로 쓰지 않는다.
-- code: item_type
-  name: 물품 유형 정의
-  stable_key: goods.item_type
-  description: 서버·메모리 등 규격 물품을 해석하는 업무 유형 사전. 개별 모델·실물이나 조달 분류 코드와 동일시하지 않으며 native Object schema의 복제본이 아니다.
-  identity_properties:
-  - type_id
-  properties:
-  - code: type_id
-    name: 물품 유형 식별자
-    stable_key: goods.item_type.type_id
-    value_type: string
-    cardinality: one
-    description: 검토 대상 사전 항목의 지속적인 식별자. 이름 변경으로 바꾸지 않는다.
-  - code: preferred_name
-    name: 표준 물품 유형명
-    stable_key: goods.item_type.preferred_name
-    value_type: string
-    cardinality: one
-    description: 동의어와 구분한 유형명.
-  - code: definition
-    name: 유형 정의
-    stable_key: goods.item_type.definition
-    value_type: string
-    cardinality: one
-    description: 대상의 의미와 포함·제외 범위를 설명한다.
-  - code: aliases
-    name: 유형 동의어
-    stable_key: goods.item_type.aliases
-    value_type: string
-    cardinality: many
-    description: 원문 표현만으로 동등성이나 분류 일치를 확정하지 않는다.
-  - code: source_ref
-    name: 정의 근거
-    stable_key: goods.item_type.source_ref
-    value_type: string
-    cardinality: one
-    description: 외부 표준 또는 검토 근거.
-  - code: review_ref
-    name: 정의 검토 참조
-    stable_key: goods.item_type.review_ref
-    value_type: string
-    cardinality: optional
-    description: 기존 승인 이력과 연결한다. 사전 행 생성이 승인을 뜻하지 않는다.
-- code: characteristic_definition
-  name: 물품 표준 특성 정의
-  stable_key: goods.characteristic_definition
-  description: 물품 특성 사전의 업무 항목. 가변적인 특성의 뜻·값 종류·단위 정책을 정의한다. Ontology native Property는 이 사전과 명세 객체의 고정 필드를
-    계속 정의한다.
-  identity_properties:
-  - characteristic_id
-  properties:
-  - code: characteristic_id
-    name: 표준 특성 식별자
-    stable_key: goods.characteristic_definition.characteristic_id
-    value_type: string
-    cardinality: one
-    description: 의미를 지속적으로 식별하는 사전 ID. 명칭·단위가 같다고 합치지 않는다.
-  - code: preferred_name
-    name: 표준 특성명
-    stable_key: goods.characteristic_definition.preferred_name
-    value_type: string
-    cardinality: one
-    description: 시스템 메모리 용량과 GPU 메모리 용량 등 업무상 구별되는 이름.
-  - code: definition
-    name: 특성 정의
-    stable_key: goods.characteristic_definition.definition
-    value_type: string
-    cardinality: one
-    description: 무엇을 기술하며 무엇과 구별되는지 설명한다.
-  - code: value_kind
-    name: 허용 값 종류
-    stable_key: goods.characteristic_definition.value_kind
-    value_type: string
-    cardinality: one
-    description: 수치·문자·불리언·식별자·범위·집합·복합 값 등의 계약.
-  - code: quantity_kind_ref
-    name: 수량 종류 참조
-    stable_key: goods.characteristic_definition.quantity_kind_ref
-    value_type: string
-    cardinality: optional
-    description: 의미가 검증된 수량 종류 식별자. 단위와 구분하며 모든 특성에 강제하지 않는다.
-  - code: allowed_unit_refs
-    name: 허용 단위 참조
-    stable_key: goods.characteristic_definition.allowed_unit_refs
-    value_type: string
-    cardinality: many
-    description: 의미·차원·환산 정책을 검증한 단위 ID. 원문 GB를 근거 없이 GiB로 바꾸지 않는다.
-  - code: source_ref
-    name: 정의 근거
-    stable_key: goods.characteristic_definition.source_ref
-    value_type: string
-    cardinality: one
-    description: 표준 또는 업무 정의 근거.
-  - code: review_ref
-    name: 정의 검토 참조
-    stable_key: goods.characteristic_definition.review_ref
-    value_type: string
-    cardinality: optional
-    description: 검토·승인 상태는 기존 사전/프로파일 검토 기능과 연결한다.
 - code: specification_document
   name: 규격서 버전
   stable_key: goods.specification_document
@@ -293,6 +194,12 @@ objects:
     value_type: string
     cardinality: optional
     description: 원문 언급을 보존한다. 명칭 유사성만으로 다른 대상을 합치지 않는다.
+  - code: type_concept_ref
+    name: 게시 물품 유형 참조
+    stable_key: goods.specified_item.type_concept_ref
+    value_type: object
+    cardinality: optional
+    description: OntologyPublicationRef와 Object Stable Concept ID. 문서 대상의 해석 참조이며 별도 유형 정의나 실물 동일성의 선언이 아니다.
 - code: property_statement
   name: 속성 명세
   stable_key: goods.property_statement
@@ -365,7 +272,7 @@ objects:
     stable_key: goods.property_statement.unit_ref
     value_type: string
     cardinality: optional
-    description: 표준 특성의 허용 단위와 일치하는 ID. 해석 전에는 비워 둔다.
+    description: 참조한 게시 Property의 허용 단위와 일치하는 ID. 해석 전에는 비워 둔다.
   - code: value_expression
     name: 구조화한 규격값
     stable_key: goods.property_statement.value_expression
@@ -378,6 +285,13 @@ objects:
     value_type: object
     cardinality: many
     description: SpecificationCondition 계약. 주입량·반복횟수·작업면·상온 등 조건.
+  - code: property_concept_ref
+    name: 게시 속성 개념 참조
+    stable_key: goods.property_statement.property_concept_ref
+    value_type: object
+    cardinality: optional
+    description: OntologyPublicationRef와 Property Stable Concept ID. 적용 대상의 게시 유형·속성 owner를 함께 검증하며 별도 특성 정의를 저장하지
+      않는다.
 - code: composition_statement
   name: 구성 명세
   stable_key: goods.composition_statement
@@ -689,6 +603,77 @@ objects:
     value_type: string
     cardinality: one
     description: 명시·문맥 해석·미해결의 구분.
+- code: server
+  name: 서버
+  stable_key: goods.server
+  description: 서버라는 업무 대상 유형. 규격서의 요구 대상·제품 모델·실물 자산의 동일성을 이름만으로 확정하지 않는다. 요구조건은 별도 관찰로 저장하며 아래 속성을 확정값으로 채우지 않는다.
+  identity_properties:
+  - item_id
+  properties:
+  - code: item_id
+    name: 대상 식별자
+    stable_key: goods.server.item_id
+    value_type: string
+    cardinality: one
+    description: 소유 시스템이 확인한 대상의 지속적인 식별자. 문서 대상·제품 모델·실물 자산을 이름이나 실행 ID로 합치지 않는다.
+  - code: system_memory_capacity
+    name: 서버 전체 시스템 메모리 용량
+    stable_key: goods.server.system_memory_capacity
+    value_type: decimal
+    cardinality: optional
+    description: 서버 전체 시스템 주기억장치의 용량. 모듈당 용량·GPU 메모리·최대 지원 용량과 구분한다. 원문에 전체 값이 없으면 모듈 수 곱셈 결과를 원문 값으로 만들지 않는다.
+    unit: GB
+    quantity_dimension: information
+    allowed_units:
+    - GB
+    - TB
+  - code: memory_capacity_per_socket_limit
+    name: CPU 소켓당 메모리 지원 상한
+    stable_key: goods.server.memory_capacity_per_socket_limit
+    value_type: decimal
+    cardinality: optional
+    description: 서버가 CPU 소켓 하나에 대해 명시한 최대 시스템 메모리 지원 용량. 전체 공급 용량·모듈당 용량·현재 장착 사실과 구분한다.
+    unit: GB
+    quantity_dimension: information
+    allowed_units:
+    - GB
+    - TB
+  - code: memory_slot_count
+    name: 서버 전체 메모리 슬롯 수
+    stable_key: goods.server.memory_slot_count
+    value_type: integer
+    cardinality: optional
+    description: 서버 전체의 메모리 슬롯 개수. 공급 모듈 수·사용 중 슬롯 수·CPU당 슬롯 수와 구분한다.
+    unit: 개
+    quantity_dimension: count
+    allowed_units:
+    - 개
+    - EA
+    - ea
+- code: memory_module
+  name: 메모리 모듈
+  stable_key: goods.memory_module
+  description: 서버·컴퓨터의 시스템 메모리를 구성하는 개별 모듈의 업무 유형. GPU 메모리·저장장치와 구분한다. 문서에서 언급한 모듈 요구는 실물 모듈의 존재를 확정하지 않는다.
+  identity_properties:
+  - item_id
+  properties:
+  - code: item_id
+    name: 대상 식별자
+    stable_key: goods.memory_module.item_id
+    value_type: string
+    cardinality: one
+    description: 소유 시스템이 확인한 대상의 지속적인 식별자. 문서 대상·제품 모델·실물 자산을 이름이나 실행 ID로 합치지 않는다.
+  - code: capacity
+    name: 메모리 모듈당 용량
+    stable_key: goods.memory_module.capacity
+    value_type: decimal
+    cardinality: optional
+    description: 메모리 모듈 하나의 시스템 메모리 용량. 서버 전체 합계나 CPU 소켓당 지원 상한을 이 속성으로 해석하지 않는다.
+    unit: GB
+    quantity_dimension: information
+    allowed_units:
+    - GB
+    - TB
 relationships:
 - code: describes_item
   name: 물품 항목을 기술한다
@@ -824,38 +809,6 @@ relationships:
   source_cardinality: many
   target_cardinality: many
   description: 원문 분류 표제와 코드의 위치. metadata 주장에는 별도 source_ref를 사용한다.
-- code: item_has_type
-  name: 물품 유형에 해당한다
-  stable_key: goods.item_has_type
-  source: specified_item
-  target: item_type
-  source_cardinality: many
-  target_cardinality: many
-  description: 검토한 유형 해석. 유형 미확정이면 연결하지 않는다. 분류 코드와 동등성을 뜻하지 않는다.
-- code: type_parent
-  name: 직접 상위 물품 유형이다
-  stable_key: goods.type_parent
-  source: item_type
-  target: item_type
-  source_cardinality: many
-  target_cardinality: many
-  description: 업무 정의로 검증한 유형 포함 관계. 구성·분류 계층과 구별하고 순환을 금지한다.
-- code: applicable_characteristic
-  name: 적용 가능한 표준 특성이다
-  stable_key: goods.applicable_characteristic
-  source: item_type
-  target: characteristic_definition
-  source_cardinality: many
-  target_cardinality: many
-  description: 유형에 적용 가능한 특성 정의. 개별 물품에 값이 존재하거나 반드시 요구된다는 뜻은 아니다.
-- code: statement_characteristic
-  name: 표준 특성을 기술한다
-  stable_key: goods.statement_characteristic
-  source: property_statement
-  target: characteristic_definition
-  source_cardinality: many
-  target_cardinality: optional
-  description: 명세의 뜻이 확인된 특성 정의. 미해결 표현은 원문으로 유지한다.
 - code: describes_service
   name: 서비스 항목을 기술한다
   stable_key: goods.describes_service
@@ -1072,3 +1025,12 @@ relationships:
   source_cardinality: many
   target_cardinality: many
   description: 각 해석의 원문 구절·위치를 추적한다.
+- code: has_memory_module
+  name: 시스템 메모리 모듈로 구성된다
+  stable_key: goods.has_memory_module
+  source: server
+  target: memory_module
+  source_cardinality: one
+  target_cardinality: many
+  description: 서버와 시스템 메모리 모듈의 구성 의미. 실제 관계 인스턴스는 검증한 데이터에서 생성한다. 문서의 포함 조건·수량·근거는 composition_statement에 보존하며 슬롯
+    수로 모듈을 생성하지 않는다.

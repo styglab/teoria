@@ -218,6 +218,12 @@ def main() -> int:
         "validate-graph", help="validate proposed document goods graphs without requiring classification"
     )
     specification_graph.add_argument("--manifest", required=True, type=Path)
+    specification_graph.add_argument("--ontology-context", type=Path,
+        help="check explicit concept references against a pinned Ontology context; does not approve meanings")
+    specification_review = specification_subparsers.add_parser(
+        'review-meanings', help='validate owner/scope interpretation proposals without modifying observations or approving meanings')
+    specification_review.add_argument('--manifest', required=True, type=Path)
+    specification_review.add_argument('--output-root', required=True, help='immutable artifact root (file:// or s3://)')
     specification_workflow = specification_subparsers.add_parser(
         "standard-workflow",
         help="orchestrate extraction, semantic authoring and standard application",
@@ -240,7 +246,7 @@ def main() -> int:
         "prepare", help="verify classification and freeze a grouped random sample"
     )
     evaluation_prepare.add_argument("--manifest", required=True, type=Path)
-    for evaluation_step in ("baseline", "candidate", "finish", "abort"):
+    for evaluation_step in ("baseline", "candidate", "finish", "abort", "quality-check"):
         step = evaluation_steps.add_parser(evaluation_step)
         step.add_argument("--cycle-id", required=True)
     evaluation_compare = evaluation_steps.add_parser(

@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 from teoria.features.semantic_modeling.goods_dictionary.contracts import Record
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import (
     ConceptDefinition, DefinitionChange, DictionaryChangeSet, DictionarySnapshot, MappingChange,
-    concept_id_for_key, resolve_snapshot, snapshot_from_records,
+    concept_id_for_key, resolve_snapshot, snapshot_from_records, approved_dictionary_snapshot,
 )
 from teoria.features.specification_processing.authoring_client import GoodsAuthoringClient
 from teoria.features.specification_processing.models import StandardReference, SourceDocument
@@ -41,6 +41,7 @@ class DictionaryMaintenance(Record):
     validation_extractions: list[ExtractionInput] = Field(default_factory=list,max_length=1000)
     model: str = Field(min_length=1)
     auto_apply: bool = True
+    baseline_dictionary: StandardReference | None = None
     rebuild_from_sources: bool = False
     model_timeout_seconds: int = Field(default=600,ge=1,le=600)
     max_context_characters: int = Field(default=300000,ge=10000,le=1000000)
@@ -313,13 +314,29 @@ async def maintain_dictionary(request, *, api=None, runner=None):
     validation,validation_hashes,validation_families = await load_corpus(request.validation_extractions,request.classification_code)
     if hashes & validation_hashes or families & validation_families:
         raise ValueError('development and validation overlap by source hash or declared template family')
+    notices={d.get('notice_number') for d in development['documents']}-{None}
+    if any(d.get('notice_number') in notices for d in validation['documents']):
+        raise ValueError('development and validation overlap by notice')
     candidates,decisions = await register_corpus(api,development,'dictionary_'+request.batch_id+'_dev')
     validation_candidates,validation_decisions = await register_corpus(api,validation,'dictionary_'+request.batch_id+'_val')
     groups,nodes,entries = source_groups(development,candidates,decisions)
     validation_groups,validation_nodes,_ = source_groups(validation,validation_candidates,validation_decisions)
     if len(groups)>5000:
         raise ValueError('partition dictionary maintenance into at most 5000 source expressions')
-    baseline = DictionarySnapshot.model_validate(await api.dictionary_meaning('GET','/snapshot'))
+    from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import parse_dictionary_snapshot
+    baseline = parse_dictionary_snapshot(await api.dictionary_meaning('GET','/snapshot'))
+    if request.baseline_dictionary:
+        raw=await read_uri(request.baseline_dictionary.uri)
+        if hashlib.sha256(raw).hexdigest()!=request.baseline_dictionary.sha256:
+            raise ValueError('baseline dictionary checksum mismatch')
+        pinned=approved_dictionary_snapshot(parse_dictionary_snapshot(raw))
+        if pinned.checksum!=approved_dictionary_snapshot(baseline).checksum:
+            return {'status':'held','reason':'baseline_dictionary_changed','artifacts':[]}
+    if baseline.schema_version == 2:
+        from teoria.features.specification_processing.normalization.ontology_candidates import collect_ontology_candidates
+        return await collect_ontology_candidates(baseline, development, candidates, decisions,
+            artifact_root=request.artifact_root,
+            prefix='specification_processing/dictionary_maintenance/'+request.batch_id+'/')
     planning_baseline = snapshot_from_records([], [], baseline.sources) if request.rebuild_from_sources else baseline
     key_prefix = 'rebuild_'+hashlib.sha256(request.batch_id.encode()).hexdigest()[:10]+'_' if request.rebuild_from_sources else ''
     prefix = 'specification_processing/dictionary_maintenance/'+request.batch_id+'/'

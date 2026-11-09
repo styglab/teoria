@@ -1,3 +1,4 @@
+# Legacy 0.2.0 compatibility input; current goods 2.0.0 uses server and memory_module.
 schema_version: '1.0'
 ontology_namespace: goods
 ontology_version: 0.2.0

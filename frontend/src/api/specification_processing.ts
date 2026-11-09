@@ -30,8 +30,14 @@ export type InputDocument = {
   filename: string;
   source_uri: string;
   sha256: string;
+  notice_number?: string | null;
 };
 export const processingApi = {
+  reproduceValidation: (run: string, document: string, attribute: string) =>
+    getJson<{ verdict: string; code: string | null; model_called: boolean }>(
+      `/specification-processing/runs/${encodeURIComponent(run)}/validation/${encodeURIComponent(document)}/${encodeURIComponent(attribute)}`),
+  operations: () => getJson<{ days: number; runs: Record<string, number>; documents: Record<string, number>; quality_evaluation: string;
+    quality_versions?: Array<{processor_revision: string | null; model_requested: string | null; runs: number; measured_runs: number; approved: number; held: number; validation_errors: number; accepted_attributes: number; quarantined_attributes: number; applied_attributes: number; held_attributes: number}> }>("/specification-processing/operations"),
   status: () =>
     getJson<{ uploads_enabled: boolean; results_enabled: boolean }>(
       "/specification-processing/status",
@@ -43,6 +49,10 @@ export const processingApi = {
   detail: (id: string) =>
     getJson<ProcessingDetail>(
       `/specification-processing/runs/${encodeURIComponent(id)}`,
+    ),
+  inputs: (id: string, failedOnly = false) =>
+    getJson<{ source_run_id: string; documents: InputDocument[]; classification_code: string | null }>(
+      `/specification-processing/runs/${encodeURIComponent(id)}/inputs${failedOnly ? "?failed_only=true" : ""}`,
     ),
   artifact: (id: string, key: string) =>
     getJson<Record<string, unknown>>(

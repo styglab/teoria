@@ -1,0 +1,71 @@
+purpose: >-
+  실제 서버 규격서의 메모리 구절을 대조한 부분 관찰 예시. 원본 SHA-256을 재확인했다.
+  전체 문서 추출 정답·게시 의미 연결·실제 장착 사실을 뜻하지 않는다.
+  draft: 참조는 게시 전 Stable Key 후보이며 실제 게시 참조가 아니다.
+graphs:
+  - document_id: server_memory_source_example
+    revision_id: a8c7ad031dc585cf
+    source_sha256: a8c7ad031dc585cfd104df9c9d4d27b83f2a866838ed6beba6d7a71233ce7a60
+    evidence:
+      - evidence_id: server_name
+        locator: Sheet1!C2
+        quote: '[ASUS ESC8000-E12 Rack Mount Server]'
+      - evidence_id: memory_clause
+        locator: Sheet1!C2, 메모리(RAM)
+        quote: DDR5 32GB 5600 RDIMM  x 2개
+      - evidence_id: socket_limit
+        locator: Sheet1!C2, 메모리(RAM), 최대 용량
+        quote: '최대 용량: CPU 소켓당 최대 3TB 지원'
+      - evidence_id: memory_slots
+        locator: Sheet1!C2, 메모리(RAM), 총 슬롯 수
+        quote: '총 슬롯 수 : 32 개 DIMM 슬롯 (CPU당 16 DIMM, 2DPC), 최대 6400MHz DDR5 지원'
+    subjects:
+      - subject_id: server
+        kind: item
+        name: ASUS ESC8000-E12 Rack Mount Server
+        type_ref: draft:goods.server
+        evidence_ids: [server_name]
+      - subject_id: memory
+        kind: item
+        name: DDR5 32GB 5600 RDIMM
+        type_ref: draft:goods.memory_module
+        evidence_ids: [memory_clause]
+    compositions:
+      - composition_id: server_memory
+        parent_id: server
+        child_id: memory
+        relation_kind: physical_component
+        quantity:
+          value: 2
+          unit_raw: 개
+          scope_raw: 서버 구성의 공급 모듈 수
+        evidence_ids: [memory_clause]
+        evidence_basis: interpreted
+    properties:
+      - statement_id: module_capacity
+        subject_id: memory
+        characteristic_ref: draft:goods.memory_module.capacity
+        characteristic_name_raw: 메모리(RAM)
+        value: {kind: number, number: 32, unit_raw: GB}
+        operator: eq
+        assertion_role: requirement
+        semantic_scope: per_module
+        evidence_ids: [memory_clause]
+      - statement_id: socket_capacity_limit
+        subject_id: server
+        characteristic_ref: draft:goods.server.memory_capacity_per_socket_limit
+        characteristic_name_raw: 최대 용량
+        value: {kind: number, number: 3, unit_raw: TB}
+        operator: lte
+        assertion_role: supported_capability
+        semantic_scope: per_socket
+        evidence_ids: [socket_limit]
+      - statement_id: memory_slot_count
+        subject_id: server
+        characteristic_ref: draft:goods.server.memory_slot_count
+        characteristic_name_raw: 총 슬롯 수
+        value: {kind: number, number: 32, unit_raw: 개}
+        operator: eq
+        assertion_role: requirement
+        semantic_scope: system_total
+        evidence_ids: [memory_slots]

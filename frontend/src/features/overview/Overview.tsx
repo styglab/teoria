@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { RefreshCw, ArrowRight } from "lucide-react";
 import { metadataApi, type MetadataStatus } from "../../api/metadata";
@@ -17,7 +17,7 @@ import { useDeploymentModules } from "../access/DeploymentAvailability";
 
 type HomeRun = ModelRun & { pipeline_label?: string };
 
-export function Overview() {
+export function Overview({ workspaceChoices }: { workspaceChoices?: ReactNode }) {
   const modules = useDeploymentModules();
   const { principal, requestLogin } = useAdminAccess();
   const [refresh, setRefresh] = useState(0);
@@ -147,8 +147,9 @@ export function Overview() {
           </button>
         }
       />
+      {workspaceChoices}
       <div className="home-shortcuts">
-        {modules.semantic && (
+        {!workspaceChoices && modules.semantic && (
           <Link to="/admin/data-catalog">
             데이터 자산 찾기 <ArrowRight size={13} />
           </Link>
@@ -158,9 +159,14 @@ export function Overview() {
             FormatID 시작 <ArrowRight size={13} />
           </Link>
         )}
-        {modules.semantic && (
+        {!workspaceChoices && modules.semantic && (
           <Link to="/admin/semantic-model/ontology">
             의미 모델 탐색 <ArrowRight size={13} />
+          </Link>
+        )}
+        {workspaceChoices && (
+          <Link to="/admin/workflows">
+            공통 파이프라인 열기 <ArrowRight size={13} />
           </Link>
         )}
       </div>
@@ -252,12 +258,14 @@ export function Overview() {
   );
 }
 export function OperationsSettings() {
+  const modules = useDeploymentModules();
   const { principal, requestLogin } = useAdminAccess();
   const modelOperations = useModelOperationsAvailability();
   const [status, setStatus] = useState<MetadataStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
+    if (!modules.semantic) return;
     metadataApi
       .metadataStatus()
       .then((value) => {
@@ -269,7 +277,7 @@ export function OperationsSettings() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [modules.semantic]);
   return (
     <div className="workspace-page">
       <PageHeader
@@ -277,7 +285,7 @@ export function OperationsSettings() {
         description="외부 서비스 연결, 실행 도구와 현재 접근 권한을 확인합니다."
       />
       <div className="overview-columns">
-        <section className="workspace-card">
+        {modules.semantic && <section className="workspace-card">
           <h3>메타데이터 연결</h3>
           {error ? (
             <p role="alert">{error}</p>
@@ -305,9 +313,9 @@ export function OperationsSettings() {
           >
             OpenMetadata 열기 ↗
           </a>
-        </section>
+        </section>}
         <section className="workspace-card">
-          <h3>워크플로</h3>
+          <h3>공통 파이프라인</h3>
           <p>데이터 동기화·학습·배포의 실행과 예약은 Prefect가 관리합니다.</p>
           <Link to="/admin/workflows">파이프라인 조회·실행 →</Link>
           <p>
@@ -317,7 +325,7 @@ export function OperationsSettings() {
             Prefect 열기 ↗
           </a>
         </section>
-        <ModelOperationsOverview showDisabled />
+        {modules.mlops && <ModelOperationsOverview showDisabled />}
         <section className="workspace-card">
           <h3>현재 접근</h3>
           <p>

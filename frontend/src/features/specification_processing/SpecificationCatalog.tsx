@@ -150,6 +150,8 @@ export function SpecificationCatalog() {
           <p>규격서를 열어 물품·구성품과 속성이 원문에 맞게 추출됐는지 확인합니다.</p>
         </div>
         <div>
+          <Button asChild variant="outline"><Link to={`/admin/domains/goods/dictionary${classification ? `?classification=${encodeURIComponent(classification)}` : ""}`}>물품 사전</Link></Button>
+          <Button asChild variant="outline"><Link to="/admin/specifications/standards">처리 기준</Link></Button>
           <Button asChild>
             <Link to="?new=1">규격서 등록</Link>
           </Button>
@@ -606,6 +608,7 @@ export function CatalogDocumentView({ id }: { id: string }) {
           )}
           {data.result ? (
             <AnalysisExplorer
+              runId={data.document.run_id}
               value={data.result.extracted}
               normalization={data.result.normalization}
               mappingStatus={

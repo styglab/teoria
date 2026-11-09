@@ -1,0 +1,28 @@
+schema_version: '1.0'
+source_registry_release: 2026.10.27.3
+target_ontology: goods
+classifications:
+  BUSINESS_CONCEPT: 서버·메모리 모듈과 그 속성을 Ontology Object·Property로 정의하는 미게시 2.0.0 작성안
+  DEPRECATED: item_type·characteristic_definition의 별도 정의 원장을 새 Draft에서 제거하고 문서 관찰에 게시 개념 참조를 사용
+# 활성 Runtime의 legacy YAML Object는 0개다. 새 업무 모델의 게시·실제 적재·
+# 과거 Stable Concept와의 동등성 승인·은퇴 Capability 재활성화는 수행하지 않는다.
+objects: {}
+draft_objects:
+  goods.server:
+    classification: BUSINESS_CONCEPT
+    migration_status: planned
+    target_stable_key: goods.server
+    rationale: 서버 전체 용량·CPU 소켓당 지원 상한·슬롯 수를 별도 Property로 정의한다. 과거 goods.server와의 의미 동등성·Stable Concept ID 재사용은 별도 검토한다.
+  goods.memory_module:
+    classification: BUSINESS_CONCEPT
+    migration_status: planned
+    target_stable_key: goods.memory_module
+    rationale: 메모리 모듈당 용량을 정의한다. 기존 memory·memory_target의 ID나 적용 범위를 자동 이관하지 않는다.
+  goods.item_type:
+    classification: DEPRECATED
+    migration_status: deprecated
+    rationale: 새 작성안에서 별도 유형 정의 객체를 제거한다. 과거 artifact·DB 이력은 보존하며 문서 대상은 게시 Object 개념 참조로 해석한다.
+  goods.characteristic_definition:
+    classification: DEPRECATED
+    migration_status: deprecated
+    rationale: 새 작성안에서 별도 특성 정의 객체를 제거한다. 값·조건·근거는 문서 관찰에 유지하고 의미는 게시 Property를 참조한다.

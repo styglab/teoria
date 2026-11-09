@@ -113,6 +113,7 @@ async def advance_workflow(request, repository, state, lease_id):
             stage['completed'] = True
             await checkpoint()
         final_request = extraction.model_copy(update={'mode': 'document_processing',
+            'auto_approve_application_standard': False, 'auto_apply_source_literals': False,
             'standard': StandardReference(uri=state['package_ref']['uri'], sha256=state['package_ref']['sha256']),
             'extraction_checkpoint': StandardReference(uri=state['extraction_ref']['uri'], sha256=state['extraction_ref']['sha256'])})
         final = await document_processing_flow(final_request.model_dump(mode='json'))

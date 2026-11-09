@@ -27,6 +27,9 @@ uv run --project backend --locked --group orchestration teoria-pipelines specifi
 ```
 
 중단은 `evaluate abort --cycle-id example_cycle`을 사용한다.
+실행기 실패 시 완료한 development/regression 묶음의 점수와 종료 코드·예외 유형·Teoria 코드 위치는
+요약에 남긴다. 원문 본문·모델 응답·예외 메시지와 전체 로그는 보존하지 않는다.
+전체 묶음이 끝나지 않은 기록은 평가 완료나 품질 승인으로 간주하지 않는다.
 분리한 요약 위치는 `evaluate --state-dir PATH prepare ...`처럼 단계 이름 앞에 지정한다.
 다른 작업의 코드 변경이 섞이지 않도록 작업 사본을 분리한다. 코드·파서 변경을 감지하면 비교를 중단한다.
 
@@ -59,9 +62,17 @@ uv run --project backend --locked --group orchestration teoria-pipelines specifi
 | sample_size, seed | 기본 모드의 표본 목표와 고정 난수 |
 | history_reviewed, excluded_notices, excluded_sha256 | 과거 노출 확인과 제외 근거 |
 | concurrency, model_concurrency, model_timeout_seconds | 실행 범위·동시 호출·제한 |
-| purpose, replay_of | 일반 추출 개선 또는 별도의 평가기 보정 재실행 |
+| purpose, replay_of | 일반 추출 개선, 평가기 보정 또는 기존 고정 표본의 품질 관측 재실행 |
 
 모델을 고정하지 않거나 원문·사례가 부족하면 개선을 확정하지 않는다.
+`purpose: quality_assessment`와 `replay_of`는 중단했던 표본의 현재 품질을 관측할 때 사용한다.
+원본·사례·표본 전체·분할·실행 설정을 보존하고 `prepare → baseline → finish`로 한 번 실행한다.
+판정은 `assessment_recorded`이며 개선 승인이나 새로운 독립 검증을 뜻하지 않는다.
+`resume_from`에 정리가 완료된 이전 `quality_assessment` 실행 ID를 지정하면 이미 점수를
+저장한 정상 문서만 재사용한다. 원본·사례·분할·모델·실행 설정·processor·grader·파서 실행 환경이
+모두 같고 문서별 점수 checksum이 일치해야 한다. 실패 문서는 다시 실행하며 미완료 문서는
+원래 분모에 남긴다. 부분 완료라도 기술 실행이 성공한 문서는 재사용할 수 있다.
+이 기능은 평가 재개이며 일반 문서 처리의 단계 checkpoint 재사용과 별개다.
 Parser 버전뿐 아니라 소스와 설치 패키지 해시도 고정하고 실행 전후 확인한다.
 평가 Flow는 별도 임시 Prefect 환경에서 실행하며 운영 DB에 행을 만들지 않는다.
 
@@ -71,10 +82,20 @@ Parser 버전뿐 아니라 소스와 설치 패키지 해시도 고정하고 실
 |---|---|
 | 엔티티 | 원문 근거가 있는 대상의 존재·필요한 상위 대상 |
 | 관계 | 출발·도착·방향·종류·원문 근거 |
+| 구성 목록 (`compositions`) | 지정 부모의 직접 구성 전체를 원문 목록과 대조. 누락·잘못 추가·동명 대상 중복도 실패로 처리 |
+| 수량 (`quantities`) | `declared_quantities`의 대상·원문 수량·단위·근거. 다른 대상의 수량이나 중복 수량은 불인정 |
 | 요구조건 | 대상·값·단위·연산·역할·범위·원문 구절과 명시한 조건 |
 
 사례는 AI 작성 silver와 실제 사람 검토 human_reviewed를 구분한다.
 원문으로 확인해 고정한 entity_aliases만 사용하고 유사 문자열을 임의로 허용하지 않는다.
+
+구성 목록 사례는 원문에서 **직접 구성의 전체 범위가 확인되는 부모만** 작성한다.
+같은 자식을 가리키는 구성/구매 범위 관계가 함께 있어도 한 대상으로 세고, 서로 다른
+대상이 같은 이름으로 중복 추가되면 실패한다. `PC SYSTEM`을 데이터 처리 시스템 아래에서
+최상위로 올린 경우처럼, 존재하는 구성품의 잘못된 승격도 잡는다. 미주석 하위 계층 전체의
+정확도를 의미하지 않으며 구성 목록 검사는 표준 적용이나 별도 서비스를 실행하지 않는다.
+원본 기반 사례는 [lcms_composition_cases.json](../../backend/tests/features/specification_processing/evaluation/fixtures/lcms_composition_cases.json)에 유지한다.
+이 사례는 직접 구성 9개·PC의 부모·명시 수량 9건을 다룬다. 악세서리의 미기재 수량은 분모에 넣지 않는다.
 
 모델명 뒤에 성능값이 붙은 원문 명칭도 먼저 확인한다. 예를 들어 CPU의 모델명과
 `모델명 3.50GHz 8‑코어 16‑스레드 48MB`가 같은 대상의 원문 표현임이 확인되면,
@@ -82,6 +103,22 @@ Parser 버전뿐 아니라 소스와 설치 패키지 해시도 고정하고 실
 단순 접두어 일치나 모델 번호가 다른 이름은 인정하지 않는다. 관계 방향과 속성의
 소유 대상·값·단위·조건 검사는 그대로 유지한다. 이전 명칭 불일치가 해소된 것은
 평가 기준 보정이며 추출 로직의 개선 점수로 보고하지 않는다.
+
+진공펌프 원문은 구매 범위의 `고효율 진공펌프`, 표지의 `인버터제어형 진공펌프`,
+동일 구매 대상의 기술 표에 적힌 `진공펌프`를 구분해 표기한다.
+[vacuum_power_cases.json](../../backend/tests/features/specification_processing/evaluation/fixtures/vacuum_power_cases.json)은
+이 원문 대응을 명시적인 별칭으로 고정해 600 kW·425 kW 두 사례를 확인한다.
+추출 결과의 대상 ID를 합치거나 유사 명칭을 포괄적으로 허용하지 않는다. 같은 별칭으로
+매칭되는 대상이 여러 개면 요구조건 소유는 계속 불명확한 것으로 판정한다.
+
+핵심 표시명과 긴 원문 명칭을 분리한 결과도 원문으로 확인한 별칭만 고정한다.
+농기계 원문의 두 Target/반사체 항목은 용도와 수량이 다르므로 별도 대상으로 유지한다.
+[farm_target_cases.json](../../backend/tests/features/specification_processing/evaluation/fixtures/farm_target_cases.json)은
+이름 분리·상위 구성·각각의 5 EA 이상/2 EA 이상 조건을 확인하는 알려진 원본의 silver 사례다.
+짧은 명칭을 허용해도 대상 통합·수량 교환·비교 연산 반전은 인정하지 않는다.
+이 보정은 일반적인 이름 유사성 매칭이나 신규 문서의 독립 검증을 의미하지 않는다.
+해당 사례의 적용 범위 라벨과 관계의 지정 근거 구절은 보정 실행에서 불일치가 남았다.
+값·단위·연산 일치와 구분해 검토해야 하며, 이 사례 전체의 일치를 검증 완료로 간주하지 않는다.
 
 서버의 모델명·구성 관계·주요 사양·수량·지원 한도 보정 사례는
 [server_component_cases.json](../../backend/tests/features/specification_processing/evaluation/fixtures/server_component_cases.json)에
@@ -174,3 +211,21 @@ uv run --project backend --locked --group orchestration teoria-pipelines specifi
 고정 사례 분모에 남기며 기존 scorer로 비교한다. 결과는 누적 state의 `tool_comparison`에
 보존하고 작업공간 전체를 정리한다. 판정은 `comparison_only`이며 수정 전후 품질 승인이나
 배포 성공으로 기록하지 않는다. 파서 변환 성공률·문자열 보존 검사도 추출 정확도와 구분한다.
+
+## 개선안의 품질 조건 검사
+
+```bash
+uv run --project backend --locked --extra api --group orchestration \
+  teoria-pipelines specification evaluate quality-check --cycle-id example_cycle
+```
+
+이 명령은 기존 누적 평가 기록을 읽으며 새 추출·채점·정리를 실행하지 않는다. 통과에는
+accepted 개선 평가, 현재 코드 revision 일치, 테스트 성공, 정리 완료, 노출 이력 확인,
+개발·검증·회귀의 고정 사례 전부 일치와 측정 오류 0건을 요구한다. validation은 사람이
+검토한 정답이어야 한다. 기록·지표 누락은 통과시키지 않으며 blocked이면 종료 코드 1을 반환한다.
+이 기준은 관측된 실패가 없는 개선안을 선별하는 보수적인 초기 기준이다.
+
+통과 범위는 고정된 추출 사례다. 문서 전체 재현율, 모든 조건의 의미 동등성, 표준 적용,
+DB·S3·UI 연동이나 운영 배포 성공을 인증하지 않는다. 출력은 항상 `deployment_ready: false`와
+남은 통합 검증을 구분한다. 현재 배포 스크립트의 강제 gate에는 아직 연결하지 않았다.
+기존 샘플은 모두 노출된 회귀 자료이며 새 원본과 사람 검토 정답을 확보해야 독립 품질 승인을 진행할 수 있다.

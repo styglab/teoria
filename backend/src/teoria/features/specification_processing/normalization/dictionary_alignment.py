@@ -9,7 +9,7 @@ from teoria.features.specification_processing.authoring_client import GoodsAutho
 from teoria.features.specification_processing.normalization.dictionary_candidates import submission_from_corpus
 from teoria.features.specification_processing.normalization.dictionary_semantics import author_dictionary_meanings
 from teoria.features.specification_processing.storage.artifact_store import artifact_store, read_uri
-from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import DictionarySnapshot, resolve_snapshot
+from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import resolve_snapshot, parse_dictionary_snapshot
 
 
 def aligned_observations(corpus, submission, result):
@@ -47,6 +47,15 @@ def apply_concept_meanings(documents, resolution):
                 observation['meaning_status']=meaning['status']
                 observation['meaning_reason']=meaning['reason']
                 if meaning['status']=='resolved':
+                    if meaning.get('ontology'):
+                        observation['ontology_concept_ref'] = meaning['concept_id']
+                        observation['ontology'] = meaning['ontology']
+                        observation['definition_revision_id'] = meaning['revision_id']
+                        observation['meaning_mapping_ids'] = meaning['mapping_ids']
+                        # Role/scope/value/unit checks belong to the pinned profile.
+                        # An expression link alone never produces a normalized value.
+                        counts[observation['meaning_status']] += 1
+                        continue
                     observation['dictionary_concept_ref']='dictionary_concept:'+meaning['concept_id']
                     observation['definition_revision_id']=meaning['revision_id']
                     observation['meaning_mapping_ids']=meaning['mapping_ids']
@@ -80,17 +89,19 @@ async def align_dictionary(request, corpus, extraction_ref, *, maintenance=None)
             pinned = snapshot_from_records([], [], [])
         if maintenance is not None:
             artifacts.extend(maintenance['artifacts'])
-            standard=maintenance.get('dictionary_standard')
+            standard=maintenance.get('dictionary_standard') or maintenance.get('baseline_dictionary')
+            if standard is None and request.dictionary_baseline is not None:
+                standard=request.dictionary_baseline.model_dump(mode='json')
             if standard:
                 raw=await read_uri(standard['uri'])
                 if hashlib.sha256(raw).hexdigest()!=standard['sha256']:
                     raise ValueError('maintenance dictionary checksum mismatch')
-                pinned=DictionarySnapshot.model_validate_json(raw)
+                pinned=parse_dictionary_snapshot(raw)
         if request.dictionary_standard:
             raw = await read_uri(request.dictionary_standard.uri)
             if hashlib.sha256(raw).hexdigest()!=request.dictionary_standard.sha256:
                 raise ValueError('dictionary standard checksum mismatch')
-            pinned = DictionarySnapshot.model_validate_json(raw)
+            pinned = parse_dictionary_snapshot(raw)
             if request.mode=='standard_management':
                 raise ValueError('dictionary_standard is read-only; use document_processing')
         if corpus['documents']:
@@ -115,10 +126,12 @@ async def align_dictionary(request, corpus, extraction_ref, *, maintenance=None)
                     resolution=resolve_snapshot(pinned,source_ids,request.classification_code)
                 else:
                     resolution_items=[]
+                    policy_version = 'published_ontology_expression_v2'
                     for start in range(0,len(source_ids),1000):
                         resolved=await api.resolve_dictionary_meanings(source_ids[start:start+1000],request.classification_code)
+                        policy_version = resolved.get('policy_version', 'approved_scoped_equivalence_v1')
                         resolution_items.extend(resolved['items'])
-                    resolution={'policy_version':'approved_scoped_equivalence_v1','items':resolution_items}
+                    resolution={'policy_version':policy_version,'items':resolution_items}
             documents = aligned_observations(corpus,submission,result)
             blocked=set(maintenance.get('blocked_source_ids',[])) if maintenance else set()
             for meaning in resolution['items']:

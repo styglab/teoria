@@ -46,6 +46,8 @@ export type OntologyVersionDetail = OntologyVersion & {
       value_type: string;
       cardinality: string;
       unit: string | null;
+      quantity_dimension?: string | null;
+      allowed_units?: string[];
       temporal: boolean;
     }>;
   }>;
@@ -78,6 +80,11 @@ export type OntologyDiff = {
 };
 
 export type OntologyBindingImpact = {
+  dependency_impact?: {
+    status: string;
+    review_required_count: number;
+    dependencies: Array<{ kind: string; id: string; reason: string; affected_concept_ids: string[] }>;
+  };
   compatible: boolean;
   incompatible_binding_count: number;
   incompatible_bindings: Array<{

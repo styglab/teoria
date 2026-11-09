@@ -2,7 +2,7 @@
 from datetime import date
 from typing import Literal
 from pydantic import Field, field_validator, model_validator
-from teoria.features.specification_processing.models import Record, SourceDocument, StandardReference
+from teoria.features.specification_processing.models import Record, SourceDocument, StandardReference, OntologyAlignmentInput
 
 
 class DocumentSelection(Record):
@@ -45,12 +45,14 @@ class DictionaryManagement(Record):
 
 
 class ManagementExecution(Record):
+    ontology_alignment: OntologyAlignmentInput | None = None
     run_id: str | None = Field(default=None, pattern=r'^[a-z][a-z0-9_]{0,73}$')
     artifact_root: str | None = None
     model: str | None = None  # None uses the worker's configured Codex model.
     concurrency: int = Field(default=2, ge=1, le=4)
     model_concurrency: int = Field(default=4, ge=1, le=4)
     model_timeout_seconds: int = Field(default=180, ge=1, le=600)
+    reuse_stage_checkpoints: bool = True
 
     @model_validator(mode='after')
     def artifact_location(self):

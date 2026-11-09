@@ -320,7 +320,7 @@ def main() -> None:
             return sorted(identifiers)
 
         def cleanup(apply: bool) -> None:
-            protected = set(state.get("images", []) + state.get("previous_images", []))
+            protected = set(state.get("images", []))
             selected_repositories = {
                 service["image"].rsplit(":", 1)[0]
                 for service in services.values()
@@ -328,9 +328,7 @@ def main() -> None:
             }
             for saved_file in (ROOT / ".state").glob("*/deployment.json"):
                 saved = json.loads(saved_file.read_text())
-                protected.update(
-                    saved.get("images", []) + saved.get("previous_images", [])
-                )
+                protected.update(saved.get("images", []))
             containers = call(["docker", "ps", "-aq"], capture=True).split()
             if containers:
                 protected.update(

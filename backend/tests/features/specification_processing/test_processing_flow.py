@@ -28,7 +28,7 @@ def inputs(tmp_path,mode='document_processing'):
 @pytest.fixture
 def undecorated(monkeypatch):
     # Exercise the exact operational task bodies without starting an orchestration server.
-    for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','resolve_dictionary','select_and_map_standard','persist_report','persist_document_results']:
+    for name in ['stage_original_documents','parse_documents','extract_entity_relations','extract_requirements','resolve_attribute_semantics','persist_extraction','resolve_dictionary','select_and_map_standard','persist_report','persist_document_results','persist_execution_receipt']:
         monkeypatch.setattr(tasks,name,getattr(tasks,name).fn)
     from teoria.features.specification_processing.normalization import dictionary_alignment
     from teoria.features.specification_processing.normalization import dictionary_incremental
@@ -56,9 +56,9 @@ async def test_canonical_artifacts_are_separate_and_db_completion_is_last(tmp_pa
     result=await flows.execute_specification_run(request)
     assert result.status=='completed'
     assert result.summary['applied']==1
-    assert len(result.artifacts)==9
+    assert len(result.artifacts)==10
     root=tmp_path/'objects/specification_processing/fixture_run'
-    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==sorted(['documents/doc_1/result.json','source_term_alignment.json','dictionary_semantic_decisions.json','dictionary_bindings.json','dictionary_candidates.json','extracted.json','index.md','normalized.json','sources/doc_1.hwp'])
+    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==sorted(['execution_receipt.json','documents/doc_1/result.json','source_term_alignment.json','dictionary_semantic_decisions.json','dictionary_bindings.json','dictionary_candidates.json','extracted.json','index.md','normalized.json','sources/doc_1.hwp'])
     for artifact in result.artifacts:
         path=Path(artifact.uri.removeprefix('file://'))
         assert path.exists() and hashlib.sha256(path.read_bytes()).hexdigest()==artifact.sha256
@@ -69,6 +69,29 @@ async def test_completed_replay_does_not_touch_inputs_or_model(tmp_path,undecora
     undecorated[0].return_value=result
     Path(request.documents[0].source_uri.removeprefix('file://')).unlink()
     assert await flows.execute_specification_run(request)==result
+
+
+async def test_data_processing_can_skip_expression_registration_without_losing_source_artifacts(tmp_path,undecorated,monkeypatch):
+    from teoria.features.specification_processing.normalization import dictionary_alignment
+    forbidden = AsyncMock(side_effect=AssertionError('expression registration must be optional'))
+    monkeypatch.setattr(dictionary_alignment, 'align_dictionary', forbidden)
+    request = inputs(tmp_path).model_copy(update={'use_expression_dictionary':False})
+    result = await flows.execute_specification_run(request)
+    forbidden.assert_not_awaited()
+    assert result.status == 'completed' and result.summary['applied'] == 1
+    assert result.summary['dictionary']['reason'] == 'expression_dictionary_disabled'
+    assert result.summary['dictionary_operation_id'] is None
+    keys = {artifact.key.rsplit('/',1)[-1] for artifact in result.artifacts}
+    assert {'extracted.json','normalized.json','result.json','execution_receipt.json'} <= keys
+    assert not keys.intersection({'dictionary_candidates.json','dictionary_bindings.json','source_term_alignment.json'})
+    undecorated[1].assert_awaited_once_with(result)
+
+
+def test_dictionary_disabled_cannot_approve_a_dictionary_backed_application_release(tmp_path):
+    body = inputs(tmp_path, mode='standard_management').model_dump(mode='json')
+    body.update(use_expression_dictionary=False, auto_approve_application_standard=True)
+    with pytest.raises(ValueError, match='require expression dictionary'):
+        SpecificationRun.model_validate(body)
 
 
 async def test_pipeline_persists_three_level_policy_even_when_reusing_extraction(tmp_path,undecorated):
@@ -115,8 +138,24 @@ async def test_untrusted_checkpoint_cannot_change_source_subjects(tmp_path,undec
         await flows.execute_specification_run(request)
     undecorated[1].assert_not_awaited()
 
+
+@pytest.mark.parametrize('failure',['partial_value','partial_span'])
+async def test_checkpoint_cannot_ground_a_number_inside_a_larger_number(tmp_path,undecorated,failure):
+    request=inputs(tmp_path);checkpoint=Path(request.extraction_checkpoint.uri.removeprefix('file://'))
+    data=json.loads(checkpoint.read_text());document=data['documents'][0]
+    text='CPU 116core' if failure=='partial_value' else 'CPU 16core / 116core'
+    document['parsed_document']['nodes'][0]['text']=text
+    if failure=='partial_span':
+        start=text.rindex('16')
+        document['attributes'][0]['evidence']['field_spans']={'value_raw':[[start,start+2]]}
+    checkpoint.write_text(json.dumps(data));request.extraction_checkpoint.sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    with pytest.raises(ValueError,match='numeric'):
+        await flows.execute_specification_run(request)
+    undecorated[1].assert_not_awaited();undecorated[2].assert_awaited_once()
+
 async def test_management_without_selected_standard_preserves_unmapped_candidates(tmp_path,undecorated):
     request=inputs(tmp_path,'standard_management');request.standard=None
+    request.auto_apply_source_literals=False
     result=await flows.execute_specification_run(request)
     assert result.status=='partial' and result.summary['automatically_deferred']==1
     draft=json.loads(Path(result.standard.uri.removeprefix('file://')).read_text())
@@ -194,3 +233,75 @@ async def test_all_excluded_sources_are_not_reported_as_failed_extraction(tmp_pa
     assert result.status=='completed'
     assert result.summary['failed_documents']==0 and result.summary['excluded_documents']==1
     assert result.document_results[0]['status']=='excluded'
+
+
+async def test_execution_receipt_pins_verified_sources_and_artifact_checksums(tmp_path, undecorated):
+    request = inputs(tmp_path)
+    result = await flows.execute_specification_run(request)
+    ref = next(a for a in result.artifacts if a.key.endswith('/execution_receipt.json'))
+    receipt = json.loads(Path(ref.uri.removeprefix('file://')).read_bytes())
+    assert receipt['sources'] == [{'document_id': 'doc_1', 'sha256': request.documents[0].sha256}]
+    assert receipt['standard'] == request.standard.model_dump(mode='json')
+    assert receipt['processor_revision'] == result.summary['processor_revision']
+    assert receipt['quality_evaluation'] == 'not_attached'
+    assert receipt['model']['immutable_identity_verified'] is False
+    assert all(any(a.key == pinned['key'] and a.sha256 == pinned['sha256'] for a in result.artifacts) for pinned in receipt['artifacts'])
+
+
+async def test_cli_release_guard_checks_approval_and_references_before_reading_originals(tmp_path, monkeypatch):
+    from uuid import UUID
+    import teoria.features.specification_processing.authoring_client as client_module
+    request = inputs(tmp_path)
+    request = request.model_copy(update={'application_release_id':UUID(int=1), 'dictionary_standard':request.standard,
+        'dictionary_auto_approve':False,'dictionary_meaning_auto_approve':False})
+    release = {'status':'approved','standard_kind':'extraction_draft',
+        'standard_ref':request.standard.model_dump(mode='json'),
+        'dictionary_ref':request.dictionary_standard.model_dump(mode='json'),
+        'classification_code':request.classification_code}
+    class API:
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def application_standard(self,id):
+            assert id == request.application_release_id
+            return release
+    monkeypatch.setattr(client_module,'GoodsAuthoringClient',API)
+    # Approval checking has no reason to read the original document.
+    Path(request.documents[0].source_uri.removeprefix('file://')).unlink()
+    await flows.verify_application_release(request)
+    for changes in [{'status':'deprecated'}, {'dictionary_ref':{}}, {'classification_code':None}]:
+        original = dict(release)
+        release.update(changes)
+        with pytest.raises(ValueError, match='application_standard_reference_mismatch'):
+            await flows.verify_application_release(request)
+        release.clear();release.update(original)
+    path = Path(request.standard.uri.removeprefix('file://'))
+    path.write_text('{}')
+    with pytest.raises(ValueError, match='application_standard_checksum_mismatch'):
+        await flows.verify_application_release(request)
+
+
+async def test_source_only_auto_application_preserves_literals_without_numeric_authority(tmp_path, undecorated):
+    request=inputs(tmp_path,'standard_management');request.standard=None
+    result=await flows.execute_specification_run(request)
+    assert result.summary['applied']==1
+    root=tmp_path/'objects/specification_processing/fixture_run'
+    normalized=json.loads((root/'normalized.json').read_text())
+    fact=normalized['attributes'][0]['facts'][0]
+    assert fact['value']['text']=='16' and fact['value']['unit_raw']=='core'
+    assert fact['value']['numeric_ordering_allowed'] is False
+    assert fact['subject_ids']==['cpu'] and fact['semantic_scope']=='per_processor'
+    standard=json.loads(Path(result.standard.uri.removeprefix('file://')).read_text())
+    assert standard['published'] is False
+    assert standard['definitions'][0]['approval_policy']=='grounded_source_literal_v1'
+
+
+def test_source_auto_application_holds_unresolved_or_ungrounded_observations(tmp_path):
+    from copy import deepcopy
+    from teoria.features.specification_processing.normalization.standard_versioning import manage_standard
+    request=inputs(tmp_path)
+    original=json.loads(Path(request.extraction_checkpoint.uri.removeprefix('file://')).read_text())
+    for field,value in [('semantic_scope','unknown'),('semantic_role','unknown'),('value_raw','160')]:
+        corpus=deepcopy(original);corpus['documents'][0]['attributes'][0][field]=value
+        standard,_,result=manage_standard(corpus,auto_apply_source_literals=True)
+        assert not standard.bindings
+        assert result['summary']['automatically_deferred']==1

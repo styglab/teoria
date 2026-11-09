@@ -54,16 +54,26 @@ def save(path,value):
     path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
 def norm(text):return re.sub(r'\s+','',unicodedata.normalize('NFKC',text or ''))
 
-def spans(text,raw):
-    """All source spans matching an NFKC/whitespace-normalized literal. No fuzzy matching."""
+def spans(text,raw,*,complete_number=False):
+    """Source spans for a literal; numeric values must cover a complete source number."""
     if raw is None:return []
     target=norm(raw)
     if not target:return []
     chars=[];indices=[]
     for index,char in enumerate(text):
         for normalized in unicodedata.normalize('NFKC',char):
-            if not normalized.isspace():chars.append(normalized);indices.append(index)
+            if complete_number or not normalized.isspace():chars.append(normalized);indices.append(index)
     haystack=''.join(chars);positions=[];start=0
+    if complete_number:
+        for match in re.finditer(r'[+−-]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?',haystack):
+            a,b=match.span()
+            # An adjacent binary separator in 0-10 or 3+1 is not a unary sign.
+            if haystack[a] in '+−-' and a and haystack[a-1].isdigit():a+=1
+            if a and haystack[a-1]=='.':continue
+            if b+1<len(haystack) and haystack[b]=='.' and haystack[b+1].isdigit():continue
+            begin,end=indices[a],indices[b-1]+1
+            if haystack[a:b]==target and norm(text[begin:end])==target:positions.append([begin,end])
+        return positions
     while True:
         found=haystack.find(target,start)
         if found<0:break
@@ -79,7 +89,7 @@ def recover_literal_unit(text,value,data_type,property_key):
     """Recover only an unambiguous, known unit immediately following a numeric literal."""
     if data_type!='number' or 'model' in property_key or number(value) is None:return None
     candidates=[]
-    for start,end in spans(text,value):
+    for start,end in spans(text,value,complete_number=True):
         if start and re.match(r'[A-Za-z0-9_.+\-]',text[start-1]):continue
         tail=text[end:].lstrip(' \t')
         unit=next((u for u in sorted(UNITS,key=len,reverse=True)
@@ -103,7 +113,7 @@ def narrow_source_evidence(attribute,nodes,source_quote):
     for field in ('property_raw','value_raw','unit_raw','operator_raw'):
         value=attribute.get(field)
         if value is None:continue
-        found=spans(quote,value)
+        found=spans(quote,value,complete_number=(field=='value_raw' and attribute.get('data_type')=='number' and number(value) is not None))
         if not found:raise ValueError('source quote omits '+field)
         field_spans[field]=[[a+start,b+start] for a,b in found]
     qualifiers=[]
@@ -138,7 +148,7 @@ def decode_batch(raw,chunk,graph,document,chunk_index):
             field_spans={};errors=[]
             for field,literal in fields.items():
                 if literal is None:continue
-                matched=spans(fragment['text'],literal)
+                matched=spans(fragment['text'],literal,complete_number=(field=='value_raw' and data_type=='number' and number(literal) is not None))
                 if not matched:errors.append(field+': literal not in source fragment')
                 field_spans[field]=[[a+fragment['start'],b+fragment['start']] for a,b in matched]
             if not value.strip():errors.append('empty raw value')

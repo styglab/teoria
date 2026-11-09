@@ -17,8 +17,10 @@ def test_document_processing_only_uses_portable_goods_and_authoring_http_contrac
     assert paths
     assert not [(str(p.relative_to(SOURCE_ROOT)), name) for p in paths for name in imports(p)
                 if name.startswith('teoria.features.')
-                and not (p.name == 'workspace_router.py' and name == 'teoria.features.access_control.auth')
+                and not (p.name in {'workspace_router.py','application_standards_router.py'} and name == 'teoria.features.access_control.auth')
                 and not name.startswith(('teoria.features.specification_processing',
+                                         'teoria.features.semantic_modeling.ontology.publication_contracts',
+                                         'teoria.features.semantic_modeling.ontology.review_contracts',
                                          'teoria.features.goods_normalization.contracts',
                                          'teoria.features.semantic_modeling.goods_dictionary.contracts',
                                          'teoria.features.semantic_modeling.goods_dictionary.meaning_contracts'))]

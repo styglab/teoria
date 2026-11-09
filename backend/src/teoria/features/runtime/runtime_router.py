@@ -118,6 +118,8 @@ async def execute_capability(
                 "sunset_at": capability.lifecycle.sunset_at,
             },
         )
+    if capability.lifecycle.status != "active":
+        raise HTTPException(409, detail={"code": "inactive_capability", "status": capability.lifecycle.status})
     policy_decision = await require_policy(
         services=services,
         principal=principal,

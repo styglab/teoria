@@ -233,3 +233,72 @@ def test_minio_upload_and_preview_do_not_need_local_files(tmp_path,monkeypatch):
     ref['uri']='s3://another-bucket/result.json'
     with api(tmp_path,reference=ref) as client:
         assert client.get('/v1/admin/specification-processing/runs/test_run/artifact?key=result.json',headers=HEADERS).status_code==404
+
+
+async def _inputs(self, run_id):
+    return [{'document_id': 'doc_1', 'filename': 'sample.pdf', 'source_uri': 'file:///app/inputs/sample.pdf', 'sha256': 'a'*64}]
+
+
+def test_reprocessing_returns_registered_inputs_only_for_operators(tmp_path, monkeypatch):
+    original = Repository.detail
+    async def detail(self, run_id):
+        result = await original(self, run_id)
+        if result: result['run']['status'] = 'partial'
+        return result
+    monkeypatch.setattr(Repository, 'detail', detail)
+    monkeypatch.setattr(Repository, 'inputs', _inputs, raising=False)
+    with api(tmp_path) as client:
+        result = client.get('/v1/admin/specification-processing/runs/test_run/inputs', headers=HEADERS)
+        assert result.status_code == 200
+        assert result.json()['documents'][0]['sha256'] == 'a'*64
+        assert client.get('/v1/admin/specification-processing/runs/missing/inputs', headers=HEADERS).status_code == 404
+    with api(tmp_path, roles='ontology_owner') as client:
+        assert client.get('/v1/admin/specification-processing/runs/test_run/inputs', headers=HEADERS).status_code == 403
+
+
+def test_active_run_cannot_be_reprocessed(tmp_path, monkeypatch):
+    original = Repository.detail
+    async def detail(self, run_id):
+        result = await original(self, run_id)
+        if result: result['run']['status'] = 'running'
+        return result
+    monkeypatch.setattr(Repository, 'detail', detail)
+    with api(tmp_path) as client:
+        assert client.get('/v1/admin/specification-processing/runs/test_run/inputs', headers=HEADERS).status_code == 409
+
+
+def test_reproduce_quarantined_observation_uses_registered_checksum_verified_result(tmp_path):
+    from types import SimpleNamespace
+    from teoria.features.specification_processing.extraction.extraction_validation import isolate_extraction_failures
+    from backend.tests.features.specification_processing.extraction.test_extraction_isolation import corpus_fixture
+    corpus,request,sources=corpus_fixture()
+    corpus['documents'][0]['attributes'][0]['value_raw']='10'
+    isolated=isolate_extraction_failures(corpus,request,sources)
+    document=isolated['documents'][0]
+    payload={'document_id':document['document_id'],'source_sha256':document['source']['sha256'],
+             'extracted':{'documents':[document]}}
+    path=tmp_path/'artifacts'/'result.json';path.parent.mkdir();raw=__import__('json').dumps(payload).encode();path.write_bytes(raw)
+    reference={'key':'specification_processing/test_run/documents/a_doc/result.json','uri':path.as_uri(),
+               'sha256':hashlib.sha256(raw).hexdigest(),'size_bytes':len(raw)}
+    url='/v1/admin/specification-processing/runs/test_run/validation/a_doc/a_doc_count'
+    with api(tmp_path,reference=reference) as client:
+        assert client.get(url).status_code==401
+        result=client.get(url,headers=HEADERS)
+        assert result.status_code==200 and result.json()['code']=='source_numeric_literal_mismatch'
+        assert result.json()['model_called'] is False
+        path.write_bytes(b'changed')
+        assert client.get(url,headers=HEADERS).status_code==409
+
+
+def test_retry_inputs_excludes_successful_documents_and_keeps_validation_failures(tmp_path,monkeypatch):
+    async def detail(self,run_id):
+        return {'run':{'run_id':run_id,'status':'partial','classification_code':None},'artifacts':[],
+            'documents':[{'document_id':'good','status':'extracted','result_summary':{}},
+                         {'document_id':'bad','status':'failed','result_summary':{}},
+                         {'document_id':'held','status':'partial','result_summary':{'quarantined_attributes':1}}]}
+    async def inputs(self,run_id):return [{'document_id':id,'filename':id+'.pdf','source_uri':(tmp_path/(id+'.pdf')).as_uri(),'sha256':'a'*64} for id in ('good','bad','held')]
+    monkeypatch.setattr(Repository,'detail',detail);monkeypatch.setattr(Repository,'inputs',inputs,raising=False)
+    with api(tmp_path) as client:
+        response=client.get('/v1/admin/specification-processing/runs/test_run/inputs?failed_only=true',headers=HEADERS)
+        assert response.status_code==200
+        assert [d['document_id'] for d in response.json()['documents']]==['bad','held']

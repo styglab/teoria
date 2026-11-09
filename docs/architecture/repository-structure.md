@@ -38,9 +38,11 @@ Python 프로젝트와 의존성 기준은 `backend/pyproject.toml`·`backend/uv
 | 위치 | 책임 |
 |---|---|
 | `features/semantic_modeling/ontology/` | 지속 가능한 업무 개념·Draft·검토·게시 |
+| `features/semantic_modeling/ontology/publication_contracts.py` | 소스 독립 게시 참조·본문 검증·Stable Concept projection의 공개 값 계약 |
+| `features/semantic_modeling/ontology/review_contracts.py` | 작성 버전의 고정 검토 문맥·개념 소유 관계 값 계약; 게시·Runtime 계약과 구분 |
 | `features/semantic_modeling/binding/` | Stable Concept와 외부 의미 대상의 연결 |
 | `features/semantic_modeling/registry/` | 실행 계약 검증·고정 bundle·Mapping codec |
-| `features/semantic_modeling/goods_dictionary/` | 원문 표현·표준 정의·매핑·판정·감사 |
+| `features/semantic_modeling/goods_dictionary/` | 원문 표현·게시 Ontology 연결·과거 정의 이력·판정·감사 |
 | `features/specification_processing/` | 규격서 파싱·추출·검증·표준 적용·평가·Flow·입력/결과 HTTP |
 | `features/goods_normalization/` | 프로파일 후보·의미 판정·작성·승인·고정 계약 |
 | `features/goods_notice_collection/` | 물품 공고 백업 복원·원문 버전·관측·첨부 참조; 자동 수집 배포는 비활성 |
@@ -66,13 +68,15 @@ Python 프로젝트와 의존성 기준은 `backend/pyproject.toml`·`backend/uv
 기능의 실행 코드·타입·저장소는 같은 소유 기능에 둔다. 기능과 integration은 entrypoint를 역으로 import하지 않는다.
 기능 간 의존성은 순환하지 않아야 하며 공개 계약을 사용한다. 내부 저장소를 다른 기능이 직접 조작하지 않는다.
 
-- 규격서 처리는 `goods_normalization/contracts/`와 사전의 공개 HTTP 계약을 사용한다.
+- 규격서 처리는 `goods_normalization/contracts/`, Ontology의 공개 게시 값 계약과 인증된 Admin HTTP API를 사용한다. 사전은 표현 연결을 제공하며 게시 정의 조회의 필수 관문이 아니다.
+- 규격서의 소유 대상·scope 재해석은 `normalization/meaning_review.py`에서 원문과 분리한 제안 산출물로 보관한다. Draft 검토 문맥은 공개 값 계약과 Admin HTTP로 읽고 승인·Runtime·프로파일 적용의 근거로 사용하지 않는다.
 - Pipeline의 의미 작성은 인증된 Admin HTTP API를 호출한다. Capability·Mapping Runtime을 직접 호출하지 않는다.
 - MCP는 Runtime API만 사용한다. 직접 DB 접근·embedded 실행을 제공하지 않는다.
 - Provider·Codex·실행 기반은 기능 구현을 역으로 import하지 않는다.
 - OpenMetadata는 자산·기술·거버넌스 metadata의 기준이다. entity 본문을 Teoria DB에 복제하지 않는다.
 - Application DB는 업무 의미·제안·승인 이력, Data DB는 실행·참조, 파일/S3는 문서별 본문을 소유한다.
 - Runtime은 checksum을 검증한 게시 artifact를 적재한다. 운영에서 작성 DB나 원본 Registry를 직접 읽지 않는다.
+- API·DB·파일의 Data 관찰과 게시 개념 연결은 별도 책임이다. 원본 대상 식별자와 Stable Concept ID를 혼용하지 않으며, Mapping·사전·프로파일에 새 업무 정의 원장을 만들지 않는다.
 
 상세 승인·게시 정책은 [아키텍처](overview.md)와 [Ontology](../platform/ontology.md),
 Data DB 보존·정리는 [DB 안내](../pipelines/database.md)를 따른다.

@@ -11,6 +11,8 @@ import {
 } from "./document_results";
 import "./document_results.css";
 import { AttributeValue, attributeName } from "./AttributeValue";
+import { RejectedObservations } from "./RejectedObservations";
+import { OntologyAlignmentResults } from "./OntologyAlignmentResults";
 
 const kindNames: Record<string, string> = {
   product: "물품",
@@ -197,6 +199,20 @@ export function composition(
   const detailTargets = entities.filter((e) =>
     hasHierarchy ? detailIdsFromPipeline.has(String(e.id))
       : mode === "composition" && (depths.get(String(e.id)) ?? 0) > COMPOSITION_DISPLAY_LEVELS);
+  const detailIds = new Set(detailTargets.map((e) => String(e.id)));
+  const detailSubjectIds = new Map<string, Set<string>>();
+  for (const id of treeIds) {
+    if (depths.get(id) !== COMPOSITION_DISPLAY_LEVELS || mode !== "composition") continue;
+    const subjects = new Set<string>();
+    const pending = [...(children.get(id) || [])];
+    while (pending.length) {
+      const child = pending.pop()!;
+      if (!detailIds.has(child) || subjects.has(child)) continue;
+      subjects.add(child);
+      pending.push(...(children.get(child) || []));
+    }
+    if (subjects.size) detailSubjectIds.set(id, subjects);
+  }
   const scopes = entities.filter((e) => !treeIds.has(String(e.id)) && !purchaseIds.has(String(e.id)) &&
     !related.has(String(e.id)) && !explicitlyPurchased.some((item) => item.id === e.id) &&
     Array.isArray(e.document_roles) && e.document_roles.includes("procurement_scope"));
@@ -208,6 +224,7 @@ export function composition(
     children,
     displayChildren,
     detailTargets,
+    detailSubjectIds,
     depths,
     roots,
     treeIds,
@@ -229,6 +246,7 @@ export function AnalysisExplorer({
   documentId = "",
   onDocumentChange,
   initialAttributeId = "",
+  runId,
 }: {
   value: Row;
   normalization?: Row | null;
@@ -236,6 +254,7 @@ export function AnalysisExplorer({
   documentId?: string;
   onDocumentChange?: (id: string) => void;
   initialAttributeId?: string;
+  runId?: string;
 }) {
   const available = rows(value.documents);
   const documents = [...available, ...rows(value.unavailable_documents)];
@@ -308,6 +327,7 @@ export function AnalysisExplorer({
           initialAttributeId={initialAttributeId}
           normalization={normalization}
           mappingStatus={mappingStatus}
+          runId={runId}
         />
       )}
     </section>
@@ -318,11 +338,13 @@ function DocumentAnalysis({
   initialAttributeId = "",
   normalization,
   mappingStatus,
+  runId,
 }: {
   document: Row;
   initialAttributeId?: string;
   normalization?: Row | null;
   mappingStatus: MappingStatus;
+  runId?: string;
 }) {
   const [navigation, setNavigation] = useState(() =>
     composition(document, "composition", true).roots.length ? "composition" : "list",
@@ -357,6 +379,11 @@ function DocumentAnalysis({
     }
     return counts;
   }, [document]);
+  const detailAttributeCounts = useMemo(() => new Map(
+    [...graph.detailSubjectIds].map(([id, subjects]) => [id, rows(document.attributes).filter((a) =>
+      Array.isArray(a.subject_ids) && !a.subject_ids.includes(id) &&
+      a.subject_ids.some((subject) => subjects.has(String(subject)))).length]),
+  ), [document, graph.detailSubjectIds]);
   const initialAttribute = rows(document.attributes).find(
     (a) => a.id === initialAttributeId,
   );
@@ -397,6 +424,7 @@ function DocumentAnalysis({
   const [detailTab, setDetailTab] = useState("attributes");
   const [view, setView] = useState("source");
   const [filter, setFilter] = useState("all");
+  const [includeDetailAttributes, setIncludeDetailAttributes] = useState(true);
   const mappings = rows(normalization?.attributes).filter(
     (a) => a.document_id === document.document_id,
   );
@@ -441,8 +469,13 @@ function DocumentAnalysis({
   }, [focused, sourceOpen, selectedAttribute]);
   const [mobileDetail, setMobileDetail] = useState(false);
   const entity = entitiesById.get(selected);
-  const attributes = rows(document.attributes).filter(
+  const detailSubjects = graph.detailSubjectIds.get(selected);
+  const directAttributes = rows(document.attributes).filter(
     (a) => Array.isArray(a.subject_ids) && a.subject_ids.includes(selected),
+  );
+  const attributes = rows(document.attributes).filter(
+    (a) => Array.isArray(a.subject_ids) && (a.subject_ids.includes(selected) ||
+      includeDetailAttributes && a.subject_ids.some((id) => detailSubjects?.has(String(id)))),
   );
   const quantities = rows(document.declared_quantities).filter(
     (q) => q.entity_id === selected,
@@ -701,7 +734,8 @@ function DocumentAnalysis({
         >
           {label(item.name || id)}
           <small>
-            {attributeCounts.get(id) || 0}개 속성
+            {(attributeCounts.get(id) || 0) + (detailAttributeCounts.get(id) || 0)}개 속성
+            {!!detailAttributeCounts.get(id) && ` · 세부 구성 속성 ${detailAttributeCounts.get(id)}개 포함`}
             {kindNames[String(item.kind)]
               ? ` · ${kindNames[String(item.kind)]}`
               : ""}
@@ -754,6 +788,8 @@ function DocumentAnalysis({
                 : `적용 표준: ${label(normalization?.standard_version)} · ${normalization?.artifact_kind === "goods_normalized_observations" && normalization?.profile_revision_id ? "프로파일 표준 적용" : "추출용 표준 초안"}`}
         </p>
       )}
+      <RejectedObservations document={document} runId={runId} sourceText={sourceExcerpt} onSource={a => openAttribute(a, -1)} />
+      <OntologyAlignmentResults document={document} normalization={normalization} sourceButton={nodeButton} />
       <div className="result-document-summary" aria-label="규격서 결과 요약">
         <span>
           대상 <strong>{graph.entities.length}</strong>
@@ -895,7 +931,7 @@ function DocumentAnalysis({
                   </h4>
                 )}
                 {navigation === "composition" && !!visible.length && (
-                  <p className="operations-note">최상위 물품 포함 3계층까지 표시합니다.</p>
+                  <p className="operations-note">구성 탐색은 3계층까지 표시하며, 세부 구성의 속성은 상위 대상에서 함께 확인할 수 있습니다.</p>
                 )}
                 {visible.map(({ id, depth }) => itemRow(id, depth))}
                 {!graph.roots.length && (
@@ -1096,6 +1132,17 @@ function DocumentAnalysis({
                   )}
                   <div className="analysis-attribute-toolbar">
                     <h4>추출 속성 · {attributes.length}</h4>
+                    {!!detailSubjects?.size && <label>
+                      속성 범위{" "}
+                      <select aria-label="속성 범위" value={includeDetailAttributes ? "details" : "direct"}
+                        onChange={(event) => {
+                          setIncludeDetailAttributes(event.target.value === "details");
+                          setFilter("all"); setSelectedAttribute(""); setSourceOpen(false);
+                        }}>
+                        <option value="details">이 대상과 세부 구성</option>
+                        <option value="direct">이 대상만</option>
+                      </select>
+                    </label>}
                     <label>
                       속성 필터{" "}
                       <select
@@ -1121,10 +1168,15 @@ function DocumentAnalysis({
                       </select>
                     </label>
                   </div>
+                  {!!detailSubjects?.size && <p className="operations-note">
+                    직접 속성 {directAttributes.length}개 · 세부 구성 속성 {detailAttributeCounts.get(selected) || 0}개.
+                    세부 구성의 속성은 원래 대상과 원문 근거를 유지합니다.
+                  </p>}
                   <div className="page-table-wrap">
-                    <table className="page-table">
+                    <table className="page-table analysis-attribute-table" data-detail-owners={!!detailSubjects?.size}>
                       <thead>
                         <tr>
+                          {!!detailSubjects?.size && <th>대상</th>}
                           <th>속성</th>
                           <th>
                             {view === "mapping"
@@ -1153,6 +1205,10 @@ function DocumentAnalysis({
                               }
                             }}
                           >
+                            {!!detailSubjects?.size && <td data-label="대상">
+                              {Array.isArray(a.subject_ids) && a.subject_ids.map((id) =>
+                                label(entitiesById.get(String(id))?.name || id)).join(" · ")}
+                            </td>}
                             <td data-label="속성">
                               <span className="analysis-property-name">
                                 {label(
@@ -1242,8 +1298,9 @@ function DocumentAnalysis({
                   )}
                   {!attributes.length && (
                     <p className="operations-note">
-                      이 대상에 연결된 속성이 없습니다. 다른 대상을 선택하거나
-                      대상 미지정 속성을 확인하세요.
+                      {detailSubjects?.size && !includeDetailAttributes
+                        ? "이 대상에 직접 연결된 속성이 없습니다. 속성 범위에서 세부 구성 포함을 선택하세요."
+                        : "이 대상에 연결된 속성이 없습니다. 다른 대상을 선택하거나 대상 미지정 속성을 확인하세요."}
                     </p>
                   )}
                 </>

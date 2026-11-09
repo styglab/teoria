@@ -10,7 +10,7 @@ compose=(docker compose --env-file "$env_file" -f "$compose_file")
 
 # Resolve the same project and Data DB URL as deployment, including shell overrides.
 # Keep the resolved configuration and credentials in memory, never in backup metadata.
-config_json=$("${compose[@]}" config --format json)
+config_json=$("${compose[@]}" --profile jobs config --format json)
 config_value() {
   printf '%s' "$config_json" | python3 -c \
     'import json,sys; value=json.load(sys.stdin)

@@ -10,12 +10,12 @@ ROOT = (Path(__file__).resolve().parents[5] / 'backend')
 def test_specification_goods_model_separates_subjects_statements_and_evidence():
     blueprint = OntologyBlueprint.load(ROOT / "authoring/ontology_blueprints/goods.yaml")
     objects = {o.code: o for o in blueprint.objects}
-    assert blueprint.namespace == "goods" and blueprint.target_version == "1.0.0"
+    assert blueprint.namespace == "goods" and blueprint.target_version == "2.0.0"
     assert set(objects) == {
         "specification_document", "specified_item", "property_statement",
         "composition_statement", "requirement_statement", "evidence",
         "classification_scheme", "classification_entry", "classification_assignment",
-        "item_type", "characteristic_definition", "specified_service",
+        "server", "memory_module", "specified_service",
         "supply_scope", "supply_membership", "specified_context",
         "specified_deliverable", "item_relation_statement",
     }
@@ -37,8 +37,10 @@ def test_specification_goods_model_separates_subjects_statements_and_evidence():
     assert links["evidence_document"] == ("evidence", "specification_document")
     for code in ["property_evidence", "composition_evidence", "requirement_evidence"]:
         assert links[code][1] == "evidence"
-    assert links["item_has_type"] == ("specified_item", "item_type")
-    assert links["statement_characteristic"] == ("property_statement", "characteristic_definition")
+    assert 'type_concept_ref' in item_properties
+    assert 'property_concept_ref' in {p.code for p in objects['property_statement'].properties}
+    assert not {'item_has_type','type_parent','applicable_characteristic','statement_characteristic'} & links.keys()
+    assert links['has_memory_module'] == ('server', 'memory_module')
     assert links["classification_subject"] == ("classification_assignment", "specified_item")
     assert links["resolved_classification"] == ("classification_assignment", "classification_entry")
     assert links["service_subject"] == ("specified_service", "specified_item")
@@ -98,7 +100,7 @@ class _RecordingAuthoringService:
         return {"status": "valid"}
 
 
-async def test_goods_blueprint_materializes_dictionaries_and_links_without_publishing():
+async def test_goods_blueprint_materializes_native_meaning_and_observation_links_without_publishing():
     blueprint = OntologyBlueprint.load(ROOT / "authoring/ontology_blueprints/goods.yaml")
     service = _RecordingAuthoringService()
     result = await apply_ontology_blueprint(service, blueprint, actor="test")
@@ -109,6 +111,11 @@ async def test_goods_blueprint_materializes_dictionaries_and_links_without_publi
     stable_keys = [payload["stable_key"] for _, payload in service.items]
     assert len(stable_keys) == len(set(stable_keys))
     assert not any(kind in {"publish", "approve"} for kind, _ in service.items)
+    module_capacity = next(payload for kind, payload in service.items
+                           if kind == 'property' and payload['stable_key'] == 'goods.memory_module.capacity')
+    assert module_capacity['quantity_dimension'] == 'information'
+    assert module_capacity['allowed_units'] == ['GB', 'TB']
+    assert module_capacity['unit'] == 'GB'
 
 
 def test_teoria_business_ontology_blueprint_has_shared_publication_boundary() -> None:

@@ -1,7 +1,12 @@
 from collections import defaultdict
 from typing import Any
+from decimal import Decimal
+from datetime import date, datetime, timezone
+import hashlib
+import json
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from teoria.features.semantic_modeling.ontology.value_policy import normalize_property_number
 
 from teoria.features.runtime.mapping.codec import apply_codec
 from teoria.integrations.provider_api.models import ExecutionResponse, PreparedRequest
@@ -12,11 +17,12 @@ class MappedFragment(BaseModel):
     mapping_id: str
     operation: str
     record_key: str
-    record_order: str | None = None
+    record_order: Any = None
     ontology: str
     object_type: str
     role: str
     properties: dict[str, Any]
+    semantic_observations: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class MappingDecoder:
@@ -72,7 +78,7 @@ class MappingDecoder:
                         mapping_id=mapping_id,
                         operation=call,
                         record_key=f"{call}:{record_key or record_index}",
-                        record_order=str(order) if order is not None else None,
+                        record_order=order,
                         ontology=mapping.ontology,
                         object_type=object_type,
                         role=role,
@@ -88,6 +94,7 @@ class MappingDecoder:
         response: ExecutionResponse,
         request: PreparedRequest | None = None,
         record_key_prefix: str = "0",
+        observed_at: datetime | None = None,
     ) -> list[MappedFragment]:
         source = catalog.sources[source_id]
         operation = next(item for item in source.source.operations if item.id == operation_id)
@@ -113,11 +120,12 @@ class MappingDecoder:
                     continue
                 base: dict[tuple[str, str], dict[str, Any]] = defaultdict(dict)
                 variants: dict[tuple[str, str], dict[tuple[tuple[str, str], ...], dict[str, Any]]] = defaultdict(lambda: defaultdict(dict))
+                interpretations = defaultdict(list)
                 for target, bindings in mapping.bindings.items():
                     target_parts = target.split(".")
                     object_type = ".".join(target_parts[:-1])
                     property_id = target_parts[-1]
-                    for binding in bindings:
+                    for binding_index, binding in enumerate(bindings):
                         references = [binding.field] if isinstance(binding.field, str) else list(binding.field.values())
                         if not references or not all(
                             reference.startswith((response_prefix, request_prefix)) for reference in references
@@ -139,6 +147,11 @@ class MappingDecoder:
                             continue
                         role = binding.role or object_type
                         key = (role, object_type)
+                        if binding.meaning is not None:
+                            value, observation = self._interpret(catalog, mapping_id, target, binding_index,
+                                binding, raw, value, record, source_id, operation_id,
+                                f'{call}:{record_key_prefix}:{record_index}', observed_at)
+                            interpretations[(key, tuple(sorted(binding.qualifiers.items())))].append(observation)
                         if (
                             isinstance(binding.field, str)
                             and binding.field.startswith(request_prefix)
@@ -159,23 +172,68 @@ class MappingDecoder:
                             combined = dict(base[key])
                             combined.update(dict(qualifier_key))
                             combined.update(properties)
-                            property_sets.append(combined)
+                            property_sets.append((combined, qualifier_key))
                     elif base[key]:
-                        property_sets.append(dict(base[key]))
-                    for properties in property_sets:
+                        property_sets.append((dict(base[key]), ()))
+                    for properties, qualifier_key in property_sets:
                         results.append(
                             MappedFragment(
                                 mapping_id=mapping_id,
                                 operation=call,
                                 record_key=f"{call}:{record_key_prefix}:{record_index}",
-                                record_order=str(order) if order is not None else None,
+                                record_order=order,
                                 ontology=mapping.ontology,
                                 object_type=object_type,
                                 role=role,
                                 properties=properties,
+                                semantic_observations=[*interpretations[(key, ())],
+                                    *(interpretations[(key,qualifier_key)] if qualifier_key else [])],
                             )
                         )
         return results
+
+    def _interpret(self, catalog, mapping_id, target, index, binding, raw, value, record, source_id, operation_id, record_key, observed_at):
+        plan = catalog.mapping_semantics.get((mapping_id,target,index))
+        if plan is None or plan['meaning'] != binding.meaning.model_dump(mode='json') or plan['field'] != binding.field or plan['decode'] != binding.decode:
+            raise ValueError('verified_mapping_semantics_required')
+        meaning = binding.meaning
+        checked_on = (observed_at or datetime.now(timezone.utc)).date()
+        if ((plan['valid_from'] and checked_on < date.fromisoformat(str(plan['valid_from']))) or
+            (plan['valid_to'] and checked_on > date.fromisoformat(str(plan['valid_to'])))):
+            raise ValueError('mapping_binding_outside_validity')
+        value_type = plan['value_type']
+        if plan['source_type'] in {'number','integer'}:
+            if isinstance(raw, bool) or not isinstance(raw, (int,float,Decimal)):
+                raise ValueError('mapping_source_number_type_mismatch')
+            if plan['source_type']=='integer' and (not Decimal(str(raw)).is_finite() or Decimal(str(raw)) != Decimal(str(raw)).to_integral_value()):
+                raise ValueError('mapping_source_integer_type_mismatch')
+        if value_type in {'number','decimal','integer','int','float','double'}:
+            typed = normalize_property_number(value, value_type, meaning.unit)
+            projected = Decimal(typed['decimal'])
+        elif value_type in {'string','text'} and isinstance(value, str):
+            typed = {'kind':'text','text':value}
+            projected = value
+        else:
+            raise ValueError('mapping_value_type_mismatch')
+        effective_at = self._resolve_path(record, meaning.effective_at_field) if meaning.effective_at_field else None
+        if effective_at is not None and not isinstance(effective_at, str):
+            raise ValueError('mapping_effective_time_requires_source_string')
+        if effective_at is not None:
+            datetime.fromisoformat(effective_at.replace('Z','+00:00'))
+        body = {'ontology':meaning.ontology.model_dump(mode='json'), 'concept_id':str(meaning.concept_id),
+                'information_kind':meaning.information_kind, 'operator':meaning.operator, 'scope':meaning.scope,
+                'value':typed, 'value_raw':raw, 'unit_raw':meaning.unit.source_unit if meaning.unit else None,
+                'effective_at':effective_at,
+                'source':{'kind':'api','source_id':source_id,'operation_id':operation_id,
+                          'field_path':binding.field.split('.',3)[3], 'record_key':record_key,
+                          'mapping_id':mapping_id, 'api_field_binding_id':str(meaning.api_field_binding_id),
+                          'runtime_property':target.rsplit('.',1)[1],
+                          'mapping_checksum':plan['mapping_checksum'],
+                          'source_contract_checksum':plan['source_contract_checksum'],
+                          'unit_conversion':meaning.unit.model_dump(mode='json') if meaning.unit else None,
+                          'contract_version':catalog.sources[source_id].registry.version}}
+        body['observation_id'] = hashlib.sha256(json.dumps(body,sort_keys=True,default=str).encode()).hexdigest()
+        return projected, body
 
     def _binding_value(
         self, reference: str, record: Any, request: PreparedRequest | None,

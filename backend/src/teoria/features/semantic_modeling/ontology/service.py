@@ -9,6 +9,7 @@ from teoria.features.semantic_modeling.ontology.repository import (
     OntologyRepository,
     serialize_record,
 )
+from teoria.features.semantic_modeling.ontology.publication_contracts import PublishedOntology
 
 
 class OntologyAuthoringService:
@@ -21,6 +22,18 @@ class OntologyAuthoringService:
         if repository is None and not database_url:
             raise ValueError("Ontology database configuration is required")
         self.repository = repository or OntologyRepository(database_url)
+
+    async def publication(self, version_id: UUID) -> PublishedOntology:
+        """Read only an actual publication, independently of any source dictionary."""
+        artifact = await self.published_artifact(version_id)
+        if artifact is None:
+            raise KeyError(str(version_id))
+        content = artifact['content']
+        return PublishedOntology.model_validate({
+            'ontology': {'version_id': str(version_id), 'namespace': content['namespace'],
+                         'version': content['version'], 'checksum': artifact['checksum']},
+            'content': content,
+        })
 
     async def published_artifact(
         self,
@@ -91,6 +104,15 @@ class OntologyAuthoringService:
     async def get_version(self, version_id: UUID) -> dict[str, Any]:
         return await self.repository.get_version(version_id)
 
+    async def preview_blueprint(self, version_id, blueprint):
+        from teoria.features.semantic_modeling.ontology.blueprint_revision import preview
+        return await preview(self, version_id, blueprint)
+
+    async def prepare_blueprint_draft(self, version_id, blueprint, *, expected_plan_checksum, actor, rationale):
+        from teoria.features.semantic_modeling.ontology.blueprint_revision import prepare
+        return await prepare(self, version_id, blueprint, expected_plan_checksum=expected_plan_checksum,
+                             actor=actor, rationale=rationale)
+
     async def add_item(
         self, version_id: UUID, *, kind: str, payload: dict[str, Any], actor: str
     ) -> dict[str, Any]:
@@ -142,6 +164,12 @@ class OntologyAuthoringService:
                     {"code": "relationship_endpoint_missing", "path": rel["code"]}
                 )
         for obj in version["objects"]:
+            for prop in obj['properties']:
+                units = prop.get('allowed_units', [])
+                if (not isinstance(units, list) or any(not isinstance(u, str) or not u for u in units)
+                    or len(units) != len(set(units)) or
+                    (units and (prop.get('unit') not in units or not prop.get('quantity_dimension')))):
+                    diagnostics.append({'code':'invalid_property_unit_policy','path':prop['code'],'severity':'error'})
             if not obj["properties"]:
                 diagnostics.append(
                     {

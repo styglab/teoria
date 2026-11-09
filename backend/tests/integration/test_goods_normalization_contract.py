@@ -26,6 +26,46 @@ def uid(n):
     return str(UUID(int=n))
 
 
+def test_v2_expression_links_drive_profiles_without_alias_fallback_and_preserve_requirements():
+    profile, ontology, corpus = example()
+    profile = profile.model_copy(update={
+        'entities':[r.model_copy(update={'aliases':[]}) for r in profile.entities],
+        'requirements':[r.model_copy(update={'source_property_keys':[]}) for r in profile.requirements]})
+    package = compile_package(profile, ontology, revision_id=UUID(int=900), approval_actor='fixture:reviewer')
+    doc = corpus['documents'][0]
+    reference = profile.ontology.model_dump(mode='json')
+    alignment = {'policy_version':'published_ontology_expression_v2', 'documents':[{
+        'document_id':doc['document_id'],
+        'entities':[{'id':e['id'],'meaning_status':'resolved','ontology':reference,
+                     'ontology_concept_ref':uid(4) if e['id']=='root' else uid(1)} for e in doc['entities']],
+        'attributes':[{'id':a['id'],'meaning_status':'resolved','ontology':reference,
+                       'ontology_concept_ref':uid(3) if a['property_key']=='quantity' else uid(2)} for a in doc['attributes']]}]}
+    # Changed parser keys no longer require another source-expression registry in the profile.
+    for attribute in doc['attributes']:
+        attribute['property_key']='parser_key_changed'
+    normalized, _ = apply_profile(corpus, package, run_id='governed', meaning_alignment=alignment)
+    facts = normalized['documents'][0]['requirements']
+    assert len(facts)==4 and facts[0]['operator']=='gte' and facts[0]['value_raw']=='64'
+    assert any(f['value']['decimal']=='1000' and f['value']['unit']=='GB' and f['semantic_scope']=='support_limit' for f in facts)
+    assert 'typed_value' not in doc['attributes'][0]
+    alignment['documents'][0]['entities'][1]['meaning_status']='held'
+    blocked, candidates = apply_profile(corpus, package, run_id='blocked', meaning_alignment=alignment)
+    assert next(e for e in blocked['documents'][0]['entities'] if e['source_entity_id']=='m1')['reason']=='unresolved_ontology_mapping'
+    assert not any(f['evidence_ref']=='doc:a0' for f in blocked['documents'][0]['requirements'])
+    for row in alignment['documents'][0]['entities']:
+        row['ontology']={**reference,'version':'different'}
+    drifted, _ = apply_profile(corpus, package, run_id='drifted', meaning_alignment=alignment)
+    assert not drifted['documents'][0]['requirements']
+
+
+def test_profile_source_units_cannot_broaden_published_property_policy():
+    profile, ontology, _ = example()
+    ontology['objects'][0]['properties'][0]['allowed_units']=['GB']
+    updated=profile.model_copy(update={'ontology':profile.ontology.model_copy(update={'checksum':checksum(ontology)})})
+    with pytest.raises(ValueError,match='published property unit policy'):
+        compile_package(updated,ontology,revision_id=UUID(int=900),approval_actor='fixture:reviewer')
+
+
 def example():
     ontology = {
         "namespace": "goods_test",
@@ -404,6 +444,7 @@ async def test_operational_standard_management_uses_package_and_saves_only_canon
         "select_and_map_standard",
         "persist_report",
         "persist_document_results",
+        "persist_execution_receipt",
     ]:
         monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
     monkeypatch.setattr(tasks, "resolve_dictionary", AsyncMock(return_value={
@@ -424,7 +465,7 @@ async def test_operational_standard_management_uses_package_and_saves_only_canon
         and result.standard.uri == exported.as_uri()
     )
     assert result.status == "partial" and normalized["extraction_ref"]["sha256"]
-    assert len(result.artifacts) == 6
+    assert len(result.artifacts) == 7
     report = (
         tmp_path / "objects/specification_processing/profile_run/index.md"
     ).read_text()
@@ -804,6 +845,7 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
         "select_and_map_standard",
         "persist_report",
         "persist_document_results",
+        "persist_execution_receipt",
     ]:
         monkeypatch.setattr(tasks, name, getattr(tasks, name).fn)
     monkeypatch.setattr(tasks, "resolve_dictionary", AsyncMock(return_value={

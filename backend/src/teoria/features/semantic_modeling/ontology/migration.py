@@ -6,7 +6,7 @@ from typing import Literal
 
 from teoria.integrations.application_database.postgres import connect
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from teoria.features.semantic_modeling.registry.loader import RegistryCatalog
 
@@ -28,6 +28,7 @@ class OntologyMigrationManifest(BaseModel):
     target_ontology: str
     classifications: dict[str, str]
     objects: dict[str, LegacyObjectDisposition]
+    draft_objects: dict[str, LegacyObjectDisposition] = Field(default_factory=dict)
 
     @classmethod
     def load(cls, path: Path) -> "OntologyMigrationManifest":
@@ -93,6 +94,11 @@ async def build_migration_report(
         "source_registry_release": manifest.source_registry_release,
         "registry_object_count": len(registry_objects),
         "manifest_object_count": len(manifest_objects),
+        "draft_object_count": len(manifest.draft_objects),
+        "draft_objects": [
+            {'stable_key': key, **item.model_dump(), 'published_target_verification': 'not_checked'}
+            for key, item in sorted(manifest.draft_objects.items())
+        ],
         "classification_counts": dict(sorted(classifications.items())),
         "migration_status_counts": dict(sorted(statuses.items())),
         "missing_objects": missing,

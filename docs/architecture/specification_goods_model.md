@@ -2,8 +2,12 @@
 
 목표는 **어떤 물품이 무엇으로 구성되고, 어떤 특성과 조건을 요구하며, 근거가 어디에 있는지** 표현하는 것이다.
 검색·비교·변경 확인은 이 구조를 사용하는 기능이다.
-현재 작성 입력은 [goods.yaml](../../backend/authoring/ontology_blueprints/goods.yaml)의 goods Draft다.
+현재 작성 입력은 [goods.yaml](../../backend/authoring/ontology_blueprints/goods.yaml)의 goods 2.0.0 Draft다.
 현재 추출 JSON이 이 Draft의 전체 객체로 자동 적재·게시되는 것은 아니다.
+
+업무 의미는 native Object·Property·Relationship로 정의하고, 문서의 값·조건·근거는
+별도 관찰로 그 게시 개념을 참조한다. 현재 최소 업무 유형은 `goods.server`와
+`goods.memory_module`이다. 분류코드마다 새 유형을 만들거나 모든 품목 속성을 한 객체에 모으지 않는다.
 
 ## 먼저 구분할 것
 
@@ -29,8 +33,8 @@
 | `property_statement` | 대상의 특성에 대한 원문 값·조건과 해석 |
 | `requirement_statement` | 속성 하나로 축약하기 어려운 의무·조건 |
 | `evidence` | 문서 버전의 원문 위치·인용 |
-| `item_type` | 물품 유형의 공통 정의 |
-| `characteristic_definition` | 특성의 뜻·값 종류·차원·단위 정책 |
+| `server` | 서버 업무 대상 유형; 전체 시스템 메모리 용량·소켓당 지원 상한·슬롯 수의 native Property |
+| `memory_module` | 개별 시스템 메모리 모듈 유형; 모듈당 용량의 native Property |
 | `classification_scheme` | 분류체계와 판본 |
 | `classification_entry` | 해당 판본의 분류 항목 |
 | `classification_assignment` | 대상에 대한 출처별 분류 주장·검증 상태 |
@@ -41,8 +45,39 @@
 | `specified_deliverable` | 지침서·성적서 등 납품 자료 |
 | `item_relation_statement` | 데이터 전송·호환·고정·연계 등 대상 간 관계 |
 
-객체의 고정 필드는 Ontology Property로 정의한다. 물품별 다양한 특성의 공통 정의는 사전 항목으로 관리한다.
-사전 항목 ID와 Ontology schema의 Stable Concept ID는 서로 다르다.
+객체의 고정 필드와 여러 소스가 공유하는 물품 특성의 업무 의미는 Ontology에서 작성·검토·게시한다.
+위 모델 목록은 goods Draft의 작성 모델이며 사전에서 별도 정의를 작성하는 근거가 아니다.
+사전은 원문 표현·문맥·근거와 게시 Stable Concept ID의 승인 연결만 관리한다.
+사전 표현 ID·문서 대상 ID·Ontology Stable Concept ID는 서로 다르다.
+
+이전 Draft의 `item_type`·`characteristic_definition`과 그 정의 객체를 잇던 관계는 새 작성안에서
+제거했다. 기존 DB·applied 이력·고정 artifact는 변경하지 않는다. 문서의 `specified_item`에는
+`type_concept_ref`, `property_statement`에는 `property_concept_ref`를 둔다. 참조는 게시 버전의
+version_id·namespace·version·checksum과 Stable Concept ID를 함께 가진다.
+
+`DocumentGoodsGraph`에도 같은 명시적 참조가 있으며 `type_ref`·`characteristic_ref`의 기존
+`draft:` 문자열은 미해결 후보의 호환 표기다. 문자열이나 사전 ID를 게시 개념 ID로 간주하지 않는다.
+고정 문맥을 사용한 그래프 검사는 개념 종류·버전·속성 owner를 대조하고 원문 관찰을 바꾸지 않는다.
+checksum이 맞는 문맥만으로 현재 게시 권위·의미 동등성·승인이 확인되는 것은 아니다.
+
+## 최소 메모리 의미와 원문 관찰
+
+| 게시 전 업무 정의 | 적용 범위 | 구분할 값 |
+|---|---|---|
+| `goods.memory_module.capacity` | 모듈 하나 | 서버 전체 합계·GPU 메모리·지원 상한 |
+| `goods.server.system_memory_capacity` | 서버 전체 | 모듈당 값·소켓당 상한 |
+| `goods.server.memory_capacity_per_socket_limit` | CPU 소켓당 지원 한도 | 공급/장착 용량 |
+| `goods.server.memory_slot_count` | 서버 전체 슬롯 수 | 공급 모듈 수·사용 슬롯 수 |
+
+위 정의는 현재 Draft의 Stable Key이며 승인된 운영 개념 ID가 아니다. 기준/허용 단위는
+Property가 소유하고 Blueprint에서도 `quantity_dimension`·`allowed_units`를 보존한다.
+요구조건은 Property의 확정값으로 쓰지 않고 대상·게시 Property 참조·값·연산자·역할·범위·근거를
+가진 관찰로 저장한다. 제품 명시값과 측정값도 같은 Property를 참조하되 정보 성격을 구분한다.
+
+[서버 메모리 부분 예시](../../backend/authoring/specification_examples/server_memory_graph.yaml)는
+기존 서버 XLSX 원본의 SHA-256을 대조한 미게시 검토 자료다. 모듈당 32GB·공급 2개·소켓당 지원
+3TB·전체 슬롯 32개를 구분한다. 원문에 없는 전체 공급 용량 64GB를 생성하지 않으며,
+문서의 `per_socket`을 프로세서당·모듈당 범위나 전체 공급 용량으로 바꾸지 않는다.
 
 ## 물품과 구성품의 연결
 
@@ -112,9 +147,21 @@ Published 개념을 문서에 적용하는 규칙은 [정규화 프로파일](..
 | 구현 | 상태 |
 |---|---|
 | 일반 추출 그래프·구성·속성·근거·보류 | 파이프라인에서 생성·저장 |
-| 원문 사전·표준 정의·승인 매핑 | 별도 저장·개정·조회 구현 |
+| 원문 표현·승인 개념 연결 | 사전에서 저장·판정·조회; 업무 정의는 게시 Ontology 참조 |
 | `DocumentGoodsGraph` 작성 계약 | [대표 예시](../../backend/authoring/specification_examples/four_sample_graphs.yaml)의 구조·참조 검사 가능 |
+| 소유 대상·scope 해석 제안 | 원래 문서 결과와 Draft/게시 작성 버전을 고정하고 별도 검토 산출물에 차이·근거 보관; 승인·적용은 수행하지 않음 |
 | goods Draft의 전체 인스턴스 적재·게시·Runtime 조회 | 후속 작업 |
+
+2.0.0 작성안은 새 pending manifest의 `draft_objects`로 추가/제거 의미를 별도 분류한다.
+[이관 분류](../../backend/authoring/ontology_migrations/pending/2026_11_goods_native_meaning/ontology_v2.yaml)는
+실행 Registry의 legacy Object가 0개인 사실과 Draft 변경 4개를 구분한다. 과거 `goods.server` 등과의
+Stable Concept ID 재사용·동등성은 자동 승인하지 않는다. 기존 Ontology가 있는 환경에서 bootstrap을
+다시 실행해 내용을 덮어쓰지 않는다. 인증된 작성 API의 `blueprint-preview`에서 변경·차단 사유를
+확인하고, 계획 checksum을 고정해 `blueprint-drafts`로 별도 Draft를 준비한다.
+게시 기반이 없는 기존 Draft에서도 준비할 수 있으며 원본은 보존한다. 공통 Stable Concept ID는
+유지하되 과거 버전에서만 존재하는 key 재사용·소유 대상 변경·승인 Binding 제거는 차단한다.
+미게시 원본은 감사 이력에 기록하고 게시 기반인 것처럼 `based_on_version_id`에 넣지 않는다.
+이 경로는 의미 승인·게시를 수행하지 않는다. 새 작성안을 적용하려고 이전 Draft를 먼저 게시해서는 안 된다.
 
 [네 문서 평가](../../archive/documentation/verification/goods_relation_repair_2026_10_28.md)와
 [운영 Worker 확인](../../archive/documentation/verification/goods_relation_deployment_2026_10_28.md)을 구분해 읽는다.

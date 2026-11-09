@@ -138,3 +138,26 @@ def test_authenticated_http_path_rejects_unauthenticated_writes_and_reads():
         result=client.post('/v1/admin/goods/dictionary/operations/test',headers=headers,json=submission().model_dump(mode='json'))
         assert result.status_code==200 and result.json()['summary']['approved']==2
         assert len(client.get('/v1/admin/goods/dictionary/entries',headers=headers).json()['items'])==2
+
+async def test_product_scope_is_observation_context_and_legacy_replay_checksum_is_preserved():
+    from teoria.features.semantic_modeling.goods_dictionary.contracts import dictionary_checksum
+    repo=MemoryRepository();service=GoodsDictionaryService(repository=repo)
+    request=submission()
+    legacy=request.model_dump(mode='json');legacy.pop('classification_code')
+    for source in legacy['sources']:source.pop('classification_code')
+    result=await service.author('legacy_scope',request,actor='test')
+    assert repo.operations['legacy_scope']['request_checksum']==dictionary_checksum(legacy)
+    assert await service.author('legacy_scope',request,actor='test')==result
+    a=await service.author('observed_a',request.model_copy(update={'classification_code':'1111111111'}),actor='test')
+    b=await service.author('observed_b',request.model_copy(update={'classification_code':'2222222222'}),actor='test')
+    assert a['classification_code']=='1111111111' and b['classification_code']=='2222222222'
+    assert [r['entry_id'] for r in a['decisions']]==[r['entry_id'] for r in b['decisions']]
+
+async def test_mixed_product_batch_keeps_each_source_document_scope():
+    repo=MemoryRepository();service=GoodsDictionaryService(repository=repo)
+    request=submission()
+    first=request.sources[0].model_copy(update={'classification_code':'1111111111'})
+    second=first.model_copy(update={'document_id':'other_doc','classification_code':'2222222222'})
+    request=request.model_copy(update={'sources':[first,second]})
+    result=await service.author('mixed_scopes',request,actor='test')
+    assert result['source_classifications']=={'doc':'1111111111','other_doc':'2222222222'}

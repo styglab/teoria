@@ -9,29 +9,43 @@ from teoria.features.specification_processing.storage.artifact_store import arti
 from teoria.features.specification_processing.document_selection import select_specifications
 from teoria.features.specification_processing.storage.processing_workspace import processing_workspace
 from teoria.features.specification_processing.authoring_client import GoodsAuthoringClient
-from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import DictionarySnapshot, approved_dictionary_snapshot
+from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import approved_dictionary_snapshot, parse_dictionary_snapshot
 
 
 @task(name='기준 사전 확인', persist_result=False, cache_policy=NO_CACHE)
 async def check_baseline(parameters):
     ref=parameters.management.baseline_dictionary
-    if not ref:return
-    raw=await read_uri(ref.uri)
-    if hashlib.sha256(raw).hexdigest()!=ref.sha256:raise ValueError('baseline dictionary checksum mismatch')
-    pinned=DictionarySnapshot.model_validate_json(raw)
-    if parameters.management.purpose!='quality_evaluation':
-        async with GoodsAuthoringClient() as api:
-            current=approved_dictionary_snapshot(await api.dictionary_meaning('GET','/snapshot'))
-        if approved_dictionary_snapshot(pinned).checksum!=current.checksum:
-            raise ValueError('baseline dictionary is no longer current; select the current release')
+    pinned=None
+    if ref:
+        raw=await read_uri(ref.uri)
+        if hashlib.sha256(raw).hexdigest()!=ref.sha256:raise ValueError('baseline dictionary checksum mismatch')
+        pinned=approved_dictionary_snapshot(parse_dictionary_snapshot(raw))
+    if parameters.management.purpose=='quality_evaluation':return pinned
+    async with GoodsAuthoringClient() as api:
+        current=approved_dictionary_snapshot(await api.dictionary_meaning('GET','/snapshot'))
+    if pinned is not None and pinned.checksum!=current.checksum:
+        raise ValueError('baseline dictionary is no longer current; select the current release')
+    return current
 
 
 def split_documents(documents,holdout_count,minimum_development):
     """Never put attachments from the same notice in both development and evaluation."""
+    # A copied original can appear in different notices; group both identities transitively.
+    parents=list(range(len(documents)))
+    def root(index):
+        while parents[index]!=index:
+            parents[index]=parents[parents[index]];index=parents[index]
+        return index
+    seen={}
+    for index,document in enumerate(documents):
+        keys=[('hash',document['source']['sha256'])]
+        if document.get('notice_number'):keys.append(('notice',document['notice_number']))
+        for key in keys:
+            if key in seen:parents[root(index)]=root(seen[key])
+            else:seen[key]=index
     groups={}
-    for document in documents:
-        key=document.get('notice_number') or document['source']['sha256']
-        groups.setdefault(key,[]).append(document['document_id'])
+    for index,document in enumerate(documents):
+        groups.setdefault(root(index),[]).append(document['document_id'])
     if len(groups)<2:return [],[d['document_id'] for d in documents]
     validation=[]
     for group in reversed(list(groups.values())):
@@ -44,15 +58,25 @@ def split_documents(documents,holdout_count,minimum_development):
 
 
 @task(name='사전 구축·평가 문서 분리', persist_result=False, cache_policy=NO_CACHE)
-async def prepare_batch(parameters,selection):
+async def prepare_batch(parameters,selection,*,baseline=None):
     from teoria.features.specification_processing.flows import extract_documents
     from teoria.features.specification_processing import tasks
     settings=parameters.execution
     documents=[SourceDocument.model_validate({k:v for k,v in row.items() if k in SourceDocument.model_fields}) for row in selection['selected']]
     if not documents:return {'status':'held','reason':'no_specification_files','selection':selection}
+    baseline=baseline if baseline is not None else await check_baseline(parameters)
+    prefix='specification_processing/'+selection['run_id']+'/'
+    async with artifact_store(selection['artifact_root']) as store:
+        baseline_artifact=await store.put(prefix+'baseline_dictionary.json',
+            (baseline.model_dump_json(indent=2)+'\n').encode())
+    baseline_ref={'uri':baseline_artifact.uri,'sha256':baseline_artifact.sha256}
     request=SpecificationRun(run_id=selection['run_id'],mode='standard_management',
         classification_code=parameters.classification_code,documents=documents,artifact_root=selection['artifact_root'],
         dictionary_meaning_auto_approve=False,**settings.model_dump(exclude={'run_id','artifact_root'}))
+    if request.ontology_alignment is not None:
+        from teoria.features.specification_processing.normalization.ontology_context import load_published_context
+        async with GoodsAuthoringClient() as api:
+            await load_published_context(request.ontology_alignment,api)
     async with processing_workspace(request.artifact_root,request.run_id,'extraction') as working:
         workspace=str(working.path)
         extracted_ref,_=await extract_documents(request,workspace)
@@ -71,9 +95,8 @@ async def prepare_batch(parameters,selection):
     if not development:return {'status':'held','reason':'no_specification_content' if corpus['unavailable_documents'] and all(d.get('disposition')=='excluded' for d in corpus['unavailable_documents']) else 'no_parseable_specifications','selection':selection}
     gate=not is_evaluation and len(validation)>=parameters.management.holdout_documents and (
         len([d for d in complete if d['document_id'] in development])>=parameters.management.minimum_development_documents)
-    prefix='specification_processing/'+request.run_id+'/'
     async with artifact_store(request.artifact_root) as store:
-        refs=[extracted_ref,*diagnostics,*[d['artifact'] for d in selection['selected']]]
+        refs=[baseline_artifact.model_dump(mode='json'),extracted_ref,*diagnostics,*[d['artifact'] for d in selection['selected']]]
         async def save(name,body):
             ref=await store.put(prefix+name,(json.dumps(body,ensure_ascii=False,indent=2)+'\n').encode())
             refs.append(ref.model_dump(mode='json'));return {'uri':ref.uri,'sha256':ref.sha256}
@@ -89,18 +112,21 @@ async def prepare_batch(parameters,selection):
         # The run-level canonical extraction must contain the exact development set.
         # Full extraction lives in the preparation run; execution uses a distinct stable ID.
         updates={'run_id':request.run_id+'_apply','documents':[d for d in documents if d.document_id in development],
-            'extraction_checkpoint':training,'dictionary_meaning_auto_approve':parameters.management.auto_apply and gate,
+            'auto_apply_source_literals':parameters.management.auto_apply and not is_evaluation,
+            'auto_approve_application_standard':parameters.management.auto_apply and not is_evaluation,
+            'dictionary_auto_approve':parameters.management.auto_apply and not is_evaluation,
+            'extraction_checkpoint':training,'dictionary_meaning_auto_approve':parameters.management.auto_apply and gate and baseline.schema_version == 1,
             'dictionary_reconcile':parameters.management.force_review and not is_evaluation,
             'dictionary_validation_corpus':[validation_ref] if validation_ref else [],
             'dictionary_evidence_corpus':[] if is_evaluation else [evidence],
-            'dictionary_baseline':parameters.management.baseline_dictionary,
+            'dictionary_baseline':baseline_ref,
             'dictionary_require_validation':not is_evaluation,
             'dictionary_max_held_source_ids':parameters.management.max_held_source_ids}
         if is_evaluation:
             standard=StandardArtifact(version='dictionary_evaluation',definitions=[],bindings=[],classification_code=parameters.classification_code)
             standard_ref=await save('evaluation_standard.json',standard.model_dump(mode='json'))
             updates.update(mode='document_processing',standard=standard_ref,
-                dictionary_standard=parameters.management.baseline_dictionary,dictionary_baseline=None,
+                dictionary_standard=baseline_ref,dictionary_baseline=None,
                 dictionary_reconcile=False,dictionary_require_validation=False,dictionary_auto_approve=False)
         summary={'status':'ready','purpose':parameters.management.purpose,'force_review':parameters.management.force_review,
             'target':parameters.target_specifications,
@@ -110,8 +136,10 @@ async def prepare_batch(parameters,selection):
             'partial_extractions':len(corpus['documents'])-len(complete),'development_documents':development,
             'validation_documents':validation,'automatic_application_enabled':updates['dictionary_meaning_auto_approve'],
             'quality_gate':'read_only_evaluation' if is_evaluation else
+                'ontology_review_required' if baseline.schema_version == 2 else
                 'separate_documents_and_no_semantic_regression' if gate else 'insufficient_independent_documents',
-            'requested_auto_apply':parameters.management.auto_apply}
+            'requested_auto_apply':parameters.management.auto_apply,
+            'baseline_dictionary':baseline_ref,'baseline_dictionary_checksum':baseline.checksum}
         await save('management_batch.json',summary)
         selected_ref=await store.get(prefix+'document_selection.json')
         # Include selection in the final Data DB artifact references as well as preparation files.
@@ -124,9 +152,9 @@ async def prepare_batch(parameters,selection):
 
 async def execute_management_batch(parameters):
     from teoria.features.specification_processing.flows import execute_specification_run
-    await check_baseline(parameters)
+    baseline=await check_baseline(parameters)
     selection=await select_specifications(parameters)
-    prepared=await prepare_batch(parameters,selection)
+    prepared=await prepare_batch(parameters,selection,baseline=baseline)
     if prepared['status']!='ready':return prepared
     return await execute_specification_run(SpecificationRun.model_validate(prepared['request']),
         extra_artifacts=prepared['artifacts'],extra_summary={'management_batch':prepared['summary']})

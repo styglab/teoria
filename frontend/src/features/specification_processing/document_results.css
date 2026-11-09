@@ -186,6 +186,18 @@
   overflow-wrap: break-word;
 }
 
+/* The owner column must leave room for values and evidence in the bounded detail view. */
+.analysis-layout[data-view="source"] .analysis-attribute-table[data-detail-owners="true"] th:nth-child(1) { width: 18%; }
+.analysis-layout[data-view="source"] .analysis-attribute-table[data-detail-owners="true"] th:nth-child(2) { width: 20%; }
+.analysis-layout[data-view="source"] .analysis-attribute-table[data-detail-owners="true"] th:nth-child(3) { width: 24%; }
+.analysis-layout[data-view="source"] .analysis-attribute-table[data-detail-owners="true"] th:nth-child(4) { width: 8%; }
+.analysis-layout[data-view="source"] .analysis-attribute-table[data-detail-owners="true"] th:nth-child(5) { width: 30%; }
+.analysis-layout[data-view="source"] .analysis-attribute-table[data-detail-owners="true"] td[data-label="단위"] { padding-inline: 6px; }
+.analysis-layout[data-view="mapping"] .analysis-properties .analysis-attribute-table[data-detail-owners="true"] th:nth-child(1) { width: 18%; }
+.analysis-layout[data-view="mapping"] .analysis-properties .analysis-attribute-table[data-detail-owners="true"] th:nth-child(2) { width: 26%; }
+.analysis-layout[data-view="mapping"] .analysis-properties .analysis-attribute-table[data-detail-owners="true"] th:nth-child(3) { width: 36%; }
+.analysis-layout[data-view="mapping"] .analysis-properties .analysis-attribute-table[data-detail-owners="true"] th:nth-child(4) { width: 20%; }
+
 .analysis-evidence-preview {
   margin: 0 0 6px;
   color: var(--ui-secondary);
@@ -289,3 +301,8 @@
     margin-bottom: 6px;
   }
 }
+
+.validation-rejections { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border-color, #d9c68e); border-radius: 8px; }
+.validation-rejections article { padding: .75rem 0; border-top: 1px solid var(--border-color, #ddd); }
+.validation-rejections blockquote { margin: .5rem 0; padding-left: .75rem; border-left: 3px solid #c4ad70; white-space: pre-wrap; overflow-wrap: anywhere; }
+.validation-rejections button { margin-right: .5rem; }

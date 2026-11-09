@@ -74,6 +74,8 @@ class RegistryCatalog:
     references: dict[str, ProviderReference] = field(default_factory=dict)
     reference_paths: dict[str, Path] = field(default_factory=dict)
     release: RegistryRelease | None = None
+    # Derived only after published Ontology + approved Binding validation in a bundle.
+    mapping_semantics: dict[tuple[str, str, int], dict[str, Any]] = field(default_factory=dict)
 
 class RegistryLoadError(Exception):
     def __init__(self, diagnostics: list[Diagnostic]) -> None:

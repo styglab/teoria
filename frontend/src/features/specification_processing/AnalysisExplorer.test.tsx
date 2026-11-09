@@ -174,6 +174,41 @@ it("limits the default tree to three levels while preserving deep components and
     .getByText("8. 데이터 처리 시스템 (4) PC SYSTEM")).toBeTruthy();
 });
 
+it("shows deep component attributes at the visible parent with their original owners and evidence", () => {
+  const value = lcmsConfiguration();
+  value.entities.push({ id: "ram", name: "RAM", kind: "equipment" });
+  value.relations.push(relation("ram", "pc"));
+  const attributes = [
+    { id: "cpu_model", subject_ids: ["cpu"], property_raw: "CPU", value_raw: "Intel Core i5", evidence: { node_id: "cpu_source" } },
+    { id: "ram_capacity", subject_ids: ["ram"], property_raw: "용량", value_raw: "8", unit_raw: "GB", evidence: { node_id: "ram_source" } },
+  ];
+  const document = { ...value, attributes, parsed_document: { nodes: [
+    { node_id: "cpu_source", text: "1) CPU : Intel Core i5 or better" },
+    { node_id: "ram_source", text: "2) RAM : 8GB or better" },
+  ] } };
+  render(<AnalysisExplorer value={{ documents: [document] }} />);
+  const tree = screen.getByRole("tree", { name: "구성 대상" });
+  const pc = within(tree).getByRole("treeitem", { name: /PC SYSTEM/ });
+  expect(pc.textContent).toContain("세부 구성 속성 2개");
+  expect(within(tree).queryByRole("treeitem", { name: /^RAM/ })).toBeNull();
+  fireEvent.click(pc);
+  const detail = screen.getByRole("region", { name: "분석 대상 상세" });
+  expect(within(detail).getByText("추출 속성 · 2")).toBeTruthy();
+  const cpuRow = within(detail).getByText("Intel Core i5").closest("tr")!;
+  expect(within(cpuRow).getAllByText("CPU").length).toBeGreaterThan(0);
+  const ramRow = within(detail).getByText("용량").closest("tr")!;
+  expect(within(ramRow).getByText("RAM")).toBeTruthy();
+  expect(within(ramRow).getByText("8")).toBeTruthy();
+  fireEvent.click(within(ramRow).getByRole("button", { name: /원문 보기/ }));
+  expect(screen.getByRole("region", { name: "선택한 원문 근거" }).textContent).toContain("2) RAM : 8GB or better");
+  fireEvent.change(within(detail).getByLabelText("속성 범위"), { target: { value: "direct" } });
+  expect(within(detail).getByText("추출 속성 · 0")).toBeTruthy();
+  expect(within(detail).queryByText("Intel Core i5")).toBeNull();
+  fireEvent.change(within(detail).getByLabelText("속성 범위"), { target: { value: "details" } });
+  expect(within(detail).getByText("Intel Core i5")).toBeTruthy();
+  expect(attributes.map((a) => a.subject_ids)).toEqual([["cpu"], ["ram"]]);
+});
+
 it("uses the pipeline hierarchy contract while preserving the full relation graph", () => {
   const value = lcmsConfiguration();
   const graph = composition({ ...value, composition_hierarchy: {
@@ -671,7 +706,7 @@ it("shows normalized values next to original conditions while keeping mappings s
   );
   fireEvent.click(screen.getByRole("treeitem", { name: /프로세서 1개 속성/ }));
   fireEvent.click(screen.getByRole("button", { name: "표준 매핑" }));
-  expect(screen.getByText("이상 1", { exact: true })).toBeTruthy();
+  expect(screen.getByText("1 TB 이상", { exact: true })).toBeTruthy();
   expect(screen.getByText("1000 GB", { exact: true })).toBeTruthy();
 });
 it("moves tree focus independently from selection and expands with arrow keys", () => {
@@ -770,6 +805,28 @@ it("does not repeat source operators already contained in the extracted value", 
   first.unmount();
   const second = render(<AttributeValue attribute={{ value_raw: "2 to 2000", operator_raw: "to", operator: "range" }} mapping={undefined} standard={false} />);
   expect(second.container.textContent).toBe("2 to 2000");
+});
+
+it.each(["이상", "이하", "초과", "미만"])("places %s after the original value and unit without changing the observation", (operator) => {
+  const attribute = { value_raw: "5", unit_raw: "EA", operator_raw: operator };
+  const result = render(<AttributeValue attribute={attribute} mapping={undefined} standard />);
+  expect(result.container.querySelector("span")?.textContent).toBe(`5 EA ${operator}`);
+  expect(attribute).toEqual({ value_raw: "5", unit_raw: "EA", operator_raw: operator });
+});
+
+it.each(["≥", "≤", "±", "최소", "최대"])("keeps the prefix position of %s", (operator) => {
+  const result = render(<AttributeValue attribute={{ value_raw: "5", unit_raw: "EA", operator_raw: operator }} mapping={undefined} standard />);
+  expect(result.container.querySelector("span")?.textContent).toBe(`${operator} 5 EA`);
+});
+
+it.each(["5 이상", "5 EA 이상"])("does not duplicate the suffix or unit already present in %s", (value) => {
+  const result = render(<AttributeValue attribute={{ value_raw: value, unit_raw: "EA", operator_raw: "이상" }} mapping={undefined} standard />);
+  expect(result.container.querySelector("span")?.textContent).toBe("5 EA 이상");
+});
+
+it("keeps the unit in its separate column in the extraction view", () => {
+  const result = render(<AttributeValue attribute={{ value_raw: "5", unit_raw: "EA", operator_raw: "이상" }} mapping={undefined} standard={false} />);
+  expect(result.container.textContent).toBe("5 이상");
 });
 
 it("shows a suggested property name without presenting source descriptions as properties", () => {

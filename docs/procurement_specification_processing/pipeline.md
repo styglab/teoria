@@ -42,12 +42,13 @@ API 경로와 Prefect Flow·배포 ID는 기존 실행 계약을 유지한다.
 |---|---|
 | `selection.date_from`, `date_to` | 게시일 범위. 생략하면 실행일 기준 최근 365일, 날짜 끝날 포함 |
 | `management.purpose` | `dictionary_management`(기본 사전 관리), `quality_evaluation`(읽기 전용 평가) |
-| `management.baseline_dictionary` | 기준 사전의 URI·sha256. 평가는 필수. 사전 관리는 생략하면 현재 승인 사전을 사용하며, 지정하면 현재 사전과 일치해야 함 |
+| `management.baseline_dictionary` | 기준 사전의 URI·sha256. 평가는 필수. 사전 관리는 생략하면 실행 시작 시 현재 승인 사전을 고정하며, 지정하면 현재 사전과 일치해야 함 |
 | `management.force_review` | 기본 `false`: 확인된 문맥 재사용. `true`: 기존 항목도 재검토. 사전 관리에만 사용 |
 | `management.auto_apply` | 별도 문서 검증·의미 퇴행 없음·보류 수 한도를 통과한 변경 묶음만 자동 반영 |
 | `execution.run_id` | 생략하면 Prefect 실행 ID로 생성. 직접 지정하면 동일 입력의 선정 목록 재사용 |
 | `execution.artifact_root` | 생략하면 Worker의 `TEORIA_SPECIFICATION_ARTIFACT_ROOT`, 기본 `s3://teoria-artifacts` |
 | `execution.model` | 생략하면 Worker의 Codex 설정 사용 |
+| `execution.reuse_stage_checkpoints` | 기본 `true`. 전체 실행 검증에서 `false`로 지정하면 이전 추출 단계의 checkpoint를 재사용하지 않음 |
 
 분류를 지정해 보관된 물품 공고 DB의 최신 유효 차수를 게시일 내림차순으로 최대 300개 확인한다.
 취소·다른 분류·게시일 없음은 대상에서 제외한다. 정기 공고 수집이나 보류된 수집 배포를 활성화하지 않는다.
@@ -60,6 +61,8 @@ ZIP이나 이름만으로 확인할 수 없는 문서는 자동 선정하지 않
 탐색 범위에서 목표 수를 채우지 못하면 확보한 수로 진행하고 사유를 남긴다. 파싱·추출 후 완료 문서 수와 부족 수를 따로 기록한다.
 파일명 기준은 규격서처럼 보이는 첨부 후보 선정이며 본문 적격성을 보장하지 않는다. 01단계에서 명확한 공고문·빈 양식은 `not_specification`으로 제외하고, 혼합 문서는 기술·납품 요구 구간을 보존한다. 제외 문서는 확보 후보 수에는 포함되지만 추출·평가 완료 수에는 포함되지 않는다. 제외된 수만큼 자동 추가 확보하는 반복은 아직 없다.
 부분 추출 문서는 품질 통과 수에 포함하지 않는다. 같은 공고의 첨부는 구축용·평가용에 나누어 넣지 않는다.
+다른 공고에 복사된 동일 해시의 원본도 같은 그룹으로 묶는다. 공고·해시가 연결되는 문서는
+전체를 같은 쪽에 배치하며, 문서 수를 맞추려고 그룹을 쪼개지 않는다.
 기본값은 완료 문서 중 구축용 최소 5개·평가용 최소 5개이며 부족하면 변경안을 저장하되 자동 반영은 보류한다.
 실제 모델 기반 의미 검증이며 사람의 정답 평가나 전체 정확도 향상을 증명하지는 않는다.
 
@@ -69,42 +72,36 @@ ZIP이나 이름만으로 확인할 수 없는 문서는 자동 선정하지 않
 `quality_evaluation`은 고정 기준 사전에 연결한 결과를 저장하며 사전 정의·매핑을 변경하지 않는다.
 `auto_apply: false`는 사전 관리 변경안을 저장하고 반영하지 않는다.
 
+규격서는 한 개 또는 여러 개를 입력할 수 있지만 사전 의미는 문서마다 순차 갱신하지 않는다.
+문서별 추출을 완료한 뒤 구축용 문서와 관련 과거 근거의 후보를 모아 하나의 변경안을 만들고,
+동결된 변경안을 별도 문서로 검증해 한 번에 반영한다. 단일 문서나 검증 문서가 부족한 입력은
+후보 작성에 사용할 수 있지만 자동 반영하지 않는다. 기존 명시적 `SpecificationRun` 입력에서도
+`dictionary_require_validation: false`로 이 조건을 해제할 수 없다.
+
+사전 관리 시작 시 승인 사전을 `baseline_dictionary.json`으로 고정하고 URI·SHA256과 의미
+checksum을 최종 결과에 남긴다. 추출과 후보 계획 중 승인 사전이 바뀌면 새 기준으로 조용히
+재계획하지 않고 `baseline_dictionary_changed`로 보류한다. 새 API에서는 기준 snapshot과 원문 후보를 보존하고, 의미 변경은 별도의 Ontology Draft·연결 검토로 진행한다.
+문서처리는 계속 고정된 `dictionary_standard`를 사용한다. 이 과정은 추출용 사전 관리이며
+Published Ontology 게시가 아니다. 별도 운영 파이프라인을 추가하지 않는다.
+
 문서를 직접 지정하려면 같은 설정 객체를 `manifest`에 넣고 `documents` 목록을 추가한다.
 이 경우 공고 DB를 조회하지 않고 입력 파일 순서로 처리한다. 기존 `SpecificationRun` 형식의 `manifest`도 유지한다.
 `manifest`와 개별 Flow 파라미터를 동시에 수정해 제출하면 오류로 처리한다.
 관리 API도 새 설정 객체를 기존 `manifest` 필드로 받는다. 이전 설명의 `request`는 실제 인자 이름이 아니다.
 분류 없는 기존 샘플은 기존 명시적 문서 manifest 경로를 사용한다.
+CLI도 위 배치 설정 객체와 기존 `SpecificationRun` 형식 모두 받는다.
 
-기존 의미를 참조하지 않고 새 사전 초안부터 구축할 때는 명시적 `SpecificationRun` manifest에서
-`dictionary_rebuild_from_sources: true`, `dictionary_auto_approve: false`,
-`dictionary_meaning_auto_approve: false`를 함께 지정한다. `mode`는 `standard_management`이며
-과거 사전·근거 corpus 입력과 혼용하지 않는다. 원문 표현의 식별자는 재사용할 수 있으나 기존 의미 정의·매핑은
-계획 입력에서 제외한다. 기존 사전 snapshot은 백업하고 새 정의는 rebuild 전용 key로 작성한다.
-`draft_definitions.json`, `draft_mappings.json`, `changeset.json`은 검토용 제안이며 승인된 사전 snapshot이 아니다.
-기존 사전 삭제·자동 승인·게시·전환은 하지 않으며 새 초안의 적용에는 별도 전환 검토가 필요하다.
-재구축에서 기존 승인 의미로 되돌아가 표준 매핑을 성공 처리하지 않는다.
+```bash
+uv run --project backend --locked --group orchestration \
+  teoria-pipelines specification run --manifest /data/standard_management.json
+```
 
-사전 계획의 형식·소유자·분류·단위 계약 오류는 원래 제안과 오류 위치를 저장하고
-최대 한 차례 수정 요청한다. 수정 후에도 실패하면 `corpus_plan_contract_failed`로 보류하고
-후속 문서 결과 저장을 계속한다. 단위가 있으면 측정 차원·대표 단위·허용 단위를 함께 지정하고,
-대표 단위는 허용 단위에 포함돼야 한다. 관측 단위를 삭제하거나 임의 보완해 통과시키지 않는다.
-`*_invalid_plan.json`, `*_validation.json`은 해당 사전 관리 batch에 보존한다.
-`10 MHz~8 GHz`처럼 양끝에 단위가 있는 수치 범위는 별도 `unit_raw`가 없어도 값 안의
-명시된 단위 표기를 검증에 사용한다. 알려진 단위로 온전히 표현된 범위에 한정하며 값·단위는
-환산하거나 다시 쓰지 않는다. 임의 문장·모델명에서 단위를 추정하지 않는다.
+배치 설정은 `mode` 없이 제출한다. 실행이 반영 보류(`held`)로 끝나면 CLI는 종료 코드 1을 반환하고
+보류 사유를 출력한다. 최종 실행의 `partial`은 결과를 보존한 부분 완료이며 종료 코드 0이다.
 
-04단계의 `extraction/table_attribute_context.py`는 같은 표의 명시 헤더에서 숫자 셀의 단위를
-복원하고, 구매 수량의 부서·동별 하위 헤더를 조건으로 보존한다. 기존 관찰이 빠진 구분별
-수량은 숫자 셀과 구매 행의 공급 대상이 하나로 확정될 때만 추가한다. 합계 계산·수량 전파·
-새 대상 생성은 하지 않는다. 충돌하는 단위나 복수 대상 행은 추정하지 않는다. 값 셀의
-정확한 근거와 헤더·단위 셀의 복수 근거를 함께 저장하므로 원문에서 확인할 수 있다.
-
-
-선정·준비 산출물은 `specification_processing/<run_id>/`의 `document_selection.json`,
-`management_batch.json`, `development_checkpoint.json`, `validation_checkpoint.json`에서 확인한다.
-00–05 전체 추출을 먼저 보존하고, 구축·검증 입력을 분리한 다음 `<run_id>_apply`에서 기존 처리·사전 관리·완료 기록을 실행한다.
-최종 실행의 Data DB에도 준비 산출물 참조와 확보·평가 요약을 남긴다. 새 배포나 별도 Flow를 만들지 않는다.
-DB에 보관된 공고가 오래됐으면 그 범위 내 최신순이며, 외부 사이트의 현재 최신 공고를 보장하지 않는다.
+새 API의 v2 경로에서는 `dictionary_rebuild_from_sources`와 `dictionary_meaning_auto_approve`가
+독립 로컬 사전 작성·승인을 활성화하지 않는다. 새 의미는 Ontology Draft에서 검토·게시한다.
+과거 v1 사전의 재구축·모델 기반 개정 코드는 저장된 결과의 호환·회귀 확인에 남기며 새 운영 API에 쓰기를 연결하지 않는다.
 
 ## 두 흐름과 공통 단계
 
@@ -123,12 +120,60 @@ DB에 보관된 공고가 오래됐으면 그 범위 내 최신순이며, 외부
 | **03 요구조건 추출** | 속성·값·단위·조건 분리, 누락 후보 재추출 | **사용** |
 | **04 대상·역할·범위 해석** | 속성의 대상·범위 판정과 원문에 명시된 구성 관계 누락 검토 | **사용** |
 | **05 검증·저장** | 원문·참조·관계 유형 검사, 추출·보류 보존 | 사용 안 함 |
-| **06 표준 사전 관리·연결** | 문맥 비교·과거 근거 조회·정의와 매핑 개정·검증·반영 | **표준관리의 신규·변경 문맥에 사용** |
+| **06 표준 사전 관리·연결** | 원문 표현 등록·게시 Ontology 연결 조회·미해결 검토 후보 저장 | **표준관리의 신규·변경 문맥에 사용** |
+| **06b Ontology 의미 연결 비교 — 선택** | 고정된 관찰에 게시 개념 정의를 제공해 대상·속성·관계 연결 제안, 기존 승인 연결과 비교 | **사용·비교 제안만 저장** |
 | **07 표준 적용** | 고정 표준/프로파일 적용, 사전 개념 연결 결과 저장 | 사용 안 함 |
 | **08 보고서 저장** | 구성 트리·속성·근거·보류 표시, 산출물 저장 후 완료 기록 | 사용 안 함 |
+| **11 처리 기준 자동 승인·고정** | 자동 적용을 켠 표준관리 결과의 사용 가능한 규칙을 인증된 Admin API로 승인하고 재사용 버전 저장 | 사용 안 함 |
 
 Flow 코드가 [실행 순서](../../backend/src/teoria/features/specification_processing/flows.py),
 Task 코드가 [단계 경계](../../backend/src/teoria/features/specification_processing/tasks.py)의 기준이다.
+
+## 고정 관찰의 Ontology 연결 비교
+
+`ontology_alignment`를 지정하면 05에서 보존한 관찰을 변경하지 않고 06b에서 게시 개념을
+참고한다. 00–05의 원문 추출 프롬프트에는 Ontology를 주입하지 않는다. 먼저 의미 연결의 효과를
+관찰하는 경로이며 별도 추출 파이프라인을 만들지 않는다. 기본값은 사용 안 함이다.
+
+```json
+{
+  "ontology_alignment": {
+    "snapshot": {"uri": "s3://artifacts/published_context.json", "sha256": "<실제 파일 SHA-256>"},
+    "concept_ids": ["<게시된 Stable Concept UUID>"]
+  }
+}
+```
+
+기존 `specification run --manifest` 입력에 추가한다. 상위 표준관리 입력에서는
+`execution.ontology_alignment`에 같은 값을 지정한다. 개념은 최대 32개를 선택하며 속성의
+소유 대상과 관계의 양 끝 대상 정의를 함께 제공한다. 전체 Ontology를 무제한으로 넣지 않는다.
+고정 관찰만 비교할 때는 기존 `extraction_checkpoint`와 같은 표준·사전 참조를 사용한다.
+
+입력은 기존 schema v2 snapshot 포맷을 재사용한다. 정의의 기준은 `ontologies[].content`의
+게시 Ontology artifact이며 사전의 별도 의미 정의가 아니다. 인증된 Admin API의
+`GET /v1/admin/goods/dictionary/snapshot`으로 게시 정의를 포함한 snapshot을 받을 수 있다.
+이미 승인된 표현 연결만 포함하는 처리용 release는 필요한 미연결 개념 정의가 없을 수 있으므로
+연결 문맥과 구별한다. 파일 해시·내부 checksum·현재 게시 버전·Stable ID를 검사하고 승인된 표현
+예시도 서버의 승인 이력과 대조한다. Draft·폐기된 버전·변조된 정의는 신규 제안의 입력으로 허용하지 않는다.
+프로파일 패키지를 함께 지정하면 해당 프로파일과 동일한 Ontology 게시 참조여야 한다.
+
+엔티티에는 제목뿐 아니라 그 엔티티에 귀속된 상세 사양의 원문도 전달한다.
+`procurement_scope` 같은 문서상 역할은 물품 유형과 구별한다. 개별 장비가 구매 범위의
+기준이 될 수 있지만 여러 독립 물품의 묶음을 물리 장비로 간주하지 않는다.
+속성·관계는 먼저 연결한 대상의 Stable ID·버전과 소유·방향이 일치해야 한다.
+코드는 근거·유형·허용 단위·기존 역할/범위의 확인 여부를 검사한다. 의미 동등성의 확정이나
+승인된 프로파일의 실제 환산·적용 정책을 대신하지 않는다. 미지원 유형·불명확한 값은 보류한다.
+
+산출물은 `ontology_context.json`, `ontology_alignment.json`,
+`ontology_alignment_unresolved.json`이다. 원문 관찰 checksum, 이전 승인 연결, 새 제안과 보류
+이유를 보존한다. 미연결은 선택한 개념 범위에서의 미해결이며 전체 Ontology에 개념이 없다는
+확정이 아니다. 문맥 확대나 Ontology 변경을 검토할 후보로 남긴다.
+제안은 `authority: suggestion`, `mode: comparison_only`, `auto_applied: false`이며,
+사전 승인 연결·프로파일 적용 결과·게시 Ontology를 변경하지 않는다.
+고정 표준 적용에서도 이 옵션을 켰을 때만 추가 연결 추론을 수행한다.
+
+FormatID 결과의 **Ontology 의미 연결 비교**에서 게시 버전·이전 승인 연결·새 제안·원문 근거를
+대조한다. 제안 수는 정확도 점수가 아니다. 사람 검토 정답이나 문서 전체 재현율은 별도 검증한다.
 
 ## Codex를 사용하는 단계
 
@@ -237,6 +282,9 @@ Codex는 제공한 원문과 문맥으로 JSON을 반환한다. 추론 호출에
   깊이를 맞추려고 부모를 건너뛰거나 실제 부품을 속성으로 바꾸지 않는다.
   화면의 기본 트리는 이 결과의 3계층까지만 표시하고, 그 아래는 접힌 '세부 구성'에서
   원래 부모와 속성·원문을 조회한다. 검색·전체 목록에서도 세부 대상을 찾을 수 있다.
+  3계층 대상을 선택하면 그 아래 세부 구성 속성도 기본으로 함께 표시한다. 속성 표는 실제
+  소유 대상명을 표시하며 '이 대상만'으로 직접 속성을 구분한다. UI 조회 범위만 넓히고
+  원본 속성의 subject_ids나 구성 관계는 변경하지 않는다.
   정책 필드가 없는 과거 결과에는 같은 깊이 기준을 화면에서 적용한다.
   이 정책은 기본 구성 범위를 제한하며 LLM 응답의 모든 대상 개수나 포장 단위 탐색의 깊이를 제한하지 않는다.
   근거가 있는 해석된 `component_of` 연결은 원래 부모 아래 '구성 관계 검토 중'으로 표시한다.
@@ -366,6 +414,10 @@ Ontology의 동일성 선언이 아니다. 엄격한 고정 이름 평가와 별
 ### 속성과 근거
 
 원문 값·단위·연산·한정 조건을 보존한다. 모델명·기보유 제품·지원 한도를 신규 납품 성능으로 바꾸지 않는다.
+단일 수치의 근거 위치는 원문의 숫자 전체와 일치해야 한다. `48MB` 안의 `8`이나
+`3.264GHz` 안의 `64`를 별도 수치로 인정하지 않으며 부호·소수 자릿수·천 단위 구분도 보존한다.
+추출 검증·인용 범위 축소·단위 복원에 같은 검사를 적용한다. 최종 결과와 재사용 checkpoint도
+수치 원문과 기록된 값 위치를 검사하며 잘못된 예측의 값을 임의로 고치지 않는다.
 수치 단위 보완은 같은 구절의 값 바로 뒤에 명확히 붙은 알려진 단위만 사용한다.
 04 의미 판정 후에도 단위가 비어 있으면 원문 값의 정확한 위치에서 바로 이어지는 단위를
 확인한다. `8‑코어`처럼 숫자와 단위 사이의 공백·하이픈은 허용하되 줄을 넘거나 다른
@@ -386,37 +438,41 @@ Ontology의 동일성 선언이 아니다. 엄격한 고정 이름 평가와 별
 
 ## 사전과 표준 적용
 
-06 단계는 원문에 나온 표현을 조회·등록하고, 승인된 의미 매핑이 있으면 표준 정의를 가져온다.
-원문 명칭이 없는 속성은 내부 영문 후보명을 원문 표현처럼 등록하지 않는다.
-새 동의어·표준 의미를 이름 유사도만으로 확정하지 않는다.
+06 단계는 원문 표현·근거를 등록하고 승인된 게시 Ontology 연결을 조회한다.
+현재 schema v2 경로는 `ontology_candidates.json`에 미해결 표현과 문맥을 남기며, 로컬 사전 정의를 새로 만들거나 자동 승인하지 않는다.
+실행 기준의 `dictionary_release.json`은 게시 Ontology 참조·검증된 artifact 복사본·표현 연결을 고정한다.
+Ontology 없이 추출을 진행할 수 있으며 후보는 승인·게시 전까지 공식 의미가 아니다.
 
-표준관리 모드에서는 문서가 들어올 때마다 기존 사전과 문맥을 비교한다.
-현재 승인 정의 개정으로 이미 확인된 문맥은 재사용한다. 숫자만 달라진 경우 같은 문맥으로 인식할 수 있으며,
-표현·소유 물품·역할·범위·조건·단위가 달라지면 관련 과거 추출 결과를 Data DB의 참조로 찾아 checksum을 확인한다.
-Codex는 현재 문서와 관련 과거 근거를 함께 보고 기존 개념 연결, 새 정의, 정의 개정과 영향 매핑을 판단한다.
-별도 검증을 통과한 변경 묶음만 인증된 Admin API로 원자적으로 반영한다.
-`dictionary_meaning_auto_approve: false`이면 변경안을 저장하고 자동 반영하지 않는다.
-과거 근거 누락·checksum 불일치·판정 충돌은 보류하고, 해당 문맥에 기존 의미를 임의로 적용하지 않는다.
+자동 적용을 켜면 대상·역할·범위와 원문 근거가 검증된 속성에는 `source_literal` 추출 규칙을
+자동 채택한다. 이 규칙은 원문 값·단위·조건을 보존하며 수치 비교·단위 환산이나 Ontology 의미 승인을
+뜻하지 않는다. 불명확한 대상·범위 또는 원문 근거가 없는 속성은 보류한다.
+화면에서 Ontology 소유자 권한으로 새 표준관리를 실행하면 자동 승인·적용이 기본으로 켜진다.
+상위 표준관리 Flow의 `management.auto_apply`도 같은 정책을 사용한다.
+처리 완료 뒤 11 단계에서 비어 있지 않은 규칙과 실행 당시 사전 버전을 확인하고 적용 기준을 자동 승인한다.
+승인 주체·정책·버전은 이력에 남고 같은 실행의 재시도는 같은 승인 버전을 사용한다.
+사전이 처리 후 변경되었거나 사용 가능한 규칙이 없으면 자동 승인을 보류한다.
 
-문서처리 모드는 지정한 `dictionary_standard` URI·checksum의 고정 사전을 사용하고 이 증분 관리 경로를 실행하지 않는다.
-로컬 사전 승인은 Published Ontology 게시가 아니다.
+새 추출 결과의 마지막 원문 검증은 잘못된 속성을 `quarantined_attributes`로 격리하고
+원문·거절 사유를 객체 저장소에 보존한다. 정상 속성과 다른 문서는 계속 처리한다.
+문서 구조 검증 실패는 해당 문서를 실패로 남기지만 원본 해시·문서 식별 불일치나
+프로그래밍 오류는 실행 전체를 중단한다. 기존 checkpoint는 자동 수정하지 않고 엄격히 검증한다.
+결과 화면은 격리 항목과 원문을 대조하고 현재 검증기로 다시 확인할 수 있다. 이 확인은 모델을
+호출하거나 저장 결과를 변경하지 않는다. 실패·격리 문서만 원본 참조로 새 실행할 수도 있다.
 
-07 단계는 다음 두 연결을 구분해 저장한다.
+자동 승인 전 `automatic_approval_limits`를 적용한다. 기본값은 원문 검증 오류 0건,
+문서 실패 비율 최대 25%, 표준 적용 보류 비율 최대 100%, 속성 수 변화 최대 50%다.
+보류 비율 기본값은 보류 항목이 일부 있다는 이유만으로 승인을 막지 않는다. 속성 수 변화는
+동일 원본 묶음·명시적 모델·파서·분류의 직전 측정 결과가 있을 때만 비교한다.
+측정값이 없거나 한도를 넘으면 승인 요청을 보내지 않고 이유와 정책을 실행 이력에 남긴다.
+이는 자동 승인 안전 조건이며 의미 정확도 평가 점수는 아니다.
 
-| 연결 | 결과 |
-|---|---|
-| 사전의 승인된 개념 매핑 | `dictionary_meanings`, `dictionary_concept_ref`, 정의 개정·매핑 ID |
-| 고정 표준/프로파일 적용 | 표준 버전·URI·checksum과 관찰별 적용/보류 |
+07 단계는 사전에서 확인한 같은 Stable Concept ID·게시 버전으로 프로파일의 대상·역할·범위·단위 규칙을 적용한다.
+미승인 표현 연결을 프로파일 별칭으로 우회하지 않는다. 요구값·원문 단위·조건·근거를 보존하며
+문서 요구조건을 실측 사실로 바꾸지 않는다. `ontology_concept_ref`, `ontology`, 적용 매핑 ID를 결과에 남긴다.
 
-사전 개념 ID와 Published Ontology Stable Concept ID는 다르다.
-기본 `source_only`는 미확정 의미를 후보로 남긴다. 분류값만으로 분야 규칙을 켜지 않는다.
-과거 `server` 규칙은 명시적인 호환 설정이며 현재 운영 물품 사전이나 활성 서버 Capability를 뜻하지 않는다.
-상세 내용은 [사전](../platform/goods_dictionary.md)과 [프로파일](normalization_profiles.md)을 따른다.
-
-사전 관리는 처음 입력한 문서와 이후 추가 문서에 같은 06 단계를 사용한다. 여러 문서의 extracted.json을 함께 입력할 수도 있다.
-`dictionary_reconcile`은 이미 확인된 문맥도 다시 검토하는 옵션이며, `dictionary_corpus`는 추가 근거를 지정할 때 사용한다.
-사전 안내의 `dictionary-maintain` 명령으로 묶음 개정도 실행할 수 있다.
-개정과 영향 매핑을 함께 검증·반영하고 사전 스냅샷을 내보낸다. 문서처리는 `dictionary_standard` URI·checksum으로 사전 버전까지 고정할 수 있다.
+v1 snapshot과 `dictionary_concept_ref`는 과거 결과 재현용 호환 경로다. 기존 정의·감사·산출물을 덮어쓰지 않는다.
+새 버전 게시 시 기존 연결은 재검토하며 과거 snapshot의 해석은 유지한다.
+사전 이관·연결 승인과 기존 CLI의 호환 범위는 [사전 안내](../platform/goods_dictionary.md)를 따른다.
 
 ## 저장 위치와 최소 산출물
 
@@ -426,7 +482,7 @@ Codex는 현재 문서와 관련 과거 근거를 함께 보고 기존 개념 �
 | `extracted.json` | 표준화 전 대상·관계·속성·원문·보류 |
 | `dictionary_candidates.json` | 원문 표현 등록 후보와 근거 |
 | `dictionary_bindings.json` | 등록·재사용·보류 판정 |
-| `dictionary_semantic_decisions.json` | Codex 정의·매핑 판단, 재검증·자동 승인/제안/보류와 ID |
+| `dictionary_semantic_decisions.json` | 사전 연결 재사용·검토 후보 상태; 모델 기반 로컬 정의 판단은 v1 호환 |
 | `source_term_alignment.json` | 원문 등록과 표준 개념 연결 |
 | `meaning_candidates.json` | 표준관리의 미해결 의미 후보 |
 | `normalized.json` | 고정 표준 적용과 사전 연결 결과 |
@@ -495,14 +551,12 @@ uv run --project backend --locked --group orchestration \
 
 ## 증분 관리 산출물
 
-- `dictionary_incremental.json`: 재사용·반영·보류 결과와 사유.
-- `dictionary_related_context.json`: 관련 과거 문서와 불러온 추출 참조.
-- `dictionary_history/`: 영향 검증에 사용한 과거 관찰 부분집합.
-- `dictionary_release.json`: 현재 실행에 적용하는 승인된 사전 스냅샷.
+- `dictionary_incremental.json`: 게시 개념 연결의 재사용 또는 검토 후보 상태.
+- `ontology_candidates.json`: 미해결 원문 표현·관찰·소유 대상·실제 원문 문맥. 권위는 Suggestion이다.
+- `dictionary_release.json`: 이번 실행에 적용하는 게시 Ontology·표현 연결의 불변 snapshot.
 
-변경이 필요하면 maintenance 산출물에 변경안·검증·적용 결과를 저장한다.
-Data DB에는 파일 참조와 확인된 문맥의 해시·정의 개정 ID를 저장하며 완료 실행만 재사용한다.
-과거 파일 조회는 최대 100개이며 영향이 넓어지면 한 번 추가 조회·재판정하고 미해결은 보류한다.
+과거 `dictionary_related_context.json`, `dictionary_history/`, 로컬 정의 changeset은 v1 호환 경로의 산출물이다.
+현재 운영 API에서는 로컬 정의의 maintenance 적용을 거부한다.
 
 ## 본문 역할·품질·근거 가용성
 

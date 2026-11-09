@@ -24,6 +24,7 @@ def source_case(request):
     # sampled server evaluation or a bypass of verify_document's metadata checks.
     expected=SimpleNamespace(
         document_id=case['document_id'],sha256=case['source_sha256'],label_status='silver',entity_aliases={},
+        compositions=[],quantities=[],
         entities=[EntityCase(name=e['name'],source_text=e['name'],owner=names(e['owner']) if e.get('owner') else None) for e in entities.values()],
         relations=[RelationCase(source=names(r['source_id']),target=names(r['target_id']),kind=r['kind'],source_text=r['source_text']) for r in case['relations']],
         requirements=[RequirementCase(subjects=[names(r['subject_id'])],value_raw=r['value_raw'],unit_raw=r['unit_raw'],

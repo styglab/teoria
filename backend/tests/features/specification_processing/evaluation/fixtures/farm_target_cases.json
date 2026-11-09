@@ -1,0 +1,145 @@
+{
+  "filename": "1. 규격서 (지능형 농기계 정적상태.주행성능 분석시험장치).hwpx",
+  "sha256": "2fbb97780e28f5e9868e63f5240862eb4eb8907209510335831f8478ef81f4cd",
+  "layout": "prose",
+  "label_status": "silver",
+  "entities": [
+    {
+      "name": "지능형 농기계 정적상태·주행성능 분석시험장치",
+      "source_text": "지능형 농기계 정적상태·주행성능 분석시험장치"
+    },
+    {
+      "name": "열화상카메라",
+      "source_text": "열화상카메라"
+    },
+    {
+      "name": "표준 렌즈",
+      "source_text": "표준 렌즈"
+    },
+    {
+      "name": "고속 레이저 동적위치 계측장치",
+      "source_text": "고속 레이저 동적위치 계측장치"
+    },
+    {
+      "name": "동적 위치추적용 Target 또는 반사체",
+      "source_text": "동적 위치추적용 Target 또는 반사체",
+      "owner": "고속 레이저 동적위치 계측장치"
+    },
+    {
+      "name": "다양한 주행방향의 위치추적을 위한 Target 또는 반사체",
+      "source_text": "다양한 주행방향의 위치추적을 위한 Target 또는 반사체",
+      "owner": "고속 레이저 동적위치 계측장치"
+    }
+  ],
+  "relations": [
+    {
+      "source": "열화상카메라",
+      "target": "지능형 농기계 정적상태·주행성능 분석시험장치",
+      "kind": "component_of",
+      "source_text": "열화상카메라"
+    },
+    {
+      "source": "표준 렌즈",
+      "target": "열화상카메라",
+      "kind": "component_of",
+      "source_text": "표준 렌즈 1 EA"
+    },
+    {
+      "source": "고속 레이저 동적위치 계측장치",
+      "target": "지능형 농기계 정적상태·주행성능 분석시험장치",
+      "kind": "component_of",
+      "source_text": "고속 레이저 동적위치 계측장치"
+    },
+    {
+      "source": "동적 위치추적용 Target 또는 반사체",
+      "target": "고속 레이저 동적위치 계측장치",
+      "kind": "component_of",
+      "source_text": "동적 위치추적용 Target 또는 반사체 5 EA 이상"
+    },
+    {
+      "source": "다양한 주행방향의 위치추적을 위한 Target 또는 반사체",
+      "target": "고속 레이저 동적위치 계측장치",
+      "kind": "component_of",
+      "source_text": "다양한 주행방향의 위치추적을 위한 Target 또는 반사체 2 EA 이상"
+    }
+  ],
+  "requirements": [
+    {
+      "value_raw": "+1,000",
+      "unit_raw": "℃",
+      "operator": "gte",
+      "source_text": "최대 측정온도는 +1,000℃ 이상이어야 한다.",
+      "role": "requirement_candidate",
+      "scope": "per_component",
+      "subjects": [
+        "열화상카메라"
+      ]
+    },
+    {
+      "subjects": [
+        "동적 위치추적용 Target 또는 반사체"
+      ],
+      "value_raw": "5",
+      "unit_raw": "EA",
+      "operator": "gte",
+      "source_text": "동적 위치추적용 Target 또는 반사체 5 EA 이상",
+      "role": "requirement_candidate",
+      "scope": "per_component"
+    },
+    {
+      "subjects": [
+        "다양한 주행방향의 위치추적을 위한 Target 또는 반사체"
+      ],
+      "value_raw": "2",
+      "unit_raw": "EA",
+      "operator": "gte",
+      "source_text": "다양한 주행방향의 위치추적을 위한 Target 또는 반사체 2 EA 이상",
+      "role": "requirement_candidate",
+      "scope": "per_component"
+    }
+  ],
+  "entity_aliases": {
+    "다양한 주행방향의 위치추적을 위한 Target 또는 반사체": [
+      "Target 또는 반사체"
+    ]
+  },
+  "source_nodes": [
+    {
+      "node_id": "n00009",
+      "native_ref": "/blocks/9",
+      "text": "지능형 농기계 정적상태·주행성능 분석시험장치"
+    },
+    {
+      "node_id": "n00124",
+      "native_ref": "/blocks/106",
+      "text": "본 시험장치는 아래의 정적 상태진단 및 동적 주행성능 분석을 위한 각 계측장비가 상호 연계되어 하나의 시험장치로 운용되어야 하며, 개별 구성장비는 독립적인 단품 납품이 아니라 전체 시험목적과 장비 간 연계성을 고려하여 통합 구성하여야 한다."
+    },
+    {
+      "node_id": "n00125",
+      "native_ref": "/blocks/107",
+      "text": "가. 고속 레이저 동적위치 계측장치(동적주행성능시험)"
+    },
+    {
+      "node_id": "n00136",
+      "native_ref": "/blocks/118",
+      "text": "11) 구성품 : 고속 동적위치 계측장치 1 EA, 동적 위치추적용 Target 또는 반사체 5 EA 이상, 다양한 주행방향의 위치추적을 위한 Target 또는 반사체 2 EA 이상, 장비 운용 및 데이터 취득·분석에 필요한 부속품 1 SET"
+    },
+    {
+      "node_id": "n00172",
+      "native_ref": "/blocks/154",
+      "text": "사. 열화상카메라(정적상태진단시험)"
+    },
+    {
+      "node_id": "n00175",
+      "native_ref": "/blocks/157",
+      "text": "3) 시험대상 주요 발열부 측정에 충분한 온도측정범위를 확보하여야 하며 최대 측정온도는 +1,000℃ 이상이어야 한다."
+    },
+    {
+      "node_id": "n00177",
+      "native_ref": "/blocks/159",
+      "text": "5) 구성품 : 열화상카메라 1 EA, 표준 렌즈 1 EA, 기타 부속품 1 SET"
+    }
+  ],
+  "purpose": "Known-source silver calibration of names, ancestry and distinct quantities; not independent accuracy evidence.",
+  "annotation_limitations": "Calibration replay retained disagreements in scope labels (per_component versus per_item/system_total) and one relation evidence literal. Not an accepted extraction oracle or independent validation."
+}

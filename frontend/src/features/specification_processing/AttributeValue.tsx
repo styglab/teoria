@@ -24,23 +24,25 @@ function RawValue({
   unit?: boolean;
 }) {
   const value = resultLabel(attribute.value_raw ?? attribute.value ?? attribute.raw_value);
-  const operator = String(attribute.operator_raw || "");
-  const included = operator && (value.startsWith(operator) ||
+  const operator = String(attribute.operator_raw || "").trim();
+  const suffix = ["이상", "이하", "초과", "미만"].includes(operator);
+  const suffixInValue = suffix && value.endsWith(operator);
+  const included = operator && (value.startsWith(operator) || value.endsWith(operator) ||
     (attribute.operator === "range" && value.includes(operator)));
+  const readingValue = suffixInValue ? value.slice(0, -operator.length).trimEnd() : value;
+  const readingUnit = unit && attribute.unit_raw ? resultLabel(attribute.unit_raw) : "";
+  const missingUnit = readingUnit && !readingValue.endsWith(readingUnit) ? readingUnit : "";
+  const parts = suffix && (!included || suffixInValue)
+    ? [readingValue, missingUnit, operator]
+    : [included ? "" : operator, readingValue, missingUnit];
   return (
     <>
       <span>
-        {[
-          included ? "" : operator,
-          value,
-        ]
+        {parts
           .filter(Boolean)
           .map(resultLabel)
           .join(" ")}
       </span>
-      {unit && attribute.unit_raw ? (
-        <span> {resultLabel(attribute.unit_raw)}</span>
-      ) : null}
       {Array.isArray(attribute.qualifiers_raw) &&
         attribute.qualifiers_raw.length > 0 && (
           <p className="operations-note">

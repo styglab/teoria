@@ -31,6 +31,50 @@ class GoodsAuthoringClient:
     async def package(self, revision_id):
         return (await self.request('GET',f'/{revision_id}/package')).content
 
+    async def ontology_publication(self, version_id):
+        """Read the Ontology owner's publication contract, not a dictionary projection."""
+        from uuid import UUID
+        identifier = UUID(str(version_id))
+        try:
+            response = await self.http.get(f'/v1/admin/ontology-authoring/versions/{identifier}/publication')
+        except httpx.HTTPError:
+            raise RuntimeError('ontology publication API transport failure') from None
+        if not response.is_success:
+            raise RuntimeError(f'ontology publication API returned HTTP {response.status_code}')
+        return response.json()
+
+    async def ontology_review_version(self, reference):
+        """Pin authoring data for review; this is never a Runtime/publication lookup."""
+        from teoria.features.semantic_modeling.ontology.review_contracts import OntologyReviewSnapshot
+        try:
+            response = await self.http.get(f'/v1/admin/ontology-authoring/versions/{reference.version_id}')
+        except httpx.HTTPError:
+            raise RuntimeError('ontology review API transport failure') from None
+        if not response.is_success:
+            raise RuntimeError(f'ontology review API returned HTTP {response.status_code}')
+        return OntologyReviewSnapshot(context=reference, content=response.json())
+
+    async def application_standard(self, release_id):
+        try:
+            response = await self.http.get('/v1/admin/specification-processing/application-standards/' + str(release_id))
+        except httpx.HTTPError:
+            raise RuntimeError('application standard API transport failure') from None
+        if not response.is_success:
+            raise RuntimeError(f'application standard API returned HTTP {response.status_code}')
+        return response.json()
+
+    async def application_standard_readiness(self, run_id):
+        response = await self.http.get('/v1/admin/specification-processing/application-standards/sources/' + run_id)
+        if not response.is_success:
+            raise RuntimeError(f'application standard readiness returned HTTP {response.status_code}')
+        return response.json()
+
+    async def approve_application_standard(self, payload):
+        response = await self.http.post('/v1/admin/specification-processing/application-standards', json=payload)
+        if not response.is_success:
+            raise RuntimeError(f'application standard approval returned HTTP {response.status_code}')
+        return response.json()
+
     async def dictionary(self, operation_id, submission):
         if not re.fullmatch(r'[a-z][a-z0-9_]{0,119}',operation_id):
             raise ValueError('invalid dictionary operation ID')

@@ -6,6 +6,8 @@ from typing import Literal
 from uuid import UUID
 from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from teoria.features.specification_processing.processing_quality import AutomaticApprovalLimits
+from teoria.features.semantic_modeling.ontology.publication_contracts import OntologyPublicationRef
 
 class Record(BaseModel):
     model_config = ConfigDict(extra="forbid",hide_input_in_errors=True)
@@ -54,16 +56,40 @@ class StandardReference(Record):
     def safe_reference(cls,value):
         return SourceDocument.safe_uri(value)
 
+class OntologyAlignmentInput(Record):
+    """Optional comparison against a bounded, pinned published concept catalogue."""
+    snapshot: StandardReference | None = None
+    publications: list[OntologyPublicationRef] = Field(default_factory=list, max_length=8)
+    concept_ids: list[UUID] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode='after')
+    def distinct_concepts(self):
+        if (self.snapshot is None) == (not self.publications):
+            raise ValueError('provide either publication references or one pinned context snapshot')
+        versions = [ref.version_id for ref in self.publications]
+        if len(versions) != len(set(versions)):
+            raise ValueError('duplicate ontology publication')
+        if len(set(self.concept_ids)) != len(self.concept_ids):
+            raise ValueError('duplicate ontology context concept')
+        return self
+
 class SpecificationRun(Record):
     run_id: str = Field(pattern=r"^[a-z][a-z0-9_]{0,79}$")
     mode: Literal['standard_management','document_processing']
+    application_release_id: UUID | None = None
     classification_code: str | None = Field(default=None,pattern=r"^\d{10}$")
+    use_expression_dictionary: bool = True
     dictionary_auto_approve: bool = True
     dictionary_rebuild_from_sources: bool = False
     dictionary_meaning_auto_approve: bool = True
+    auto_apply_source_literals: bool = True
+    auto_approve_application_standard: bool = False
+    automatic_approval_limits: AutomaticApprovalLimits = Field(default_factory=AutomaticApprovalLimits)
+    ontology_alignment: OntologyAlignmentInput | None = None
     dictionary_standard: StandardReference | None = None
     dictionary_baseline: StandardReference | None = None
-    dictionary_require_validation: bool = False
+    dictionary_require_validation: bool = Field(default=True,
+        description='Legacy input retained; automatic dictionary changes always require separate validation documents')
     dictionary_max_held_source_ids: int | None = Field(default=None,ge=0)
     dictionary_reconcile: bool = False
     dictionary_evidence_corpus: list[StandardReference] = Field(default_factory=list,max_length=1000)
@@ -82,6 +108,18 @@ class SpecificationRun(Record):
 
     @model_validator(mode='after')
     def check_contract(self):
+        if not self.use_expression_dictionary and (
+            self.dictionary_standard or self.dictionary_baseline or self.dictionary_rebuild_from_sources
+            or self.dictionary_reconcile or self.dictionary_corpus or self.dictionary_evidence_corpus
+            or self.dictionary_validation_corpus or self.application_release_id
+            or self.auto_approve_application_standard
+        ):
+            raise ValueError('dictionary inputs and application-standard approval require expression dictionary')
+        if self.auto_approve_application_standard and self.mode != 'standard_management':
+            raise ValueError('automatic processing-standard approval requires standard_management')
+        if self.application_release_id and (self.mode != 'document_processing' or self.dictionary_standard is None
+                or self.dictionary_auto_approve or self.dictionary_meaning_auto_approve):
+            raise ValueError('application release requires fixed standard and dictionary without automatic approvals')
         if self.dictionary_rebuild_from_sources and (self.mode!='standard_management' or
                 self.dictionary_auto_approve or self.dictionary_meaning_auto_approve or self.dictionary_standard
                 or self.dictionary_baseline or self.dictionary_validation_corpus or self.dictionary_evidence_corpus

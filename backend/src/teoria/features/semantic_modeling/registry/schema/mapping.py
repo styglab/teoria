@@ -1,14 +1,29 @@
 from __future__ import annotations
 
 import re
+from uuid import UUID
 from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 
 from teoria.features.semantic_modeling.registry.schema.common import IdentifiedModel, RegistryMetadata, RegistryModel
+from teoria.features.semantic_modeling.ontology.models import OntologyPublicationRef
+from teoria.features.semantic_modeling.ontology.observations import InformationKind
+from teoria.features.semantic_modeling.ontology.value_policy import UnitConversion
 
 
 TRANSFORM_PATTERN = re.compile(r"^[a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)+$")
+
+
+class MappingMeaning(RegistryModel):
+    ontology: OntologyPublicationRef
+    concept_id: UUID
+    api_field_binding_id: UUID
+    information_kind: InformationKind
+    scope: str = Field(min_length=1)
+    unit: UnitConversion | None = None
+    operator: Literal['eq','gte','lte','gt','lt','raw','one_of'] = 'eq'
+    effective_at_field: str | None = None
 
 
 class MappingBinding(RegistryModel):
@@ -17,6 +32,7 @@ class MappingBinding(RegistryModel):
     encode: str | None = None
     qualifiers: dict[str, str] = Field(default_factory=dict)
     role: str | None = None
+    meaning: MappingMeaning | None = None
 
     @field_validator("decode", "encode")
     @classmethod
@@ -27,6 +43,10 @@ class MappingBinding(RegistryModel):
 
     @model_validator(mode="after")
     def validate_direction(self) -> "MappingBinding":
+        if self.meaning is not None and (not isinstance(self.field, str) or '.response.' not in self.field):
+            raise ValueError('governed meanings require one API response field')
+        if self.meaning is not None and self.meaning.information_kind != 'requirement' and self.meaning.operator != 'eq':
+            raise ValueError('non-requirement API observations must use equality')
         if isinstance(self.field, dict) and not self.field:
             raise ValueError("field mapping must not be empty")
         fields = [self.field] if isinstance(self.field, str) else list(self.field.values())

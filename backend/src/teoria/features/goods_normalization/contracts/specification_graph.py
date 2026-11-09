@@ -11,6 +11,9 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from teoria.features.goods_normalization.contracts.models import Record
+from teoria.features.semantic_modeling.ontology.publication_contracts import (
+    PublishedConceptRef, PublishedOntologyContext, publication_concepts,
+)
 
 
 class SourceEvidence(Record):
@@ -94,7 +97,8 @@ class SpecificationSubject(EvidenceBacked):
     name: str = Field(min_length=1)
     designation_raw: str | None = Field(default=None, min_length=1)
     context_kind: Literal["location", "functional_group", "test_subject", "reference_model", "measurand"] | None = None
-    type_ref: str | None = None
+    type_ref: str | None = Field(default=None, description='Legacy local candidate label, never publication authority')
+    type_concept_ref: PublishedConceptRef | None = None
 
     @model_validator(mode="after")
     def context_has_a_role(self):
@@ -152,6 +156,7 @@ class PropertySpecification(EvidenceBacked):
     statement_id: str = Field(min_length=1)
     subject_id: str = Field(min_length=1)
     characteristic_ref: str = Field(min_length=1)
+    property_concept_ref: PublishedConceptRef | None = None
     characteristic_name_raw: str | None = Field(default=None, min_length=1)
     value: SpecificationValue
     operator: Literal["eq", "gte", "lte", "gt", "lt", "described"] = "described"
@@ -312,3 +317,45 @@ class DocumentGoodsGraphBatch(Record):
         if len(keys) != len(set(keys)):
             raise ValueError("duplicate document revision")
         return self
+
+
+def validate_graph_meanings(graph: DocumentGoodsGraph, context: PublishedOntologyContext) -> dict:
+    """Check pinned concept identity/ownership, never approve a source interpretation.
+
+    Definitions are supplied as an immutable contract. Establishing current
+    publication authority is the caller's responsibility, not a checksum check.
+    Unlinked observations and legacy draft labels remain valid source data.
+    """
+    catalog = publication_concepts(context.ontologies)
+    subjects = {subject.subject_id: subject for subject in graph.subjects}
+
+    def resolve(reference, kind):
+        concept = catalog.get(str(reference.concept_id))
+        if concept is None or concept['ontology'] != reference.ontology.model_dump(mode='json'):
+            raise ValueError('graph_concept_not_in_pinned_publication')
+        if concept['kind'] != kind:
+            raise ValueError('graph_concept_kind_mismatch')
+        return concept
+
+    for subject in graph.subjects:
+        if subject.type_concept_ref is not None:
+            resolve(subject.type_concept_ref, 'object')
+    for statement in graph.properties:
+        if statement.property_concept_ref is None:
+            continue
+        prop = resolve(statement.property_concept_ref, 'property')
+        owner = subjects[statement.subject_id].type_concept_ref
+        if owner is None or owner.ontology != statement.property_concept_ref.ontology:
+            raise ValueError('graph_property_owner_unresolved')
+        if str(owner.concept_id) != prop['owner_concept_id']:
+            raise ValueError('graph_property_owner_mismatch')
+        # Raw wording and structured predicates remain in the source observation.
+        # This check does not convert values, certify evidence, or infer equipment.
+    return {
+        'context_checksum': context.checksum,
+        'linked_subjects': sum(subject.type_concept_ref is not None for subject in graph.subjects),
+        'unlinked_subjects': sum(subject.type_concept_ref is None for subject in graph.subjects),
+        'linked_properties': sum(prop.property_concept_ref is not None for prop in graph.properties),
+        'unlinked_properties': sum(prop.property_concept_ref is None for prop in graph.properties),
+        'publication_authority_verified': False, 'semantic_equivalence_confirmed': False,
+    }

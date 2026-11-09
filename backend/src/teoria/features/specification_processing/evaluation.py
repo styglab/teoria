@@ -42,6 +42,19 @@ class ParserRuntimeChanged(ValueError):
     """The baseline and candidate no longer use the same parser implementation."""
 
 
+class EvaluationWorkerError(RuntimeError):
+    """Keep code locations and exception types while discarding document/log bodies."""
+
+    def __init__(self, code, stdout, stderr):
+        super().__init__('extraction evaluation worker failed')
+        output=(stdout+b'\n'+stderr).decode('utf-8',errors='replace')
+        output=re.sub(r'\x1b\[[0-9;]*m','',output)
+        exceptions=re.findall(r'^(?:[\w.]+\.)?([A-Z]\w*(?:Error|Exception|Interrupt|Exit))(?::|$)',output,re.MULTILINE)
+        frames=re.findall(r'File "[^"\n]*/teoria/([a-z0-9_/]+\.py)", line (\d+), in (\w+)',output)
+        self.diagnostic={'exit_code':code,'exception_type':exceptions[-1] if exceptions else 'WorkerExit',
+                         'frames':[{'module':module,'line':int(line),'function':function} for module,line,function in frames[-8:]]}
+
+
 def _parser_runtime(parser_python):
     executable=parser_python or os.getenv('TEORIA_SPECIFICATION_PARSER_PYTHON') or sys.executable
     try:
@@ -129,7 +142,7 @@ def _save(directory,state):_write(Path(directory)/'state.json',state)
 
 def _grader_revision():
     root=Path(__file__).parent
-    return hashlib.sha256(b''.join((root/name).read_bytes() for name in ('evaluation.py','evaluation_cases.py','evaluation_scoring.py'))).hexdigest()
+    return hashlib.sha256(b''.join((root/name).read_bytes() for name in ('evaluation.py','evaluation_cases.py','evaluation_scoring.py','evaluation_resume.py'))).hexdigest()
 
 
 def _processor_revision():
@@ -178,6 +191,8 @@ def _report(directory,state):
         for variant,summary in cycle.get('results',{}).items():
             for split,value in summary.items():
                 lines.append(f"- {variant}/{split}: {value['metrics']} / {value.get('elapsed_seconds','?')}초")
+        if cycle.get('executor_failure'):
+            lines.append(f"- 실행기 오류 요약: {cycle['executor_failure']}")
         for finding in cycle.get('review_findings',[]):
             lines.append(f"- 확인 근거 {finding['document_id']}: {finding['grader_issue']}")
         if cycle.get('cycle_outcome_note'):
@@ -216,16 +231,20 @@ def prepare_cycle(manifest_path,directory=DEFAULT_STATE):
                 old=original.get(d.document_id)
                 if old is None or (d.sha256,d.notice_number,d.classification_code)!=(old['sha256'],old['notice_number'],old['classification_code']):
                     raise ValueError('calibration replay may not change source identities')
+                if manifest.purpose=='quality_assessment' and d.model_dump(mode='json')!=old:
+                    raise ValueError('quality assessment must retain frozen document cases')
             selected={d.document_id for d in supplied}
             splits={k:[i for i in ids if i in selected] for k,ids in parent['sampling']['splits'].items()}
             if set(splits['regression'])!={d.document_id for d in manifest.regression_documents}:
                 raise ValueError('calibration replay may not move documents between splits')
+            if manifest.purpose=='quality_assessment' and selected!=set(sum(parent['sampling']['splits'].values(),[])):
+                raise ValueError('quality assessment must retain the complete prior sample')
             for name in ('model','parser_python','concurrency','model_concurrency','model_timeout_seconds'):
                 if getattr(manifest,name)!=parent['settings'][name]:raise ValueError('calibration replay must retain execution settings')
             seed=parent['sampling']['seed']
             if manifest.seed is not None and manifest.seed!=seed:raise ValueError('calibration replay must retain the seed')
             aliases=[]
-            sampling={'freshness':'exposed_calibration_replay','replay_of':manifest.replay_of,
+            sampling={'freshness':'exposed_assessment_replay' if manifest.purpose=='quality_assessment' else 'exposed_calibration_replay','replay_of':manifest.replay_of,
                       'sampled_documents':len(manifest.documents),'independent_groups':None}
         else:
             seed=manifest.seed if manifest.seed is not None else secrets.randbits(63)
@@ -233,9 +252,13 @@ def prepare_cycle(manifest_path,directory=DEFAULT_STATE):
         if not splits['development']:raise ValueError('no eligible documents after exclusions')
         selected=set(sum(splits.values(),[]))
         manifest.documents=[d for d in manifest.documents if d.document_id in selected]
-        if sum(len(d.entities)+len(d.relations)+len(d.requirements) for d in manifest.documents+manifest.regression_documents)>1000:
+        if sum(len(d.entities)+len(d.relations)+len(d.requirements)+len(d.quantities)
+               +sum(1+len(c.children) for c in d.compositions)
+               for d in manifest.documents+manifest.regression_documents)>1000:
             raise ValueError('keep the frozen evaluation corpus under 1000 compact cases')
         manifest.seed=seed
+        from teoria.features.specification_processing.evaluation_resume import resumable_document_scores,checksum
+        resume_scores=resumable_document_scores(manifest,state,splits,parser_runtime,_processor_revision(),_grader_revision())
         workspace=Path(tempfile.mkdtemp(prefix='teoria_specification_eval_'))
         cycle={'cycle_id':manifest.cycle_id,'token':secrets.token_hex(16),'workspace':str(workspace),
                'status':'prepared','sampling':{**sampling,'seed':seed,'splits':splits},'results':{},
@@ -245,6 +268,9 @@ def prepare_cycle(manifest_path,directory=DEFAULT_STATE):
                'cleanup':{'status':'pending'},'created_at':time.time()}
         try:
             _write(workspace/'.owner.json',{'cycle_id':manifest.cycle_id,'token':cycle['token']})
+            _write(workspace/'resume_scores.json',resume_scores)
+            cycle['resume_scores_sha256']=file_sha256(workspace/'resume_scores.json')
+            cycle['resume_from']=manifest.resume_from
             frozen=manifest.model_dump(mode='json');_write(workspace/'manifest.json',frozen)
             cycle['manifest_sha256']=file_sha256(workspace/'manifest.json')
             cycle['input_manifest']={'path':str(Path(manifest_path).resolve()),'sha256':file_sha256(Path(manifest_path))}
@@ -264,6 +290,8 @@ def _load_cycle(directory,cycle_id):
     workspace=_workspace(cycle)
     if file_sha256(workspace/'manifest.json')!=cycle['manifest_sha256']:raise ValueError('frozen manifest changed')
     if _grader_revision()!=cycle['grader_revision']:raise ValueError('frozen evaluator changed during cycle')
+    if cycle.get('resume_scores_sha256') and file_sha256(workspace/'resume_scores.json')!=cycle['resume_scores_sha256']:
+        raise ValueError('frozen resume scores changed')
     manifest=EvaluationManifest.model_validate(_json(workspace/'manifest.json'))
     for document in manifest.documents+manifest.regression_documents:
         verify_document(document,allow_unclassified=manifest.selection_mode!='classified_random')
@@ -300,7 +328,18 @@ async def _execute(request,run_dir,manifest):
     code,stdout,stderr=await _launch([sys.executable,'-m',MODULE,'worker',str(run_dir/'request.json')],
         cwd=REPOSITORY_ROOT,env=env,timeout=manifest.run_timeout_seconds,pid_file=run_dir/'worker_pid.json')
     await asyncio.to_thread((run_dir/'executor.log').write_bytes,stdout+b'\n'+stderr)
-    if code:raise RuntimeError('extraction evaluation worker failed')
+    if code:
+        failure=EvaluationWorkerError(code,stdout,stderr)
+        context_path=run_dir/'worker_failure.json'
+        if context_path.exists():
+            try:context=await asyncio.to_thread(_json,context_path)
+            except (OSError,ValueError):context={}
+            if isinstance(context,dict) and isinstance(context.get('code'),str) and re.fullmatch(r'[a-z][a-z0-9_]{0,79}',context['code']):
+                details=context.get('details',{})
+                safe={key:value for key,value in details.items() if key in {'document_id','attribute_id','node_id'}
+                      and isinstance(value,str) and re.fullmatch(r'[a-zA-Z0-9_]{1,160}',value)} if isinstance(details,dict) else {}
+                failure.diagnostic['context']={'code':context['code'],'details':safe}
+        raise failure
     extracted=run_dir/'objects/specification_processing'/request['run_id']/'extracted.json'
     corpus=await asyncio.to_thread(_json,extracted)
     corpus['_evaluation_usage']=await asyncio.to_thread(_usage,run_dir/'processing')
@@ -324,8 +363,8 @@ async def run_variant(cycle_id,variant,directory=DEFAULT_STATE):
             state,cycle,workspace,manifest=_load_cycle(directory,cycle_id)
             if cycle['status'] in {'running','finishing'}:raise ValueError('cycle already running')
             if variant in cycle.get('completed_variants',[]):raise ValueError('variant already frozen')
-            if manifest.purpose=='grader_calibration' and variant!='baseline':
-                raise ValueError('grader calibration records a baseline, not an extraction candidate')
+            if manifest.purpose in {'grader_calibration','quality_assessment'} and variant!='baseline':
+                raise ValueError('calibration and assessment record a baseline, not an extraction candidate')
             revision=_processor_revision()
             if variant=='baseline' and revision!=cycle['baseline_revision']:raise ValueError('baseline code changed after prepare')
             if variant=='candidate' and 'baseline' not in cycle.get('completed_variants',[]):raise ValueError('run baseline before changing code')
@@ -335,6 +374,8 @@ async def run_variant(cycle_id,variant,directory=DEFAULT_STATE):
     cycle,workspace,manifest,revision=await asyncio.to_thread(reserve)
     try:
         documents={d.document_id:d for d in manifest.documents+manifest.regression_documents}
+        from teoria.features.specification_processing.evaluation_resume import combine_document_scores,checksum
+        resume_scores=await asyncio.to_thread(_json,workspace/'resume_scores.json')
         summaries={};score_hashes={}
         for split,ids in cycle['sampling']['splits'].items():
             if not ids:continue
@@ -342,19 +383,40 @@ async def run_variant(cycle_id,variant,directory=DEFAULT_STATE):
             run_dir=workspace/variant/split
             await asyncio.to_thread(run_dir.mkdir,parents=True,exist_ok=False)
             run_id='eval_'+hashlib.sha256(f'{cycle_id}:{variant}:{split}'.encode()).hexdigest()[:40]
+            reused=[i for i in ids if variant=='baseline' and i in resume_scores]
+            fresh=[i for i in ids if i not in reused]
             request={'run_id':run_id,'mode':'standard_management',
                      'classification_code':manifest.classification_code,'artifact_root':(run_dir/'objects').as_uri(),
                      'documents':[{k:v for k,v in documents[i].model_dump(mode='json').items()
-                        if k in {'document_id','notice_number','source_uri','filename','sha256'}} for i in ids],
+                        if k in {'document_id','notice_number','source_uri','filename','sha256'}} for i in fresh],
                      **{k:getattr(manifest,k) for k in ('parser_python','model','concurrency','model_concurrency','model_timeout_seconds')}}
-            corpus,elapsed=await _execute(request,run_dir,manifest)
+            corpus,elapsed=await _execute(request,run_dir,manifest) if fresh else ({'documents':[],'unavailable_documents':[]},0)
             await asyncio.to_thread(_assert_parser_runtime,cycle,manifest)
-            summary=score_extraction(corpus,[documents[i] for i in ids]);summary['elapsed_seconds']=round(elapsed,3)
-            summary['usage']=corpus.get('_evaluation_usage',{'available':False})
+            document_scores={i:resume_scores[i] for i in reused}
+            for i in fresh:
+                subset={**corpus,'documents':[d for d in corpus.get('documents',[]) if d['document_id']==i],
+                        'unavailable_documents':[d for d in corpus.get('unavailable_documents',[]) if d['document_id']==i]}
+                score=score_extraction(subset,[documents[i]])
+                document_scores[i]={'score':score,'sha256':checksum(score),'origin_cycle':cycle_id}
+            summary=combine_document_scores(document_scores[i]['score'] for i in ids)
+            summary['elapsed_seconds']=round(elapsed,3)
+            summary['usage']=corpus.get('_evaluation_usage',{'available':not fresh,'model_calls':0} if not fresh else {'available':False})
+            summary['resumed_documents']=reused
             summaries[split]=summary
             await asyncio.to_thread(_write,run_dir/'score.json',summary)
             score_hashes[split]=await asyncio.to_thread(file_sha256,run_dir/'score.json')
             if _processor_revision()!=revision:raise ValueError('processor changed while evaluation was running')
+            def record_progress():
+                with _locked(directory):
+                    current=_state(directory);item=current['cycles'][cycle_id]
+                    item.setdefault('score_hashes',{}).setdefault(variant,{})[split]=score_hashes[split]
+                    if split!='validation':
+                        item.setdefault('results',{}).setdefault(variant,{})[split]=summary
+                    item.setdefault('progress',{}).setdefault(variant,{})[split]='scored'
+                    if manifest.purpose=='quality_assessment':
+                        item.setdefault('assessment_document_scores',{}).update(document_scores)
+                    _save(directory,current)
+            await asyncio.to_thread(record_progress)
         def complete():
             with _locked(directory):
                 state=_state(directory);item=state['cycles'][cycle_id]
@@ -367,7 +429,16 @@ async def run_variant(cycle_id,variant,directory=DEFAULT_STATE):
         return {'cycle_id':cycle_id,'variant':variant,'splits':list(summaries),'workspace':str(workspace),
                 'development':summaries.get('development'),'validation':'closed_until_finish'}
     except BaseException as exc:
-        await asyncio.shield(asyncio.to_thread(abort_cycle,cycle_id,directory,type(exc).__name__))
+        try:
+            if isinstance(exc,EvaluationWorkerError):
+                def record_failure():
+                    with _locked(directory):
+                        current=_state(directory)
+                        current['cycles'][cycle_id]['executor_failure']=exc.diagnostic
+                        _save(directory,current)
+                await asyncio.shield(asyncio.to_thread(record_failure))
+        finally:
+            await asyncio.shield(asyncio.to_thread(abort_cycle,cycle_id,directory,type(exc).__name__))
         raise
 
 
@@ -471,8 +542,9 @@ async def finish_cycle(cycle_id,directory=DEFAULT_STATE):
         state,cycle,workspace,manifest=await asyncio.to_thread(_load_cycle,directory,cycle_id)
         busy=cycle['status'] in {'running','finishing'}
         if busy:raise ValueError('cannot finish a running cycle')
-        variants=('baseline',) if manifest.purpose=='grader_calibration' else ('baseline','candidate')
-        revision_key='baseline_revision' if manifest.purpose=='grader_calibration' else 'candidate_revision'
+        baseline_only=manifest.purpose in {'grader_calibration','quality_assessment'}
+        variants=('baseline',) if baseline_only else ('baseline','candidate')
+        revision_key='baseline_revision' if baseline_only else 'candidate_revision'
         if set(cycle.get('completed_variants',[]))!=set(variants):raise ValueError('required variants must finish before comparison')
         if _processor_revision()!=cycle[revision_key]:raise ValueError('processor changed after evaluation')
         await asyncio.to_thread(_assert_parser_runtime,cycle,manifest)
@@ -492,9 +564,10 @@ async def finish_cycle(cycle_id,directory=DEFAULT_STATE):
         code,stdout,stderr=await _launch([sys.executable,'-m','pytest','backend/tests','-q'],
             cwd=REPOSITORY_ROOT,env=env,timeout=manifest.run_timeout_seconds)
         await asyncio.to_thread((workspace/'tests.log').write_bytes,stdout+b'\n'+stderr)
-        if manifest.purpose=='grader_calibration':
-            comparison={'decision':'baseline_recorded' if code==0 else 'rejected',
-                        'reasons':['grader_calibration_only','no_extraction_improvement_claim']}
+        if baseline_only:
+            decision='assessment_recorded' if manifest.purpose=='quality_assessment' else 'baseline_recorded'
+            comparison={'decision':decision if code==0 else 'rejected',
+                        'reasons':[manifest.purpose+'_only','no_extraction_improvement_claim']}
         else:
             comparison=compare_runs(results['baseline'],results['candidate'],code==0)
             if comparison['decision']!='rejected' and cycle['baseline_revision']==cycle['candidate_revision']:
@@ -533,7 +606,17 @@ async def worker(request_path):
     request=await asyncio.to_thread(_json,request_path)
     workspace=Path(request_path).parent/'processing'
     await asyncio.to_thread(workspace.mkdir)
-    await extraction_evaluation_flow(request,str(workspace))
+    try:
+        await extraction_evaluation_flow(request,str(workspace))
+    except Exception as exc:
+        from teoria.features.specification_processing.processing_errors import SpecificationProcessingError
+        if isinstance(exc,SpecificationProcessingError):
+            # Only source identifiers survive cleanup; values, quotes and model output do not.
+            details={key:value for key,value in exc.details.items()
+                     if key in {'document_id','attribute_id','node_id'}}
+            await asyncio.to_thread(_write,Path(request_path).parent/'worker_failure.json',
+                                    {'code':exc.code,'details':details})
+        raise
 
 
 if __name__=='__main__':

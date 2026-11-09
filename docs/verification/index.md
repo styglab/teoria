@@ -5,6 +5,8 @@
 
 | 기록 | 확인할 내용 |
 |---|---|
+| [goods native 의미 Draft 준비 — 11월 9일](goods_native_draft_preparation_2026_11_09.md) | 기존 Draft 보존·실제 2.0.0 준비·백업·인증 HTTP 경계·문서 scope/소유 대상 차이 |
+| [새 규격서 등록·승인·재처리 검증 — 11월 8일](specification_workflow_validation_2026_11_08.md) | 공개 원본 확보, 격리 DB·S3·API·CLI 실행, 빈 기준 승인 차단과 정리·품질 한계 |
 | [프런트엔드 공통 스타일·문서 탐색 개선 — 10월 31일](frontend_refinement_2026_10_31.md) | 공통 UI·모바일 카드·조회 복구·비교 이유·화면 회귀 검사 |
 | [FormatID 분류별 문서 탐색·비교 배포 — 10월 31일](document_catalog_deployment_2026_10_31.md) | 문서 버전 목록·이전 정상 결과·2열 상세·표준 비교·migration 104 |
 | [FormatID 결과 화면 배포 — 10월 31일](formatid_results_deployment_2026_10_31.md) | 규격서별 엔티티·관계·속성·근거 탐색과 승인 UI 제거 |

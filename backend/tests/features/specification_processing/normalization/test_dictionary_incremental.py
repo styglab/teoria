@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock
+import pytest
 
 from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import RelatedMeaningContext,resolve_snapshot
 from teoria.features.specification_processing.models import SpecificationRun
@@ -91,6 +92,8 @@ async def test_new_role_discovers_past_extraction_and_does_not_blindly_reuse_app
     payload=maintain.await_args.args[0]
     assert len(payload['extractions'])==2  # Current and automatically discovered past source.
     assert payload['auto_apply'] is False  # One frozen checked changeset is applied later.
+    frozen=payload['baseline_dictionary']
+    assert hashlib.sha256(Path(frozen['uri'].removeprefix('file://')).read_bytes()).hexdigest()==frozen['sha256']
 
 
 async def test_missing_historical_artifact_is_held_before_inference_or_definition_change(tmp_path):
@@ -133,17 +136,19 @@ async def test_changed_source_wording_requires_review_even_when_extracted_role_i
 async def test_held_new_context_cannot_fall_back_to_the_old_approved_meaning(tmp_path,monkeypatch):
     from teoria.features.specification_processing.normalization import dictionary_alignment
     api,catalog,new,ref,req=await setup(tmp_path)
+    baseline=write_ref(tmp_path/'frozen_dictionary.json',await api.service.snapshot())
     class AlignerAPI:
         async def __aenter__(self):return self
         async def __aexit__(self,*args):pass
         async def dictionary(self,id,payload):
             registered=await api.dictionary(id,payload)
             return {**registered,'operation_id':id,'policy_version':'source_literal_v1','summary':{'reused':2}}
-        async def resolve_dictionary_meanings(self,ids,code=None):return resolve_snapshot(await api.service.snapshot(),ids,code)
+        async def resolve_dictionary_meanings(self,ids,code=None):
+            raise AssertionError('A held batch must use its frozen baseline, not live meanings')
     monkeypatch.setattr(dictionary_alignment,'GoodsAuthoringClient',AlignerAPI)
     source=next(id for id,row in api.repo.sources.items() if row['kind']=='characteristic')
     result=await dictionary_alignment.align_dictionary(req,new,ref,maintenance={'status':'held','reason':'role_changed',
-        'blocked_source_ids':[source],'artifacts':[]})
+        'blocked_source_ids':[source],'artifacts':[],'baseline_dictionary':baseline})
     attr=result['meaning_alignment']['documents'][0]['attributes'][0]
     assert attr['meaning_status']=='held' and 'dictionary_concept_ref' not in attr
 
@@ -157,9 +162,10 @@ async def test_catalog_reference_to_missing_file_is_held_without_modifying_defin
     assert before==api.repo.definitions
 
 
-async def test_automatic_application_requires_separate_validation_when_requested(tmp_path,monkeypatch):
+@pytest.mark.parametrize('require_validation',[False,True])
+async def test_automatic_application_always_requires_separate_validation(tmp_path,monkeypatch,require_validation):
     api,catalog,new,ref,req=await setup(tmp_path)
-    req.dictionary_require_validation=True
+    req.dictionary_require_validation=require_validation
     new['documents'][0]['attributes'][0]['semantic_role']='supported_capability'
     planned={'status':'proposed','validation_documents':0,'held_source_ids':[],'artifacts':[]}
     monkeypatch.setattr(dictionary_incremental,'maintain_dictionary',AsyncMock(return_value=planned))
@@ -167,6 +173,27 @@ async def test_automatic_application_requires_separate_validation_when_requested
     result=await dictionary_incremental.update_standard_dictionary(req,new,ref,api=api,repository=catalog,runner=AsyncMock())
     assert result['status']=='held' and result['reason']=='independent_validation_required'
     assert before==api.repo.definitions
+
+
+async def test_dictionary_change_during_batch_is_held_instead_of_rebased(tmp_path):
+    from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import snapshot_from_records
+    api,catalog,data,ref,req=await setup(tmp_path)
+    req.dictionary_reconcile=True
+    original=api.dictionary_meaning
+    reads=0
+    async def changed_dictionary(method,path,payload=None):
+        nonlocal reads
+        if path=='/snapshot':
+            reads+=1
+            if reads>1:return snapshot_from_records([],[],[]).model_dump(mode='json')
+        return await original(method,path,payload)
+    api.dictionary_meaning=changed_dictionary
+    runner=AsyncMock()
+    before=deepcopy(api.repo.definitions)
+    result=await dictionary_incremental.update_standard_dictionary(req,data,ref,api=api,repository=catalog,runner=runner)
+    assert result['status']=='held' and result['reason']=='baseline_dictionary_changed'
+    assert before==api.repo.definitions
+    runner.generate.assert_not_awaited()
 
 
 async def test_current_source_is_reassessed_without_deleted_historical_file(tmp_path,monkeypatch):

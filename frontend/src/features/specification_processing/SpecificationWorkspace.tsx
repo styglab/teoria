@@ -1,3 +1,5 @@
+import { Button } from "../../components/ui/button";
+import { goodsDictionaryApi, type ApplicationStandard } from "../../api/goods_dictionary";
 import {
   SpecificationCatalog,
   CatalogDocumentView,
@@ -13,6 +15,7 @@ import {
   type ProcessingRun,
 } from "../../api/specification_processing";
 import { AnalysisExplorer, type MappingStatus } from "./AnalysisExplorer";
+import { RunQuality, VersionQuality } from "./ProcessingQuality";
 import { workflowsApi } from "../../api/workflows";
 import {
   PageHeader,
@@ -93,9 +96,21 @@ function RunWorkspace() {
   }, []);
   const [rows, setRows] = useState<ProcessingRun[] | null>(null);
   const [total, setTotal] = useState(0);
-  const [detail, setDetail] = useState<ProcessingDetail | null>(null);
-  const [error, setError] = useState("");
+  const [operations, setOperations] = useState<Awaited<ReturnType<typeof processingApi.operations>> | null>(null);
+  const [operationsError, setOperationsError] = useState("");
   const [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    if (run || creating) return;
+    let active = true;
+    setOperations(null); setOperationsError("");
+    processingApi.operations().then(value => { if (active) setOperations(value); })
+      .catch(() => { if (active) setOperationsError("운영 현황을 조회하지 못했습니다."); });
+    return () => { active = false; };
+  }, [run, creating, refresh]);
+  const [detail, setDetail] = useState<ProcessingDetail | null>(null);
+  const automaticApproval = detail?.run.summary.automatic_application_standard as
+    {status: string; release_id?: string; reason?: string} | undefined;
+  const [error, setError] = useState("");
   const [artifact, setArtifact] = useState<Record<string, unknown> | null>(
     null,
   );
@@ -264,7 +279,7 @@ function RunWorkspace() {
           <button onClick={() => setRefresh((v) => v + 1)}>다시 조회</button>
         </p>
       )}
-      {creating && !uploadsEnabled ? (
+      {creating && !uploadsEnabled && !params.get("reprocess") ? (
         <PageState
           title="문서 업로드가 설정되지 않았습니다"
           description="입력 저장소와 Worker 연결 설정을 확인하세요."
@@ -278,8 +293,12 @@ function RunWorkspace() {
             ← 처리 목록
           </button>
           <ProcessingForm
+            key={`${params.get("reprocess") || "new"}:${params.get("release") || ""}:${params.get("retry") || ""}`}
+            retryFailed={params.get("retry") === "failed"}
+            sourceRun={params.get("reprocess") || undefined}
+            initialReleaseId={params.get("release") || undefined}
             onStarted={(flowId, runId) =>
-              update({ new: "", view: "runs", flow: flowId, pending: runId })
+              update({ new: "", reprocess: "", view: "runs", flow: flowId, pending: runId })
             }
           />
         </>
@@ -317,6 +336,25 @@ function RunWorkspace() {
                   실행 이력
                 </Link>
               </div>
+              <RunQuality summary={detail.run.summary} />
+              <section aria-label="검토와 다음 작업" className="context-banner">
+                <div>
+                  <strong>검토와 다음 작업</strong>
+                  <p>실행 상태와 업무 정확도는 별개입니다. 원문 근거와 보류 항목을 확인하세요.</p>
+                  {detail.run.status === "partial" && <p>일부 항목이 처리되지 않았거나 보류됐습니다. 결과를 검토한 뒤 기준을 수정해 다시 처리할 수 있습니다.</p>}
+                  {detail.run.status === "failed" && <p>문서별 실패 원인과 실행 이력을 확인한 뒤 다시 처리하세요.</p>}
+                  {detail.run.mode === "standard_management" && <p>원문 표현의 의미 연결을 검토하고, 사용할 표준과 사전 버전을 처리 기준으로 승인하세요.</p>}
+                </div>
+                <Link to="/admin/domains/goods/dictionary">표현·의미 연결 검토</Link>
+                {automaticApproval?.status === "approved" && <p>처리 기준이 자동 승인됐습니다. 이 버전으로 같은 문서를 다시 처리할 수 있습니다.</p>}
+                {automaticApproval?.status === "held" && <p>자동 승인이 보류됐습니다. 적용 규칙과 사전 버전을 확인하세요.</p>}
+                {principal?.roles.includes("ontology_owner") && automaticApproval?.status !== "approved" && detail.run.mode === "standard_management" && ["completed", "partial"].includes(detail.run.status) &&
+                  <Link to={`/admin/specifications/standards?source_run=${encodeURIComponent(run!)}`}>이 결과로 처리 기준 승인</Link>}
+                {principal?.roles.includes("metadata_admin") && ["completed", "partial", "failed"].includes(detail.run.status) &&
+                  <Link to={`/admin/specifications?new=1&reprocess=${encodeURIComponent(run!)}${automaticApproval?.release_id ? `&release=${encodeURIComponent(automaticApproval.release_id)}` : ""}`}>같은 문서를 승인된 기준으로 재처리</Link>}
+                {principal?.roles.includes("metadata_admin") && detail.documents.some(d => d.status === "failed" || Number(d.result_summary.quarantined_attributes || 0) > 0) &&
+                  <Link to={`/admin/specifications?new=1&reprocess=${encodeURIComponent(run!)}&retry=failed`}>실패·검증 보류 문서만 다시 추출</Link>}
+              </section>
               <FilterTabs
                 label="규격서 결과"
                 value={tab}
@@ -440,6 +478,7 @@ function RunWorkspace() {
                 )}
                 {artifact && tab === "evidence" && (
                   <AnalysisExplorer
+                    runId={run || undefined}
                     key={run}
                     value={artifact}
                     documentId={params.get("document") || ""}
@@ -483,9 +522,16 @@ function RunWorkspace() {
               <button onClick={() => setRefresh((v) => v + 1)}>
                 결과 새로고침
               </button>
+              {params.get("pending") && <Link to={`/admin/specifications?run=${encodeURIComponent(params.get("pending")!)}`}>처리 결과 확인</Link>}
             </div>
           )}
           <div className="page-table-wrap specification-run-list">
+            {operations && <section aria-label="최근 처리 현황">
+              <p>최근 {operations.days}일 · 실행 실패 {operations.runs.failed || 0}건 · 일부 완료 {operations.runs.partial || 0}건 · 처리 중 {operations.runs.running || 0}건</p>
+              <p>문서 실패 {operations.documents.failed || 0}건 · 일부 추출 {operations.documents.partial || 0}건. 독립 품질 평가 결과는 별도로 확인해야 합니다.</p>
+              <VersionQuality versions={operations.quality_versions || []} />
+            </section>}
+            {operationsError && <p role="status">{operationsError}</p>}
             <table className="page-table">
               <thead>
                 <tr>
@@ -558,15 +604,49 @@ function RunWorkspace() {
 
 function ProcessingForm({
   onStarted,
+  sourceRun,
+  initialReleaseId,
+  retryFailed = false,
 }: {
   onStarted: (flow: string, run: string) => void;
+  sourceRun?: string;
+  initialReleaseId?: string;
+  retryFailed?: boolean;
 }) {
+  const { principal } = useAdminAccess();
+  const canAutoApprove = Boolean(principal?.roles.includes("ontology_owner"));
   const [files, setFiles] = useState<File[]>([]);
-  const [mode, setMode] = useState("standard_management");
+  const [mode, setMode] = useState(sourceRun && !retryFailed ? "document_processing" : "standard_management");
+  const [autoApplyPreference, setAutoApply] = useState(true);
+  const autoApply = canAutoApprove && autoApplyPreference;
   const [classification, setClassification] = useState("");
   const [model, setModel] = useState("");
-  const [uri, setUri] = useState("");
-  const [checksum, setChecksum] = useState("");
+  const [releaseId, setReleaseId] = useState("");
+  const [releases, setReleases] = useState<ApplicationStandard[]>([]);
+  const [initialRelease, setInitialRelease] = useState<ApplicationStandard | null>(null);
+  const [releasePage, setReleasePage] = useState(0);
+  const [releaseTotal, setReleaseTotal] = useState(0);
+  const [releaseError, setReleaseError] = useState("");
+  useEffect(() => {
+    if (!initialReleaseId) return;
+    let active = true;
+    goodsDictionaryApi.standard(initialReleaseId).then(value => {
+      if (active) { setInitialRelease(value); setReleaseId(value.release_id); }
+    }).catch(reason => { if (active) setReleaseError(reason.message); });
+    return () => { active = false; };
+  }, [initialReleaseId]);
+  useEffect(() => {
+    if (mode !== "document_processing") return;
+    let active = true; setReleaseError("");
+    if (!initialReleaseId) setReleaseId("");
+    goodsDictionaryApi.standards(releasePage).then(value => {
+      if (active) { setReleases(value.items); setReleaseTotal(value.total); }
+    }).catch(reason => { if (active) setReleaseError(reason.message); });
+    return () => { active = false; };
+  }, [mode, releasePage, initialReleaseId]);
+  const availableReleases = initialRelease && !releases.some(release => release.release_id === initialRelease.release_id)
+    ? [initialRelease, ...releases] : releases;
+  const selectedRelease = availableReleases.find(release => release.release_id === releaseId && release.status === "approved");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState("");
@@ -575,6 +655,19 @@ function ProcessingForm({
       `ui_${Date.now()}_${crypto.getRandomValues(new Uint32Array(1))[0].toString(16)}`,
   );
   const [documents, setDocuments] = useState<InputDocument[]>([]);
+  const [inputLoading, setInputLoading] = useState(Boolean(sourceRun));
+  useEffect(() => {
+    if (!sourceRun) return;
+    let active = true;
+    (retryFailed ? processingApi.inputs(sourceRun, true) : processingApi.inputs(sourceRun)).then(value => {
+      if (active) {
+        setDocuments(value.documents);
+        setClassification(value.classification_code || "");
+      }
+    }).catch(reason => { if (active) setError(reason.message); })
+      .finally(() => { if (active) setInputLoading(false); });
+    return () => { active = false; };
+  }, [sourceRun, retryFailed]);
   const [key] = useState(() => {
     const bytes = crypto.getRandomValues(new Uint8Array(16));
     bytes[6] = (bytes[6] & 15) | 64;
@@ -589,13 +682,15 @@ function ProcessingForm({
       className="processing-form"
       onSubmit={async (event) => {
         event.preventDefault();
-        if (busy) return;
+        if (busy || inputLoading) return;
         setBusy(true);
         setError("");
         try {
           if (files.some((file) => file.size > 40 * 1024 * 1024))
             throw Error("파일은 각각 40MB 이하로 선택하세요.");
+          if (mode === "document_processing" && !selectedRelease) throw Error("승인된 처리 기준을 선택하세요.");
           const uploaded = [...documents];
+          if (!files.length && !uploaded.length) throw Error("처리할 문서가 없습니다.");
           for (let i = uploaded.length; i < files.length; i++) {
             setProgress(`문서 등록 ${i + 1}/${files.length}`);
             uploaded.push(await processingApi.upload(files[i]));
@@ -607,11 +702,17 @@ function ProcessingForm({
             mode,
             documents: uploaded,
             artifact_root: "file:///app/specification_artifacts",
-            ...(classification ? { classification_code: classification } : {}),
+            ...(mode !== "document_processing" && classification ? { classification_code: classification } : {}),
             ...(model ? { model } : {}),
-            dictionary_auto_approve: false,
-            ...(mode === "document_processing"
-              ? { standard: { uri, sha256: checksum } }
+            dictionary_auto_approve: mode === "standard_management" && autoApply,
+            dictionary_meaning_auto_approve: false,
+            auto_apply_source_literals: mode === "standard_management" && autoApply,
+            auto_approve_application_standard: mode === "standard_management" && autoApply,
+            ...(mode === "document_processing" && selectedRelease
+              ? { application_release_id: selectedRelease.release_id,
+                  standard: selectedRelease.standard_ref,
+                  dictionary_standard: selectedRelease.dictionary_ref,
+                  ...(selectedRelease.classification_code ? { classification_code: selectedRelease.classification_code } : {}) }
               : {}),
           };
           const id =
@@ -628,6 +729,11 @@ function ProcessingForm({
       }}
     >
       <h3>1. 문서 선택</h3>
+      {sourceRun ? <div>
+        <p>기존 실행의 원본과 해시를 재사용합니다. 새 실행 결과는 이전 결과와 별도로 보존됩니다.</p>
+        {inputLoading ? <p role="status">원본 문서 확인 중…</p> :
+          <ul>{documents.map(document => <li key={document.document_id}>{document.filename}</li>)}</ul>}
+      </div> : <>
       <label>
         규격서 파일
         <input
@@ -646,6 +752,7 @@ function ProcessingForm({
           등록됩니다.
         </small>
       </label>
+      </>}
       <h3>2. 처리 방식</h3>
       <label>
         작업
@@ -658,38 +765,38 @@ function ProcessingForm({
           <option value="document_processing">고정 표준 적용</option>
         </select>
       </label>
+      {mode === "standard_management" && <label>
+        <input type="checkbox" checked={autoApply} disabled={busy || !canAutoApprove} onChange={event => setAutoApply(event.target.checked)} />
+        원문 표현과 추출 기준을 자동 승인·적용
+        <small>원문 근거가 확인된 항목을 적용하고 처리 기준 버전을 고정합니다. 모호한 항목은 보류합니다.</small>
+      </label>}
       <label>
         분류 코드(선택)
         <input
-          value={classification}
+          value={mode === "document_processing" ? selectedRelease?.classification_code || "" : classification}
+          disabled={busy || mode === "document_processing"}
           pattern="[0-9]{10}"
           placeholder="물품 분류 코드 10자리"
           onChange={(event) => setClassification(event.target.value)}
-          disabled={busy}
         />
       </label>
       {mode === "document_processing" && (
         <>
           <label>
-            고정 표준 URI
-            <input
-              required
-              value={uri}
-              onChange={(event) => setUri(event.target.value)}
-              placeholder="file:// 또는 s3://"
-              disabled={busy}
-            />
+            승인된 처리 기준
+            <select required disabled={busy} value={releaseId} onChange={event => setReleaseId(event.target.value)}>
+              <option value="">표준·사전 버전 선택</option>
+              {availableReleases.filter(release => release.status === "approved").map(release => <option key={release.release_id} value={release.release_id}>{release.name} · {release.classification_code || "미분류"}</option>)}
+            </select>
           </label>
-          <label>
-            표준 checksum(SHA256)
-            <input
-              required
-              pattern="[a-f0-9]{64}"
-              value={checksum}
-              onChange={(event) => setChecksum(event.target.value)}
-              disabled={busy}
-            />
-          </label>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" type="button" disabled={busy || releasePage === 0} onClick={() => setReleasePage(page => page - 1)}>이전 처리 기준</Button>
+            <Button variant="outline" size="sm" type="button" disabled={busy || (releasePage + 1) * 25 >= releaseTotal} onClick={() => setReleasePage(page => page + 1)}>다음 처리 기준</Button>
+          </div>
+          <Link to="/admin/specifications/standards">규격서 처리 기준 관리</Link>
+          {releaseError && <p role="alert">{releaseError}</p>}
+          {!releaseError && !releases.length && <p>승인된 처리 기준이 없습니다. 의미 관리 담당자가 규격서 처리 기준에서 먼저 승인해야 합니다.</p>}
+          {selectedRelease && <p>표준과 사전이 함께 고정됩니다. 승인자: {selectedRelease.approved_by} · {selectedRelease.standard_kind === "ontology_profile" ? "Ontology 프로파일" : "추출용 표준 초안"}</p>}
         </>
       )}
       <details>
@@ -722,7 +829,7 @@ function ProcessingForm({
       <button
         className="page-primary-link"
         type="submit"
-        disabled={busy || !files.length || files.length > 100}
+        disabled={busy || inputLoading || (!files.length && !documents.length) || files.length > 100 || (mode === "document_processing" && !selectedRelease)}
       >
         {busy ? "처리 요청 중…" : "문서 처리 실행"}
       </button>

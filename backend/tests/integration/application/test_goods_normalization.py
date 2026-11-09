@@ -201,7 +201,7 @@ async def test_real_profile_approval_export_and_immutable_history(monkeypatch):
         await profiles.export(rid)
 
 
-async def test_supplied_goods_extensions_and_template_use_the_existing_ontology_workflow():
+async def test_legacy_goods_extensions_and_template_use_the_existing_ontology_workflow():
     from teoria.features.semantic_modeling.ontology.blueprint import (
         OntologyBlueprint,
         apply_ontology_blueprint,
@@ -220,7 +220,18 @@ async def test_supplied_goods_extensions_and_template_use_the_existing_ontology_
     namespace = "test_goods_" + uuid4().hex
     await apply_migrations(DATABASE_URL, root / "backend/migrations/application")
     repo = OntologyAuthoringService(DATABASE_URL)
-    blueprint = OntologyBlueprint.load(root / "backend/authoring/ontology_blueprints/goods.yaml")
+    # The supplied 0.2 extension and example profile target the old item/requirement
+    # contract. Exercise replay against that shape, not today's 1.0 goods blueprint.
+    blueprint = OntologyBlueprint.model_validate({
+        "schema_version":"1.0", "namespace":"goods", "name":"Legacy goods replay fixture",
+        "description":"Synthetic base for historical extension compatibility only", "target_version":"0.1.0",
+        "objects":[{
+            "code":code, "name":code, "stable_key":"goods."+code,
+            "description":"Synthetic legacy shape", "identity_properties":["observation_id"],
+            "properties":[{"code":"observation_id", "name":"Observation ID",
+                           "stable_key":"goods."+code+".observation_id", "value_type":"string"}]
+        } for code in ("item","requirement")]
+    })
     blueprint.namespace = namespace
     for obj in blueprint.objects:
         obj.stable_key = obj.stable_key.replace("goods.", namespace + ".", 1)
@@ -261,7 +272,7 @@ async def test_supplied_goods_extensions_and_template_use_the_existing_ontology_
     template = json.loads(
         (
             root
-            / "docs/procurement_specification_processing/examples/server_memory_profile.json"
+            / "backend/tests/fixtures/ontology/legacy_server_memory_profile.json"
         )
         .read_text()
         .replace("goods.", namespace + ".")

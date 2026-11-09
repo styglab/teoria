@@ -40,6 +40,14 @@ def document_result(corpus, normalized, document_id, *, definitions=()):
                      for fact in row.get("facts", [])]
             scoped["attributes"].append({**row, **({"facts": facts} if "facts" in row else {})})
         scoped["documents"] = [d for d in normalized.get("documents", []) if d.get("document_id") == document_id]
+        if isinstance(normalized.get('ontology_alignment'),dict):
+            alignment=normalized['ontology_alignment']
+            observations=[row for row in alignment['observations'] if row['document_id']==document_id]
+            scoped['ontology_alignment']={**alignment,'observations':observations,
+                'unavailable_document_ids':[identifier for identifier in alignment.get('unavailable_document_ids',[]) if identifier==document_id],
+                'summary':{'observations':len(observations),
+                    'baseline_approved_links':sum(row.get('baseline') is not None for row in observations),
+                    **{status:sum(row['status']==status for row in observations) for status in ('proposed','held','unresolved')}}}
     return {"schema_version": 1, "artifact_kind": "specification_document_result",
             "document_id": document_id, "source_sha256": document.get("source", {}).get("sha256"),
             "result_kind": result_kind(scoped), "extracted": extraction, "normalization": scoped}

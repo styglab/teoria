@@ -3069,6 +3069,7 @@ dependencies = [
 api = [
     { name = "fastapi" },
     { name = "langgraph" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "redis" },
     { name = "uvicorn" },
 ]
@@ -3110,6 +3111,7 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pydantic", specifier = ">=2.7,<3" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
+    { name = "pyjwt", extras = ["crypto"], marker = "extra == 'api'", specifier = ">=2.12,<3" },
     { name = "python-dotenv", specifier = ">=1.0,<2" },
     { name = "pyyaml", specifier = ">=6.0,<7" },
     { name = "redis", marker = "extra == 'api'", specifier = ">=6,<7" },

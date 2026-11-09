@@ -24,7 +24,7 @@ class RuntimeBundleSnapshotRepository:
             rows = await (
                 await connection.execute(
                     """
-                SELECT o.namespace,v.version,a.artifact_id,a.schema_version,
+                SELECT o.namespace,v.version,a.ontology_version_id,a.artifact_id,a.schema_version,
                        a.checksum,a.content,a.created_at
                   FROM ontology.runtime_artifacts a
                   JOIN ontology.ontology_versions v USING (ontology_version_id)

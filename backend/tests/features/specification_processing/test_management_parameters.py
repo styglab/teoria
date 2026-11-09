@@ -24,6 +24,7 @@ def test_operator_defaults_and_invalid_ranges(tmp_path):
     assert p.selection.lookback_days==365 and p.selection.max_notices_to_scan==300
     assert p.management.auto_apply and p.management.holdout_documents==5
     assert p.management.purpose=='dictionary_management' and not p.management.force_review
+    assert params(tmp_path,execution={'reuse_stage_checkpoints':False}).execution.reuse_stage_checkpoints is False
     for patch in [{'target_specifications':0},{'classification_code':'123'},
                   {'selection':{'date_from':'2026-10-02','date_to':'2026-10-01'}},
                   {'management':{'purpose':'quality_evaluation'}},
@@ -106,6 +107,39 @@ def test_holdout_keeps_a_notices_attachments_together_and_checks_minimum():
     assert split_documents(docs[:4],3,5)==([],[d['document_id'] for d in docs[:4]])
 
 
+def test_holdout_groups_copied_sources_and_related_notices_transitively():
+    docs=[{'document_id':f'd{i}','notice_number':f'n{i}','source':{'sha256':str(i)}} for i in range(8)]
+    # Last file copies another notice's original; that notice has another attachment.
+    docs[7]['source']['sha256']=docs[0]['source']['sha256']
+    docs[1]['notice_number']=docs[0]['notice_number']
+    validation,development=split_documents(docs,2,3)
+    linked={'d0','d1','d7'}
+    assert linked<=set(validation) or linked<=set(development)
+    validation,development=split_documents(docs,2,6)
+    assert not {'d0','d1','d7'} & set(validation)
+    assert {'d0','d1','d7'}<=set(development)
+
+
+async def test_management_freezes_current_dictionary_before_selecting_documents(tmp_path,monkeypatch):
+    from teoria.features.specification_processing import management_batch
+    from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import snapshot_from_records
+    snapshot=snapshot_from_records([],[],[])
+    api=AsyncMock()
+    api.__aenter__.return_value=api
+    api.dictionary_meaning.return_value=snapshot.model_dump(mode='json')
+    monkeypatch.setattr(management_batch,'GoodsAuthoringClient',lambda:api)
+    monkeypatch.setattr(management_batch,'check_baseline',management_batch.check_baseline.fn)
+    async def select(parameters):
+        api.dictionary_meaning.assert_awaited_once_with('GET','/snapshot')
+        return {'selected':[]}
+    monkeypatch.setattr(management_batch,'select_specifications',select)
+    prepare=AsyncMock(return_value={'status':'held','reason':'no_specification_files'})
+    monkeypatch.setattr(management_batch,'prepare_batch',prepare)
+    result=await management_batch.execute_management_batch(params(tmp_path))
+    assert result['status']=='held'
+    assert prepare.await_args.kwargs['baseline'].checksum==snapshot.checksum
+
+
 async def test_flow_exposes_typed_defaults_and_preserves_legacy_manifest(tmp_path,monkeypatch):
     from teoria.features.specification_processing import flows,management_batch
     execute=AsyncMock(return_value='managed');monkeypatch.setattr(management_batch,'execute_management_batch',execute)
@@ -131,6 +165,8 @@ async def test_preparation_splits_before_writes_and_disables_apply_when_insuffic
     from teoria.features.specification_processing import flows
     from teoria.features.specification_processing.management_batch import prepare_batch
     from teoria.features.specification_processing.storage.artifact_store import artifact_store
+    from teoria.features.semantic_modeling.goods_dictionary.meaning_contracts import snapshot_from_records
+    baseline=snapshot_from_records([],[],[])
     p=params(tmp_path,management={'holdout_documents':holdout,'force_review':force_review})
     selection={'run_id':'selection_fixture','artifact_root':tmp_path.as_uri(),'selected':[]}
     async with artifact_store(tmp_path.as_uri()) as store:
@@ -141,6 +177,7 @@ async def test_preparation_splits_before_writes_and_disables_apply_when_insuffic
                 'source_uri':ref.uri,'sha256':ref.sha256,'artifact':ref.model_dump()})
         await store.put('specification_processing/selection_fixture/document_selection.json',b'{}')
     async def extract(request,workspace):
+        assert (tmp_path/'specification_processing/selection_fixture/baseline_dictionary.json').is_file()
         corpus={'classification_code':CODE,'documents':[{'document_id':d.document_id,'notice_number':d.notice_number,
             'source':{'sha256':d.sha256},'extraction_status':'extracted'} for d in request.documents], 'unavailable_documents':[]}
         raw=json.dumps(corpus).encode();Path(workspace,'extracted.json').write_bytes(raw)
@@ -148,7 +185,7 @@ async def test_preparation_splits_before_writes_and_disables_apply_when_insuffic
             ref=await store.put('specification_processing/'+request.run_id+'/extracted.json',raw)
         return ref.model_dump(),False
     monkeypatch.setattr(flows,'extract_documents',extract)
-    result=await prepare_batch.fn(p,selection)
+    result=await prepare_batch.fn(p,selection,baseline=baseline)
     assert result['status']=='ready'
     request=result['request']
     assert request['dictionary_meaning_auto_approve']==auto_apply
@@ -162,6 +199,9 @@ async def test_preparation_splits_before_writes_and_disables_apply_when_insuffic
     else:
         assert request['dictionary_validation_corpus']==[]
     assert request['dictionary_require_validation']
+    assert request['dictionary_baseline']==result['summary']['baseline_dictionary']
+    assert result['summary']['baseline_dictionary_checksum']==baseline.checksum
+    assert any(a['uri']==request['dictionary_baseline']['uri'] for a in result['artifacts'])
     assert request['dictionary_reconcile']==force_review
     assert result['summary']['purpose']=='dictionary_management'
     assert request['run_id']=='selection_fixture_apply'
