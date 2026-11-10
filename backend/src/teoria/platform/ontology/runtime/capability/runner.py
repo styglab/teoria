@@ -116,7 +116,7 @@ class CapabilityRunner:
         include_raw_responses: bool,
     ) -> CapabilityResult:
         capability = catalog.capabilities[capability_id]
-        if capability.kind != "query":
+        if capability.processor is not None:
             handler = self.handlers.processor(capability.processor)
             if handler is None:
                 raise CapabilityExecutionError(
@@ -124,7 +124,16 @@ class CapabilityRunner:
                     f"unknown capability processor '{capability.processor}'",
                     capability_id=capability_id,
                 )
-            return await handler(self, catalog, capability_id, inputs)
+            result = await handler(self, catalog, capability_id, inputs)
+            if capability.kind == "query":
+                returned = {f"{o.ontology}.{o.object_type}" for o in result.objects}
+                returned.update(f"{link.ontology}.{link.link_type}" for link in result.links)
+                if result.capability_id != capability_id or not returned <= set(capability.returns):
+                    raise CapabilityExecutionError("invalid_processor_result", "Query processor returned undeclared objects",
+                                                   capability_id=capability_id)
+                if not include_raw_responses:
+                    result.responses = None
+            return result
         allowed_objects = {
             item
             for item in capability.returns

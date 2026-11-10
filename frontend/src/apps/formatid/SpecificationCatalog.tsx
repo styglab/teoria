@@ -1,3 +1,4 @@
+import { RuntimeRequirements } from "./RuntimeRequirements";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../../components/ui/button";
@@ -624,6 +625,12 @@ export function CatalogDocumentView({ id }: { id: string }) {
                 </>
               )}
             </section>
+          )}
+          {data.result?.result_kind === "profile" && (
+            <RuntimeRequirements
+              runId={data.document.run_id}
+              documentId={data.document.document_id}
+            />
           )}
           {data.result ? (
             <AnalysisExplorer

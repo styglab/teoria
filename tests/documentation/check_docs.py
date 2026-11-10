@@ -60,7 +60,10 @@ def validate(root: Path) -> tuple[list[str], int, int]:
     root = root.resolve()
     docs = sorted((root / 'docs').rglob('*.md'))
     docs += sorted((root / 'archive/kory_parser/docs').rglob('*.md'))
-    sources = [p for p in [root / 'README.md', root / 'AGENTS.md'] if p.exists()]
+    docs += sorted((root / 'archive/kory_parser_evaluation/docs').rglob('*.md'))
+    sources = [p for p in [root / 'README.md', root / 'AGENTS.md',
+                           root / 'archive/kory_parser/README.md',
+                           root / 'archive/kory_parser_evaluation/README.md'] if p.exists()]
     sources += docs + sorted((root / '.agents/skills').rglob('*.md'))
     graph: dict[Path, set[Path]] = defaultdict(set)
     errors = []

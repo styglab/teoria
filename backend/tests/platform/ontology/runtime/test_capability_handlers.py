@@ -128,3 +128,29 @@ async def test_query_hook_runs_after_database_query_materialization(catalog):
     )
     assert events == ["database", "hook"]
     assert result.outcome == {"enriched": True}
+
+
+def test_native_query_cannot_mix_source_steps_or_write_effects():
+    base = dict(id="read_view", name="Read view", description="Immutable view query", kind="query",
+                processor="example.read_view", returns=["example.result"])
+    assert CapabilityDefinition(**base).kind == "query"
+    with pytest.raises(ValueError, match="either Source steps"):
+        CapabilityDefinition(**base, steps=[{"call":"example.read"}])
+    with pytest.raises(ValueError, match="only an action"):
+        CapabilityDefinition(**base, effects={"updates":["example.result"]})
+
+
+async def test_native_query_cannot_return_undeclared_objects():
+    from teoria.platform.ontology.runtime.mapping.materializer import MaterializedObject
+    catalog = compute_catalog("example.read_view")
+    catalog.capabilities["calculate"] = CapabilityDefinition(id="calculate", description="Read only",
+        kind="query", processor="example.read_view", returns=["example.result"])
+    handlers = CapabilityHandlers()
+    async def wrong_result(*args):
+        return CapabilityResult(capability_id="calculate", objects=[MaterializedObject(
+            ontology="foreign",object_type="private",object_id="secret",properties={},
+            provenance=[],property_provenance={})])
+    handlers.register_processor("example.read_view", wrong_result)
+    with pytest.raises(CapabilityExecutionError) as exc:
+        await CapabilityRunner(handlers=handlers).run(catalog,"calculate",{})
+    assert exc.value.code == "invalid_processor_result"

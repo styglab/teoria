@@ -53,7 +53,45 @@ export type InputDocument = {
   sha256: string;
   notice_number?: string | null;
 };
+export type RuntimeRequirementsResult = {
+  objects: Array<{
+    properties: { view_version: string; total: number; deferred_count: number };
+    semantic_observations?: Array<{
+      observation_id: string;
+      concept_id: string;
+      operator: string;
+      scope: string;
+      information_kind: string;
+      value: { decimal?: string; text?: string; unit?: string };
+      value_raw: unknown;
+      unit_raw: string | null;
+      source: { attribute_id: string; evidence?: { node_id?: string } };
+    }>;
+  }>;
+  outcome?: {
+    concepts: Record<string, string>;
+    subjects?: Record<string, string>;
+    compositions?: Array<{
+      composition_id: string;
+      parent_ref: string;
+      child_ref: string;
+      inclusion_role: "required" | "optional" | "excluded";
+      quantity: { value: string; unit_raw: string; operator: string; scope: string };
+      evidence: Array<{ quote: string }>;
+    }>;
+  };
+};
 export const processingApi = {
+  runtimeRequirements: (
+    runId: string,
+    documentId: string,
+    offset: number,
+    signal?: AbortSignal,
+  ) =>
+    getJson<RuntimeRequirementsResult>(
+      `/specification-processing/runtime-requirements?${new URLSearchParams({ run_id: runId, document_id: documentId, offset: String(offset) })}`,
+      signal,
+    ),
   reproduceValidation: (
     run: string,
     document: string,

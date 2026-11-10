@@ -6,7 +6,10 @@ import httpx
 
 
 class ContextRuntimeError(RuntimeError):
-    pass
+    def __init__(self, message, *, status_code=None, code=None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
 
 
 class ContextRuntimeClient:
@@ -67,7 +70,11 @@ class ContextRuntimeClient:
             json={"inputs": inputs, "options": {"max_objects": max_objects}},
         )
         if not response.is_success:
-            raise ContextRuntimeError(
-                f"Runtime API returned HTTP {response.status_code}"
-            )
+            try:
+                detail = response.json().get("detail", {})
+                code = detail.get("code") if isinstance(detail, dict) else None
+            except ValueError:
+                code = None
+            raise ContextRuntimeError(f"Runtime API returned HTTP {response.status_code}",
+                                      status_code=response.status_code, code=code)
         return response.json()

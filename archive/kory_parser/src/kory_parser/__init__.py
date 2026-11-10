@@ -1,4 +1,4 @@
-"""Native Python parser; the reference JavaScript engine is used only by comparison tools."""
+"""Python document parser with structured output and source references."""
 
 from .api import parse
 from .models import (

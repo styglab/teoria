@@ -79,6 +79,54 @@ Property가 소유하고 Blueprint에서도 `quantity_dimension`·`allowed_units
 3TB·전체 슬롯 32개를 구분한다. 원문에 없는 전체 공급 용량 64GB를 생성하지 않으며,
 문서의 `per_socket`을 프로세서당·모듈당 범위나 전체 공급 용량으로 바꾸지 않는다.
 
+## 서버 메모리 검토 묶음
+
+[검토 준비 자료](../../../backend/authoring/specification_examples/server_memory_review.yaml)는
+기존 서버 XLSX의 네 항목을 원문 인용·기록된 관찰·후보 개념·적용 차이로 정리한다.
+2026-11-10 보존된 MinIO 볼륨의 읽기 전용 복사본에서 XLSX·문서 결과·기존 검토 자료의
+해시와 실제 관찰 ID를 재확인했다. 운영 Draft의 현재 상태와 사람의 의미 승인은 미확인이다.
+
+| 항목 | 후보 의미 | 남은 검토·적용 |
+|---|---|---|
+| 모듈당 32GB | `goods.memory_module.capacity` | `a008`, `a02`, `per_module` 확인; 게시 개념·표현 연결·프로파일 승인 |
+| 공급 2개 | 구성 명세의 수량 | `a011` 일반 속성·`rel_002` 구성 관계 확인; 공급 여부 검토·구성 수량 경로 필요 |
+| 소켓당 지원 상한 3TB | `goods.server.memory_capacity_per_socket_limit` | 원래 `support_limit`을 보존한 채 `per_socket` 해석 검토 |
+| 전체 슬롯 32개 | `goods.server.memory_slot_count` | 원래 DIMM 슬롯 귀속을 보존한 채 서버 귀속 해석 검토 |
+
+표의 관찰 ID는 모두 `sample_09_c00_` 접두사를 갖는다. 저장 분류는 추출·정규화 모두 null이며
+무분류 적용을 승인한 것은 아니다. 공급 수량 근거에는 32GB의 숫자까지 걸친 span 오류가 있어
+원문 `x 2개`와 구분해야 한다. 원본 관찰·납품 상태·검토 상태는 변경하지 않았다.
+
+`review-meanings`는 계속 제안만 만든다. 문서별 해석은 별도 Admin API에서 승인한다.
+원문과 일반 표현 연결을 바꾸지 않으며 해당 문서·게시 Ontology·승인 프로파일에만 적용한다.
+구성 수량은 일반 속성과 별도로 Runtime·FormatID에 제공한다. 위 실제 문서는 아직 승인·운영 적용하지 않았다.
+
+### 문서별 해석 승인·적용
+
+기준 경로는 `/v1/admin/goods/interpretations`이며 모든 요청에 `ontology_owner` 인증이 필요하다.
+
+1. `POST`로 초안을 만든다. 입력은 `review_id`, `document_id`, `source_sha256`, `result`(URI·SHA256),
+   `profile_revision_id`, `entities`, `properties`, `compositions`다.
+   속성 제안은 기존 `review-meanings`의 대상·근거·소유 대상·scope 선택을 사용한다.
+   구성 제안은 원래 관계·수량 관찰 ID, 부모·자식, 게시 구성 개념·수량 Property, 포함 조건·범위·근거를 명시한다.
+2. `GET /{revision_id}/review`에서 원래 관찰과 제안·checksum을 대조한다.
+3. `POST /{revision_id}/transitions`로 `submit` 후 `approve` 또는 `reject`한다.
+   `action`, `expected_status`, `expected_request_checksum`을 함께 보내며 변경 주체는 인증 principal로 기록한다.
+   입력은 불변이다. 수정하려면 새 `review_id`로 초안을 만든다.
+4. `POST /{revision_id}/applications`에 `run_id`, `expected_request_checksum`을 보내 별도 적용한다.
+   결과 본문은 객체 저장소에, 승인·적용 주체와 산출물 참조는 Application DB 감사 이력에 남긴다.
+   `GET /{revision_id}/audit`로 확인한다. 동일 입력·실행 재요청은 같은 불변 산출물을 반환한다.
+5. Runtime view 작성 manifest의 `interpretation_revision_ids`에 승인 revision ID를 넣는다.
+   기존 `build-runtime-view`가 `GET /{revision_id}/approval`로 현재 승인을 조회하고 원문 결과·프로파일·게시 checksum을 다시 검사한다.
+   구성 수량은 응답 `outcome.compositions`, 속성은 `semantic_observations`에 구분한다.
+
+초안·거절·폐기된 해석은 적용·export할 수 없다. 게시 전 Ontology나 미승인 프로파일도 거절한다.
+`deprecate`는 이후 적용·view 작성을 차단하며 이미 고정한 Runtime 파일은 새 release로 교체해야 한다.
+표현 등록의 일반 승인과 문서별 해석 승인은 서로 다른 범위다. 문서 한 건의 승인을 전체 표현 사전으로 확대하지 않는다.
+Application DB에는 요청·적용 본문을 복제하지 않고 불변 참조·checksum·승인·감사를 저장한다.
+운영 API에는 `specification_processing/interpretations/*`의 읽기·조건부 생성 권한이 필요하다.
+
+
 ## 물품과 구성품의 연결
 
 ```text

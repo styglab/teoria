@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -71,8 +71,15 @@ class Settings(BaseSettings):
     opa_control_plane_token: str | None = None
     opa_bundle_path: Path = Path("/var/lib/teoria/opa/teoria.tar.gz")
     registry_require_published: bool = False
+    goods_runtime_view_path: Path | None = None
+    goods_runtime_view_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     runtime_artifact_path: Path | None = None
     runtime_artifact_store: Path | None = None
+
+    @field_validator("goods_runtime_view_path", "goods_runtime_view_sha256", mode="before")
+    @classmethod
+    def optional_goods_runtime_view(cls, value):
+        return None if value == "" else value
 
 
 def bootstrap_settings(*, cwd: Path | None = None) -> Settings:

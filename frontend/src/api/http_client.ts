@@ -12,6 +12,11 @@ export class AdminApiError extends Error {
 }
 
 const requestMessages: Record<string, string> = {
+  goods_runtime_not_configured:
+    "게시 의미 조회 서비스가 아직 연결되지 않았습니다.",
+  goods_runtime_unavailable: "게시 의미 조회 서비스에 연결하지 못했습니다.",
+  unknown_capability: "이 조회 기능이 아직 Runtime에 게시되지 않았습니다.",
+  resource_not_found: "이 문서는 게시된 조회 기준에 포함되지 않았습니다.",
   prefect_unavailable:
     "실행 관리 서비스에 연결하지 못했습니다. 잠시 후 다시 조회하세요.",
   mlflow_unavailable:

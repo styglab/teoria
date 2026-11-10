@@ -25,13 +25,14 @@ backend/src/teoria/
   domains/
     goods/
       contracts.py         물품 처리 입력·산출물 값 계약
+      runtime.py           승인 관찰의 불변 조회 artifact·Runtime handler
       data_processing/     파싱·추출·저장·문서 목록·평가
         tasks.py           원본 준비 → 파싱 → 추출 → 검증·저장
         flows.py           추출 실행 순서
       expression_links/    원문 표현 등록·게시 개념 연결
       normalization/       후보·프로파일·검토·고정 표준 적용
-        meaning_proposals/ 의미 후보와 게시 정의 비교
-        application/       고정 프로파일·규칙 적용
+        meaning_proposals/ 의미 후보·문서 해석 승인·감사
+        application/       고정 프로파일·승인 해석의 별도 적용
         legacy_dictionary/ 과거 v1 결과 재현
       workflows/           추출·의미 적용을 연결하는 실행·품질·승인
       notice_collection/   명시적 규격서 처리 입력 준비
@@ -109,7 +110,8 @@ Worker는 Ontology 저장소를 직접 변경하지 않고 인증된 Admin HTTP 
 | `backend/tests/platform/`, `domains/`, `apps/`, `examples/` | 소유 코드에 대응하는 테스트 |
 | `backend/tests/integration/` | 백엔드 모듈 간 연동·실환경 검사 |
 | `tests/documentation/` | 문서 링크·목차 검사 |
-| `archive/kory_parser/` | 별도 설치·실행하는 문서 파서와 자체 검증 |
+| `archive/kory_parser/` | 별도 설치·실행하는 문서 파서·사용 문서·라이선스 |
+| `archive/kory_parser_evaluation/` | 파서 회귀 테스트·평가·벤치마크·Codex 개선 실행기 |
 
 Python 의존성과 잠금은 `backend/pyproject.toml`, `backend/uv.lock` 한곳에서 관리한다.
 역할별 이미지·권한은 유지한다. 기존 URL·CLI·산출물 ID·적용 migration·게시 artifact는 구조 변경으로 수정하지 않는다.

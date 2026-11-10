@@ -16,7 +16,7 @@ JSON
 cat >/tmp/specification_api.json <<'JSON'
 {"Version":"2012-10-17","Statement":[
  {"Effect":"Allow","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::teoria-artifacts/specification_inputs/*","arn:aws:s3:::teoria-artifacts/specification_processing/*","arn:aws:s3:::teoria-artifacts/legacy/*"]},
- {"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::teoria-artifacts/specification_inputs/*","arn:aws:s3:::teoria-artifacts/specification_processing/application_standards/*"]}
+ {"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::teoria-artifacts/specification_inputs/*","arn:aws:s3:::teoria-artifacts/specification_processing/application_standards/*","arn:aws:s3:::teoria-artifacts/specification_processing/interpretations/*"]}
 ]}
 JSON
 mc admin policy create local teoria_specification_worker /tmp/specification_worker.json >/dev/null

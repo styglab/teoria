@@ -152,6 +152,7 @@ async def execute_capability(
     except CapabilityExecutionError as exc:
         status_code = {
             "capability_timeout": 504,
+            "resource_not_found": 404,
             "bid_notice_not_found": 404,
             "invalid_bid_notice_id": 422,
         }.get(exc.code, 502)

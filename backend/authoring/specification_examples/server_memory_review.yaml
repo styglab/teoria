@@ -1,0 +1,162 @@
+schema_version: 1
+artifact_kind: specification_review_preparation
+review_id: server_memory_review_preparation_20261110
+prepared_at: '2026-11-10'
+authority: suggestion
+review_status: source_verified_awaiting_semantic_review
+approved: false
+published: false
+runtime_ready: false
+basis: >-
+  2026-11-10 보존된 MinIO 볼륨을 읽기 전용으로 복사해 원문 XLSX·문서 결과·기존 request/review를 대조했다.
+  네 객체의 바이트 SHA256과 기존 review 본문 checksum이 기록과 일치했다.
+  현재 운영 Draft는 재조회하지 못했으며 이 자료는 사람의 의미 승인·게시·독립 정답이 아니다.
+references:
+  verification_record: docs/verification/goods_native_draft_preparation_2026_11_09.md
+  proposed_graph: backend/authoring/specification_examples/server_memory_graph.yaml
+  blueprint: backend/authoring/ontology_blueprints/goods.yaml
+  profile_template: docs/domains/goods/specifications/examples/server_memory_profile.json
+  prior_request:
+    uri: s3://teoria-artifacts/specification_processing/meaning_reviews/server_memory_20261109_01/request.json
+    sha256: e3b7cd36204a84e8abb658c6501bd2c9f0ce3ae0dde2db6e41fb959cd9372cd9
+  prior_review:
+    uri: s3://teoria-artifacts/specification_processing/meaning_reviews/server_memory_20261109_01/review.json
+    sha256: cd03a229b22605214354fbe90bb68da0647a72a7faf6a6a02659157dbddf6613
+    content_checksum: abaa76cc0138064d8afcf3f49e2e934c19dd497848dd586cd9b90173c60d314c
+source:
+  run_id: sample_ten_inventory_20261102_03
+  document_id: sample_09
+  format: xlsx
+  uri: s3://teoria-artifacts/specification_processing/sample_ten_structure_20261101_03/sources/sample_09.xlsx
+  recorded_sha256: a8c7ad031dc585cfd104df9c9d4d27b83f2a866838ed6beba6d7a71233ce7a60
+  local_path: null
+  result_uri: s3://teoria-artifacts/specification_processing/sample_ten_inventory_20261102_03/documents/sample_09/result.json
+  recorded_result_bytes_sha256: 2de33723ef466d63b8dea61b3c66201e433cb327dfef8a9f32e6a80fa87dfe86
+  classification_code: null
+  classification_verification: stored_extraction_and_normalization_both_null
+  verified_inventory: {entities: 28, relations: 29, attributes: 87}
+  stored_extraction_status: partial
+  recovery:
+    verified_at: '2026-11-10'
+    source_volume: teoria_model-objects
+    original_mount: read_only
+    access: isolated_copy_no_network_or_published_ports
+    live_api_verified: false
+  note: >-
+    result_uri는 기존 request에서, 원문 URI는 저장 결과의 source.origin_uri에서 확인했다.
+    classification_code는 저장 결과의 추출·정규화 양쪽에서 null이다. 품목 분류가 없다는 판정이나 무분류 프로파일 승인 근거는 아니다.
+    local_path는 임시 원문 복사본을 정리하므로 null을 유지한다.
+ontology:
+  last_recorded_version_id: 89712e6e-6d1c-494d-8377-6735f009d200
+  namespace: goods
+  version: 2.0.0
+  last_recorded_status: draft
+  last_recorded_content_checksum: 8ace7305c96e8ec69023a39c7d2956c0300cf3042263b4968e3b9d9ee8a8cb2f
+  current_status_verification: not_retrieved
+  published_reference: null
+  note: Stable Key는 검토 후보이며 게시 Concept ID나 승인된 표현 연결이 아니다.
+checks:
+  proposed_graph_structure: passed
+  validation_scope: structure_and_references_only
+  source_bytes_reverified: true
+  stored_result_reverified: true
+  prior_request_bytes_reverified: true
+  prior_review_bytes_and_content_reverified: true
+  xlsx_cell_quotes_reverified: true
+  observation_ids_and_component_relation_reverified: true
+  current_draft_reverified: false
+  human_review_performed: false
+items:
+  - id: module_capacity
+    label: 모듈당 메모리 용량
+    evidence: {id: memory_clause, locator: 'Sheet1!C2, 메모리(RAM)', quote: 'DDR5 32GB 5600 RDIMM  x 2개'}
+    recorded_observation: {subject_id: a02, semantic_role: requirement_candidate, semantic_scope: per_module, value_raw: '32', unit_raw: GB}
+    source_evidence: {node_id: n00012, fragment_id: n00012_f04, native_ref: /blocks/1/table/cells/1/2}
+    source_observation_id: sample_09_c00_a008
+    candidate:
+      owner_type: goods.memory_module
+      property: goods.memory_module.capacity
+      value: '32'
+      unit: GB
+      operator: eq
+      role: requirement
+      scope: per_module
+    proposed_changes: [meaning_link]
+    review_question: 32GB가 서버 합계·GPU 메모리가 아닌 공급 메모리 모듈 하나의 용량인가?
+    application_status: requires_published_concept_expression_link_and_profile_approval
+  - id: supplied_module_count
+    label: 공급 메모리 모듈 수
+    evidence: {id: memory_clause, locator: 'Sheet1!C2, 메모리(RAM)', quote: 'DDR5 32GB 5600 RDIMM  x 2개'}
+    recorded_observation: {subject_id: a02, property_key: quantity, semantic_role: requirement_candidate, semantic_scope: system_total, value_raw: '2', unit_raw: 개}
+    source_observation_id: sample_09_c00_a011
+    source_evidence: {node_id: n00012, fragment_id: n00012_f04, native_ref: /blocks/1/table/cells/1/2}
+    recorded_component_relation: {id: rel_002, kind: component_of, source_id: a02, target_id: root, basis: explicit, review_status: needs_review}
+    recorded_delivery_status: not_established
+    declared_composition_quantity: absent
+    candidate:
+      kind: composition_quantity
+      parent_type: goods.server
+      child_type: goods.memory_module
+      model: goods.composition_statement
+      quantity_property: goods.composition_statement.quantity_value
+      value: '2'
+      unit: 개
+      operator: eq
+      scope: 서버 구성의 공급 모듈 수
+      evidence_basis: interpreted
+    proposed_changes: [review_supply_interpretation, project_attribute_as_composition_quantity]
+    review_question: x 2개가 이 서버 구성에 공급할 메모리 모듈 수이며 슬롯 수나 물리 자산 식별이 아닌가?
+    application_status: requires_published_profile_and_composition_approval
+    note: >-
+      수량은 메모리의 일반 속성에 저장돼 있고 declared_quantities에는 서버 1EA만 있다.
+      a02의 납품 상태는 not_established이며 rel_002도 needs_review다. 공급 구성 수량으로 승인된 상태가 아니다.
+      수량 근거의 value_raw spans에는 32GB의 2와 x 2개의 2가 함께 잡혀 있다. 원문 x 2개를 직접 대조했으며 저장 span을 독립 정답으로 쓰지 않는다.
+      기존 review-meanings 자료는 이 수량을 검토하지 않았다.
+  - id: socket_capacity_limit
+    label: CPU 소켓당 메모리 지원 상한
+    evidence: {id: socket_limit, locator: 'Sheet1!C2, 메모리(RAM), 최대 용량', quote: '최대 용량: CPU 소켓당 최대 3TB 지원'}
+    recorded_observation: {subject_id: root, semantic_scope: support_limit, semantic_role: supported_capability, value_raw: '3', unit_raw: TB}
+    source_observation_id: sample_09_c00_a017
+    source_evidence: {node_id: n00012, fragment_id: n00012_f06, native_ref: /blocks/1/table/cells/1/2}
+    candidate:
+      owner_type: goods.server
+      property: goods.server.memory_capacity_per_socket_limit
+      value: '3'
+      unit: TB
+      operator: lte
+      role: supported_capability
+      scope: per_socket
+    proposed_changes: [meaning_link, semantic_scope]
+    review_question: 공급 용량이 아니라 CPU 소켓 하나당 지원 상한을 뜻하는가?
+    application_status: requires_document_interpretation_approval
+    note: 원래 support_limit을 변경하지 않는다. per_socket은 별도 검토할 해석이며 현재 프로파일에 자동 맞추지 않는다.
+  - id: system_memory_slot_count
+    label: 서버 전체 메모리 슬롯 수
+    evidence: {id: memory_slots, locator: 'Sheet1!C2, 메모리(RAM), 총 슬롯 수', quote: '총 슬롯 수 : 32 개 DIMM 슬롯 (CPU당 16 DIMM, 2DPC), 최대 6400MHz DDR5 지원'}
+    recorded_observation: {subject_id: a03, subject_name: DIMM 슬롯, semantic_role: requirement_candidate, semantic_scope: system_total, value_raw: '32', unit_raw: 개}
+    source_observation_id: sample_09_c00_a012
+    source_evidence: {node_id: n00012, fragment_id: n00012_f05, native_ref: /blocks/1/table/cells/1/2}
+    candidate:
+      owner_type: goods.server
+      owner_subject_id: root
+      property: goods.server.memory_slot_count
+      value: '32'
+      unit: 개
+      operator: eq
+      role: requirement
+      scope: system_total
+    proposed_changes: [meaning_link, subject_ids]
+    review_question: 32개가 공급 모듈 수가 아니라 서버 전체 DIMM 슬롯 수인가?
+    application_status: requires_document_interpretation_approval
+    note: 원래 a03 귀속은 유지한다. 서버 root로의 귀속은 별도 승인된 해석이 필요하다.
+blocked_until:
+  - 현재 Draft의 ID·내용 checksum·게시 여부와 실제 분류 범위를 다시 조회한다.
+  - 재확인한 네 관찰의 소유 대상·역할·scope·공급 여부에 대한 검토 주체의 판정을 기록한다.
+  - 의미가 승인된 Ontology를 게시하고 표현 연결과 대상 분류에 맞는 프로파일을 승인한다.
+  - 문서별 해석 API에서 scope·소유 대상 제안을 검토·승인하고 별도 산출물로 적용한다.
+  - 공급 수량의 포함 조건·범위를 승인하고 새 Runtime view의 구성 수량을 대조한다.
+constraints:
+  - 32GB × 2를 원문에 명시된 전체 64GB로 생성하지 않는다.
+  - 공급 수량·전체 슬롯 수·소켓당 지원 상한을 같은 속성으로 연결하지 않는다.
+  - 현재 profile_template의 classification_code=null을 실제 문서에 그대로 적용하지 않는다. 실제 분류와 적용 범위를 먼저 확인한다.
+  - 이 준비 자료나 과거 requires_review 결과를 승인된 연결·정답·Runtime 입력으로 사용하지 않는다.

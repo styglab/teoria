@@ -3,12 +3,11 @@
 !/.gitignore
 !/LICENSE
 !/NOTICE
+!/README.md
 !/pyproject.toml
 !/uv.lock
 !/src/
-!/tests/
 !/docs/
 !/third_party/
-!/evaluations/
 # Historical verification tools and results remain local in their entirety.
 /verification/

@@ -1,0 +1,53 @@
+registry:
+  version: 1.0.0
+  registered_at: '2026-11-10'
+runtime_contract:
+  id: goods_requirements
+  name: 게시 의미 기반 문서 요구조건 조회
+  description: 업무 Ontology 정의가 아닌 고정 관찰의 Runtime 조회 projection
+  object_types:
+  - id: document
+    name: 문서 요구조건 조회 결과
+    description: 검증된 관찰과 미해결 개수를 제공하는 읽기 전용 projection
+    primary_key: result_id
+    properties:
+    - id: result_id
+      name: result_id
+      description: result_id
+      data_type: string
+    - id: run_id
+      name: run_id
+      description: run_id
+      data_type: string
+    - id: document_id
+      name: document_id
+      description: document_id
+      data_type: string
+    - id: source_sha256
+      name: source_sha256
+      description: source_sha256
+      data_type: string
+    - id: view_version
+      name: view_version
+      description: view_version
+      data_type: string
+    - id: view_checksum
+      name: view_checksum
+      description: view_checksum
+      data_type: string
+    - id: total
+      name: total
+      description: total
+      data_type: integer
+    - id: offset
+      name: offset
+      description: offset
+      data_type: integer
+    - id: limit
+      name: limit
+      description: limit
+      data_type: integer
+    - id: deferred_count
+      name: deferred_count
+      description: deferred_count
+      data_type: integer

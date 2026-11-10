@@ -1,18 +1,23 @@
 # Kory Parser
 
 문서의 문단·표·목록·원문 위치를 읽는 독립 Python 라이브러리다.
-코드는 `archive/kory_parser/`에 있고 설치 이름은 `kory-parser`, import는 `kory_parser`다.
-버전은 `src/kory_parser/version.py`가 기준이다. Teoria backend 의존성에는 합치지 않는다.
-규격서 처리는 별도 Python 프로세스로 설치된 파서를 호출하며 실행기는
-`TEORIA_SPECIFICATION_PARSER_PYTHON` 또는 처리 입력의 `parser_python`으로 지정한다.
+설치 이름은 `kory-parser`, import는 `kory_parser`다.
+버전은 `src/kory_parser/version.py`가 기준이다.
 
 ## 설치·호출
 
-저장소 루트에서 실행한다.
+PyPI에는 아직 게시하지 않았다. GitHub에서 설치한다.
 
 ```bash
-uv sync --project archive/kory_parser --locked --group dev
-uv run --project archive/kory_parser --locked kory-parser document.hwpx -o parsed.json
+pip install "git+https://github.com/styglab/kory-parser.git"
+kory-parser document.hwpx -o parsed.json
+```
+
+개발 환경에서는 파서 프로젝트 루트에서 실행한다.
+
+```bash
+uv sync --locked --group dev
+uv run --locked kory-parser document.hwpx -o parsed.json
 ```
 
 ```python
@@ -47,39 +52,49 @@ CLI `--no-numbered-structure`로 끈다. 물리적 페이지 조판이나 업무
 OCR은 추가 의존성을 설치하고 명시적으로 사용한다. 모델이 없으면 최초 실행 시 다운로드할 수 있다.
 
 ```bash
-uv sync --project archive/kory_parser --locked --extra ocr --group dev
-uv run --project archive/kory_parser --locked --extra ocr kory-parser scan.png --ocr -o scan.json
+uv sync --locked --extra ocr --group dev
+uv run --locked --extra ocr kory-parser scan.png --ocr -o scan.json
 ```
 
-## 테스트·평가
+## 빌드와 개발 검증
+
+파서 프로젝트 루트에서 배포본을 빌드한다.
 
 ```bash
-uv run --project archive/kory_parser --locked --group dev \
-  pytest -c archive/kory_parser/pyproject.toml archive/kory_parser/tests
-uv build --project archive/kory_parser --out-dir /tmp/kory_parser_dist
+uv build --out-dir /tmp/kory_parser_dist
 ```
 
-합성 회귀 테스트는 저장소 파일만으로 실행한다. 실제 문서·OCR·kordoc 비교에는 별도 입력과 환경이 필요하다.
-원문 정확도와 reference 일치율을 구분한다. 과거 수치를 현재 코드의 성능 보장으로 사용하지 않는다.
+평가·회귀 테스트·벤치마크·Codex 개선 실행기는 개발 작업 공간에서 별도로 관리한다.
+이 공개 저장소와 파서의 wheel·source distribution에는 포함하지 않는다.
+파서 실행에는 평가 도구·Node.js·Codex가 필요하지 않다.
 
-- [평가·개선 실행과 manifest](evaluation_loop.md)
-- [실문서 표본·독립 검증·게이트](public_procurement_cycle.md)
-- [적용된 변경 이력](change_history.md)
+## 라이선스와 배포
 
-## 보관과 정리
+현재 Kory Parser 배포 라이선스는 **AGPL-3.0-or-later**다. 전문은
+[LICENSE](../LICENSE), 이식 범위와 출처는 [NOTICE](../NOTICE)에 있다.
+기존 MIT 고지는 [kordoc](../third_party/kordoc_license.txt),
+[rhwp](../third_party/rhwp_license.txt),
+[pdfplumber](../third_party/pdfplumber_license.txt) 파일에 보존한다.
+원저작자 이름은 프로젝트 이름 변경이나 배포 라이선스 변경으로 교체하지 않는다.
+이번 정리는 저작권 소유권 변경을 뜻하지 않으며, 과거 MIT 배포본에 이미 부여된
+허가를 철회하지 않는다.
 
-Git에는 소스·테스트·작은 합성 코퍼스·평가 도구·lock·라이선스를 둔다.
-실제 문서와 결과는 접근이 제한된 `.artifacts/`에 두고 환경·캐시·빌드 산출물은 커밋하지 않는다.
-검증을 마친 사이클의 일반 성공 표본·동일 파싱 출력·재생성 가능한 중간 사본만 정리한다.
-고정 회귀 원문·정답·문제 사례·사용 이력·manifest·hash·측정 요약·동결 소스는 유지한다.
-미완료 검증·검토 중인 후보·실행 중인 환경을 삭제하지 않는다.
+AGPL은 상업적 사용과 유료 판매를 허용한다. 프로그램을 배포할 때는 라이선스에 따른
+고지와 Corresponding Source 제공 조건을 지켜야 한다. 수정 버전을 네트워크로
+제공하면 원격 사용자에게 해당 버전의 소스를 무료로 받을 수 있는 방법을 제공해야
+한다. 적용 범위와 조건은 [AGPL 원문](https://www.gnu.org/licenses/agpl-3.0.html)의
+5·6·13조를 따른다. 소스 범위는 결합 관계에 따라 판단하며, 별도 프로세스 호출만으로
+의무가 해소되었다고 간주하지 않는다.
 
-최종 보고서 명령이 기본 정리를 수행한다. 별도 정리는 패키지 디렉터리에서 다음과 같이 실행한다.
+필수 PDF 엔진인 PyMuPDF/MuPDF는 AGPL 또는 별도 상용 라이선스로 제공된다.
+이 패키지의 라이선스가 의존성에 대한 별도 상용 사용권을 부여하지는 않는다.
+[PyMuPDF 공식 안내](https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright)를
+확인한다. 다른 의존성과 선택적 OCR 모델도 각자의 라이선스를 유지한다.
 
-```bash
-uv run --locked python -m evaluations.public_procurement.cleanup --cycle-root .artifacts/cycle_001
-uv run --locked python -m evaluations.public_procurement.cleanup --cycle-root .artifacts/cycle_001 --apply
-```
+wheel과 소스 배포본에는 라이선스 전문과 원저작권 고지를 포함한다. 외부 배포·서비스
+제공 전에는 실제 배포 버전의 소스, 필요한 빌드·설치 자료, 의존성 고지와 소스 제공
+방법을 함께 준비한다. 이 저장소의 공개가 이 라이브러리를 사용하는 운영 서비스의
+소스 제공 기능이나 라이선스 준수 절차를 대신하지는 않는다.
 
-파서 동작을 바꾸면 patch 버전과 변경 이력을 함께 갱신한다. 문서 정리만으로 버전을 올리거나 배포하지 않는다.
-저작권·의존성 라이선스는 `LICENSE`·`NOTICE`·`third_party/`를 유지한다.
+2026-11-10에 배포 메타데이터와 고지를 정리했다. 파싱 동작과 버전은 0.9.16을 유지하며,
+이 기록은 PyPI 게시나 운영 재배포를 뜻하지 않는다.

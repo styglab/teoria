@@ -52,6 +52,8 @@ flowchart TB
 이 순서는 책임 구분이다. 모든 실행이 새 Ontology를 게시하는 것은 아니다.
 추출 표준 자동 채택은 draft이며, Published Ontology 승인이 아니다.
 Worker의 의미 쓰기는 인증된 Admin HTTP API를 거친다.
+문서별 소유 대상·scope·구성 수량 해석은 물품 도메인의 별도 승인으로 관리한다.
+요청·적용 본문은 객체 저장소, 승인·참조·감사는 Application DB에 둔다. Runtime은 승인 상태를 재확인해 만든 고정 view만 읽는다.
 
 ## 저장 권위
 
@@ -80,6 +82,7 @@ OpenMetadata entity 상태를 Teoria DB에 복제하지 않는다. 외부 자산
 공개 Foundry 문서의 [데이터 통합](https://www.palantir.com/docs/foundry/data-integration/overview/),
 [Ontology](https://www.palantir.com/docs/foundry/ontology/overview/),
 [Workshop](https://www.palantir.com/docs/foundry/workshop/overview/)에서 데이터 준비·업무 의미·앱의
-역할 분리를 참고했다. 이 저장소 구조는 Teoria의 구현 선택이며 Palantir 내부 코드 구조를 뜻하지 않는다.
+역할 분리를 참고했다. [Actions](https://www.palantir.com/docs/foundry/action-types/overview/)의
+입력·권한·변경 검증을 참고해 문서 해석의 상태 전이·원문 보존·감사를 소유 서비스에서 검증한다. 이 저장소 구조는 Teoria의 구현 선택이며 Palantir 내부 코드 구조를 뜻하지 않는다.
 
 구체적인 변경 위치는 [저장소 구조](repository-structure.md), 현재 범위는 [로드맵](../roadmap.md)을 읽는다.

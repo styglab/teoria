@@ -85,6 +85,11 @@ Capability는 입력·실행 단계·반환 Object/Link를 선언한다.
 MCP Tool 이름은 Capability ID다. Runtime은 timeout·retry·deadline·페이지 상한을 적용하고
 identity로 병합한 객체·Link·provenance를 반환한다. 원본 응답은 명시적 진단에서만 포함한다.
 
+고정 artifact의 읽기 전용 조회는 `kind: query`와 명시적으로 주입한 `processor`를 사용할 수 있다.
+이 경우 `steps`와 함께 선언하지 않는다. Python import 경로를 Registry에서 실행하지 않으며
+등록된 handler·입력·반환 타입·권한·deadline을 검증한다. 외부 HTTP·DB 조회는 기존 Source·Mapping 계약을 사용하고,
+processor로 그 계약을 우회하지 않는다. 첫 사용은 [문서 요구조건 조회](../runtime.md#문서-요구조건의-게시-의미-조회)다.
+
 ## 검증·게시
 
 ```bash

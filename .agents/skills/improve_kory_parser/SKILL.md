@@ -6,19 +6,24 @@ description: Evaluate and improve the archived Kory Parser library using source-
 # Improve Kory Parser
 
 Kory Parser is an independent document-structure library in `archive/kory_parser/`.
-Keep changes there; do not connect it to Platform, Pipelines, Registry or deployments.
+Keep parser changes there. Evaluation, benchmarks, regression tests and repair-loop tooling live
+in `archive/kory_parser_evaluation/`; keep them outside the parser distribution.
+Do not connect this evaluation workflow to Platform, Pipelines, Registry or deployments.
 In an isolated repair candidate, the working directory itself is the package root.
+It contains frozen regression tests and `development/manifest.json`, but no evaluator or validation corpus.
+Use that supplied development evidence and do not search for external validation inputs.
 
-Read `docs/evaluation_loop.md` in the package for the manifest contract and commands.
-For a real-document improvement cycle also read `docs/public_procurement_cycle.md`.
+Outside isolated candidates, read `archive/kory_parser_evaluation/docs/evaluation_loop.md`
+for the manifest contract and commands. For a real-document improvement cycle also read
+`archive/kory_parser_evaluation/docs/public_procurement_cycle.md`.
 Do not stop after the synthetic seed passes: sample actual public bid attachments
 from Teoria's collected notices, run the parser and kordoc, then identify deficiencies.
 Use `evaluations.public_procurement.export_notices` for a read-only attachment frame
 through the Pipeline DB boundary when the MCP projection does not expose attachment URLs.
-Keep sampling and downloads in this archive's local artifacts; do not restore a
+Keep sampling and downloads in the evaluation workspace's local `.artifacts/`; do not restore a
 production attachment ingestion or parsing service.
 Omit `--seed` in ordinary new exploration runs: export and sampling generate fresh
-seeds and record them. Preserve the shared `.artifacts/corpus_history/state.json`.
+seeds and record them. Preserve the shared `archive/kory_parser_evaluation/.artifacts/corpus_history/state.json`.
 Register previous corpora before sampling; do not reset the history to obtain more
 apparently fresh cases. Exclude prior notices before download and prior bytes by
 SHA-256 even at a different URL. Keep the frozen regression manifest unchanged.
@@ -28,8 +33,8 @@ refilling with used documents. Replay stored manifests to reproduce an evaluatio
 Repository-root invocation example:
 
 ```bash
-cd archive/kory_parser
-uv run --locked python -m evaluations --output .artifacts/evaluation_before
+cd archive/kory_parser_evaluation
+uv run --project ../kory_parser --locked --group dev python -m evaluations --output .artifacts/evaluation_before
 ```
 
 Use sampled development failures or supplied cases to select one underlying defect. Inspect the

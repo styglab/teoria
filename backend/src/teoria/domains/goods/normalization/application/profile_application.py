@@ -27,6 +27,10 @@ def apply_profile(corpus,package: NormalizationPackage,*,run_id: str, meaning_al
         if row.get('meaning_status') != 'resolved' or row.get('ontology') != profile.ontology.model_dump(mode='json'):
             return None
         return row.get('ontology_concept_ref')
+    def approved_connection(document_id, collection, local_id):
+        row = next((o for o in aligned.get(document_id, {}).get(collection, []) if o['id'] == local_id), {})
+        return {'source_entry_id': row.get('source_term_ref', '').removeprefix('source_term:'),
+                'mapping_ids': row.get('meaning_mapping_ids', [])}
     documents=[];attribute_rows=[];candidates=[];entity_counts=Counter();relation_counts=Counter()
     for doc in corpus['documents']:
         entities={};nodes={n['node_id']:n['text'] for n in doc['parsed_document']['nodes']}
@@ -100,6 +104,9 @@ def apply_profile(corpus,package: NormalizationPackage,*,run_id: str, meaning_al
                     source={'kind':'document','document_id':doc['document_id'],'source_sha256':doc['source']['sha256'],
                             'attribute_id':a['id'],'evidence':a['evidence'],'run_id':run_id,
                             'package_checksum':package.checksum,
+                            **({'expression_snapshot_checksum':meaning_alignment.get('snapshot_checksum'),
+                                'property_connection':approved_connection(doc['document_id'],'attributes',a['id']),
+                                'subject_connections':[approved_connection(doc['document_id'],'entities',identifier) for identifier in a['subject_ids']]} if governed else {}),
                             'unit_conversion':policy.model_dump(mode='json') if chosen.value_type=='number' else None,
                             'profile_revision_id':str(package.profile_revision_id),'rule_id':chosen.rule_id})
                 fact['semantic_observation']=observation.model_dump(mode='json')

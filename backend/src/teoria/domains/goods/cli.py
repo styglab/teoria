@@ -7,6 +7,11 @@ from teoria.domains.goods.contracts import SpecificationRun
 
 
 def run_command(args):
+    if args.specification_command == "build-runtime-view":
+        from teoria.domains.goods.runtime import prepare_requirements_view
+        result = asyncio.run(prepare_requirements_view(json.loads(args.manifest.read_text()), args.output))
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
     if args.specification_command == 'index-catalog':
         from teoria.domains.goods.data_processing.catalog.indexing import index_catalog
         if not 1 <= args.limit <= 1000:

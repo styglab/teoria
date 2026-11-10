@@ -31,6 +31,21 @@ class GoodsAuthoringClient:
     async def package(self, revision_id):
         return (await self.request('GET',f'/{revision_id}/package')).content
 
+    async def expression_snapshot(self):
+        response = await self.http.get('/v1/admin/goods/dictionary/snapshot')
+        if not response.is_success:
+            raise RuntimeError(f'expression snapshot API returned HTTP {response.status_code}')
+        return response.json()
+
+    async def interpretation_approval(self, revision_id):
+        """Read fresh approval authority through Admin; saved suggestions are never accepted."""
+        from uuid import UUID
+        identifier = UUID(str(revision_id))
+        response = await self.http.get(f'/v1/admin/goods/interpretations/{identifier}/approval')
+        if not response.is_success:
+            raise RuntimeError(f'interpretation approval API returned HTTP {response.status_code}')
+        return response.json()
+
     async def ontology_publication(self, version_id):
         """Read the Ontology owner's publication contract, not a dictionary projection."""
         from uuid import UUID

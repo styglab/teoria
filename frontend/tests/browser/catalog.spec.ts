@@ -214,3 +214,64 @@ test("shared search field has one focus frame on the data catalog", async ({
   await expect(page.getByText("0개", { exact: true }).first()).toBeVisible();
   await expect(page).toHaveScreenshot("metadata-search-focus.png");
 });
+
+test("reads the published 32GB module requirement without replacing source extraction", async ({
+  page,
+}) => {
+  let requests = 0;
+  await page.route(
+    "**/specification-processing/runtime-requirements?**",
+    async (route) => {
+      requests++;
+      const url = new URL(route.request().url());
+      expect(url.searchParams.get("run_id")).toBe("fixture_run");
+      expect(url.searchParams.get("document_id")).toBe("document_a");
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          objects: [
+            {
+              properties: {
+                view_version: "2026.11.10.1",
+                total: 1,
+                deferred_count: 2,
+              },
+              semantic_observations: [
+                {
+                  observation_id: "memory_module_capacity",
+                  concept_id: "capacity",
+                  operator: "eq",
+                  scope: "per_module",
+                  information_kind: "requirement",
+                  value: { decimal: "32", unit: "GB" },
+                  value_raw: "32",
+                  unit_raw: "GB",
+                  source: {
+                    attribute_id: "a1",
+                    evidence: { node_id: "memory_row" },
+                  },
+                },
+              ],
+            },
+          ],
+          outcome: { concepts: { capacity: "메모리 모듈 용량" } },
+        }),
+      });
+    },
+  );
+  await page.goto("/admin/specifications?document=server_a");
+  const published = page.getByRole("region", {
+    name: "게시 의미 기반 요구조건",
+  });
+  await expect(
+    published.getByRole("button", { name: /게시 의미로 조회/ }),
+  ).toBeVisible();
+  expect(requests).toBe(0);
+  await published.getByRole("button", { name: /게시 의미로 조회/ }).click();
+  await expect(published.getByText("메모리 모듈 용량")).toBeVisible();
+  await expect(published.getByText("eq 32 GB")).toBeVisible();
+  await expect(published.getByText("모듈당")).toBeVisible();
+  await expect(published.getByText(/memory_row/)).toBeVisible();
+  await expect(page.getByRole("treeitem", { name: /CPU/ })).toBeVisible();
+  expect(requests).toBe(1);
+});

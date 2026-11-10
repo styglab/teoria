@@ -264,10 +264,10 @@ class CapabilityDefinition(IdentifiedModel):
         if self.kind != "action" and (self.effects.creates or self.effects.updates):
             raise ValueError("only an action capability may declare creates or updates effects")
         if self.kind == "query":
-            if self.processor is not None:
-                raise ValueError("query capability cannot declare a processor")
-            if not self.steps:
-                raise ValueError("query capability must declare at least one step")
+            if bool(self.processor) == bool(self.steps):
+                raise ValueError("query capability requires either Source steps or one registered processor")
+            if self.processor and (not REFERENCE_PATTERN.fullmatch(self.processor) or len(self.processor.split(".")) != 2):
+                raise ValueError("processor must use '<namespace>.<processor>'")
         else:
             if self.processor is None:
                 raise ValueError("compute, decision, and action capabilities must declare a processor")

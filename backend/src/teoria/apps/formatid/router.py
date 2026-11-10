@@ -45,6 +45,7 @@ def create_processing_workspace_router(
     repository=None,
     object_root: str | None = None,
     uploads_enabled: bool = False,
+    runtime_query=None,
 ):
     router = APIRouter(
         prefix="/v1/admin/specification-processing", tags=["specification-processing"]
@@ -65,6 +66,19 @@ def create_processing_workspace_router(
     @router.get("/status")
     async def status(principal: AdminPrincipal = Depends(authorizer.require())):
         return {"uploads_enabled": uploads_enabled, "results_enabled": repo is not None}
+
+    @router.get("/runtime-requirements")
+    async def runtime_requirements(
+        run_id: str = Query(pattern=r"^[a-z][a-z0-9_]{0,79}$"),
+        document_id: str = Query(pattern=r"^[a-z][a-z0-9_]{0,79}$"),
+        offset: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=100),
+        principal: AdminPrincipal = Depends(authorizer.require("metadata_admin")),
+    ):
+        if runtime_query is None:
+            raise HTTPException(503, detail={"code": "goods_runtime_not_configured"})
+        return await runtime_query(principal, {"run_id": run_id, "document_id": document_id,
+                                               "offset": offset, "limit": limit})
 
     @router.post("/documents", status_code=201)
     async def upload(

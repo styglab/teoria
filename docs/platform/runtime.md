@@ -109,3 +109,64 @@ Context는 게시 의미·승인 Binding 조회와 업무 query handler의 계�
 plan·execute는 관리자 인증과 각 단계 OPA 검증을 거친다. execute는 plan JSON/ID 재생 API가 아니다.
 새 handler는 `platform/ontology/runtime/context/query.py` 계약을 구현해 `entrypoints/composition/`에서 주입한다.
 업무 handler가 질문 해석·입력·결과를 맡고 공통 Engine은 의미 조회·정책 검증을 맡는다.
+
+## 문서 요구조건의 게시 의미 조회
+
+`get_goods_document_requirements`는 원문 관찰 → 승인 표현 연결 → 고정 프로파일 → Runtime 조회의 첫 경로다.
+Registry 계약은 `validated` 상태이며 운영에서 자동 활성화하지 않는다. 업무 정의는 goods Ontology,
+조회 응답은 별도 `goods_requirements.document` Runtime projection이다.
+
+문서 본문·관찰을 DB에 다시 복제하지 않는다. 조회용 artifact는 승인된 연결과 프로파일로 적용한 관찰만 고정한다.
+원문 hash·게시 개념·프로파일 revision·적용 규칙·표현 연결 mapping ID·값·단위·scope·근거를 함께 보존한다.
+미연결·보류 관찰은 원래 추출 결과에 남고, 조회 artifact에는 보류 개수를 기록한다.
+
+### 준비
+
+먼저 실제 의미 검토·Ontology 게시·표현 연결 승인·프로파일 승인을 완료한다.
+`TEORIA_SPECIFICATION_AUTHORING_API_URL`과 별도 bearer token을 설정한다.
+아래는 입력 형식 예시다. 운영 version·UUID·URI·SHA256은 실제 export와 저장 참조로 바꾼다.
+
+```json
+{
+  "version": "2026.11.10.1",
+  "run_id": "approved_memory_run",
+  "profile_revision_id": "승인된_프로파일_UUID",
+  "extraction": {"uri": "s3://teoria-artifacts/.../extracted.json", "sha256": "원본_산출물_SHA256"},
+  "alignment": {"uri": "s3://teoria-artifacts/.../source_term_alignment.json", "sha256": "연결_산출물_SHA256"},
+  "execution_receipt": {"uri": "s3://teoria-artifacts/.../execution_receipt.json", "sha256": "실행_기록_SHA256"}
+}
+```
+
+```bash
+uv run --locked --project backend --extra api teoria-pipelines specification build-runtime-view \
+  --manifest /path/to/runtime_view_input.json --output /path/to/goods_views
+```
+
+명령은 Admin의 승인 프로파일·표현 스냅샷·게시 Ontology를 읽는다. 저장된 resolved 표시는 신뢰하지 않고
+승인 스냅샷에서 연결을 재해석하며 원문 hash·값·귀속·scope·단위와 프로파일을 다시 검증한다.
+실행 receipt의 run/document·원본 hash·산출물 URI/hash가 입력과 일치해야 한다.
+원문 관찰·Draft·승인 상태는 변경하지 않는다. 출력은 `<version>/view.json`이며 같은 version의 다른 내용을 덮어쓰지 않는다.
+
+### Runtime 연결
+
+검토한 Capability를 활성화한 새 Registry release와 Runtime bundle을 별도로 준비한다.
+Runtime에 아래 두 값을 함께 설정한다. SHA256은 생성 명령의 `artifact.sha256`이다.
+
+```dotenv
+TEORIA_GOODS_RUNTIME_VIEW_PATH=/app/runtime_artifacts/goods_views/2026.11.10.1/view.json
+TEORIA_GOODS_RUNTIME_VIEW_SHA256=실제_파일_SHA256
+```
+
+Runtime은 파일 hash·내부 checksum·version 디렉터리·개념 소유 관계와 bundle의 게시 version/checksum을 검증한다.
+불일치는 시작을 차단한다. 활성 Capability에 고정 view가 없거나 검증된 bundle 없이 view만 지정해도 시작하지 않는다.
+요청 중에는 메모리에 적재한 불변 view만 읽으며 작성 DB·Admin API·원본 Registry를 조회하지 않는다.
+Compose는 기존 read-only `runtime-artifacts` 볼륨에 view를 배치하고 위 환경변수로 선택한다.
+K3s에서는 같은 파일을 PVC에 배치하고 동일 환경변수를 명시한다. 실제 배포 성공은 별도 검증한다.
+
+FormatID의 프로파일 적용 결과에서 **게시 의미로 조회**를 열면 `metadata_admin` 인증을 가진 Admin → Runtime HTTP 경계를 거친다.
+run/document로 범위를 고정하고 최대 100개씩 조회하며 게시되지 않은 문서를 빈 성공으로 표시하지 않는다.
+호출 주체·역할은 인증 principal에서 전달한다. 원문 추출값은 기존 결과 화면에서 확인한다.
+
+검증: `backend/tests/integration/test_goods_runtime_view.py`의 격리 게시 fixture에서 모듈당 32GB의
+값·scope·승인 연결·원문 근거·bundle version을 HTTP까지 대조한다. 운영 goods Draft를 게시하거나
+실문서 자동 연결 정확도를 승인한 결과는 아니다.

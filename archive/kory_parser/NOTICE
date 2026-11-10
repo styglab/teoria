@@ -1,8 +1,16 @@
 kory-parser is an independent experimental Python implementation.
 It is not the official kordoc Python SDK and does not invoke JavaScript while parsing.
 
+The current Kory Parser distribution is licensed under the GNU Affero General
+Public License, version 3 or (at your option) any later version
+(SPDX: AGPL-3.0-or-later). See LICENSE for the full license text.
+This distribution license does not replace the original notices and MIT licenses
+for adapted third-party portions listed below, or the licenses of dependencies.
+No change of copyright ownership is asserted by this licensing update.
+
 Porting reference: kordoc 4.22.15, https://github.com/chrisryugj/kordoc
-Copyright (c) 2026 chrisryugj. MIT license, reproduced in LICENSE.
+Copyright (c) 2026 chrisryugj. MIT license, reproduced in
+third_party/kordoc_license.txt.
 Adapted portions: HWP5 record/control decoding, addressed table assembly,
 HWP3 paragraph/control decoding, Johab and Hancom character mapping tables.
 Modifications: Python rewrite, dataclass contracts, explicit source references,
@@ -16,7 +24,7 @@ The HWP algorithms and character tables in kordoc in turn derive from rhwp:
 https://github.com/edwardkim/rhwp
 Copyright edwardkim. MIT license, reproduced in third_party/rhwp_license.txt.
 
-The PDF implementation uses pdfplumber/pdfminer and PDFium for primitives and
+Historical PDF versions used pdfplumber/pdfminer and PDFium for primitives and
 includes the above clip/layout adaptations. It is not a complete port of
 kordoc's PDF.js/OpenDataLoader-based table detection. Dependencies retain their
 own licenses. OCR is an optional RapidOCR integration, not identical to kordoc OCR.
@@ -25,7 +33,8 @@ Version 0.3.0 adds single-pass pdfminer decoding, indexed rule coverage and
 form/page continuation reconstruction. Optional PyMuPDF integration calls the
 installed library API; no PyMuPDF source or binary is vendored in this package.
 PyMuPDF / MuPDF is offered under GNU AGPL v3 or an Artifex commercial license:
-https://pymupdf.io/licensing . The pdf_native extra is optional and explicit.
+https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright .
+The pdf_native extra was optional and explicit in that historical version.
 fontTools, used to inspect embedded glyph outlines, retains its own MIT license.
 
 Version 0.4.0 preserves pdfplumber 0.11.10 glyph clustering semantics while
@@ -53,4 +62,11 @@ pdf_rules.py adapt pdfplumber 0.11.10 (MIT), Copyright (c) 2015 Jeremy Singer-Vi
 Its license is reproduced in third_party/pdfplumber_license.txt. No pdfplumber or
 pdfminer PDF interpreter is vendored. Reviewed font-outline digests contain no
 font binaries; their source and visual-review evidence are recorded in
-verification/pdf_glyph_review_v0_7_0.json.
+verification/pdf_glyph_review_v0_7_0.json in the historical evaluation environment;
+that evidence file is not included in the current source distribution.
+
+Current dependency configuration: PyMuPDF and fontTools are required; OCR uses
+optional RapidOCR and ONNX Runtime. Dependencies and downloaded OCR models retain
+their own licenses. Historical optional-extra descriptions above do not describe
+the current installation. See pyproject.toml and uv.lock for declared and resolved
+dependencies. This package does not grant a commercial license to PyMuPDF/MuPDF.

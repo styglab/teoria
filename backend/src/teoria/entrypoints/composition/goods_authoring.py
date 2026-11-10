@@ -45,6 +45,25 @@ def install_goods_authoring_routers(app: FastAPI, services: AdminServices):
             from teoria.domains.goods.normalization.ontology_impact import GoodsOntologyImpactService
             dependency_reader = GoodsOntologyImpactService(services.ontology_authoring_service, profiles,
                 expressions, services.binding_repository, services.catalog).report
+        from pathlib import Path
+        import os
+        from teoria.domains.goods.data_processing.storage.artifact_reader import verified_artifact
+        from teoria.domains.goods.data_processing.storage.artifact_store import artifact_store
+        from teoria.domains.goods.normalization.meaning_proposals.interpretation_repository import InterpretationRepository
+        from teoria.domains.goods.normalization.meaning_proposals.interpretation_service import InterpretationService
+        from teoria.domains.goods.normalization.meaning_proposals.interpretation_router import create_interpretation_router
+
+        object_root = os.getenv("TEORIA_SPECIFICATION_ARTIFACT_ROOT", "s3://teoria-artifacts")
+
+        async def read_interpretation_artifact(reference):
+            return await verified_artifact(reference, Path("/app/specification_artifacts"), object_root,
+                                           limit=20 * 1024 * 1024)
+
+        interpretations = (InterpretationService(
+            InterpretationRepository(services.settings.app_database_url), profiles,
+            services.ontology_authoring_service, read_interpretation_artifact,
+            lambda: artifact_store(object_root)) if profiles else None)
+        app.include_router(create_interpretation_router(interpretations, services.authorizer))
         app.include_router(
             create_normalization_profile_router(
                 profiles, services.authorizer, operations

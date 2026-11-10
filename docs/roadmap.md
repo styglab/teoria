@@ -13,8 +13,8 @@ AI/AIP는 예약 폴더만 있으며 미구현이다. 기존 기능별 LLM 호�
 | 메타데이터 | OpenMetadata 자산 조회·AI 진단·Suggestion 검토·적용 |
 | Ontology | Draft·검토·승인·게시·버전 artifact·공개 publication 조회 |
 | 의미 연결 | 개념과 용어·자산·API·Capability의 Binding 검토·승인 |
-| Runtime | Source·Mapping·Capability 계약 검증·artifact 적재·Context·HTTP/MCP 경계 |
-| 물품 | 규격서 추출·근거 검증·표현 등록·게시 개념 연결·프로파일 승인·고정 적용 |
+| Runtime | Source·Mapping·Capability·artifact·Context·HTTP/MCP 기반; 문서 요구조건 고정 조회 계약은 validated 상태 |
+| 물품 | 규격서 추출·근거 검증·표현 연결·프로파일 승인·문서별 해석 승인·별도 적용·감사 |
 | 법령 | 전용 Worker의 수집·시점 검색·진단 근거 조회 |
 | FormatID | 문서 입력·실행·결과·원문 근거·재처리·단계 상태·검증된 평가 근거 연결 |
 | 프런트엔드 기반 | Shell·라우트 분리, 소유 모듈별 API, TanStack Query·요청 취소·세션별 캐시 초기화 |
@@ -24,8 +24,13 @@ AI/AIP는 예약 폴더만 있으며 미구현이다. 기존 기능별 LLM 호�
 
 1. **물품 2.0.0 Draft 검토**: 서버·메모리 업무 정의와 실제 규격서 근거를 대조하고 승인·게시한다.
 2. **게시 정의 기반 적용 검증**: 개념 연결·프로파일의 품목 확장과 실제 문서 회귀 평가를 진행한다.
-3. **물품 Runtime 제공**: 검증된 업무 조회 요구가 생기면 DB Source·Mapping·Capability를 작성한다.
+3. **물품 Runtime 운영 전환**: 승인된 실제 연결·프로파일로 조회 view를 생성하고 새 bundle에 고정한다. 격리 HTTP·FormatID 통합 경로는 구현했으며 운영 Capability 활성화·배포는 남아 있다.
 4. **운영 환경 검증**: 역할별 권한·객체 저장소·Worker·게시 artifact를 실제 배포에서 확인한다.
+
+실제 서버 문서의 [네 항목 검토 준비](../backend/authoring/specification_examples/server_memory_review.yaml)는
+보존된 객체 저장소의 원문·결과·검토 해시와 네 관찰 ID를 재확인했다. 운영 Draft 재조회와 의미 승인이 필요하다.
+소유 대상·scope·구성 수량의 문서별 승인·별도 적용·Runtime 제공 경로는 구현했다.
+격리 PostgreSQL에서 migration·동시 승인·불변 재적용·감사를 검증했으며 실제 문서의 의미 승인·운영 배포는 남아 있다.
 
 구조 변경의 단위 테스트·빌드·Compose 템플릿 검증과 실제 배포 성공은 구분한다.
 현재 물품 Draft 준비의 실제 검증 범위는 [11월 9일 기록](verification/goods_native_draft_preparation_2026_11_09.md)에 있다.

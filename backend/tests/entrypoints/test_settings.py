@@ -30,3 +30,10 @@ def test_loads_explicit_env_file_and_validates_types(tmp_path: Path, monkeypatch
     assert settings.capability_timeout_seconds == 45
     for name in names:
         monkeypatch.delenv(name, raising=False)
+
+
+def test_empty_optional_goods_view_environment_does_not_enable_a_runtime_reader():
+    from teoria.settings import Settings
+    settings = Settings(goods_runtime_view_path="", goods_runtime_view_sha256="")
+    assert settings.goods_runtime_view_path is None
+    assert settings.goods_runtime_view_sha256 is None

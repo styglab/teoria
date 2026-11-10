@@ -76,4 +76,6 @@ Pipeline만 사용하는 API는 [Connector 절차](pipelines/connectors.md)를 �
 공통 모델 API·플랫폼 화면은 예제를 import하지 않으며 composition·shell이 필요한 동작을 주입한다.
 배포 목록 문서는 별도 보관하지 않고 `teoria-pipelines deployment-docs`로 현재 선언을 출력한다.
 
-문서 파서는 별도 프로젝트다. 설치·자체 검사는 [Kory Parser 사용법](../archive/kory_parser/docs/usage.md)을 따른다.
+문서 파서는 별도 프로젝트다. 설치는 [Kory Parser 사용법](../archive/kory_parser/docs/usage.md),
+회귀 테스트·평가·개선은 [평가 도구](../archive/kory_parser_evaluation/README.md)와
+[평가 절차](../archive/kory_parser_evaluation/docs/evaluation_loop.md)를 따른다.

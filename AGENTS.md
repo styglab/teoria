@@ -16,6 +16,7 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
   MLOps를 AIP와 동일시하거나 `ai/` 아래로 옮기지 않는다. 구현되지 않은 AI API·메뉴·배포를 만들지 않는다.
 - 고객 이탈 전용 데이터·학습·평가·배포·추론은 `examples/customer_churn/`, 공통 모델 운영은 `platform/mlops/`, MLflow 연결은 `integrations/mlflow/`에 둔다. 플랫폼·도메인·연결 모듈은 예제를 import하지 않는다. 예제 API·프런트엔드 테스트 폼은 composition·shell에서 주입한다.
 - Ontology는 `platform/ontology/authoring/`, Binding은 `platform/ontology/bindings/`, Source·Mapping·Capability 계약은 `platform/ontology/contracts/`, Runtime·Context는 `platform/ontology/runtime/`에 둔다.
+- 승인된 물품 관찰의 조회 artifact와 handler는 `domains/goods/runtime.py`가 소유한다. Runtime은 파일 SHA256·불변 version·bundle의 게시 참조를 검증하고 고정 view만 읽는다. 원문·관찰을 별도 DB 본문으로 복제하거나 query processor로 외부 Source 계약을 우회하지 않는다.
 - 규격서 추출은 `domains/goods/data_processing/`, 복합 Prefect Flow는 `domains/goods/workflows/`, 물품 후보·프로파일 승인은 `domains/goods/normalization/`에 둔다.
 - 물품 원문 표현 등록·게시 개념 연결은 `domains/goods/expression_links/`에 둔다. 새 업무 정의는 Ontology가 소유하며, v1 사전 쓰기는 `domains/goods/expression_links/legacy/`와 규격서의 `legacy_dictionary/` 호환 영역에 격리한다.
 - 법령 수집·조회는 `domains/legal_information/`, 메타데이터 진단·ingestion은 `platform/data/metadata/`에 둔다.

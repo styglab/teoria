@@ -16,13 +16,13 @@ async def test_migration_requires_classification_of_every_runtime_object():
     assert report["status"] == "invalid" and report["missing_objects"] == ["example.group"]
 
 
-async def test_native_goods_draft_changes_are_reported_without_claiming_runtime_migration():
+async def test_native_goods_draft_and_runtime_projection_remain_distinct():
     manifest = OntologyMigrationManifest.load(Path(
-        'backend/authoring/ontology_migrations/pending/2026_11_goods_native_meaning/ontology_v2.yaml'))
+        'backend/authoring/ontology_migrations/pending/2026_11_goods_runtime_requirements/ontology_v2.yaml'))
     catalog = RegistryLoader(Path('backend/contracts/runtime')).load()
     report = await build_migration_report(catalog, manifest)
-    assert report['status'] == 'valid' and report['registry_object_count'] == 0
-    assert report['manifest_object_count'] == 0 and report['draft_object_count'] == 4
+    assert report['status'] == 'valid' and report['registry_object_count'] == 1
+    assert report['manifest_object_count'] == 1 and report['draft_object_count'] == 4
     rows = {row['stable_key']:row for row in report['draft_objects']}
     assert rows['goods.server']['migration_status'] == 'planned'
     assert rows['goods.memory_module']['classification'] == 'BUSINESS_CONCEPT'

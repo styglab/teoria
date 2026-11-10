@@ -444,7 +444,7 @@ class RegistryValidator(FieldValidationMixin):
                     for mapping in catalog.mappings.values()
                     for target, bindings in mapping.bindings.items()
                 )
-                if capability.kind == "query" and not has_response_binding:
+                if capability.kind == "query" and capability.processor is None and not has_response_binding:
                     diagnostics.append(
                         Diagnostic(
                             "unavailable_capability_return",

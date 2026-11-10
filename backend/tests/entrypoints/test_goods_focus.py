@@ -27,7 +27,9 @@ MANIFEST = (
 def test_active_catalog_cannot_discover_retired_services():
     catalog = RegistryLoader(ROOT / "backend/contracts/runtime").load()
     assert not catalog.sources
-    assert not catalog.runtime_contracts
+    assert set(catalog.runtime_contracts) == {"goods_requirements"}
+    assert not catalog.capabilities
+    assert catalog.capability_versions[("get_goods_document_requirements", "1.0.0")].lifecycle.status == "validated"
     client = TestClient(create_admin_app(settings=Settings(), catalog=catalog))
     capabilities = client.get("/v1/admin/capabilities").json()["capabilities"]
     assert capabilities == []
@@ -43,6 +45,8 @@ async def test_retired_contracts_have_explicit_dispositions():
                for row in manifest.objects.values())
     current = OntologyMigrationManifest.load(ROOT / "backend/authoring/ontology_migrations/applied/2026_10_specification_goods_reset/ontology_v2.yaml")
     manifest.objects.update(current.objects)
+    pending = OntologyMigrationManifest.load(ROOT / "backend/authoring/ontology_migrations/pending/2026_11_goods_runtime_requirements/ontology_v2.yaml")
+    manifest.objects.update(pending.objects)
     assert (await build_migration_report(active, manifest))["status"] == "valid"
     # An unretired reference must still be rejected instead of silently ignored.
     manifest.objects["company.legal_entity"].classification = "RUNTIME_PROJECTION"
