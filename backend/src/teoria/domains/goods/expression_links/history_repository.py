@@ -1,5 +1,5 @@
 """Historical definition reads and shared expression audit; no local-definition writes."""
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from teoria.domains.goods.expression_links.registration_repository import ExpressionRegistrationRepository
 

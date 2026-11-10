@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     semantic_modeling_enabled: bool = True
     formatid_enabled: bool = True
     legal_information_enabled: bool = True
+    image_registry_url: str = ""
+    image_registry_public_host: str = ""
+    image_registry_username: str = ""
+    image_registry_password: str = ""
     model_operations_enabled: bool = False
     model_prefect_url: str = "http://prefect-server:4200/api"
     model_prefect_auth: str = ""

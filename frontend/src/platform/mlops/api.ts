@@ -114,3 +114,35 @@ export const modelOperationsApi = {
       },
     ),
 };
+
+export type ImagePage = { items: string[]; next: string | null };
+export type ImageManifest = {
+  repository: string;
+  reference: string;
+  digest: string;
+  image: string;
+  media_type: string;
+  platforms: Array<{ os?: string; architecture?: string; variant?: string }>;
+};
+export const imageRegistryApi = {
+  status: (signal?: AbortSignal) =>
+    getJson<{ configured: boolean; host: string | null }>(
+      "/image-registry/status",
+      signal,
+    ),
+  repositories: (after: string, signal?: AbortSignal) =>
+    getJson<ImagePage>(
+      `/image-registry/repositories?${new URLSearchParams({ after })}`,
+      signal,
+    ),
+  tags: (repository: string, after: string, signal?: AbortSignal) =>
+    getJson<ImagePage>(
+      `/image-registry/tags?${new URLSearchParams({ repository, after })}`,
+      signal,
+    ),
+  manifest: (repository: string, reference: string, signal?: AbortSignal) =>
+    getJson<ImageManifest>(
+      `/image-registry/manifest?${new URLSearchParams({ repository, reference })}`,
+      signal,
+    ),
+};

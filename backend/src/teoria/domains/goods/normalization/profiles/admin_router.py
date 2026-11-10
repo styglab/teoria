@@ -18,6 +18,7 @@ from teoria.domains.goods.normalization.profiles.service import (
 )
 from teoria.domains.goods.normalization.contracts.candidates import CandidateBundle
 from teoria.domains.goods.normalization.candidates.proposals import CandidateSelection
+from teoria.domains.goods.normalization.candidates.semantic_resolution import MeaningEvaluationCases
 
 
 class TransitionInput(BaseModel):
@@ -62,6 +63,10 @@ class SemanticProfileInput(SemanticDraftInput):
 class SemanticCycleInput(SemanticInput):
     version: str = Field(min_length=1, max_length=100)
     auto_approve: bool = False
+
+
+class SemanticOperationInput(SemanticCycleInput):
+    evaluation: MeaningEvaluationCases | None = None
 
 
 def create_normalization_profile_router(
@@ -239,13 +244,13 @@ def create_normalization_profile_router(
     @router.post("/semantic-operations/{operation_id}")
     async def semantic_operation(
         operation_id: Annotated[str, ApiPath(pattern=r"^[a-z][a-z0-9_]{0,79}$")],
-        payload: SemanticCycleInput,
+        payload: SemanticOperationInput,
         principal: AdminPrincipal = Depends(principal_dependency),
     ):
         async with meaning_slots:
             return await translate(
                 operation_service().execute(
-                    operation_id, payload.model_dump(mode="json"), actor=principal.actor
+                    operation_id, payload.model_dump(mode="json", exclude={'evaluation'} if payload.evaluation is None else set()), actor=principal.actor
                 )
             )
 

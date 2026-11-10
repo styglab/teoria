@@ -211,6 +211,24 @@ uv run --project backend --locked --group orchestration teoria-pipelines specifi
 보존하고 작업공간 전체를 정리한다. 판정은 `comparison_only`이며 수정 전후 품질 승인이나
 배포 성공으로 기록하지 않는다. 파서 변환 성공률·문자열 보존 검사도 추출 정확도와 구분한다.
 
+## 단계별 평가와 운영 조건
+
+추출 평가는 파싱·추출 코드와 계약으로 revision을 계산한다. 작성 API나 Runtime 변경만으로
+기존 추출 평가가 달라지지 않는다. 과거 전체 코드 해시로 만든 평가 기록은 보존하며 새 revision으로 다시 평가해야 한다.
+
+Ontology 의미 판정은 기존 개념 연결·신규 개념 제안·보류를 별도로 평가한다.
+`standard-workflow`의 `semantic_evaluations`에 `entities` 또는 `requirements`별 `{uri, sha256}`를 지정하면
+고정 사례를 검증한다. 사례 JSON은 `MeaningEvaluationCases` 계약을 사용한다.
+`base_profile_checksum`, `candidate_report_checksum`, `input_checksums`, `label_status`, `cases`를 고정하며,
+각 사례는 `group_id`, `action`, `concept_id` 또는 `new_concept_code`, `units`, `reverse`를 명시한다.
+누락된 판정은 분모에 남고 정답 대상·단위·방향이 다르면 실패한다. 다른 입력의 사례는 거절한다.
+실패하면 신규 Ontology/프로파일 작성 전에 `held`로 멈춘다. 결과는 의미 operation의 `evaluation`에서 조회한다.
+미주석 그룹과 silver 라벨을 구분하며, 통과가 정의 전체의 의미 정확도나 게시 권한을 뜻하지 않는다.
+
+전체 워크플로우 결과의 `quality`는 추출 평가 근거·의미 판정 사례·적용의 운영 지표를 구분한다.
+평가를 연결하지 않은 단계는 미평가로 남긴다. 실패율·보류율·속성 개수는 `operational_conformance`이며
+정확도 측정이 아니다. 적용된 속성·구성 수량이 하나도 없으면 자동 처리 기준 승인을 보류한다.
+
 ## 개선안의 품질 조건 검사
 
 ```bash

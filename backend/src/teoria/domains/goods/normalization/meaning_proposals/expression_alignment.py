@@ -88,6 +88,37 @@ def apply_concept_meanings(documents, resolution):
             'summary':dict(counts),'documents':aligned}
 
 
+def registration_from_snapshot(corpus, snapshot):
+    """Match exact registered source expressions and owners; never register or infer synonyms."""
+    from teoria.domains.goods.expression_links.contracts import normalized_source_name
+    submission = submission_from_corpus(corpus, auto_approve=False)
+    decisions, by_candidate = [], {}
+    for candidate in sorted(submission.candidates, key=lambda c: c.kind != 'item_type'):
+        owner = by_candidate.get(candidate.owner_candidate_key) if candidate.owner_candidate_key else candidate.owner_entry_id
+        matches = [source for source in snapshot.sources
+            if source['status'] == 'approved' and source['kind'] == candidate.kind
+            and normalized_source_name(source['preferred_name']) == normalized_source_name(candidate.preferred_name)
+            and (str(source.get('owner_entry_id')) if source.get('owner_entry_id') else None) == owner]
+        if candidate.kind == 'characteristic' and owner is None:
+            matches = []
+        entry = str(matches[0]['entry_id']) if len(matches) == 1 else None
+        by_candidate[candidate.candidate_key] = entry
+        decisions.append({'candidate_key': candidate.candidate_key, 'origin_ref': candidate.origin_ref,
+            'status': 'reused' if entry else 'held', 'entry_id': entry,
+            'reason': 'exact_snapshot_expression' if entry else 'expression_registration_required'})
+    return submission, {'operation_id': 'frozen_snapshot', 'policy_version': 'source_literal_v1',
+        'approval_mode': 'frozen_snapshot', 'status': 'partial' if any(d['status']=='held' for d in decisions) else 'completed',
+        'summary': dict(Counter(d['status'] for d in decisions)), 'decisions': decisions}
+
+
+def pinned_meanings(corpus, snapshot):
+    submission, registration = registration_from_snapshot(corpus, snapshot)
+    documents = aligned_observations(corpus, submission, registration)
+    source_ids = sorted({d['entry_id'] for d in registration['decisions'] if d['entry_id']})
+    resolution = resolve_snapshot(snapshot, source_ids, corpus.get('classification_code'))
+    return apply_concept_meanings(documents, resolution), registration
+
+
 async def align_dictionary(request, corpus, extraction_ref, *, maintenance=None):
     """Called by the existing processing Task, never a separate Flow or mode."""
     operation_id = 'dictionary_'+request.run_id
@@ -114,7 +145,25 @@ async def align_dictionary(request, corpus, extraction_ref, *, maintenance=None)
             pinned = parse_dictionary_snapshot(raw)
             if request.mode=='standard_management':
                 raise ValueError('dictionary_standard is read-only; use document_processing')
-        if corpus['documents']:
+        if request.mode == 'document_processing' and pinned is None and corpus['documents']:
+            # One read pins this execution. Applying observations never writes source registrations.
+            async with GoodsAuthoringClient() as api:
+                pinned = parse_dictionary_snapshot(await api.dictionary_meaning('GET', '/snapshot'))
+        if pinned is not None and pinned.schema_version == 2 and request.standard is not None:
+            raw_standard = await read_uri(request.standard.uri)
+            if hashlib.sha256(raw_standard).hexdigest() != request.standard.sha256:
+                raise ValueError('standard checksum mismatch')
+            standard = json.loads(raw_standard)
+            if standard.get('artifact_kind') == 'goods_normalization_package':
+                from teoria.domains.goods.expression_links.expression_contracts import expression_snapshot_for_publication
+                pinned = expression_snapshot_for_publication(pinned, standard['profile']['ontology'])
+        if corpus['documents'] and pinned is not None and pinned.schema_version == 2:
+            submission, result = registration_from_snapshot(corpus, pinned)
+            source_ids = sorted({d['entry_id'] for d in result['decisions'] if d['entry_id']})
+            resolution = resolve_snapshot(pinned, source_ids, request.classification_code)
+            semantic_authoring = {'status': 'skipped_fixed_standard', 'summary': {}, 'decisions': []}
+            documents = aligned_observations(corpus, submission, result)
+        elif corpus['documents']:
             submission = submission_from_corpus(corpus,auto_approve=request.dictionary_auto_approve)
             raw=(submission.model_dump_json(indent=2)+'\n').encode()
             artifacts.append((await store.put(f'specification_processing/{request.run_id}/dictionary_candidates.json',raw)).model_dump())

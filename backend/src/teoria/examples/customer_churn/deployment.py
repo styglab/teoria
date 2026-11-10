@@ -34,9 +34,22 @@ def activate_demo_release(release: dict) -> dict:
         fcntl.flock(lock, fcntl.LOCK_EX)
         previous = json.loads(path.read_text()) if path.exists() else None
         with closing(docker.from_env()) as client:
-            container = client.containers.get("teoria-demo-inference-1")
-            if container.labels.get("io.teoria.role") != "demo-inference":
-                raise ValueError("refusing to restart an unexpected container")
+            project = os.environ["TEORIA_COMPOSE_PROJECT_NAME"]
+            containers = client.containers.list(
+                all=True,
+                filters={
+                    "label": [
+                        f"com.docker.compose.project={project}",
+                        "com.docker.compose.service=demo-inference",
+                        "io.teoria.role=demo-inference",
+                    ]
+                },
+            )
+            if len(containers) != 1:
+                raise ValueError(
+                    "expected exactly one project-owned inference container"
+                )
+            container = containers[0]
             try:
                 _publish(path, release)
                 container.restart(timeout=20)

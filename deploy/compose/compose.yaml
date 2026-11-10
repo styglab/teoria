@@ -4,7 +4,7 @@ services:
   nginx:
     cpus: 0.5
     mem_limit: 128m
-    image: teoria-nginx:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-nginx:${TEORIA_IMAGE_TAG:-latest}
     environment:
       NGINX_ENTRYPOINT_WORKER_PROCESSES_AUTOTUNE: '1'
     build:
@@ -38,7 +38,7 @@ services:
   admin-api:
     cpus: 1
     mem_limit: 512m
-    image: ${TEORIA_ADMIN_API_IMAGE:-teoria-platform-admin:latest}
+    image: ${TEORIA_ADMIN_API_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-platform-admin:${TEORIA_IMAGE_TAG:-latest}}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -72,6 +72,10 @@ services:
       TEORIA_SEMANTIC_MODELING_ENABLED: 'false'
       TEORIA_FORMATID_ENABLED: 'false'
       TEORIA_LEGAL_INFORMATION_ENABLED: 'false'
+      TEORIA_IMAGE_REGISTRY_URL: ${TEORIA_IMAGE_REGISTRY_URL:-}
+      TEORIA_IMAGE_REGISTRY_PUBLIC_HOST: ${TEORIA_IMAGE_REGISTRY_PUBLIC_HOST:-}
+      TEORIA_IMAGE_REGISTRY_USERNAME: ${TEORIA_IMAGE_REGISTRY_USERNAME:-}
+      TEORIA_IMAGE_REGISTRY_PASSWORD: ${TEORIA_IMAGE_REGISTRY_PASSWORD:-}
       TEORIA_MODEL_OPERATIONS_ENABLED: 'false'
       TEORIA_OPENMETADATA_ENABLED: 'false'
       TEORIA_SPECIFICATION_UPLOAD_ENABLED: 'false'
@@ -247,7 +251,7 @@ services:
   opa:
     cpus: 0.5
     mem_limit: 256m
-    image: teoria-opa:1.21.1
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-opa:${TEORIA_IMAGE_TAG:-1.21.1}
     build:
       context: ../..
       dockerfile: deploy/compose/opa/Dockerfile
@@ -287,7 +291,7 @@ services:
   policy-control-plane:
     cpus: 0.5
     mem_limit: 256m
-    image: teoria-platform-authoring:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-platform-authoring:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -409,7 +413,7 @@ services:
     profiles:
     - jobs
   postgres-migrate:
-    image: teoria-data-operations:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-data-operations:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -432,7 +436,7 @@ services:
   app-postgres-migrate:
     cpus: 1
     mem_limit: 512m
-    image: teoria-platform-admin:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-platform-admin:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -453,7 +457,7 @@ services:
   opa-bundle-build:
     cpus: 0.5
     mem_limit: 256m
-    image: teoria-opa-bundle-builder:1.21.1
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-opa-bundle-builder:${TEORIA_IMAGE_TAG:-1.21.1}
     build:
       context: ../..
       dockerfile: deploy/compose/opa/Dockerfile
@@ -472,7 +476,7 @@ services:
   platform-check:
     cpus: 0.5
     mem_limit: 512m
-    image: teoria-platform-authoring:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-platform-authoring:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -516,7 +520,7 @@ services:
     - ../../backend/contracts/runtime:/app/backend/contracts/runtime:ro
     profiles:
     - jobs
-    image: teoria-pipelines-check:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-pipelines-check:${TEORIA_IMAGE_TAG:-latest}
 volumes:
   specification-model-auth: null
   metadata-model-auth: null

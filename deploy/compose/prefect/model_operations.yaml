@@ -1,9 +1,29 @@
+retired_pools:
+- teoria-model-training
 pools:
-- name: teoria-model-training
-  type: process
+- name: teoria-model-training-docker
+  type: docker
   concurrency_limit: 1
   queues: []
-  update_existing: false
+  update_existing: true
+  image_env: TEORIA_MODEL_TRAINING_IMAGE
+  network_env: TEORIA_MODEL_DOCKER_NETWORK
+  job_defaults:
+    image_pull_policy: IfNotPresent
+    auto_remove: true
+    mem_limit: 2g
+    memswap_limit: 2g
+    container_create_kwargs:
+      nano_cpus: 2000000000
+      user: '10001:10001'
+      cap_drop: [ALL]
+      security_opt: [no-new-privileges:true]
+  environment:
+    PREFECT_API_URL: '{{ $PREFECT_API_URL }}'
+    PREFECT_API_AUTH_STRING: '{{ $PREFECT_API_AUTH_STRING }}'
+    TEORIA_PIPELINE_DATA_DATABASE_URL: '{{ $TEORIA_PIPELINE_DATA_DATABASE_URL }}'
+    MLFLOW_TRACKING_URI: '{{ $MLFLOW_TRACKING_URI }}'
+    TEORIA_MODEL_TRAINING_IMAGE: '{{ image }}'
 - name: teoria-model-deployment
   type: process
   concurrency_limit: 1
@@ -12,15 +32,15 @@ pools:
 deployments:
 - name: demo-customer-churn-pipeline
   work_pool:
-    name: teoria-model-training
+    name: teoria-model-training-docker
     work_queue_name: default
 - name: demo-seed-customers
   work_pool:
-    name: teoria-model-training
+    name: teoria-model-training-docker
     work_queue_name: default
 - name: demo-train-customer-churn
   work_pool:
-    name: teoria-model-training
+    name: teoria-model-training-docker
     work_queue_name: default
 - name: demo-deploy-customer-churn
   work_pool:

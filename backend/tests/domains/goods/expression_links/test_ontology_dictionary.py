@@ -87,3 +87,25 @@ def test_release_ignores_unmapped_observations_and_frozen_replay_has_no_live_dep
     parsed=parse_dictionary_snapshot(encoded)
     entry=next(s['entry_id'] for s in parsed.sources if s['kind']=='item_type')
     assert resolve_snapshot(parsed,[entry],'1234567890')['items'][0]['status']=='resolved'
+
+
+def test_expression_review_state_keeps_approval_and_publication_boundaries():
+    from teoria.domains.goods.expression_links.expression_contracts import (
+        expression_review_state, require_expression_approval_policy,
+    )
+    from teoria.platform.ontology.authoring.publication_contracts import OntologyPublicationRef
+    snapshot = fixture()
+    ontology = OntologyPublicationRef.model_validate(snapshot.ontologies[0]['ontology'])
+    plan = {'ontology': ontology.model_dump(mode='json'),
+            'mapping_ids': [snapshot.mappings[0]['mapping_id']], 'unresolved': []}
+    assert expression_review_state(plan, snapshot, ontology)['status'] == 'ready'
+    for status, expected in [('draft','awaiting_approval'), ('rejected','held'), ('deprecated','held')]:
+        rows = [{**m, 'status': status} for m in snapshot.mappings]
+        changed = expression_snapshot(snapshot.ontologies, rows, snapshot.sources)
+        assert expression_review_state(plan, changed, ontology)['status'] == expected
+    missing = expression_snapshot(snapshot.ontologies, [], snapshot.sources)
+    assert expression_review_state(plan, missing, ontology)['status'] == 'held'
+    with pytest.raises(ValueError, match='publication_changed'):
+        expression_review_state({**plan, 'ontology': {}}, snapshot, ontology)
+    with pytest.raises(ValueError, match='evaluation ontology'):
+        require_expression_approval_policy(ontology, auto_approve=True)

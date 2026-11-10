@@ -13,11 +13,14 @@ FormatID가 사용하는 물품 처리 파이프라인이다. 원문에서 관�
 | 추출 | 물품·구성·관계·속성·조건·원문 근거 | `data_processing/extraction/` |
 | 검증·저장 | 근거 대조·실패 격리·추출 artifact 저장 | `data_processing/tasks.py`, `storage/` |
 | 표현 등록 | 원문 표현과 문맥 등록 | `expression_links/` |
-| 의미 제안 | 게시 Ontology 비교·후보·미해결 상태 보존 | `normalization/meaning_proposals/` |
+| 의미 제안 | 게시 Ontology 비교·후보·미해결 상태 보존 | `normalization/meaning_proposals/`, `normalization/candidates/` |
 | 기준 적용 | 고정 프로파일·추출 규칙 적용 | `normalization/application/` |
 | 결과 확정 | 보고서·문서별 결과·실행 영수증·완료 checkpoint | `workflows/tasks.py`, `specifications.py` |
 
 추출 Task 순서는 `data_processing/flows.py`, 전체 실행은 `workflows/specifications.py`에서 읽는다.
+표준 구축의 `workflows/standard_authoring.py`는 Task I/O·실행 순서·대기·재개를 조립한다.
+후보 선정·그룹화와 프로파일 기반 연결 제안은 `normalization/candidates/proposals.py`,
+연결 검토 상태·승인 제한은 `expression_links/`가 소유한다. 승인 쓰기는 기존 인증 API를 거친다.
 앱의 HTTP 진입점은 `apps/formatid/router.py`다. SQL·파일 저장은 물품 도메인이 맡는다.
 파싱·추론과 결정적 검증·승인 정책을 구분한다. 모델 응답을 그대로 승인하지 않는다.
 
@@ -26,6 +29,28 @@ FormatID가 사용하는 물품 처리 파이프라인이다. 원문에서 관�
 - `specification-standard-management`: 문서에서 처리 기준과 의미 후보를 준비한다.
 - `specification-document-processing`: 선택한 문서에 고정된 처리 기준을 적용한다.
 - `specification-standard-workflow`: 추출·후보·프로파일 작성 절차를 연결한다.
+
+`standard-workflow`는 **승인된 기본 프로파일에서 시작하는 모델 확장**이다.
+최초 업무 모델은 Ontology Blueprint로 작성·검토·게시하고 기본 프로파일을 승인한다.
+
+구축 흐름은 `추출 → 원문 표현 등록 → 게시 버전에 맞춘 후보 수집 → Ontology/프로파일 검토 →
+표현 연결 별도 검토 → snapshot 고정 → 적용`이다. 프로파일 승인만으로 표현의 의미 동등성을 승인하지 않는다.
+`awaiting_approval` 응답의 `review_stage: expression_links`와 `mapping_ids`를 확인해
+기존 표현 연결 API로 승인한 뒤 같은 `workflow_id`로 재개한다. 거절·폐기·사라진 연결은 적용하지 않는다.
+원문 특성명이 없어 표현을 등록할 수 없는 후보는 `review_routes`에 `document_interpretation`으로 남긴다.
+[문서별 해석 승인](../model.md#문서별-해석-승인적용) 후 `document_processing` 입력의
+`interpretation_revision_ids`로 적용한다. 워크플로우 승인 대기 중에는 같은 필드에 승인 ID를 전달할 수도 있다.
+적용 입력이 고정된 이후나 완료된 실행의 승인 목록은 변경할 수 없다.
+
+고정 v2 문서 처리는 새 표현·연결을 작성하지 않는다. 공급한 snapshot에서 정확한 표현과 소유 대상을
+찾으며 미등록 표현은 보류한다. snapshot을 생략하면 시작 시 한 번 조회해 산출물로 고정한다.
+동시에 여러 게시 버전이 존재해도 프로파일이 지정한 버전만 사용한다. 과거 v1 재현 경로는 유지한다.
+
+워크플로우 2.0은 입력 계약과 단계별 코드 버전을 기록한다. 완료한 추출은 참조·checksum으로 재사용하고,
+검토 중 의미 코드나 고정 후 적용 코드가 바뀌면 새 워크플로우를 요구한다. 관계없는 작성 API·Runtime 변경은
+재개 식별자를 바꾸지 않는다. 구형 코드 해시 기반 실행은 이관하거나 덮어쓰지 않는다.
+구형 미완료 실행은 기존 배포에서 마치거나, 기존 추출 참조를 지정한 새 `workflow_id`로 시작한다.
+새 적용 실행 ID에는 프로파일·snapshot·해석 승인·적용 코드 식별자가 반영된다.
 
 이름은 기존 Prefect 배포와 CLI의 외부 계약이므로 코드 디렉터리와 별도로 유지한다.
 공통 파라미터는 `backend/config/specification_processing/prefect_deployments.yaml`,

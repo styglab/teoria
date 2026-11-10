@@ -93,6 +93,7 @@ async def test_quality_gate_prevents_registration(monkeypatch):
 async def test_example_owns_model_identity_and_training_provenance(monkeypatch):
     from teoria.examples.customer_churn import MODEL_NAME
 
+    monkeypatch.setenv("TEORIA_MODEL_TRAINING_IMAGE", "training@sha256:fixed")
     calls = []
 
     def register(*args, **kwargs):
@@ -111,6 +112,7 @@ async def test_example_owns_model_identity_and_training_provenance(monkeypatch):
     assert calls[0]["parameters"]["personal_attributes_in_features"] is False
     assert calls[0]["tags"] == {
         "teoria.synthetic": "true",
+        "teoria.training_image": "training@sha256:fixed",
         "teoria.requested_by": "authenticated-admin",
         "teoria.prefect_flow_run_id": "child",
         "teoria.prefect_pipeline_run_id": "parent",

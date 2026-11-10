@@ -16,6 +16,8 @@ from teoria.examples.customer_churn.admin_router import (
     describe_models,
 )
 from teoria.platform.mlops.admin_router import create_model_operations_router
+from teoria.platform.mlops.image_registry_router import create_image_registry_router
+from teoria.integrations.image_registry import ImageRegistryClient
 
 if TYPE_CHECKING:
     from teoria.entrypoints.composition.admin import AdminServices
@@ -24,6 +26,21 @@ if TYPE_CHECKING:
 def install_model_operations_router(
     app: FastAPI, services: AdminServices, client: httpx.AsyncClient
 ) -> None:
+    settings = services.settings
+    registry = (
+        ImageRegistryClient(
+            client,
+            url=settings.image_registry_url,
+            public_host=settings.image_registry_public_host,
+            username=settings.image_registry_username,
+            password=settings.image_registry_password,
+        )
+        if settings.image_registry_url
+        else None
+    )
+    app.include_router(
+        create_image_registry_router(authorizer=services.authorizer, registry=registry)
+    )
     catalog = workflow_catalog(
         services.settings.model_operations_enabled,
         include_internal=True,

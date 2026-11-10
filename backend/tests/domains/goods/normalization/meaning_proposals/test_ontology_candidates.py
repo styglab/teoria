@@ -26,7 +26,7 @@ async def test_new_api_collects_grounded_candidates_without_model_meaning_writes
     request=SimpleNamespace(run_id='ontology_candidates_fixture',artifact_root=tmp_path.as_uri(),
         model='fixture',model_concurrency=2,model_timeout_seconds=600,dictionary_auto_approve=True,
         dictionary_baseline=None,dictionary_standard=None,dictionary_meaning_auto_approve=True,
-        mode='standard_management',classification_code=None)
+        mode='standard_management',classification_code=None,standard=None)
     runner=SimpleNamespace(generate=AsyncMock(side_effect=AssertionError('no local meaning model')))
     result=await collect_expression_proposals(request,data,{},api=api,repository=Catalog(None),runner=runner)
     assert result['status']=='proposed' and result['candidate_count']==2 and result['auto_applied'] is False

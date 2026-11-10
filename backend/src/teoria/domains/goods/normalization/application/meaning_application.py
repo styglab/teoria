@@ -94,7 +94,8 @@ def validate_interpretation(request, result, package, publication):
     if report['summary']['held']:
         raise ValueError('interpretation_contains_held_proposals')
     document = next(d for d in result['extracted']['documents'] if d['document_id'] == request.document_id)
-    if document.get('classification_code') != package.profile.classification_code:
+    classification = document.get('classification_code') or result.get('normalization', {}).get('classification_code')
+    if classification != package.profile.classification_code:
         raise ValueError('interpretation_classification_mismatch')
     source_entities = {e['id'] for e in document['entities']}
     if any(not set(a['subject_ids']) <= source_entities for a in document['attributes']):
@@ -222,3 +223,61 @@ def apply_interpretation(approval, result, package, publication, *, run_id):
             'source_result': request.result.model_dump(mode='json'), 'approval': provenance,
             'entities': applied['entities'], 'observations': observations, 'compositions': compositions,
             'source_observations_unchanged': True}
+
+
+def merge_interpretations(normalized, applications, package):
+    """Merge reviewed projections into a new result; preserve each original extraction separately."""
+    from collections import Counter
+    result = deepcopy(normalized)
+    selected = set()
+    concepts = {str(c.concept_id): c for c in package.concepts}
+    for application in applications:
+        doc_id = application['document_id']
+        document = next(d for d in result['documents'] if d['document_id'] == doc_id)
+        entities = {e['observation_id']: e for e in document['entities']}
+        for entity in application['entities']:
+            old = entities.get(entity['observation_id'])
+            if old and old.get('status') == 'applied' and old.get('concept_id') != entity['concept_id']:
+                raise ValueError('interpretation_entity_mapping_conflict')
+            entities[entity['observation_id']] = entity
+        document['entities'] = list(entities.values())
+        facts = []
+        for observation in application['observations']:
+            source = observation['source']; identifier = source['attribute_id']
+            fact = {'observation_id': observation['observation_id'], 'property_concept_id': observation['concept_id'],
+                'property_stable_key': concepts[observation['concept_id']].stable_key,
+                'subject_observation_ids': observation['subject_refs'], 'rule_id': source['rule_id'],
+                'operator': observation['operator'], 'role': source['original_role'],
+                'semantic_scope': observation['scope'], 'value': observation['value'],
+                'value_raw': observation['value_raw'], 'unit_raw': observation['unit_raw'],
+                'evidence': source['evidence'], 'evidence_ref': doc_id + ':' + identifier,
+                'semantic_observation': observation}
+            facts.append(fact)
+            key = (doc_id, identifier)
+            if key in selected:
+                raise ValueError('overlapping_interpretation_selections')
+            selected.add(key)
+            row = next(r for r in result['attributes'] if (r['document_id'],r['attribute_id']) == key)
+            row.clear();row.update(document_id=doc_id, attribute_id=identifier, status='applied', facts=[fact])
+        for composition in application['compositions']:
+            identifier = composition['source_quantity_observation_id'];key = (doc_id,identifier)
+            if key in selected:
+                raise ValueError('overlapping_interpretation_selections')
+            selected.add(key)
+            row = next(r for r in result['attributes'] if (r['document_id'],r['attribute_id']) == key)
+            row.clear();row.update(document_id=doc_id,attribute_id=identifier,status='applied_composition',
+                                   composition_id=composition['composition_id'])
+        document['requirements'] = [f for f in document['requirements']
+            if (doc_id, f['evidence_ref'].split(':',1)[1]) not in selected] + facts
+        document.setdefault('compositions', []).extend(application['compositions'])
+        result['unresolved_observations'] = [c for c in result['unresolved_observations']
+            if not ((c.get('document_id'),c.get('attribute_id')) in selected
+                or (c.get('kind')=='entity' and c.get('observation_id') in entities
+                    and entities[c['observation_id']]['status']=='applied')
+                or (c.get('document_id')==doc_id and any(c.get('source_relation_id')==v['source_relation_id']
+                    for v in application['compositions'])))]
+    result['summary'] = dict(Counter(r['status'] for r in result['attributes']))
+    result['entity_summary'] = dict(Counter(e['status'] for d in result['documents'] for e in d['entities']))
+    result['relation_summary'] = {'applied': sum(len(d['relations']) + len(d.get('compositions', [])) for d in result['documents']),
+        'automatically_deferred': sum(c['kind']=='relation' for c in result['unresolved_observations'])}
+    return result

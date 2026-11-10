@@ -189,3 +189,11 @@ def test_frontend_platform_does_not_import_examples():
             if name.startswith("."):
                 target = (path.parent / name).resolve()
                 assert not target.is_relative_to(frontend / "examples"), str(path)
+
+
+def test_goods_business_modules_do_not_depend_on_workflow_assembly():
+    paths = [path for owner in ('normalization', 'expression_links')
+             for path in (SOURCE / 'domains/goods' / owner).rglob('*.py')]
+    assert paths
+    assert not [(str(path.relative_to(SOURCE)), name) for path in paths for name in imports(path)
+                if name.startswith('teoria.domains.goods.workflows')]

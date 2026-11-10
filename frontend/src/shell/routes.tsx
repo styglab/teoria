@@ -11,6 +11,11 @@ const Pipelines = lazy(() =>
     default: module.Pipelines,
   })),
 );
+const ImageRegistry = lazy(() =>
+  import("../platform/mlops/ImageRegistry").then((module) => ({
+    default: module.ImageRegistry,
+  })),
+);
 const ModelOperations = lazy(() =>
   import("../platform/mlops/ModelOperations").then((module) => ({
     default: module.ModelOperations,
@@ -112,6 +117,10 @@ export function WorkspaceRoutes({
       <Route
         path={navigationPaths.workflows}
         element={workspacePage(<Pipelines />, true)}
+      />
+      <Route
+        path={navigationPaths.images}
+        element={workspacePage(<ImageRegistry />, true)}
       />
       <Route
         path={navigationPaths.models}

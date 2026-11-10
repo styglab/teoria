@@ -52,3 +52,56 @@ def processor_revision():
         for p in sorted(runner_root.rglob("*.py"))
     )
     return hashlib.sha256(body).hexdigest()
+
+
+def workflow_stage_versions():
+    """Keep completed observations reusable across unrelated authoring/UI changes."""
+    from teoria.domains.goods.data_processing.storage.extraction_checkpoints import stage_revisions
+    root = Path(__file__).resolve().parent
+    def digest(patterns):
+        paths = {p for pattern in patterns for p in root.glob(pattern) if p.is_file()}
+        return hashlib.sha256(b''.join(str(p.relative_to(root)).encode() + p.read_bytes()
+                                       for p in sorted(paths))).hexdigest()
+    from teoria.domains.goods.normalization import contracts
+    from teoria.domains.goods.expression_links import snapshot_contracts
+    from teoria.platform.ontology.authoring import publication_contracts, observations, value_policy
+    dependencies = sorted({*Path(contracts.__file__).parent.rglob('*.py'),
+        Path(snapshot_contracts.__file__), Path(publication_contracts.__file__),
+        Path(observations.__file__), Path(value_policy.__file__)})
+    dependency_digest = hashlib.sha256(b''.join(p.name.encode() + p.read_bytes() for p in dependencies)).hexdigest()
+    versions = {
+        'extraction': stage_revisions(),
+        'semantics': digest(['normalization/candidates/*.py', 'normalization/contracts/*.py',
+                             'normalization/profiles/compiler.py', 'expression_links/expression_contracts.py',
+                             'normalization/meaning_proposals/expression_candidates.py',
+                             'normalization/meaning_proposals/expression_alignment.py']),
+        'application': digest(['normalization/application/*.py', 'normalization/contracts/*.py',
+                               'normalization/meaning_proposals/expression_alignment.py',
+                               'normalization/meaning_proposals/expression_candidates.py',
+                               'expression_links/expression_contracts.py', 'expression_links/snapshot_contracts.py',
+                               'workflows/tasks.py']),
+    }
+    for stage in ('semantics', 'application'):
+        versions[stage] = hashlib.sha256((versions[stage] + dependency_digest).encode()).hexdigest()
+    return versions
+
+
+def extraction_revision():
+    """Evaluation identity excludes Ontology/API/runtime code unrelated to extraction."""
+    from teoria.domains.goods.data_processing.storage.extraction_checkpoints import stage_revisions
+    root = Path(__file__).resolve().parent / 'data_processing'
+    paths = sorted(p for folder in ('extraction', 'parsing') for p in (root / folder).glob('*.py'))
+    body = repr(sorted(stage_revisions().items())).encode()
+    body += b''.join(str(p.relative_to(root)).encode() + p.read_bytes() for p in paths)
+    return hashlib.sha256(body).hexdigest()
+
+
+def processing_revision():
+    """Identity of document processing, independent of authoring services and Runtime views."""
+    root = Path(__file__).resolve().parent
+    versions = workflow_stage_versions()
+    body = repr((versions['extraction'], versions['application'])).encode()
+    paths = sorted({*root.glob('data_processing/storage/*.py'), root/'data_processing/flows.py',
+                    root/'workflows/specifications.py', root/'workflows/processing_quality.py',
+                    root/'workflows/processing_status.py'})
+    return hashlib.sha256(body + b''.join(str(p.relative_to(root)).encode() + p.read_bytes() for p in paths)).hexdigest()

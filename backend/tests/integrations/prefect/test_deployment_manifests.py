@@ -65,12 +65,22 @@ def test_environment_binding_cannot_drift_shared_contract_or_use_unknown_queue(
         load_deployment_manifest(tmp_path / "backend", "ingestion")
 
 
-async def test_existing_demo_pool_configuration_is_preserved():
+async def test_docker_training_pool_updates_without_changing_deployment_pool(
+    monkeypatch,
+):
+    pytest.importorskip("prefect_docker")
     from unittest.mock import AsyncMock
     from teoria.integrations.prefect.deployment import configure_pool
 
     client = AsyncMock()
-    client.read_work_pool.return_value.type = "process"
+    from types import SimpleNamespace
+
+    monkeypatch.setenv("TEORIA_MODEL_TRAINING_IMAGE", "training:test")
+    monkeypatch.setenv("TEORIA_MODEL_DOCKER_NETWORK", "isolated_default")
+    client.read_work_pool.side_effect = [
+        SimpleNamespace(type="docker"),
+        SimpleNamespace(type="process"),
+    ]
     await configure_pool(
         client,
         backend="process",
@@ -78,4 +88,41 @@ async def test_existing_demo_pool_configuration_is_preserved():
         pipeline_root=ROOT / "backend",
     )
     client.create_work_pool.assert_not_awaited()
-    client.update_work_pool.assert_not_awaited()
+    client.update_work_pool.assert_awaited_once()
+    assert client.update_work_pool.await_args.args[0] == "teoria-model-training-docker"
+
+
+async def test_training_template_resolves_credentials_only_on_worker(monkeypatch):
+    pytest.importorskip("prefect_docker")
+    from unittest.mock import AsyncMock
+    from prefect_docker.worker import DockerWorkerJobConfiguration
+    from teoria.integrations.prefect.deployment import docker_job_template
+
+    monkeypatch.setenv("TEORIA_MODEL_TRAINING_IMAGE", "training:test")
+    monkeypatch.setenv("TEORIA_MODEL_DOCKER_NETWORK", "isolated_default")
+    policy = load_execution_policy(ROOT / "backend", "model-operations", "process")
+    template = docker_job_template(policy["pools"][0])
+    from prefect.server.schemas.actions import WorkPoolCreate
+
+    WorkPoolCreate(name="training-test", type="docker", base_job_template=template)
+    monkeypatch.setenv(
+        "TEORIA_PIPELINE_DATA_DATABASE_URL", "postgresql://synthetic-secret"
+    )
+    monkeypatch.setenv("PREFECT_API_AUTH_STRING", "synthetic:worker-secret")
+    monkeypatch.setenv("PREFECT_API_URL", "http://prefect-server:4200/api")
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://mlflow:5000/mlflow")
+    assert "synthetic-secret" not in str(template)
+    assert "worker-secret" not in str(template)
+    config = await DockerWorkerJobConfiguration.from_template_and_values(
+        template, {}, client=AsyncMock()
+    )
+    assert config.image == "training:test"
+    assert config.networks == ["isolated_default"]
+    assert (
+        config.env["TEORIA_PIPELINE_DATA_DATABASE_URL"]
+        == "postgresql://synthetic-secret"
+    )
+    assert config.env["PREFECT_API_AUTH_STRING"] == "synthetic:worker-secret"
+    assert config.auto_remove and config.volumes == [] and not config.privileged
+    assert config.mem_limit == "2g"
+    assert config.container_create_kwargs["nano_cpus"] == 2000000000

@@ -1,4 +1,4 @@
-"""Evidence-preserving candidate comparison and explicit Draft construction.
+"""Evidence-preserving candidate collection, comparison and Draft/link proposals.
 
 Lexical retrieval proposes concepts; it never establishes semantic equivalence or
 publishes definitions. Context compatibility is checked again before Draft creation.
@@ -9,7 +9,7 @@ import unicodedata
 from uuid import UUID
 
 from pydantic import Field
-from teoria.domains.goods.normalization.contracts import NormalizationProfile, UnitRule, checksum
+from teoria.domains.goods.normalization.contracts import NormalizationPackage, NormalizationProfile, UnitRule, checksum
 from teoria.domains.goods.normalization.contracts.candidates import CandidateBundle
 from teoria.domains.goods.normalization.contracts.models import Record
 
@@ -71,7 +71,7 @@ def _eligible(context, concept):
         return False
     if context['kind'] == 'requirement':
         allowed_roles = {'requirement_candidate', 'supported_capability', 'existing_reference', 'recommended', 'optional'}
-        allowed_scopes = {'per_component', 'system_total', 'per_module', 'per_processor', 'support_limit', 'service'}
+        allowed_scopes = {'per_component', 'system_total', 'per_module', 'per_processor', 'per_socket', 'support_limit', 'service'}
         types = {'number': {'integer', 'number', 'decimal', 'float', 'double'},
                  'text': {'string', 'text'}, 'identifier': {'string', 'text'}}
         return (context['target_concept_ids'] == [concept['owner']]
@@ -117,7 +117,7 @@ def propose_candidates(bundles, profile, ontology):
                    or (context['kind'] == 'entity' and context['source_kind'] == 'unknown')
                    or (context['kind'] == 'requirement' and
                        (context['role'] not in {'requirement_candidate', 'supported_capability', 'existing_reference', 'recommended', 'optional'}
-                        or context['scope'] not in {'per_component', 'system_total', 'per_module', 'per_processor', 'support_limit', 'service'}
+                        or context['scope'] not in {'per_component', 'system_total', 'per_module', 'per_processor', 'per_socket', 'support_limit', 'service'}
                         or context['value_type'] not in {'number', 'text', 'identifier'}
                         or len(context['target_concept_ids']) != 1))
                    or (context['kind'] == 'relation' and
@@ -208,3 +208,76 @@ def draft_from_candidates(bundles, profile, ontology, selections, *, version):
     # Reuse the executable contract validator, without persisting or publishing a package.
     compile_package(draft, ontology, revision_id=UUID(int=0), approval_actor='draft_validation')
     return draft, report['checksum']
+
+
+def collect_semantic_candidates(corpus, package, snapshot, *, run_id, phase):
+    """Build a phase's evidence-backed candidates from pinned meanings without I/O."""
+    from teoria.domains.goods.expression_links.expression_contracts import (
+        OntologyDictionarySnapshot, expression_snapshot_for_publication,
+    )
+    from teoria.domains.goods.normalization.application.profile_application import apply_profile
+    from teoria.domains.goods.normalization.meaning_proposals.expression_alignment import pinned_meanings
+
+    package = NormalizationPackage.model_validate(package)
+    snapshot = OntologyDictionarySnapshot.model_validate(snapshot)
+    meanings, _ = pinned_meanings(corpus, expression_snapshot_for_publication(snapshot, package.profile.ontology))
+    _, proposals = apply_profile(corpus, package, run_id=run_id, meaning_alignment=meanings)
+    body = proposals['bundle']; body.pop('checksum')
+    kinds = {'entity'} if phase == 'entities' else {'requirement','relation'}
+    body['groups'] = [g for g in body['groups'] if g['context']['kind'] in kinds]
+    aligned = {d['document_id']: d for d in meanings['documents']}
+    for group in body['groups']:
+        collection = 'entities' if group['context']['kind'] == 'entity' else 'attributes'
+        for observation in group['observations']:
+            row = next((r for r in aligned[observation['document_id']].get(collection, [])
+                        if r['id'] == observation['local_id']), {})
+            if row.get('source_term_ref'):
+                observation['raw'] = {**observation['raw'], 'source_term_ref': row['source_term_ref']}
+    return CandidateBundle.model_validate({**body, 'checksum': checksum(body)})
+
+
+def plan_profile_expression_links(bundle, package, snapshot, corpus):
+    """Propose links for accepted profile rules; equivalence approval stays with expression_links."""
+    from teoria.domains.goods.expression_links.expression_contracts import OntologyDictionarySnapshot, OntologyMappingProposal
+
+    bundle = CandidateBundle.model_validate(bundle)
+    package = NormalizationPackage.model_validate(package)
+    snapshot = OntologyDictionarySnapshot.model_validate(snapshot)
+    rules = {r.rule_id: r for r in [*package.profile.entities, *package.profile.requirements]}
+    proposals, unresolved = set(), []
+    for group in bundle.groups:
+        if group.context.kind == 'relation':
+            continue
+        rule = rules.get('semantic_' + group.group_id[:24])
+        if rule is None:
+            continue  # Held model decisions never acquire an expression mapping.
+        target = str(rule.concept_id if group.context.kind == 'entity' else rule.property_concept_id)
+        owner = None if group.context.kind == 'entity' else str(rule.target_concept_id)
+        for observation in group.observations:
+            source = observation.raw.get('source_term_ref', '').removeprefix('source_term:')
+            if not source:
+                unresolved.append({'document_id': observation.document_id, 'observation_id': observation.local_id,
+                                   'route': 'document_interpretation', 'reason': 'no_registered_source_expression'})
+                continue
+            proposals.add((source, target, owner))
+    # New publications do not silently inherit approval from old-version links.
+    from teoria.domains.goods.normalization.meaning_proposals.expression_alignment import registration_from_snapshot
+    _, registration = registration_from_snapshot(corpus, snapshot)
+    used = {r['entry_id'] for r in registration['decisions'] if r['entry_id']}
+    namespace_versions = {a['ontology']['version_id'] for a in snapshot.ontologies
+                          if a['ontology']['namespace'] == package.profile.ontology.namespace}
+    for mapping in snapshot.mappings:
+        if (str(mapping['source_entry_id']) in used and mapping['status'] == 'approved'
+                and mapping['relation'] == 'equivalent'
+                and str(mapping['ontology_version_id']) in namespace_versions
+                and mapping.get('classification_code') == package.profile.classification_code):
+            proposals.add((str(mapping['source_entry_id']), str(mapping['target_concept_id']),
+                           str(mapping['owner_concept_id']) if mapping.get('owner_concept_id') else None))
+    links = []
+    for source, target, owner in sorted(proposals, key=str):
+        proposal = OntologyMappingProposal(source_entry_id=source, ontology=package.profile.ontology,
+            target_concept_id=target, owner_concept_id=owner, classification_code=package.profile.classification_code,
+            scope_mode='classified' if package.profile.classification_code else 'unclassified',
+            rationale='승인된 프로파일의 후보 판정에 따른 연결 제안이다. 표현의 의미 동등성은 별도로 검토한다.')
+        links.append(proposal)
+    return {'proposals': links, 'unresolved': unresolved}

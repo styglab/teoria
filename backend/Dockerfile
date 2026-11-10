@@ -119,4 +119,21 @@ FROM data-operations AS model-worker
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --locked --no-dev --extra api --group orchestration --group model-operations --no-editable
 USER teoria
-CMD ["prefect", "worker", "start", "--pool", "teoria-model-training"]
+CMD ["prefect", "worker", "start", "--pool", "teoria-model-deployment"]
+
+# Dispatchers create ephemeral training containers without passing Docker access to jobs.
+FROM data-operations AS model-dispatcher
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --project backend --locked --no-dev --group orchestration --group docker-orchestration --no-editable
+CMD ["prefect", "worker", "start", "--pool", "teoria-model-training-docker", "--type", "docker"]
+
+# Flow code and training dependencies are baked into each execution image.
+FROM model-worker AS model-training
+CMD ["python", "-m", "prefect.engine"]
+
+# Serving has its own dependency selection and release lifecycle.
+FROM base AS model-serving
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --project backend --locked --no-dev --extra api --group model-serving --no-editable
+USER teoria
+CMD ["teoria-demo-inference"]

@@ -88,3 +88,32 @@ async def test_sql_review_approval_replay_and_application_preserve_original(tmp_
         service.repository.event=record_event
     assert (await service.get(pending))['status']=='in_review'
     assert [e['action'] for e in await service.audit(pending)]==['created','submit']
+
+    # Actual expression registration/mapping SQL: approval is separate and proposals replay idempotently.
+    from teoria.domains.goods.expression_links.registration_service import ExpressionRegistrationService
+    from teoria.domains.goods.expression_links.expression_link_service import ExpressionLinkService
+    from teoria.domains.goods.expression_links.expression_contracts import OntologyMappingProposal
+    from teoria.domains.goods.expression_links.snapshot_contracts import MeaningDecision, resolve_snapshot
+    from teoria.domains.goods.normalization.meaning_proposals.expression_candidates import submission_from_corpus
+    from copy import deepcopy
+    document=deepcopy(result['extracted']['documents'][0]);document['parser']={'version':'synthetic_sql_fixture'}
+    submission=submission_from_corpus({'classification_code':None,'documents':[document]})
+    registered=await ExpressionRegistrationService(DATABASE_URL).author('sql_sources_'+uuid4().hex,submission,actor='fixture:source-worker')
+    source_ids={d['candidate_key']:d['entry_id'] for d in registered['decisions'] if d.get('entry_id')}
+    links=ExpressionLinkService(DATABASE_URL,ontology_authoring=authoring)
+    approved_ids=[]
+    for source_key,target_key,owner_key in [('d:item:root','goods.server',None),
+            ('d:property:limit','goods.server.memory_capacity_per_socket_limit','goods.server')]:
+        proposal=OntologyMappingProposal(source_entry_id=source_ids[source_key],ontology=publication.ontology,
+            target_concept_id=keys[target_key],owner_concept_id=keys[owner_key] if owner_key else None,
+            rationale='격리 SQL 테스트에서 출처 표현과 게시 개념의 연결을 별도로 검토한다.')
+        first=await links.propose_mapping(proposal,actor='fixture:author')
+        repeated=await links.propose_mapping(proposal,actor='fixture:author')
+        assert repeated['mapping_id']==first['mapping_id'] and first['status']=='draft'
+        await links.decide('mapping',first['mapping_id'],MeaningDecision(action='approve',
+            rationale='원문 근거와 의미 소유 관계를 대조한 격리 테스트 승인이다.'),actor='fixture:link-reviewer')
+        approved_ids.append(str(first['mapping_id']))
+    snapshot=await links.snapshot()
+    resolved=resolve_snapshot(snapshot,[source_ids['d:property:limit']],None)['items'][0]
+    assert resolved['status']=='resolved' and resolved['concept_id']==str(keys['goods.server.memory_capacity_per_socket_limit'])
+    assert set(resolved['mapping_ids'])<=set(approved_ids)

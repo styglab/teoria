@@ -152,6 +152,7 @@ class SpecificationRun(Record):
     artifact_root: str = Field(min_length=1)
     standard: StandardReference | None = None
     quality_evaluation: StandardReference | None = None
+    interpretation_revision_ids: list[UUID] = Field(default_factory=list, max_length=100)
     extraction_checkpoint: StandardReference | None = None
     reuse_stage_checkpoints: bool = True
     parser_python: str | None = None
@@ -235,6 +236,8 @@ class SpecificationRun(Record):
 
     def input_fingerprint(self):
         body = self.model_dump(mode="json")
+        if not self.interpretation_revision_ids:
+            body.pop("interpretation_revision_ids")
         if self.quality_evaluation is None:
             body.pop("quality_evaluation")  # Preserve existing request identities.
         return hashlib.sha256(
@@ -258,6 +261,8 @@ class StandardWorkflow(Record):
     extraction: SpecificationRun
     base_profile_revision_id: UUID
     auto_approve: bool = False
+    interpretation_revision_ids: list[UUID] | None = Field(default=None, max_length=100)
+    semantic_evaluations: dict[Literal["entities", "requirements"], StandardReference] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def explicit_standard_workflow(self):

@@ -14,12 +14,16 @@ concurrency:
   group: k3s-production
   cancel-in-progress: false
 
+env:
+  # Empty uses GHCR. Custom registries must be reachable from the selected runner.
+  REGISTRY_PREFIX: ${{ vars.TEORIA_IMAGE_REGISTRY_PREFIX }}
+
 jobs:
   build:
     if: >-
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.TEORIA_IMAGE_BUILD_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
     permissions:
       contents: read
@@ -28,28 +32,47 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {name: runtime, dockerfile: backend/Dockerfile, target: runtime}
-          - {name: authoring, dockerfile: backend/Dockerfile, target: authoring}
-          - {name: admin-ui, dockerfile: frontend/Dockerfile, target: standalone}
-          - {name: pipelines, dockerfile: backend/Dockerfile, target: kubernetes-worker}
-          - {name: metadata-worker, dockerfile: backend/Dockerfile, target: metadata-worker}
-          - {name: opa, dockerfile: deploy/compose/opa/Dockerfile, target: runtime}
-          - {name: opa-builder, dockerfile: deploy/compose/opa/Dockerfile, target: bundle_builder}
-          - {name: ingestion, dockerfile: deploy/compose/openmetadata/Dockerfile}
+          - {name: runtime, dockerfile: backend/Dockerfile, target: runtime, compose_name: teoria-platform-runtime}
+          - {name: authoring, dockerfile: backend/Dockerfile, target: authoring, compose_name: teoria-platform-authoring}
+          - {name: admin-ui, dockerfile: frontend/Dockerfile, target: standalone, compose_name: teoria-admin-ui}
+          - {name: pipelines, dockerfile: backend/Dockerfile, target: kubernetes-worker, compose_name: teoria-pipelines-kubernetes}
+          - {name: metadata-worker, dockerfile: backend/Dockerfile, target: metadata-worker, compose_name: teoria-pipelines-metadata}
+          - {name: opa, dockerfile: deploy/compose/opa/Dockerfile, target: runtime, compose_name: teoria-opa}
+          - {name: opa-builder, dockerfile: deploy/compose/opa/Dockerfile, target: bundle_builder, compose_name: teoria-opa-bundle-builder}
+          - {name: ingestion, dockerfile: deploy/compose/openmetadata/Dockerfile, compose_name: teoria-openmetadata-ingestion}
+          - {name: admin, dockerfile: backend/Dockerfile, target: admin, compose_name: teoria-platform-admin}
+          - {name: gateway, dockerfile: frontend/Dockerfile, target: gateway, compose_name: teoria-nginx}
+          - {name: pipelines-compose, dockerfile: backend/Dockerfile, target: worker, compose_name: teoria-pipelines}
+          - {name: operations, dockerfile: backend/Dockerfile, target: operations, compose_name: teoria-data-operations}
+          - {name: law-worker, dockerfile: backend/Dockerfile, target: law-worker, compose_name: teoria-pipelines-law}
+          - {name: model-worker, dockerfile: backend/Dockerfile, target: model-worker, compose_name: teoria-model-worker}
+          - {name: model-dispatcher, dockerfile: backend/Dockerfile, target: model-dispatcher, compose_name: teoria-model-dispatcher}
+          - {name: model-training, dockerfile: backend/Dockerfile, target: model-training, compose_name: teoria-model-training}
+          - {name: model-serving, dockerfile: backend/Dockerfile, target: model-serving, compose_name: teoria-model-serving}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Resolve commit image tag
         run: |
-          echo "IMAGE_PREFIX=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+          prefix="${REGISTRY_PREFIX:-ghcr.io/${GITHUB_REPOSITORY,,}}"
+          [[ "$prefix" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]]
+          echo "IMAGE_PREFIX=$prefix" >> "$GITHUB_ENV"
+          echo "REGISTRY_HOST=${prefix%%/*}" >> "$GITHUB_ENV"
           echo "REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
+        if: env.REGISTRY_PREFIX == ''
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@v3
+        if: env.REGISTRY_PREFIX != ''
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ secrets.TEORIA_IMAGE_REGISTRY_USERNAME }}
+          password: ${{ secrets.TEORIA_IMAGE_REGISTRY_PASSWORD }}
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -57,7 +80,9 @@ jobs:
           target: ${{ matrix.target || '' }}
           platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:${{ env.REVISION }}
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:${{ env.REVISION }}
+            ${{ env.IMAGE_PREFIX }}/${{ matrix.compose_name }}:${{ env.REVISION }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
@@ -104,6 +129,7 @@ jobs:
           ssh "${ssh_args[@]}" -p "$EC2_SSH_PORT" "$target" "mkdir -p ~/.teoria/releases/$revision"
           git archive --format=tar.gz --output="$RUNNER_TEMP/k3s_release.tar.gz" HEAD deploy/k3s
           scp "${ssh_args[@]}" -P "$EC2_SSH_PORT" "$RUNNER_TEMP/k3s_release.tar.gz" "$target:.teoria/releases/$revision/release.tar.gz"
-          image_prefix="ghcr.io/${GITHUB_REPOSITORY,,}"
+          image_prefix="${REGISTRY_PREFIX:-ghcr.io/${GITHUB_REPOSITORY,,}}"
+          [[ "$image_prefix" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]]
           ssh "${ssh_args[@]}" -p "$EC2_SSH_PORT" "$target" \
             "cd ~/.teoria/releases/$revision && tar -xzf release.tar.gz && bash deploy/k3s/deploy.sh '$image_prefix' '$revision' '$PUBLIC_HOST'"

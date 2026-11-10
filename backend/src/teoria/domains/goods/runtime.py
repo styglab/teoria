@@ -21,6 +21,7 @@ from teoria.domains.goods.normalization.application.meaning_application import A
 from teoria.domains.goods.expression_links.expression_contracts import (
     OntologyDictionarySnapshot,
     approved_expression_snapshot,
+    expression_snapshot_for_publication,
     resolve_expression_snapshot,
 )
 from teoria.domains.goods.normalization.application.profile_application import (
@@ -187,8 +188,8 @@ def compile_requirements_view(
 ):
     """Inputs must come from approved Admin exports and checksum-verified artifacts."""
     exported_snapshot = OntologyDictionarySnapshot.model_validate(snapshot)
-    snapshot = approved_expression_snapshot(exported_snapshot)
     package = NormalizationPackage.model_validate(package)
+    snapshot = approved_expression_snapshot(expression_snapshot_for_publication(exported_snapshot, package.profile.ontology))
     reference = package.profile.ontology.model_dump(mode="json")
     publication = next(
         (a for a in exported_snapshot.ontologies if a["ontology"] == reference), None

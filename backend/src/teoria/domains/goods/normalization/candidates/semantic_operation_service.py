@@ -38,6 +38,8 @@ class SemanticOperationService:
                 )
             ),
             "error_code": row["error_code"],
+            "approval_scope": "ontology_and_profile",
+            "evaluation": state.get("evaluation", {"status": "not_evaluated"}),
         }
 
     async def get(self, operation_id, *, actor):
@@ -95,6 +97,11 @@ class SemanticOperationService:
             )
             await self._save(operation_id, state, "running")
         report = state["semantic_report"]
+        if payload.get('evaluation') is not None:
+            from teoria.domains.goods.normalization.candidates.semantic_resolution import score_meaning_decisions
+            state['evaluation'] = score_meaning_decisions(report, payload['evaluation'])
+            if not state['evaluation']['passed']:
+                return await self._save(operation_id, state, 'held')
         if all(d["action"] == "hold" for d in report["decisions"]):
             return await self._save(operation_id, state, "held")
         if "ontology_draft_id" not in state:

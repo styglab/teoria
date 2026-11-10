@@ -161,3 +161,32 @@ def resolve_expression_snapshot(snapshot, entry_ids, classification_code):
 
     return {'policy_version': 'published_ontology_expression_v2', 'snapshot_checksum': snapshot.checksum,
             'items': [resolve(entry_id) for entry_id in entry_ids]}
+
+
+def expression_snapshot_for_publication(snapshot, ontology):
+    """The approved profile chooses its publication explicitly; never choose the newest link."""
+    snapshot = OntologyDictionarySnapshot.model_validate(snapshot)
+    reference = OntologyReference.model_validate(ontology).model_dump(mode='json')
+    publications = [a for a in snapshot.ontologies if a['ontology'] == reference]
+    if len(publications) != 1:
+        raise ValueError('profile_publication_not_in_expression_snapshot')
+    mappings = [m for m in snapshot.mappings if str(m['ontology_version_id']) == reference['version_id']]
+    return expression_snapshot(publications, mappings, snapshot.sources)
+
+
+def require_expression_approval_policy(ontology, *, auto_approve):
+    """Automatic expression approval is reserved for explicitly isolated evaluation namespaces."""
+    if auto_approve and not ontology.namespace.startswith('goods_eval_'):
+        raise ValueError('automatic expression approval requires an evaluation ontology')
+
+
+def expression_review_state(plan, snapshot, ontology):
+    """Read a pinned review plan's state; all transition writes go through the owning service."""
+    reference = ontology.model_dump(mode='json')
+    if plan['ontology'] != reference:
+        raise ValueError('expression_review_publication_changed')
+    mappings = {str(m['mapping_id']): m for m in snapshot.mappings}
+    states = [mappings.get(identifier, {}).get('status', 'missing') for identifier in plan['mapping_ids']]
+    status = 'held' if any(s in {'rejected', 'deprecated', 'missing'} for s in states) else (
+        'awaiting_approval' if any(s != 'approved' for s in states) else 'ready')
+    return {**plan, 'status': status, 'review_stage': 'expression_links'}

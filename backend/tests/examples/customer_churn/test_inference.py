@@ -86,3 +86,14 @@ def test_example_router_preserves_authentication_service_schema_and_prediction_p
             == 422
         )
         assert len(requests) == before
+
+
+def test_unreleased_server_is_live_but_not_ready(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from teoria.examples.customer_churn.inference import create_inference_app
+
+    monkeypatch.setenv("TEORIA_DEMO_INFERENCE_TOKEN", "synthetic-inference-token-long-enough")
+    monkeypatch.setenv("TEORIA_DEMO_RELEASE_DIRECTORY", str(tmp_path))
+    with TestClient(create_inference_app()) as api:
+        assert api.get("/live").status_code == 200
+        assert api.get("/health").status_code == 503

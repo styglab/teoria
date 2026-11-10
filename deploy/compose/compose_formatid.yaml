@@ -1,7 +1,7 @@
 # Service modules are composed by deploy.sh; jobs run explicitly with --rm.
 services:
   minio-init:
-    image: teoria-storage-init:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-storage-init:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ./minio
       additional_contexts:
@@ -26,7 +26,7 @@ services:
     profiles:
     - jobs
   prefect-deploy:
-    image: teoria-pipelines:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-pipelines:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -53,7 +53,7 @@ services:
     profiles:
     - jobs
   prefect-worker:
-    image: ${TEORIA_SPECIFICATION_WORKER_IMAGE:-teoria-pipelines:latest}
+    image: ${TEORIA_SPECIFICATION_WORKER_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-pipelines:${TEORIA_IMAGE_TAG:-latest}}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -100,7 +100,7 @@ services:
       TEORIA_SPECIFICATION_S3_SECRET_KEY: ${TEORIA_SPECIFICATION_API_STORAGE_SECRET_KEY:-}
     volumes:
     - specification-model-auth:/home/teoria/.codex
-    image: ${TEORIA_ADMIN_API_IMAGE:-teoria-platform-authoring:latest}
+    image: ${TEORIA_ADMIN_API_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-platform-authoring:${TEORIA_IMAGE_TAG:-latest}}
     build:
       context: ../..
       dockerfile: backend/Dockerfile

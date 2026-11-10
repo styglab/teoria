@@ -85,3 +85,14 @@ async def test_snapshot_excludes_other_projects_and_kubernetes_pools(monkeypatch
     value = await maintenance.snapshot(client)
     assert value["pools"] == [{"name": "documents", "is_paused": False}]
     assert value["deployment_ids"] == ["doc"]
+
+
+def test_retired_training_pool_drains_but_never_resumes(monkeypatch):
+    from pathlib import Path
+    monkeypatch.setenv("TEORIA_PIPELINE_PATH", str(Path(__file__).resolve().parents[4] / "backend"))
+    monkeypatch.setenv("TEORIA_MODEL_OPERATIONS_ENABLED", "true")
+    policies = maintenance.pool_policies()
+    assert "teoria-model-training" in set().union(*policies.values())
+    selected = maintenance.selected_pools()
+    assert "teoria-model-training-docker" in selected
+    assert "teoria-model-training" not in selected

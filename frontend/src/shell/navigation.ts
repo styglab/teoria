@@ -20,6 +20,7 @@ export const navigationPaths = {
   review: "/admin/changes/review",
   workflows: "/admin/workflows",
   models: "/admin/models",
+  images: "/admin/images",
   serving: "/admin/serving",
   formatid: "/admin/specifications",
   operations: "/admin/operations",
@@ -149,6 +150,14 @@ export const navigationItems: NavigationItem[] = [
     description: "규격서 기반 물품 구조화·분석",
     icon: FileText,
     group: "apps",
+  },
+  {
+    path: navigationPaths.images,
+    label: "컨테이너 이미지",
+    description: "플랫폼·학습·서빙 이미지와 버전 참조",
+    icon: Boxes,
+    group: "common_operations",
+    placement: "footer",
   },
   {
     path: navigationPaths.operations,

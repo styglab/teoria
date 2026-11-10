@@ -27,7 +27,7 @@ def test_active_jobs_include_only_owned_workflows_and_optional_synthetic_demo():
         if d["name"].startswith("demo-"):
             assert not d["schedules"]
             assert "demo:synthetic" in d["tags"]
-            assert d["work_pool"]["name"] in {"teoria-model-training", "teoria-model-deployment"}
+            assert d["work_pool"]["name"] in {"teoria-model-training-docker", "teoria-model-deployment"}
         if "specification" in d["name"]:
             assert d["schedules"] == []
             assert d["work_pool"] == {"name": "teoria-specification", "work_queue_name": "documents"}

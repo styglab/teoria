@@ -312,3 +312,7 @@ backend/references/**
 
 # Compose lifecycle state, pause snapshots and private initialization logs.
 /deploy/compose/.state/
+
+# Private Docker registry login material; keep only the mount directory guide.
+/deploy/compose/docker_auth/*
+!/deploy/compose/docker_auth/README.md

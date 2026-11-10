@@ -62,6 +62,8 @@ async def evaluate_task(model, split):
 @task(name="MLflow 모델 버전 등록", persist_result=False)
 async def register_task(model, metrics, frame, checksum, requested_by):
     tags = {"teoria.synthetic": "true", "teoria.requested_by": requested_by}
+    if image := os.getenv("TEORIA_MODEL_TRAINING_IMAGE"):
+        tags["teoria.training_image"] = image
     if flow_run.id:
         tags["teoria.prefect_flow_run_id"] = str(flow_run.id)
         if flow_run.parent_flow_run_id:
@@ -99,10 +101,10 @@ async def customer_churn_pipeline(
     requested_by: str = "prefect:manual",
     deploy: bool = False,
 ) -> dict:
-    """Train locally; deployment runs in its own pool with a real Prefect subflow link.
+    """Train in this execution container; deployment uses its own pool and subflow link.
 
     Default is registration only. An explicit deploy=True authorizes demo deployment
-    after the fixed quality gate. The training worker never receives a Docker socket.
+    after the fixed quality gate. The training container never receives a Docker socket.
     """
     result = await train_demo_customer_churn(requested_by=requested_by)
     result = {

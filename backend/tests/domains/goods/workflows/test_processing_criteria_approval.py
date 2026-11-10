@@ -15,7 +15,7 @@ async def test_automatic_approval_pins_used_dictionary_and_records_authenticated
     path=tmp_path/'dictionary_standard.json';path.write_bytes(raw)
     request=SpecificationRun(run_id='automatic_test',mode='standard_management',artifact_root=tmp_path.as_uri(),
         auto_approve_application_standard=True,documents=[{'document_id':'doc','filename':'doc.pdf','source_uri':(tmp_path/'doc.pdf').as_uri()}])
-    result=RunResult(run_id=request.run_id,status='partial',summary={"quality":{"successful_documents":1,"validation_errors":0,"failed_document_ratio":0,"held_attribute_ratio":0,"accepted_attributes":1,"model_requested":None}},document_results=[],artifacts=[ArtifactRef(
+    result=RunResult(run_id=request.run_id,status='partial',summary={"quality":{"successful_documents":1,"validation_errors":0,"failed_document_ratio":0,"held_attribute_ratio":0,"accepted_attributes":1,"applied_attributes":1,"model_requested":None}},document_results=[],artifacts=[ArtifactRef(
         key='test/dictionary_standard.json',uri=path.as_uri(),sha256=hashlib.sha256(raw).hexdigest(),size_bytes=len(raw),media_type='application/json')])
     payloads=[];release_id=str(uuid4())
     class API:

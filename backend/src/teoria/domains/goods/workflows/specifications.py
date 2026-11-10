@@ -27,7 +27,7 @@ from teoria.domains.goods.workflows.management_parameters import (
 )
 
 
-from teoria.domains.goods.processor_revision import processor_revision
+from teoria.domains.goods.processor_revision import processing_revision as processor_revision
 
 
 @task(name="규격 처리 실행 시작", persist_result=False, cache_policy=NO_CACHE)

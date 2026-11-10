@@ -11,6 +11,7 @@ from teoria.domains.goods.data_processing.storage.artifact_store import (
     read_uri,
 )
 from teoria.domains.goods.contracts import SpecificationRun, StandardArtifact
+from teoria.domains.goods.authoring_client import GoodsAuthoringClient
 
 from teoria.domains.goods.data_processing.tasks import (
     TASK_OPTIONS,
@@ -173,7 +174,7 @@ async def select_and_map_standard(
             meaning_alignment = (
                 dictionary.get("meaning_alignment") if dictionary else None
             )
-            if not request.use_expression_dictionary:
+            if (not request.use_expression_dictionary or meaning_alignment is None):
                 # Disabling registration must not turn unreviewed aliases into approved meaning.
                 meaning_alignment = {
                     "policy_version": "published_ontology_expression_v2",
@@ -185,6 +186,39 @@ async def select_and_map_standard(
                 run_id=request.run_id,
                 meaning_alignment=meaning_alignment,
             )
+            if request.interpretation_revision_ids:
+                from teoria.domains.goods.normalization.application.meaning_application import (
+                    ApprovedInterpretation, apply_interpretation, merge_interpretations,
+                )
+                if len(set(request.interpretation_revision_ids)) != len(request.interpretation_revision_ids):
+                    raise ValueError('duplicate_interpretation_revision')
+                applications = []
+                originals = {d['document_id']: d for d in corpus['documents']}
+                async with GoodsAuthoringClient() as api:
+                    publication = await api.ontology_publication(package.profile.ontology.version_id)
+                    for revision_id in request.interpretation_revision_ids:
+                        approval = ApprovedInterpretation.model_validate(await api.interpretation_approval(revision_id))
+                        if approval.revision_id != revision_id:
+                            raise ValueError('interpretation_revision_mismatch')
+                        raw_result = await read_uri(approval.request.result.uri)
+                        if hashlib.sha256(raw_result).hexdigest() != approval.request.result.sha256:
+                            raise ValueError('interpretation_source_result_checksum_mismatch')
+                        source_result = json.loads(raw_result); source_result = source_result.get('result',source_result)
+                        original = originals.get(approval.request.document_id)
+                        sources = source_result['extracted']['documents']
+                        if (original is None or len(sources) != 1
+                                or sources[0]['source']['sha256'] != original['source']['sha256']
+                                or any(sources[0].get(k) != original.get(k) for k in
+                                       ['document_id','entities','attributes','relations','parsed_document'])):
+                            raise ValueError('interpretation_extraction_document_mismatch')
+                        applications.append(apply_interpretation(approval, source_result, package, publication,
+                                                                 run_id=request.run_id))
+                normalized = merge_interpretations(normalized, applications, package)
+                from teoria.domains.goods.normalization.application.profile_candidates import collect_profile_candidates
+                candidates['bundle'] = collect_profile_candidates(corpus, normalized, package)
+                candidates['candidates'] = normalized['unresolved_observations']
+                candidates['summary'] = {'unresolved_observations': len(normalized['unresolved_observations'])}
+                normalized['interpretation_revision_ids'] = [str(v) for v in request.interpretation_revision_ids]
             normalized["standard_ref"] = request.standard.model_dump()
             normalized["extraction_ref"] = extraction_ref
             attach_source_term_alignment(normalized, dictionary)
@@ -321,7 +355,8 @@ async def verify_quality_evaluation(request: SpecificationRun, revision: str):
     if hashlib.sha256(raw).hexdigest() != reference.sha256:
         raise ValueError("quality_evaluation_checksum_mismatch")
     cycle = json.loads(raw)
-    gate = check_release_quality(cycle, revision)
+    from teoria.domains.goods.processor_revision import extraction_revision
+    gate = check_release_quality(cycle, extraction_revision())
     if gate["status"] != "passed":
         raise ValueError("quality_evaluation_blocked:" + ",".join(gate["reasons"]))
     if not request.model or cycle["settings"]["model"] != request.model:

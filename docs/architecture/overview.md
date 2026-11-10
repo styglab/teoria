@@ -52,6 +52,11 @@ flowchart TB
 이 순서는 책임 구분이다. 모든 실행이 새 Ontology를 게시하는 것은 아니다.
 추출 표준 자동 채택은 draft이며, Published Ontology 승인이 아니다.
 Worker의 의미 쓰기는 인증된 Admin HTTP API를 거친다.
+구축 실행이 Ontology/프로파일과 표현 연결의 승인을 조립하고, 적용 실행은 고정 snapshot만 사용한다.
+후보 수집도 승인된 연결을 사용하며 별칭 매칭을 승인 근거로 대체하지 않는다.
+후보·연결 제안 판단은 `normalization/candidates/`, 연결 검토 상태·승인 정책은 `expression_links/`가 맡는다.
+`workflows/`의 표준 구축 Flow·Task는 이 판단을 호출하고 I/O·실행 순서·대기·재개를 조립한다.
+프로파일의 게시 버전·snapshot·문서 해석 승인·단계별 코드 버전을 함께 고정한다.
 문서별 소유 대상·scope·구성 수량 해석은 물품 도메인의 별도 승인으로 관리한다.
 요청·적용 본문은 객체 저장소, 승인·참조·감사는 Application DB에 둔다. Runtime은 승인 상태를 재확인해 만든 고정 view만 읽는다.
 
@@ -86,3 +91,22 @@ OpenMetadata entity 상태를 Teoria DB에 복제하지 않는다. 외부 자산
 입력·권한·변경 검증을 참고해 문서 해석의 상태 전이·원문 보존·감사를 소유 서비스에서 검증한다. 이 저장소 구조는 Teoria의 구현 선택이며 Palantir 내부 코드 구조를 뜻하지 않는다.
 
 구체적인 변경 위치는 [저장소 구조](repository-structure.md), 현재 범위는 [로드맵](../roadmap.md)을 읽는다.
+
+## MLOps 예제 실행 환경
+
+Compose에서 Prefect Docker Worker가 학습 실행마다 전용 이미지의 컨테이너를 생성한다.
+서빙 이미지는 별도로 빌드·배포하고 MLflow의 고정 모델 버전과 checksum으로 로드한다.
+예제 업무 정책은 `examples/customer_churn/`, pool·자원·네트워크 정책은
+`deploy/compose/prefect/model_operations.yaml`, 공통 등록은 `integrations/prefect/`가 소유한다.
+
+[Palantir 모델 통합](https://www.palantir.com/docs/foundry/model-integration/overview/)의
+실행 환경·모델 버전·재현성 분리 원칙을 참고했다. Teoria는 Prefect·MLflow·Compose를 사용하며,
+Ontology를 학습 실행의 필수 조건으로 추가하지 않는다.
+[Prefect Docker Worker](https://reference.prefect.io/prefect_docker/worker/)의 실행별 컨테이너 방식을 사용한다.
+K3s MLOps 실행 경로와 실제 운영 배포 검증은 별도 작업이다.
+
+컨테이너 Image Registry는 모델 버전을 관리하는 MLflow Model Registry와 분리한다.
+이미지 파일은 Registry의 영구 저장 공간, 데이터·모델 산출물은 기존 객체 저장소가 소유한다.
+HTTP 연동은 `integrations/image_registry.py`, 인증된 조회는 `platform/mlops/image_registry_router.py`,
+Admin 조립은 composition이 맡는다. Registry 설치는 플랫폼 lifecycle과 독립된 선택형 기반이다.
+[이미지 Registry 설계·검증 범위](../deployment/image_registry.md)를 따른다.

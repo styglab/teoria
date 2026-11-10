@@ -33,7 +33,7 @@ services:
       platform-postgres:
         condition: service_healthy
   mlflow:
-    image: teoria-model-worker:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-model-worker:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -79,7 +79,7 @@ services:
       timeout: 5s
       retries: 30
   model-register:
-    image: teoria-model-worker:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-model-dispatcher:${TEORIA_IMAGE_TAG:-latest}
     cpus: 0.5
     mem_limit: 512m
     command:
@@ -92,34 +92,68 @@ services:
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
+      TEORIA_MODEL_TRAINING_IMAGE: ${TEORIA_MODEL_TRAINING_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-model-training:${TEORIA_IMAGE_TAG:-latest}}
+      TEORIA_MODEL_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME}_default
     depends_on:
       prefect-server:
         condition: service_healthy
     profiles:
     - jobs
-  model-training-worker:
-    image: teoria-model-worker:latest
+  # Build the execution image without starting a permanent training container.
+  model-training-job:
+    image: ${TEORIA_MODEL_TRAINING_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-model-training:${TEORIA_IMAGE_TAG:-latest}}
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+      target: model-training
+      labels:
+        io.teoria.project: teoria
+        io.teoria.role: model-training
+    profiles: [jobs]
     cpus: 2
     mem_limit: 2g
+  model-training-worker:
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-model-dispatcher:${TEORIA_IMAGE_TAG:-latest}
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+      target: model-dispatcher
+      labels:
+        io.teoria.project: teoria
+        io.teoria.role: model-dispatcher
+    user: root
+    cpus: 0.5
+    mem_limit: 512m
     restart: unless-stopped
     command:
     - prefect
     - worker
     - start
     - --pool
-    - teoria-model-training
+    - teoria-model-training-docker
+    - --type
+    - docker
     - --limit
     - '1'
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
+      DOCKER_CONFIG: /run/docker-auth
       TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
       MLFLOW_TRACKING_URI: http://mlflow:5000/mlflow
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - type: bind
+      source: ${TEORIA_DOCKER_CONFIG_DIRECTORY:-./docker_auth}
+      target: /run/docker-auth
+      read_only: true
+      bind:
+        create_host_path: false
     depends_on:
       mlflow:
         condition: service_healthy
   model-deployment-worker:
-    image: teoria-model-worker:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-model-worker:${TEORIA_IMAGE_TAG:-latest}
     user: root
     cpus: 1
     mem_limit: 1g
@@ -137,6 +171,7 @@ services:
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
       MLFLOW_TRACKING_URI: http://mlflow:5000/mlflow
       TEORIA_DEMO_RELEASE_DIRECTORY: /app/model_release
+      TEORIA_COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
       TEORIA_DEMO_INFERENCE_TOKEN: ${TEORIA_DEMO_INFERENCE_TOKEN:-}
     volumes:
     - model-release:/app/model_release
@@ -145,7 +180,14 @@ services:
       mlflow:
         condition: service_healthy
   demo-inference:
-    image: teoria-model-worker:latest
+    image: ${TEORIA_MODEL_SERVING_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-model-serving:${TEORIA_IMAGE_TAG:-latest}}
+    build:
+      context: ../..
+      dockerfile: backend/Dockerfile
+      target: model-serving
+      labels:
+        io.teoria.project: teoria
+        io.teoria.role: model-serving
     cpus: 1
     mem_limit: 1g
     restart: unless-stopped
@@ -164,12 +206,12 @@ services:
       - CMD
       - python
       - -c
-      - import urllib.request;urllib.request.urlopen('http://localhost:8003/health')
+      - import urllib.request;urllib.request.urlopen('http://localhost:8003/live')
       interval: 5s
       timeout: 5s
       retries: 30
   model-storage-init:
-    image: teoria-storage-init:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-storage-init:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ./minio
       additional_contexts:

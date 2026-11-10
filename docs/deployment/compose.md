@@ -6,6 +6,9 @@ Teoria는 공통 기반에 MLOps, Metadata·Ontology, FormatID를 조합한다.
 [Compose 배포 진입점](../../backend/src/teoria/entrypoints/compose_deployment.py)을 호출한다.
 K3s는 [별도 절차](k3s.md)를 사용한다. 아래 Compose 구성 검증을 실제 서비스나 EC2 배포 성공으로 기록하지 않는다.
 
+이미지 레지스트리의 독립 설치·Admin 조회·Registry 릴리스 배포는
+[이미지 Registry](image_registry.md)를 따른다. Registry는 모듈 서비스 수에 포함하지 않는다.
+
 ## 구성 선택
 
 | 선택 | 추가되는 상시 서비스 | 목적 |
@@ -20,6 +23,13 @@ K3s는 [별도 절차](k3s.md)를 사용한다. 아래 Compose 구성 검증을 
 `compose_formatid.yaml`은 기능별 서비스와 Admin API 설정을 추가한다.
 공통 서비스는 같은 Compose 프로젝트에서 한 번만 생성한다.
 MLOps에는 모델 서빙이 포함되며 OpenMetadata·Semantic Runtime을 요구하지 않는다.
+MLOps 학습 Dispatcher는 요청마다 일회성 컨테이너를 만들며 상시 서비스 수에 학습 실행은 포함하지 않는다.
+`model-training-job`은 `jobs` profile의 학습 이미지 빌드 선언이며 초기화 작업으로 실행하지 않는다.
+`TEORIA_MODEL_TRAINING_IMAGE`와 `TEORIA_MODEL_SERVING_IMAGE`로 학습·서빙 이미지를 각각 지정한다.
+재현이 필요한 환경에서는 불변 tag 또는 digest를 사용한다. 학습 이미지 변경은 build·deploy 후 새 실행부터,
+서빙 이미지 변경은 Compose 서비스 재생성 후 적용된다. pool 기본값을 바꾸므로 실행 중 학습을 먼저 종료한다.
+기존 process pool `teoria-model-training`은 유지·pause하고 Deployment를 새 Docker pool에 연결한다.
+
 기본·MLOps Admin 이미지는 Codex CLI를 포함하지 않고, Semantic·FormatID는 작성용 이미지로 확장한다.
 공통 Data DB migration도 파서·Codex가 없는 operations 이미지를 재사용한다.
 FormatID는 Admin API의 Ontology·사전·프로파일 작성 기능을 사용하지만

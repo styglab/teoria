@@ -65,6 +65,8 @@ def main() -> None:
             "stop",
             "down",
             "build",
+            "pull",
+            "push",
             "cleanup",
         ),
     )
@@ -76,6 +78,7 @@ def main() -> None:
     choose.add_argument("--all", action="store_true")
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
     parser.add_argument("--project-name", default="teoria")
+    parser.add_argument("--pull", action="store_true", help="pull selected images before deploying")
     parser.add_argument(
         "--timeout",
         type=int,
@@ -142,6 +145,11 @@ def main() -> None:
         )
         if assessment_enabled:
             command += ["--profile", "assessment"]
+        selected_images = [
+            name for name in services
+            if name not in {"platform-check", "pipelines-check"}
+            and (name != "metadata-assessment-worker" or assessment_enabled)
+        ]
         persistent = [
             name
             for name, service in services.items()
@@ -206,7 +214,7 @@ def main() -> None:
                     ]
                 )
 
-        def job(name: str, extra: list[str] | None = None) -> None:
+        def require_image(name: str) -> None:
             image = services[name]["image"]
             present = subprocess.run(
                 ["docker", "image", "inspect", image],
@@ -217,6 +225,9 @@ def main() -> None:
                 raise RuntimeError(
                     f"Missing image for {name}; run build for the selected modules first"
                 )
+
+        def job(name: str, extra: list[str] | None = None) -> None:
+            require_image(name)
             log_root = state_root / "logs"
             log_root.mkdir(exist_ok=True, mode=0o700)
             log = log_root / f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S}_{name}.log"
@@ -398,6 +409,18 @@ def main() -> None:
             )
         elif args.action == "status":
             call(command + ["--profile", "*", "ps", "-a"])
+        elif args.action == "pull":
+            call(command + ["--profile", "*", "pull", *selected_images])
+        elif args.action == "push":
+            # Only publish Teoria build outputs; never re-publish upstream vendor images.
+            built = []
+            seen = set()
+            for name in selected_images:
+                service = services[name]
+                if service.get("build") and service["image"] not in seen:
+                    built.append(name)
+                    seen.add(service["image"])
+            call(command + ["--profile", "*", "push", *built])
         elif args.action == "build":
             builders = call(
                 ["docker", "buildx", "ls", "--format", "{{.Name}}"], capture=True
@@ -467,6 +490,10 @@ def main() -> None:
                 del state["maintenance"]
                 write_state(state_file, state)
         elif args.action == "deploy":
+            if args.pull:
+                call(command + ["--profile", "*", "pull", *selected_images])
+            if "mlops" in modules:
+                require_image("model-training-job")
             if state and state.get("modules") != modules:
                 # Drain using the old module configuration before changing selection.
                 old = compose_command(

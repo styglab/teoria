@@ -31,10 +31,11 @@ backend/src/teoria/
         flows.py           추출 실행 순서
       expression_links/    원문 표현 등록·게시 개념 연결
       normalization/       후보·프로파일·검토·고정 표준 적용
+        candidates/        후보 선정·그룹화·프로파일 기반 연결 제안
         meaning_proposals/ 의미 후보·문서 해석 승인·감사
         application/       고정 프로파일·승인 해석의 별도 적용
         legacy_dictionary/ 과거 v1 결과 재현
-      workflows/           추출·의미 적용을 연결하는 실행·품질·승인
+      workflows/           Flow·Task I/O·실행 순서·승인 대기·재개
       notice_collection/   명시적 규격서 처리 입력 준비
     legal_information/     법령 수집·검색
   apps/
@@ -91,6 +92,8 @@ Workflow 플랫폼은 실행할 업무 목록이나 업무별 입력 규칙을 �
 허용 목록은 `entrypoints/composition/workflow_catalog.py`에서 선택하고 실행 입력 정책과 함께 주입한다.
 
 다른 모듈은 공개 값 계약과 서비스 인터페이스를 사용한다. 앱에 SQL을 두지 않는다.
+물품 Workflow는 소유 모듈의 후보·연결 판단을 호출하며, 의미 판단 규칙을 직접 구현하지 않는다.
+`normalization/`·`expression_links/`는 `workflows/`를 역으로 import하지 않는다.
 Worker는 Ontology 저장소를 직접 변경하지 않고 인증된 Admin HTTP API를 사용한다.
 `common`·`shared`·`utils` 폴더나 이름만 바꾼 이전 namespace의 forwarding 파일은 만들지 않는다.
 클래스·함수마다 파일을 나누지 않는다. 같은 책임은 함께 두고 정책 없는 생성·전달 계층을 추가하지 않는다.

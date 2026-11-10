@@ -1,0 +1,47 @@
+# Independent bootstrap service: platform lifecycle commands never stop this project.
+name: teoria-registry
+services:
+  registry:
+    image: registry:3.1.2
+    restart: unless-stopped
+    cpus: 1
+    mem_limit: 512m
+    command: [serve, /etc/distribution/config.yaml]
+    environment:
+      REGISTRY_HTTP_SECRET: ${TEORIA_IMAGE_REGISTRY_HTTP_SECRET:?set a persistent random HTTP secret}
+      OTEL_TRACES_EXPORTER: none
+    ports:
+    - ${TEORIA_IMAGE_REGISTRY_BIND:-0.0.0.0}:${TEORIA_IMAGE_REGISTRY_PORT:-5000}:5000
+    volumes:
+    - registry-data:/var/lib/registry
+    - type: bind
+      source: ./config.yaml
+      target: /etc/distribution/config.yaml
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${TEORIA_IMAGE_REGISTRY_AUTH_FILE:?set absolute htpasswd path}
+      target: /run/registry/htpasswd
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${TEORIA_IMAGE_REGISTRY_TLS_CERT:?set absolute certificate path}
+      target: /run/registry/tls.crt
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${TEORIA_IMAGE_REGISTRY_TLS_KEY:?set absolute private key path}
+      target: /run/registry/tls.key
+      read_only: true
+      bind:
+        create_host_path: false
+    healthcheck:
+      test: [CMD, wget, --quiet, --spider, http://127.0.0.1:5001/debug/health]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+volumes:
+  registry-data:

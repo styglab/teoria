@@ -408,7 +408,7 @@ def test_validated_inventory_count_uses_only_its_explicit_target_scope():
     assert result["attributes"][2]["status"] == "automatically_deferred"
 
 
-async def test_operational_standard_management_uses_package_and_saves_only_canonical_artifacts(
+async def test_operational_package_does_not_treat_missing_meanings_as_alias_approval(
     tmp_path, monkeypatch
 ):
     profile, ontology, corpus = example()
@@ -464,7 +464,8 @@ async def test_operational_standard_management_uses_package_and_saves_only_canon
         ).read_text()
     )
     assert (
-        normalized["summary"]["applied"] == 4
+        normalized["summary"].get("applied", 0) == 0
+        and normalized["summary"]["automatically_deferred"] == 4
         and result.standard.uri == exported.as_uri()
     )
     assert result.status == "partial" and normalized["extraction_ref"]["sha256"]
@@ -472,7 +473,8 @@ async def test_operational_standard_management_uses_package_and_saves_only_canon
     report = (
         tmp_path / "objects/specification_processing/profile_run/index.md"
     ).read_text()
-    assert "support_limit" in report and "1000 GB" in report
+    assert "1000 GB" not in report
+    assert all(not d["requirements"] for d in normalized["documents"])
     complete.assert_awaited_once()
 
 
@@ -724,15 +726,50 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
         GoodsAuthoringClient,
     )
 
+    from teoria.domains.goods.normalization.contracts.candidates import CandidateContext
+    from backend.tests.domains.goods.workflows.test_meaning_links import link_services, approve_links
+    from teoria.domains.goods.expression_links.admin_router import create_goods_dictionary_router
+    from teoria.domains.goods.expression_links.expression_contracts import OntologyMappingProposal
     profile, ontology, corpus = example()
-    corpus["documents"][0]["attributes"][0]["property_key"] = "capacity_bytes"
-    seed_data = profile.model_dump(mode="json")
-    seed_data["entities"][0]["aliases"] = ["메모리"]
-    seed = NormalizationProfile.model_validate(seed_data)
-    intermediate = profile
-    final_data = profile.model_dump(mode="json")
-    final_data["requirements"][0]["source_property_keys"].append("capacity_bytes")
-    final_profile = NormalizationProfile.model_validate(final_data)
+    for obj in ontology['objects']:
+        for item in [obj, *obj['properties']]:
+            item.update(name=item['stable_key'], description='Synthetic meaning for active v2 workflow tests')
+    profile=profile.model_copy(update={'ontology':profile.ontology.model_copy(update={'checksum':checksum(ontology)})})
+    document=corpus['documents'][0]
+    document['parsed_document']['nodes'][0].update(kind='paragraph')
+    document['parsed_document']['nodes'][0]['text'] += ' / 요구용량 / 용량 / 수량'
+    for attribute in document['attributes']:
+        attribute['property_raw']='수량' if attribute['property_key']=='quantity' else '용량'
+    document['attributes'][0].update(property_key='capacity_bytes',property_raw='요구용량')
+    seed_data = profile.model_dump(mode='json')
+    seed_data['entities'][0]['aliases']=['메모리']
+    seed=NormalizationProfile.model_validate(seed_data)
+    entity_group=checksum(CandidateContext(kind='entity',label='RAM',source_kind='equipment'))
+    intermediate_data=seed.model_dump(mode='json')
+    intermediate_data['entities'].append({'rule_id':'semantic_'+entity_group[:24], 'aliases':['RAM'],'concept_id':uid(1)})
+    intermediate=NormalizationProfile.model_validate(intermediate_data)
+    property_group=checksum(CandidateContext(kind='requirement',label='capacity_bytes',source_kind='capacity_bytes',
+        target_concept_ids=[uid(1)],role='requirement_candidate',scope='per_component',value_type='number',unit='GB'))
+    final_data=intermediate.model_dump(mode='json')
+    final_data['requirements'].append({**final_data['requirements'][0], 'rule_id':'semantic_'+property_group[:24],
+        'source_property_keys':['capacity_bytes'], 'scopes':['per_component']})
+    final_profile=NormalizationProfile.model_validate(final_data)
+    links_repo,registration,link_service=link_services({'ontology':profile.ontology.model_dump(mode='json'),'content':ontology})
+    original_register=registration.author
+    async def register_and_seed(operation_id,submission,*,actor):
+        result=await original_register(operation_id,submission,actor=actor)
+        candidates={c.candidate_key:c for c in submission.candidates}
+        for decision in result['decisions']:
+            candidate=candidates[decision['candidate_key']]
+            if not decision.get('entry_id') or candidate.preferred_name in {'RAM','요구용량'}:continue
+            target=uid(4) if candidate.preferred_name=='서버' else uid(1) if candidate.kind=='item_type' else uid(3) if candidate.preferred_name=='수량' else uid(2)
+            row=await link_service.propose_mapping(OntologyMappingProposal(source_entry_id=decision['entry_id'],
+                ontology=profile.ontology,target_concept_id=target,owner_concept_id=uid(1) if candidate.kind=='characteristic' else None,
+                scope_mode='classified',classification_code=profile.classification_code,
+                rationale='기존 테스트 게시 개념과 표현의 명시적인 연결이다.'),actor=actor)
+            await approve_links(link_service,{'mapping_ids':[row['mapping_id']]})
+        return result
+    registration.author=register_and_seed
     packages = {
         uid(200 + i): compile_package(
             p, ontology, revision_id=UUID(int=200 + i), approval_actor="principal:test"
@@ -794,6 +831,7 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
             repo, AdminAuthorizer(settings), Operations(repo)
         )
     )
+    app.include_router(create_goods_dictionary_router(registration,AdminAuthorizer(settings),link_service))
     monkeypatch.setattr(
         workflow,
         "GoodsAuthoringClient",
@@ -836,7 +874,7 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
     monkeypatch.setattr(
         workflow.StandardWorkflowRepository, "from_environment", lambda: checkpoints
     )
-    for name in ["export_package", "collect_candidates", "author_candidates"]:
+    for name in ["export_package", "collect_candidates", "author_candidates", "export_expression_snapshot", "review_expression_links"]:
         monkeypatch.setattr(workflow, name, getattr(workflow, name).fn)
     for name in [
         "stage_original_documents",
@@ -852,9 +890,10 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
     ]:
         owner = data_tasks if hasattr(data_tasks, name) else tasks
         monkeypatch.setattr(owner, name, getattr(owner, name).fn)
-    monkeypatch.setattr(tasks, "resolve_dictionary", AsyncMock(return_value={
-        "result":{"operation_id":"isolated_profile_fixture"}, "summary":{}, "alignment_ref":None, "artifacts":[],
-    }))
+    from teoria.domains.goods.normalization.meaning_proposals import expression_alignment
+    monkeypatch.setattr(expression_alignment,'GoodsAuthoringClient',lambda: (_ for _ in ()).throw(
+        AssertionError('fixed v2 application must not call authoring API')))
+    monkeypatch.setattr(tasks,'resolve_dictionary',tasks.resolve_dictionary.fn)
     monkeypatch.setattr(
         flows, "document_processing_flow", flows.document_processing_flow.fn
     )
@@ -894,9 +933,19 @@ async def test_standard_workflow_http_handoff_wait_resume_and_lost_response(
         and checkpoints.status == "awaiting_approval"
     )
     approved = True
+    pending=await workflow.standard_workflow_flow.fn(manifest)
+    assert pending['status']=='awaiting_approval' and pending['review_stage']=='expression_links'
+    assert len(pending['review']['mapping_ids'])>=1
+    before=len(links_repo.links)
+    replay_pending=await workflow.standard_workflow_flow.fn(manifest)
+    assert replay_pending['review']['mapping_ids']==pending['review']['mapping_ids'] and len(links_repo.links)==before
+    await approve_links(link_service,pending['review'])
     with pytest.raises(RuntimeError, match="HTTP 503"):
         await workflow.standard_workflow_flow.fn(manifest)
     assert checkpoints.status == "failed"
+    pending=await workflow.standard_workflow_flow.fn(manifest)
+    assert pending['status']=='awaiting_approval' and pending['phase']=='requirements'
+    await approve_links(link_service,pending['review'])
     result = await workflow.standard_workflow_flow.fn(manifest)
     assert (
         result["status"] == "partial"

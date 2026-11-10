@@ -229,6 +229,37 @@ class ComposeConfigurationTests(unittest.TestCase):
         self.assertIn("NOSUPERUSER NOCREATEDB NOCREATEROLE", init["command"][-1])
         self.assertNotIn("mlflow-postgres-init", services["mlflow"]["depends_on"])
 
+    def test_model_execution_images_network_and_privileges_are_isolated(self):
+        services = self.resolved("teoria-test-mlops")["services"]
+        worker = services["model-training-worker"]
+        job = services["model-training-job"]
+        serving = services["demo-inference"]
+        self.assertNotEqual(worker["image"], job["image"])
+        self.assertNotEqual(job["image"], serving["image"])
+        self.assertEqual(job["profiles"], ["jobs"])
+        self.assertIn("docker", worker["command"])
+        self.assertIn("teoria-model-training-docker", worker["command"])
+        self.assertTrue(any(v["target"] == "/var/run/docker.sock" for v in worker["volumes"]))
+        for service in (job, serving):
+            self.assertFalse(any(v["target"] == "/var/run/docker.sock" for v in service.get("volumes", [])))
+        self.assertEqual(services["model-register"]["environment"]["TEORIA_MODEL_DOCKER_NETWORK"], "teoria-test-mlops_default")
+        self.assertEqual(services["model-deployment-worker"]["environment"]["TEORIA_COMPOSE_PROJECT_NAME"], "teoria-test-mlops")
+        self.assertIn("/live", serving["healthcheck"]["test"][-1])
+
+    def test_registry_release_prefix_covers_platform_and_model_images(self):
+        self.environment.update(TEORIA_IMAGE_PREFIX="registry.example.com:5000/teoria/", TEORIA_IMAGE_TAG="release_123")
+        services = self.resolved("teoria-test-registry-release")["services"]
+        for name, service in services.items():
+            if service.get("build"):
+                self.assertTrue(service["image"].startswith("registry.example.com:5000/teoria/"), name)
+                self.assertTrue(service["image"].endswith(":release_123"), name)
+        self.assertEqual(services["postgres"]["image"], "postgres:17")
+        self.assertEqual(services["model-register"]["environment"]["TEORIA_MODEL_TRAINING_IMAGE"], services["model-training-job"]["image"])
+        dispatcher = services["model-training-worker"]
+        self.assertEqual(dispatcher["environment"]["DOCKER_CONFIG"], "/run/docker-auth")
+        auth = next(v for v in dispatcher["volumes"] if v["target"] == "/run/docker-auth")
+        self.assertTrue(auth["read_only"])
+
     def test_admin_mlflow_connection_uses_server_static_prefix(self):
         services = self.resolved("teoria-test-mlflow")["services"]
         self.assertEqual(

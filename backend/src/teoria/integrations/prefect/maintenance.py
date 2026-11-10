@@ -24,12 +24,13 @@ def pool_policies() -> dict[str, set[str]]:
     directory = deployment_directory(
         Path(os.environ.get("TEORIA_PIPELINE_PATH", "/app/backend")), "process"
     )
-    policies = {
-        path.stem: {
-            p["name"] for p in yaml.safe_load(path.read_text()).get("pools", [])
-        }
-        for path in directory.glob("*.yaml")
-    }
+    policies = {}
+    for path in directory.glob("*.yaml"):
+        policy = yaml.safe_load(path.read_text())
+        policies[path.stem] = {p["name"] for p in policy.get("pools", [])}
+        # Retired pools must still drain, but must never resume after registration.
+        if retired := policy.get("retired_pools"):
+            policies[path.stem + "_retired"] = set(retired)
     if not policies or any(not names for names in policies.values()):
         raise ValueError("Compose Prefect ownership policies are unavailable")
     return policies

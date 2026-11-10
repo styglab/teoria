@@ -93,6 +93,10 @@ class ExpressionLinkService:
                 proposal.target_concept_id, proposal.owner_concept_id)
             if target['ontology'] != proposal.ontology.model_dump(mode='json'):
                 raise ValueError('ontology_reference_identity_mismatch')
+            # Replay a reviewed proposal without creating duplicate equivalence candidates.
+            existing = await self.repository.equivalent_mapping(conn, proposal)
+            if existing is not None:
+                return existing
             row = await self.repository.add_ontology_mapping(conn, proposal, evidence, actor)
             await self.repository.meaning_event(conn, 'mapping', row['mapping_id'], 'proposed', actor, proposal.rationale)
             return row

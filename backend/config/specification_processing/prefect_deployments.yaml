@@ -46,8 +46,8 @@ deployments:
   parameters: {}
   schedules: []
 - name: specification-standard-workflow
-  version: 1.0.0
-  description: 추출·Platform 의미 판정·승인 상태 확인·고정 표준 저장·재적용을 연결하고 체크포인트에서 재개한다.
+  version: 2.0.0
+  description: 추출·의미 제안·프로파일 승인·표현 연결 승인을 거쳐 게시 버전과 snapshot을 고정해 적용한다.
   entrypoint: teoria.domains.goods.workflows.standard_authoring.standard_workflow_flow
   tags:
   - domain:public_procurement

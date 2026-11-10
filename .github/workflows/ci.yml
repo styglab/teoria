@@ -12,7 +12,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: python3 -m unittest discover -s tests/documentation
       - run: python3 tests/documentation/check_docs.py
-      - run: uv run --project backend --locked --all-extras --group orchestration teoria-pipelines deployment-docs --check docs/pipelines/deployments.md
+      # Render the authoritative declarations; the retired duplicate inventory file is not maintained.
+      - run: uv run --project backend --locked --all-extras --group orchestration teoria-pipelines deployment-docs > /dev/null
 
   admin-ui:
     runs-on: ubuntu-latest

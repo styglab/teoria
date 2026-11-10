@@ -146,8 +146,8 @@ def _grader_revision():
 
 
 def _processor_revision():
-    from teoria.domains.goods.processor_revision import processor_revision
-    return processor_revision()
+    from teoria.domains.goods.processor_revision import extraction_revision
+    return extraction_revision()
 
 
 def _workspace(cycle, *, allow_missing=False):

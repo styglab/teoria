@@ -31,6 +31,17 @@ def apply_profile(corpus,package: NormalizationPackage,*,run_id: str, meaning_al
         row = next((o for o in aligned.get(document_id, {}).get(collection, []) if o['id'] == local_id), {})
         return {'source_entry_id': row.get('source_term_ref', '').removeprefix('source_term:'),
                 'mapping_ids': row.get('meaning_mapping_ids', [])}
+    def distinct_rules(choices, *, attribute=None):
+        if not governed:
+            return choices
+        unique = {}
+        for rule in sorted(choices, key=lambda r: r.rule_id):
+            policy = (str(rule.concept_id),) if attribute is None else (
+                str(rule.property_concept_id), rule.value_type,
+                json.dumps([u.model_dump(mode='json') for u in rule.units
+                            if u.source_unit == attribute.get('unit_raw')], sort_keys=True))
+            unique.setdefault(policy, rule)
+        return list(unique.values())
     documents=[];attribute_rows=[];candidates=[];entity_counts=Counter();relation_counts=Counter()
     for doc in corpus['documents']:
         entities={};nodes={n['node_id']:n['text'] for n in doc['parsed_document']['nodes']}
@@ -40,6 +51,7 @@ def apply_profile(corpus,package: NormalizationPackage,*,run_id: str, meaning_al
             meaning = interpretation(doc['document_id'], 'entities', entity['id']) if governed else None
             choices=[r for r in profile.entities if entity['kind'] in r.source_kinds and
                      (str(r.concept_id) == meaning if governed else literal(entity['name']) in {literal(a) for a in r.aliases})]
+            choices=distinct_rules(choices)
             row={'observation_id':observation_id(doc,run_id,'entity',entity['id']),'source_entity_id':entity['id'],
                  'name_raw':entity['name'],'evidence':evidence,'status':'applied' if grounded and len(choices)==1 else 'automatically_deferred'}
             if row['status']=='applied':row.update(concept_id=str(choices[0].concept_id),
@@ -60,6 +72,7 @@ def apply_profile(corpus,package: NormalizationPackage,*,run_id: str, meaning_al
             choices=[r for r in profile.requirements if target_types=={str(r.target_concept_id)} and
                      (str(r.property_concept_id) == meaning if governed else a['property_key'] in r.source_property_keys)
                      and role in r.roles and scope in r.scopes]
+            choices=distinct_rules(choices, attribute=a)
             reason=None;value=None;chosen=None
             if not subjects or len(subjects)!=len(a['subject_ids']) or None in target_types:reason='unresolved_subject'
             elif not attribute_is_grounded(doc,a):reason='source_condition_mismatch'

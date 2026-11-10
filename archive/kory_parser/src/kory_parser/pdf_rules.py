@@ -115,10 +115,12 @@ def paired_rule_groups(groups, axis):
 
 
 def corroborated_rule_pairs(grouped, vertical_edges):
-    """Require a bounded internal divider crossing repeated double row rules.
+    """Confirm double grids or a heavier separator inside a thin-ruled table.
 
-    Decorative frames and lone header separators keep their original geometry.
-    Once a grid is confirmed, connected outer stroke pairs belong to that grid.
+    A lone pair needs matching full-width rules on both sides, at least one
+    thinner row rule, and a crossing internal divider. An outer frame may be
+    heavier. Equal-weight narrow rows retain their original geometry.
+    Once a double grid is confirmed, connected outer pairs belong to that grid.
     """
     pairs = {
         axis: {i: item for i, item in enumerate(items) if len(item[0]) == 2}
@@ -134,6 +136,38 @@ def corroborated_rule_pairs(grouped, vertical_edges):
 
     links = {i: {j for j, h in pairs["h"].items() if crosses(v, h)} for i, v in pairs["v"].items()}
     confirmed = {"v": set(), "h": set()}
+    for index, (parents, position) in pairs["h"].items():
+        if index == 0 or index + 1 == len(grouped["h"]):
+            continue
+        strokes = [edge for group in parents for edge in group]
+        left = min(edge["x0"] for edge in strokes)
+        right = max(edge["x1"] for edge in strokes)
+        width = min(edge.get("linewidth", 0) for edge in strokes)
+        color = tuple(strokes[0].get("stroking_color") or ())
+
+        def supporting_width(item):
+            groups, _ = item
+            if len(groups) != 1:
+                return None
+            return min((
+                edge["linewidth"]
+                for edge in groups[0]
+                if edge.get("object_type") == "line"
+                and edge["x0"] <= left + 1.6
+                and edge["x1"] >= right - 1.6
+                and edge.get("linewidth", 0) > 0
+                and tuple(edge.get("stroking_color") or ()) == color
+            ), default=None)
+
+        before, after = grouped["h"][index - 1], grouped["h"][index + 1]
+        widths = (supporting_width(before), supporting_width(after))
+        if None not in widths and min(widths) <= width / 2 + 0.001 and any(
+            left + 1.6 < edge["x0"] < right - 1.6
+            and edge["top"] <= before[1] + 1.6
+            and edge["bottom"] >= after[1] - 1.6
+            for edge in vertical_edges
+        ):
+            confirmed["h"].add(index)
     for index, (parents, position) in pairs["v"].items():
         if len(links[index]) < 2:
             continue

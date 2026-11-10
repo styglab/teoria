@@ -14,11 +14,15 @@ AI/AIP는 예약 폴더만 있으며 미구현이다. 기존 기능별 LLM 호�
 | Ontology | Draft·검토·승인·게시·버전 artifact·공개 publication 조회 |
 | 의미 연결 | 개념과 용어·자산·API·Capability의 Binding 검토·승인 |
 | Runtime | Source·Mapping·Capability·artifact·Context·HTTP/MCP 기반; 문서 요구조건 고정 조회 계약은 validated 상태 |
-| 물품 | 규격서 추출·근거 검증·표현 연결·프로파일 승인·문서별 해석 승인·별도 적용·감사 |
+| 물품 | 규격서 추출·프로파일/표현 연결의 별도 승인·고정 snapshot 적용·문서 해석·감사·단계별 평가 연결 |
 | 법령 | 전용 Worker의 수집·시점 검색·진단 근거 조회 |
 | FormatID | 문서 입력·실행·결과·원문 근거·재처리·단계 상태·검증된 평가 근거 연결 |
 | 프런트엔드 기반 | Shell·라우트 분리, 소유 모듈별 API, TanStack Query·요청 취소·세션별 캐시 초기화 |
-| 별도 선택형 MLOps | 공통 모델·버전 조회; 합성 고객 학습·배포·추론은 `examples/customer_churn/`에서 연결 |
+| 별도 선택형 MLOps | 공통 모델·버전 조회; 고객 이탈 예제는 Compose의 실행별 학습 컨테이너·별도 서빙 이미지로 연결, K3s MLOps 미구현 |
+
+경량 Image Registry의 Compose·K3s 독립 배포 설정, 플랫폼 이미지 prefix·릴리스 게시·pull,
+Admin의 repository·tag·digest 조회를 추가했다. 격리 Docker에서 TLS·인증·이미지 게시·조회·보존을 검증했다.
+실제 K3s Registry 배포와 임의 외부 학습 이미지 실행 계약은 아직 검증·구현 범위에 포함하지 않는다.
 
 ## 다음 순서
 
@@ -30,6 +34,8 @@ AI/AIP는 예약 폴더만 있으며 미구현이다. 기존 기능별 LLM 호�
 실제 서버 문서의 [네 항목 검토 준비](../backend/authoring/specification_examples/server_memory_review.yaml)는
 보존된 객체 저장소의 원문·결과·검토 해시와 네 관찰 ID를 재확인했다. 운영 Draft 재조회와 의미 승인이 필요하다.
 소유 대상·scope·구성 수량의 문서별 승인·별도 적용·Runtime 제공 경로는 구현했다.
+표준 워크플로우는 프로파일과 표현 연결 승인을 구분하며, 고정 적용과 단계별 재개·평가 경로를 연결했다.
+후보·연결 판단은 소유 모듈에 두고, 표준 구축 Flow·Task는 I/O·순서·대기·재개를 조립한다.
 격리 PostgreSQL에서 migration·동시 승인·불변 재적용·감사를 검증했으며 실제 문서의 의미 승인·운영 배포는 남아 있다.
 
 구조 변경의 단위 테스트·빌드·Compose 템플릿 검증과 실제 배포 성공은 구분한다.

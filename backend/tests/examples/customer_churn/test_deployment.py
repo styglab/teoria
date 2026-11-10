@@ -14,12 +14,23 @@ def configure(monkeypatch, tmp_path, *, healthy):
         labels={"io.teoria.role": "demo-inference"},
         restart=lambda **kw: restarts.append(kw),
     )
+
+    def candidates(*, all, filters):
+        assert all
+        assert filters["label"] == [
+            "com.docker.compose.project=isolated-demo",
+            "com.docker.compose.service=demo-inference",
+            "io.teoria.role=demo-inference",
+        ]
+        return [container]
+
     client = SimpleNamespace(
-        containers=SimpleNamespace(get=lambda name: container),
+        containers=SimpleNamespace(list=candidates),
         close=lambda: closed.append(True),
     )
     monkeypatch.setitem(sys.modules, "docker", SimpleNamespace(from_env=lambda: client))
     monkeypatch.setenv("TEORIA_DEMO_RELEASE_DIRECTORY", str(tmp_path))
+    monkeypatch.setenv("TEORIA_COMPOSE_PROJECT_NAME", "isolated-demo")
     monkeypatch.setenv("TEORIA_DEMO_INFERENCE_TOKEN", "synthetic-test-token")
     monkeypatch.setattr(
         "teoria.examples.customer_churn.deployment.time.sleep", lambda seconds: None
@@ -67,3 +78,14 @@ def test_failed_readiness_restores_previous_release(monkeypatch, tmp_path):
         activate_demo_release({"model_version": 2, "sha256": "candidate"})
     assert json.loads((tmp_path / "active.json").read_text()) == previous
     assert len(restarts) == 2 and closed == [True]
+
+
+@pytest.mark.parametrize("count", [0, 2])
+def test_ambiguous_server_selection_does_not_change_release(monkeypatch, tmp_path, count):
+    restarts, closed = configure(monkeypatch, tmp_path, healthy=True)
+    client = sys.modules["docker"].from_env()
+    client.containers.list = lambda **kwargs: [object()] * count
+    with pytest.raises(ValueError, match="exactly one"):
+        activate_demo_release({"model_version": 2, "sha256": "candidate"})
+    assert not (tmp_path / "active.json").exists()
+    assert restarts == [] and closed == [True]

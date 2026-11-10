@@ -93,6 +93,20 @@ class DeploymentTests(unittest.TestCase):
         ):
             deployment.main()
 
+    def test_pull_fetches_images_without_starting_or_initializing_services(self):
+        self.execute("pull", "--modules", "core")
+        self.assertTrue(any("pull" in c for c in self.calls))
+        self.assertFalse(any("up" in c for c in self.calls))
+        self.assertEqual(self.jobs, [])
+
+    def test_push_only_publishes_each_built_image_once(self):
+        self.services["admin-api"]["build"] = {"target": "admin"}
+        self.services["nginx"]["build"] = {"target": "gateway"}
+        self.execute("push", "--modules", "core")
+        command = next(c for c in self.calls if "push" in c)
+        self.assertEqual(command[command.index("push") + 1:], ["admin-api"])
+        self.assertNotIn("postgres", command)
+
     def test_all_selects_every_module_without_starting_tools(self):
         self.execute("config", "--all")
         command = self.calls[0]
@@ -122,7 +136,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(saved["prepared"])
 
     def test_mlflow_database_is_prepared_before_tracking_server_starts(self):
-        for name in ("mlflow-postgres-init", "model-storage-init", "model-register"):
+        for name in ("mlflow-postgres-init", "model-storage-init", "model-register", "model-training-job"):
             self.services[name] = {"image": "teoria-test:latest", "profiles": ["jobs"]}
         self.services["mlflow-postgres-init"]["environment"] = {
             "TEORIA_MLFLOW_DB_PASSWORD": "synthetic"
@@ -143,6 +157,10 @@ class DeploymentTests(unittest.TestCase):
         )
         self.assertLess(prepared, started)
         self.assertFalse(any("mlflow-postgres" in c for c in self.calls))
+        self.assertNotIn("model-training-job", self.jobs)
+        inspected = next(i for i, c in enumerate(self.calls) if c[:3] == ["docker", "image", "inspect"])
+        first_start = next(i for i, c in enumerate(self.calls) if "up" in c)
+        self.assertLess(inspected, first_start)
 
     def test_failed_migration_does_not_start_application_or_mark_prepared(self):
         self.fail_job = "postgres-migrate"

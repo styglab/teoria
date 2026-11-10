@@ -223,3 +223,68 @@ async def resolve_meanings(bundles, profile, ontology, *, model, timeout=300, ba
         'decisions': [d.model_dump(mode='json') for d in sorted(decisions, key=lambda d: d.group_id)],
         'published': False}
     return {**body, 'checksum': checksum(body)}
+
+
+class MeaningDecisionCase(Record):
+    group_id: str = Field(pattern=r'^[a-f0-9]{64}$')
+    action: Literal['existing', 'new', 'hold']
+    concept_id: UUID | None = None
+    new_concept_code: str | None = None
+    units: list[UnitRule] = Field(default_factory=list)
+    reverse: bool = False
+
+    @model_validator(mode='after')
+    def expected_target(self):
+        if ((self.action == 'existing') != (self.concept_id is not None)
+                or (self.action == 'new') != (self.new_concept_code is not None)):
+            raise ValueError('meaning_case_target_mismatch')
+        if self.action == 'hold' and (self.units or self.reverse):
+            raise ValueError('held_case_cannot_apply_policy')
+        return self
+
+
+class MeaningEvaluationCases(Record):
+    base_profile_checksum: str = Field(pattern=r'^[a-f0-9]{64}$')
+    candidate_report_checksum: str = Field(pattern=r'^[a-f0-9]{64}$')
+    input_checksums: list[str] = Field(min_length=1)
+    label_status: Literal['silver', 'human_reviewed']
+    cases: list[MeaningDecisionCase] = Field(min_length=1, max_length=5000)
+
+    @model_validator(mode='after')
+    def unique_cases(self):
+        if len({c.group_id for c in self.cases}) != len(self.cases):
+            raise ValueError('duplicate_meaning_case')
+        return self
+
+
+def score_meaning_decisions(report, cases):
+    """Frozen target/action/unit/direction cases; not full definition-quality certification."""
+    cases = MeaningEvaluationCases.model_validate(cases)
+    body = {k:v for k,v in report.items() if k != 'checksum'}
+    if checksum(body) != report.get('checksum') or report.get('artifact_kind') != 'goods_semantic_proposals':
+        raise ValueError('semantic_evaluation_report_checksum_mismatch')
+    for key in ['base_profile_checksum', 'candidate_report_checksum', 'input_checksums']:
+        if report.get(key) != cases.model_dump(mode='json')[key]:
+            raise ValueError('semantic_evaluation_inputs_changed')
+    decisions = {d['group_id']: d for d in report['decisions']}
+    if len(decisions) != len(report['decisions']):
+        raise ValueError('duplicate_semantic_decision')
+    matched, missing, incorrect = 0, [], []
+    for expected in cases.cases:
+        actual = decisions.get(expected.group_id)
+        if actual is None:
+            missing.append(expected.group_id)
+            continue
+        wanted = expected.model_dump(mode='json')
+        observed = {key:actual.get(key) for key in ['group_id','action','concept_id','units','reverse']}
+        observed['new_concept_code'] = (actual.get('new_concept') or {}).get('code')
+        if observed == wanted:
+            matched += 1
+        else:
+            incorrect.append(expected.group_id)
+    return {'scope': 'semantic_decision_cases', 'label_status': cases.label_status,
+        'cases_checksum': checksum(cases), 'cases_total': len(cases.cases), 'cases_matched': matched,
+        'missing_groups': missing, 'incorrect_groups': incorrect,
+        'unlabelled_groups': sorted(set(decisions)-{c.group_id for c in cases.cases}),
+        'passed': matched == len(cases.cases), 'definition_quality_measured': False,
+        'publication_authorized': False}

@@ -35,6 +35,17 @@ class ExpressionLinkRepository(ExpressionHistoryRepository):
     async def mapping(self, conn, mapping_id):
         return await (await conn.execute('SELECT * FROM goods.dictionary_ontology_mappings WHERE mapping_id=%s', (mapping_id,))).fetchone()
 
+    async def equivalent_mapping(self, conn, proposal):
+        return await (await conn.execute("""SELECT * FROM goods.dictionary_ontology_mappings
+            WHERE source_entry_id=%s AND ontology_version_id=%s AND ontology_checksum=%s
+              AND target_concept_id=%s AND owner_concept_id IS NOT DISTINCT FROM %s::uuid
+              AND classification_code IS NOT DISTINCT FROM %s::text AND scope_mode=%s AND relation=%s
+              AND status IN ('draft','approved')
+            ORDER BY CASE status WHEN 'approved' THEN 0 ELSE 1 END,created_at,mapping_id LIMIT 1""",
+            (proposal.source_entry_id,proposal.ontology.version_id,proposal.ontology.checksum,
+             proposal.target_concept_id,proposal.owner_concept_id,proposal.classification_code,
+             proposal.scope_mode,proposal.relation))).fetchone()
+
     async def add_ontology_mapping(self, conn, proposal, evidence, actor):
         return await (await conn.execute("""INSERT INTO goods.dictionary_ontology_mappings
             (mapping_id,source_entry_id,ontology_version_id,ontology_checksum,target_concept_id,

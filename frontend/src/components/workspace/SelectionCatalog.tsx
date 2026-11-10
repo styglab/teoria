@@ -32,7 +32,7 @@ export function SelectionCatalog({
 }) {
   const [params] = useSearchParams();
   const [mobileDetail, setMobileDetail] = useState(() =>
-    ["run", "model", "pipeline", "service"].some((key) => params.has(key)),
+    ["run", "model", "pipeline", "service", "repository"].some((key) => params.has(key)),
   );
   return (
     <div

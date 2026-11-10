@@ -282,3 +282,61 @@ def test_dimension_text_with_unit_is_not_approved_as_a_unitless_string():
     )
     result = validate_decisions(MeaningBatch.model_validate(data), report, ontology)
     assert result.decisions[0].action == "hold"
+
+
+def test_semantic_decision_evaluation_pins_inputs_and_keeps_missing_cases_in_denominator():
+    from teoria.domains.goods.normalization.candidates.semantic_resolution import score_meaning_decisions
+    _, _, data = example()
+    decision=MeaningBatch.model_validate(data).model_dump(mode='json')['decisions'][0]
+    body={'artifact_kind':'goods_semantic_proposals','base_profile_checksum':'a'*64,
+        'candidate_report_checksum':'b'*64,'input_checksums':['c'*64],'decisions':[decision]}
+    report={**body,'checksum':checksum(body)}
+    cases={k:body[k] for k in ['base_profile_checksum','candidate_report_checksum','input_checksums']}
+    cases.update(label_status='silver',cases=[{k:decision[k] for k in ['group_id','action','concept_id','units','reverse']}])
+    score=score_meaning_decisions(report,cases)
+    assert score['passed'] and score['cases_matched']==1 and not score['publication_authorized']
+    assert not score['definition_quality_measured']
+    cases['cases'].append({'group_id':'d'*64,'action':'hold'})
+    score=score_meaning_decisions(report,cases)
+    assert score['cases_total']==2 and score['cases_matched']==1 and score['missing_groups']==['d'*64]
+    cases['input_checksums']=['e'*64]
+    with pytest.raises(ValueError,match='inputs_changed'):score_meaning_decisions(report,cases)
+
+
+def test_semantic_evaluation_rejects_wrong_target_units_and_direction():
+    from teoria.domains.goods.normalization.candidates.semantic_resolution import score_meaning_decisions
+    _,_,data=example();decision=MeaningBatch.model_validate(data).model_dump(mode='json')['decisions'][0]
+    body={'artifact_kind':'goods_semantic_proposals','base_profile_checksum':'a'*64,
+        'candidate_report_checksum':'b'*64,'input_checksums':['c'*64],'decisions':[decision]}
+    report={**body,'checksum':checksum(body)}
+    cases={k:body[k] for k in ['base_profile_checksum','candidate_report_checksum','input_checksums']}
+    cases.update(label_status='human_reviewed',cases=[dict(group_id=decision['group_id'],action='existing',
+        concept_id=str(UUID(int=99)),units=decision['units'],reverse=False)])
+    assert not score_meaning_decisions(report,cases)['passed']
+    cases['cases'][0].update(concept_id=decision['concept_id'],units=[],reverse=True)
+    assert not score_meaning_decisions(report,cases)['passed']
+
+
+async def test_failed_frozen_semantic_cases_stop_before_authoring_or_publication():
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from teoria.domains.goods.normalization.candidates.semantic_operation_service import SemanticOperationService
+    _,_,data=example();decision=MeaningBatch.model_validate(data).model_dump(mode='json')['decisions'][0]
+    body={'artifact_kind':'goods_semantic_proposals','base_profile_checksum':'a'*64,
+        'candidate_report_checksum':'b'*64,'input_checksums':['c'*64],'decisions':[decision]}
+    report={**body,'checksum':checksum(body)}
+    cases={k:body[k] for k in ['base_profile_checksum','candidate_report_checksum','input_checksums']}
+    cases.update(label_status='human_reviewed',cases=[{'group_id':decision['group_id'],'action':'hold'}])
+    profiles=AsyncMock();profiles.candidate_context.return_value=(SimpleNamespace(
+        ontology=SimpleNamespace(namespace='goods_eval_fixture')), {})
+    repo=AsyncMock()
+    async def saved(operation_id,state,status,error=None):
+        return dict(operation_id=operation_id,checkpoint=state,status=status,error_code=error)
+    repo.save.side_effect=saved
+    authoring=AsyncMock()
+    service=SemanticOperationService(profiles,repo,authoring)
+    result=await service._advance('fixture',{'bundles':[],'base_revision_id':str(UUID(int=1)),
+        'auto_approve':True,'evaluation':cases},{'semantic_report':report},'fixture:reviewer')
+    assert result['status']=='held' and not result['evaluation']['passed']
+    authoring.create_draft.assert_not_awaited();authoring.publish.assert_not_awaited()
+    profiles.create.assert_not_awaited()

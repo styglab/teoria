@@ -1,6 +1,6 @@
 # EC2 단일 서버 K3s 배포
 
-GitHub `main` push의 **CI 성공 후** 이미지를 GHCR에 저장하고 EC2에 SSH로 접속하여
+GitHub `main` push의 **CI 성공 후** 이미지를 GHCR 또는 설정한 Registry에 저장하고 EC2에 SSH로 접속하여
 K3s를 갱신한다. 현재 구현은 Linux **x86_64 EC2 1대**를 대상으로 한다. EC2 주소·도메인과
 GitHub 설정은 운영자가 준비한다. 저장소 구성 검증과 실제 EC2 배포 성공은 구분한다.
 현재 환경에서 실제 EC2 연결과 배포는 아직 수행하지 않았다.
@@ -33,6 +33,8 @@ GitHub main → CI → GHCR의 commit SHA 이미지 → EC2 SSH → deploy.sh
 
 Kustomize는 `kubectl`에 포함된 기능만 사용한다. Helmfile이나 별도 GitOps 서버는 필요하지 않다.
 MLflow·Argo CD·Harbor·GPU Operator·MinIO·S3는 이 초기 구성에 추가하지 않는다.
+선택형 경량 Registry는 기본 application 배포와 독립적으로 설치한다.
+[이미지 Registry](image_registry.md)에 설치·CI Registry 변경·Admin 조회 연결을 설명한다.
 규격서 MinIO 기본 저장소는 현재 Compose에 반영돼 있으며 K3s 연결·배포 검증은 별도다.
 모델 진단은 Codex subprocess를 사용하며 기본적으로 비활성화한다.
 

@@ -70,6 +70,11 @@ def create_inference_app() -> FastAPI:
     app = FastAPI(title="Teoria Synthetic Customer Demo Inference", lifespan=lifespan)
     limit = asyncio.Semaphore(2)
 
+    @app.get("/live")
+    async def live():
+        # A newly installed server can start before its first model release.
+        return {"status": "ok"}
+
     @app.get("/health")
     async def health():
         if state["model"] is None:

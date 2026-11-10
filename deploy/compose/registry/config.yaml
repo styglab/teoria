@@ -1,0 +1,27 @@
+version: 0.1
+log:
+  level: warn
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+  delete:
+    enabled: false
+http:
+  addr: 0.0.0.0:5000
+  tls:
+    certificate: /run/registry/tls.crt
+    key: /run/registry/tls.key
+    minimumtls: tls1.2
+  debug:
+    addr: 0.0.0.0:5001
+  headers:
+    X-Content-Type-Options: [nosniff]
+auth:
+  htpasswd:
+    realm: Teoria images
+    path: /run/registry/htpasswd
+health:
+  storagedriver:
+    enabled: true
+    interval: 10s
+    threshold: 3

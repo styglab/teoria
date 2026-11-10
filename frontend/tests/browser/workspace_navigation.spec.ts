@@ -57,3 +57,23 @@ test("MLOps alone uses common operations without metadata requests", async ({ pa
   await expect(page.getByRole("heading", { name: "메타데이터 연결" })).toHaveCount(0);
   expect(requests.some((path) => path.includes("/metadata/") || path.endsWith("/sources") || path.endsWith("/capabilities"))).toBe(false);
 });
+
+test("image catalog is available independently of MLOps and keeps mobile references readable", async ({ page }) => {
+  await mockWorkspace(page, false, false);
+  await page.route("**/admin-api/v1/admin/image-registry/**", async route => {
+    const url = new URL(route.request().url());
+    const digest = "sha256:" + "a".repeat(64);
+    let body: unknown = { configured: true, host: "registry.example.com" };
+    if (url.pathname.endsWith("/repositories")) body = { items: ["teoria/admin", "models/churn"], next: null };
+    if (url.pathname.endsWith("/tags")) body = { items: ["release_001"], next: null };
+    if (url.pathname.endsWith("/manifest")) body = { repository: "models/churn", reference: "release_001", digest, image: "registry.example.com/models/churn@" + digest, media_type: "index", platforms: [{ os: "linux", architecture: "amd64" }] };
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/admin/overview");
+  await page.getByRole("navigation", { name: "공통 운영" }).getByRole("link", { name: "컨테이너 이미지" }).click();
+  await expect(page.getByRole("heading", { name: "고정 버전 참조" })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/admin/images?repository=models/churn&tag=release_001");
+  await expect(page.getByRole("heading", { name: "고정 버전 참조" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+});

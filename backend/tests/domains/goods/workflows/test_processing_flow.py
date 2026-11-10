@@ -42,6 +42,9 @@ def undecorated(monkeypatch):
     class DictionaryAPI:
         async def __aenter__(self):return self
         async def __aexit__(self,*args):pass
+        async def dictionary_meaning(self,*args):
+            from teoria.domains.goods.expression_links.snapshot_contracts import snapshot_from_records
+            return snapshot_from_records([],[],[]).model_dump(mode='json')
         async def resolve_dictionary_meanings(self,source_entry_ids,classification_code=None):
             return {'policy_version':'fixture','items':[]}
         async def dictionary(self,operation_id,payload):
@@ -62,9 +65,9 @@ async def test_canonical_artifacts_are_separate_and_db_completion_is_last(tmp_pa
     result=await flows.execute_specification_run(request)
     assert result.status=='completed'
     assert result.summary['applied']==1
-    assert len(result.artifacts)==10
+    assert len(result.artifacts)==11
     root=tmp_path/'objects/specification_processing/fixture_run'
-    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==sorted(['execution_receipt.json','documents/doc_1/result.json','source_term_alignment.json','dictionary_semantic_decisions.json','dictionary_bindings.json','dictionary_candidates.json','extracted.json','index.md','normalized.json','sources/doc_1.hwp'])
+    assert sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())==sorted(['dictionary_standard.json','execution_receipt.json','documents/doc_1/result.json','source_term_alignment.json','dictionary_semantic_decisions.json','dictionary_bindings.json','dictionary_candidates.json','extracted.json','index.md','normalized.json','sources/doc_1.hwp'])
     for artifact in result.artifacts:
         path=Path(artifact.uri.removeprefix('file://'))
         assert path.exists() and hashlib.sha256(path.read_bytes()).hexdigest()==artifact.sha256
@@ -344,7 +347,8 @@ async def test_verified_quality_evidence_is_pinned_in_execution_receipt(tmp_path
         metrics[name + "_cases_total"] = metrics[name + "_cases_found"] = 1
     score = {"metrics": metrics, "case_contract_version": 2, "documents": [
         {"document_id": "frozen_fixture", "missing_cases": []}], "independent_gold": True}
-    revision = flows.processor_revision()
+    from teoria.domains.goods.processor_revision import extraction_revision
+    revision = extraction_revision()
     cycle = {"status": "finished", "purpose": "extraction_improvement", "candidate_revision": revision,
              "comparison": {"decision": "accepted"}, "cleanup": {"status": "complete"},
              "sampling": {"freshness": "history_checked"}, "settings": {"model": "fixture-model"},

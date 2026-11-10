@@ -12,6 +12,11 @@ export class AdminApiError extends Error {
 }
 
 const requestMessages: Record<string, string> = {
+  image_registry_not_configured: "이미지 저장소가 연결되지 않았습니다.",
+  image_registry_unavailable: "이미지 저장소에 연결하지 못했습니다.",
+  image_registry_auth_failed: "이미지 저장소 인증 설정을 확인하세요.",
+  image_not_found: "이미지 또는 태그를 찾지 못했습니다.",
+  invalid_image_registry_response: "이미지 저장소 응답을 검증하지 못했습니다.",
   goods_runtime_not_configured:
     "게시 의미 조회 서비스가 아직 연결되지 않았습니다.",
   goods_runtime_unavailable: "게시 의미 조회 서비스에 연결하지 못했습니다.",

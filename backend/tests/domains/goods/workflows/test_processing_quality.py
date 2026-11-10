@@ -44,3 +44,10 @@ async def test_quality_hold_never_opens_an_approval_http_request(monkeypatch):
     updated=await automatic.approve_application_standard.fn(request,result)
     assert updated.summary['automatic_application_standard']['reason']=='quality_threshold_exceeded'
     Repository.record_application_standard.assert_awaited_once()
+
+
+def test_fully_deferred_output_never_passes_the_operational_approval_gate():
+    quality=quality_fixture();quality.update(applied_attributes=0,held_attributes=10,held_attribute_ratio=1)
+    gate=automatic_approval_quality(quality,AutomaticApprovalLimits())
+    assert not gate['ready'] and 'no_applied_attributes' in gate['reasons']
+    assert gate['scope']=='operational_conformance' and gate['accuracy_verified'] is False

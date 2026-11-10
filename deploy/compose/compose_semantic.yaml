@@ -3,7 +3,7 @@ services:
   runtime-api:
     cpus: 1
     mem_limit: 512m
-    image: ${TEORIA_RUNTIME_API_IMAGE:-teoria-platform-runtime:latest}
+    image: ${TEORIA_RUNTIME_API_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-platform-runtime:${TEORIA_IMAGE_TAG:-latest}}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -177,7 +177,7 @@ services:
   prefect-metadata-deploy:
     cpus: 0.5
     mem_limit: 512m
-    image: teoria-pipelines-metadata:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-pipelines-metadata:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -194,7 +194,7 @@ services:
     - metadata
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
-      TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-2.0.5}
+      TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE: ${TEORIA_IMAGE_PREFIX:-}teoria-openmetadata-ingestion:${TEORIA_IMAGE_TAG:-${OPENMETADATA_VERSION:-2.0.5}}
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
     depends_on:
       prefect-server:
@@ -206,7 +206,7 @@ services:
   prefect-metadata-worker:
     cpus: 0.5
     mem_limit: 512m
-    image: teoria-pipelines-metadata:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-pipelines-metadata:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -226,7 +226,7 @@ services:
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
       TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
       OPENMETADATA_INGESTION_BOT_TOKEN: ${OPENMETADATA_INGESTION_BOT_TOKEN:-}
-      TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-2.0.5}
+      TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE: ${TEORIA_IMAGE_PREFIX:-}teoria-openmetadata-ingestion:${TEORIA_IMAGE_TAG:-${OPENMETADATA_VERSION:-2.0.5}}
       TEORIA_OPENMETADATA_INGESTION_CPUS: ${TEORIA_OPENMETADATA_INGESTION_CPUS:-1}
       TEORIA_OPENMETADATA_INGESTION_MEMORY: ${TEORIA_OPENMETADATA_INGESTION_MEMORY:-2g}
     volumes:
@@ -237,7 +237,7 @@ services:
   prefect-law-deploy:
     cpus: 0.5
     mem_limit: 512m
-    image: teoria-pipelines-law:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-pipelines-law:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -261,7 +261,7 @@ services:
     profiles:
     - jobs
   prefect-law-worker:
-    image: teoria-pipelines-law:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-pipelines-law:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -291,7 +291,7 @@ services:
     stop_grace_period: 600s
     cpus: 0.5
     mem_limit: 512m
-    image: ${TEORIA_ASSESSMENT_WORKER_IMAGE:-teoria-platform-authoring:latest}
+    image: ${TEORIA_ASSESSMENT_WORKER_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-platform-authoring:${TEORIA_IMAGE_TAG:-latest}}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -320,7 +320,7 @@ services:
   openmetadata-ingestion-job:
     cpus: ${TEORIA_OPENMETADATA_INGESTION_CPUS:-1}
     mem_limit: ${TEORIA_OPENMETADATA_INGESTION_MEMORY:-2g}
-    image: teoria-openmetadata-ingestion:${OPENMETADATA_VERSION:-2.0.5}
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-openmetadata-ingestion:${TEORIA_IMAGE_TAG:-${OPENMETADATA_VERSION:-2.0.5}}
     build:
       context: ../..
       dockerfile: deploy/compose/openmetadata/Dockerfile
@@ -350,7 +350,7 @@ services:
   mcp:
     cpus: 0.5
     mem_limit: 256m
-    image: teoria-mcp:latest
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-mcp:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -388,7 +388,7 @@ services:
       TEORIA_CONTEXT_RUNTIME_API_TOKEN: ${TEORIA_RUNTIME_API_TOKEN:?set TEORIA_RUNTIME_API_TOKEN}
     volumes:
     - runtime-artifacts:/app/runtime_artifacts:ro
-    image: ${TEORIA_ADMIN_API_IMAGE:-teoria-platform-authoring:latest}
+    image: ${TEORIA_ADMIN_API_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-platform-authoring:${TEORIA_IMAGE_TAG:-latest}}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
@@ -397,7 +397,7 @@ services:
         io.teoria.project: teoria
         io.teoria.role: authoring
   runtime-artifact-check:
-    image: ${TEORIA_RUNTIME_API_IMAGE:-teoria-platform-runtime:latest}
+    image: ${TEORIA_RUNTIME_API_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-platform-runtime:${TEORIA_IMAGE_TAG:-latest}}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
