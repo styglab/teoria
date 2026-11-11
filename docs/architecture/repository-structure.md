@@ -133,6 +133,7 @@ Worker는 Ontology 저장소를 직접 변경하지 않고 인증된 Admin HTTP 
 | `backend/migrations/application/`, `backend/migrations/data/` | 저장소별 순번 migration |
 | `deploy/compose/`, `deploy/kubernetes/` | Compose·공통 Kubernetes 배포·pool·queue·Job 정책 |
 | `deploy/kubernetes/overlays/k3s/` | K3s 전용 overlay·EC2 설치 설정 |
+| `deploy/kubernetes/k3d/`, `deploy/kubernetes/overlays/k3d/` | 로컬 클러스터·Registry·보존 스토리지 설정과 k3d overlay |
 | `backend/tests/platform/`, `domains/`, `apps/` | 소유 코드에 대응하는 테스트 |
 | `backend/tests/integration/` | 백엔드 모듈 간 연동·실환경 검사 |
 | `tests/documentation/` | 문서 링크·목차 검사 |

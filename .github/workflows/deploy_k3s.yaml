@@ -125,7 +125,7 @@ jobs:
           if [[ -n "$MODEL_REGISTRY_HOST" ]]; then
             [[ "$MODEL_REGISTRY_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]]
             [[ "$DEPLOY_MODULES" == semantic || "$DEPLOY_MODULES" == mlops ]]
-          model_registry_option="--with-model-registry $MODEL_REGISTRY_HOST"
+          model_registry_option="--model-registry-host $MODEL_REGISTRY_HOST"
           fi
           umask 077
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/ec2_key"

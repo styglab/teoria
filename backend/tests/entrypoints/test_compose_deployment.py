@@ -141,10 +141,6 @@ class DeploymentTests(unittest.TestCase):
         self.services["mlflow-postgres-init"]["environment"] = {
             "TEORIA_MLFLOW_DB_PASSWORD": "synthetic"
         }
-        self.services["image-registry"] = {
-            "image": "registry:3.1.2",
-            "environment": {"REGISTRY_HTTP_SECRET": "synthetic"},
-        }
         self.services["mlflow"] = {"image": "teoria-test:latest"}
         self.execute("deploy", "--modules", "mlops", "--pull")
         prepared = next(

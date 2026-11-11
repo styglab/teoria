@@ -5,6 +5,7 @@ image_prefix=${1:?image registry prefix required}
 revision=${2:?commit SHA required}
 public_host=${3:?public DNS name required}
 model_registry_host=
+model_registry_url=
 modules=semantic
 overlay=generic
 storage_class=
@@ -15,7 +16,8 @@ render_only=false
 shift 3
 while (( $# )); do
   case "$1" in
-    --with-model-registry) model_registry_host=${2:?Registry hostname required}; shift 2 ;;
+    --model-registry-host) model_registry_host=${2:?Registry host required}; shift 2 ;;
+    --model-registry-url) model_registry_url=${2:?Registry origin required}; shift 2 ;;
     --modules) modules=${2:?modules required}; shift 2 ;;
     --overlay) overlay=${2:?overlay required}; shift 2 ;;
     --storage-class) storage_class=${2:?StorageClass required}; shift 2 ;;
@@ -27,7 +29,14 @@ while (( $# )); do
   esac
 done
 [[ "$modules" == semantic || "$modules" == mlops ]] || { echo 'Kubernetes currently supports --modules semantic or mlops' >&2; exit 1; }
-[[ "$overlay" == k3s || "$overlay" == generic ]] || { echo 'Choose --overlay k3s or generic' >&2; exit 1; }
+[[ "$overlay" == k3s || "$overlay" == k3d || "$overlay" == generic ]] || { echo 'Choose --overlay k3s, k3d or generic' >&2; exit 1; }
+if [[ "$overlay" == k3d ]]; then
+  storage_class=${storage_class:-teoria-local}
+  model_registry_host=${model_registry_host:-localhost:5111}
+  if [[ "$model_registry_host" == localhost:5111 ]]; then
+    model_registry_url=${model_registry_url:-http://k3d-teoria-images:5000}
+  fi
+fi
 for value in "$storage_class" "$shared_storage_class" "$ingress_class" "$cluster_domain"; do
   [[ -z "$value" || "$value" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || { echo 'Invalid Kubernetes class or DNS domain' >&2; exit 1; }
 done
@@ -35,10 +44,23 @@ if [[ "$overlay" == generic && "$modules" == semantic && -z "$shared_storage_cla
   echo 'Generic Semantic deployment requires --shared-storage-class with ReadWriteMany support for shared artifacts.' >&2
   exit 1
 fi
-if [[ -n "$model_registry_host" ]]; then
-  [[ "$model_registry_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || { echo 'Invalid model Registry hostname' >&2; exit 1; }
+if [[ -n "$model_registry_host" || -n "$model_registry_url" ]]; then
+  python3 - "$model_registry_host" "$model_registry_url" <<'PYREGISTRY'
+import re,sys
+from urllib.parse import urlsplit
+host,origin=sys.argv[1:]
+if not re.fullmatch(r'[a-z0-9]([a-z0-9.-]*[a-z0-9])?(?::[0-9]{1,5})?',host):
+    sys.exit('Invalid model Registry host')
+parsed=urlsplit(origin or 'https://'+host)
+try:
+    valid=parsed.scheme in {'http','https'} and parsed.hostname and parsed.port != 0
+except ValueError:
+    valid=False
+if not valid or parsed.username or parsed.password or parsed.path not in {'','/'} or parsed.query or parsed.fragment:
+    sys.exit('Invalid model Registry origin')
+PYREGISTRY
+  model_registry_url=${model_registry_url:-https://$model_registry_host}
 fi
-[[ "$modules" != mlops || -n "$model_registry_host" ]] || { echo 'MLOps requires --with-model-registry HOST' >&2; exit 1; }
 [[ "$revision" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid commit SHA' >&2; exit 1; }
 [[ "$image_prefix" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]] || { echo 'Invalid image registry prefix (hostname[:port]/namespace required)' >&2; exit 1; }
 [[ "$public_host" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || { echo 'Invalid public hostname' >&2; exit 1; }
@@ -55,9 +77,9 @@ scratch=$(mktemp -d "$root/.release_XXXXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 trap 'echo "Deployment failed; existing PVCs and release files are retained. Check Kubernetes Job/Pod status." >&2' ERR
 render() {
-  python3 - "$root" "$scratch" "$1" "$image_prefix" "$revision" "$public_host" "$model_registry_host" "$overlay" "$storage_class" "$ingress_class" "$cluster_domain" "$shared_storage_class" <<'PY'
+  python3 - "$root" "$scratch" "$1" "$image_prefix" "$revision" "$public_host" "$model_registry_host" "$model_registry_url" "$overlay" "$storage_class" "$ingress_class" "$cluster_domain" "$shared_storage_class" <<'PY'
 import json,os,sys
-root,out,resource,prefix,revision,host,registry_host,overlay,storage_class,ingress_class,cluster_domain,shared_storage_class=sys.argv[1:]
+root,out,resource,prefix,revision,host,registry_host,registry_url,overlay,storage_class,ingress_class,cluster_domain,shared_storage_class=sys.argv[1:]
 selected=root+'/overlays/'+overlay+'/'+resource
 resource_path=selected if os.path.isdir(selected) else root+'/base/'+resource
 images=['runtime','authoring','admin-ui','pipelines','metadata-worker','opa','opa-builder','ingestion','admin','mlflow','model-dispatcher']
@@ -67,19 +89,17 @@ config={'apiVersion':'kustomize.config.k8s.io/v1beta1','kind':'Kustomization',
         'images':[{'name':'teoria/'+name,'newName':prefix+'/'+name,'newTag':revision} for name in images]}
 def patch(kind,name,body):
     config.setdefault('patches',[]).append({'target':{'kind':kind,'name':name},'patch':json.dumps(body)})
-if resource=='mlops':
-    patch('Ingress','image-registry',[
-        {'op':'replace','path':'/spec/rules/0/host','value':registry_host},
-        {'op':'replace','path':'/spec/tls/0/hosts/0','value':registry_host}])
 if resource in {'application', 'mlops/base'}:
-    for ingress in (('teoria',) if overlay=='generic' else ('teoria', 'teoria-api') + (('teoria-mlflow',) if resource=='mlops/base' else ())):
+    for ingress in (('teoria',) if overlay=='generic' or resource=='mlops/base' else ('teoria', 'teoria-api')):
         patch('Ingress',ingress,[
             {'op':'replace','path':'/spec/rules/0/host','value':host},
             {'op':'replace','path':'/spec/tls/0/hosts/0','value':host}])
     if resource=='mlops/base':
-        patch('Deployment','admin-api',{'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'admin-api'},
+        if registry_host:
+            patch('Deployment','admin-api',{'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'admin-api'},
             'spec':{'template':{'spec':{'containers':[{'name':'admin-api','env':[
-                {'name':'TEORIA_IMAGE_REGISTRY_PUBLIC_HOST','value':registry_host}]}]}}}})
+                {'name':'TEORIA_IMAGE_REGISTRY_PUBLIC_HOST','value':registry_host,'valueFrom':None},
+                {'name':'TEORIA_IMAGE_REGISTRY_URL','value':registry_url,'valueFrom':None}]}]}}}})
         patch('Deployment','mlflow',{'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'mlflow'},
             'spec':{'template':{'spec':{'containers':[{'name':'mlflow','env':[
                 {'name':'MLFLOW_SERVER_ALLOWED_HOSTS','value':'mlflow:5000,mlflow,localhost:5000,127.0.0.1:5000,'+host}]}]}}}})
@@ -98,7 +118,7 @@ if shared_storage_class:
             {'op':'replace','path':'/spec/accessModes','value':['ReadWriteMany']}])
 if ingress_class:
     patch('Ingress','.*',[{'op':'add','path':'/spec/ingressClassName','value':ingress_class}])
-if overlay=='generic' and resource in {'application','mlops/base'}:
+if resource=='mlops/base' or (overlay=='generic' and resource=='application'):
     patch('Deployment','admin-ui',{'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':'admin-ui'},
         'spec':{'template':{'spec':{'containers':[{'name':'admin-ui','env':[
             {'name':'TEORIA_CLUSTER_DOMAIN','value':cluster_domain}]}]}}}})
@@ -133,18 +153,23 @@ if [[ "$render_only" == true ]]; then
   phases=(execution infrastructure openmetadata application)
   jobs=(postgres-init platform-postgres-init postgres-migrate postgres-metadata-grants app-postgres-migrate openmetadata-migrate opa-bundle-build runtime-artifact-check prefect-register)
   if [[ "$modules" == mlops ]]; then
-    phases=(mlops mlops/base)
+    phases=(mlops/base)
     jobs=(mlops-postgres-init app-postgres-migrate model-storage-init model-register)
     kubectl kustomize "$root/base/mlops/execution"
     printf '\n---\n'
-  elif [[ -n "$model_registry_host" ]]; then
-    phases+=(mlops)
   fi
   for phase in "${phases[@]}"; do render "$phase"; printf '\n---\n'; done
   for job in "${jobs[@]}"; do render "jobs/$job.yaml"; printf '\n---\n'; done
   exit 0
 fi
 kubectl get nodes >/dev/null
+if [[ "$overlay" == k3d ]]; then
+  kubectl get nodes -o json | python3 -c '
+import json,sys
+if len(json.load(sys.stdin)["items"]) != 1:
+    sys.exit("The k3d overlay requires exactly one node for shared RWO volumes")
+'
+fi
 kubectl create namespace teoria --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace teoria-pipelines --dry-run=client -o yaml | kubectl apply -f -
 for secret in teoria-secrets teoria-registry teoria-tls; do
@@ -152,14 +177,7 @@ for secret in teoria-secrets teoria-registry teoria-tls; do
     echo "Create Kubernetes Secret $secret according to docs/deployment/kubernetes.md" >&2; exit 1;
   }
 done
-if [[ -n "$model_registry_host" ]]; then
-  for secret in model-registry-auth; do
-    kubectl -n teoria get secret "$secret" >/dev/null || {
-      echo "Create Kubernetes Secret $secret according to docs/deployment/image_registry.md" >&2; exit 1;
-    }
-  done
-fi
-if [[ "$overlay" == k3s ]]; then
+if [[ "$modules" == semantic && ( "$overlay" == k3s || "$overlay" == k3d ) ]]; then
   kubectl get crd middlewares.traefik.io >/dev/null
 fi
 if [[ -n "$ingress_class" ]]; then kubectl get ingressclass "$ingress_class" >/dev/null; fi
@@ -181,16 +199,7 @@ v={k:base64.b64decode(x).decode() for k,x in json.load(sys.stdin)["data"].items(
 keys=["TEORIA_LOCAL_PLATFORM_DB_PASSWORD","TEORIA_LOCAL_APP_DB_PASSWORD","TEORIA_LOCAL_PREFECT_DB_PASSWORD","TEORIA_ADMIN_API_TOKEN","TEORIA_APP_DATABASE_URL","PREFECT_API_DATABASE_CONNECTION_URL","PREFECT_API_AUTH_STRING","TEORIA_MINIO_ROOT_USER","TEORIA_MINIO_ROOT_PASSWORD"]
 assert all(v.get(k) and "CHANGE_ME" not in v[k] for k in keys), "Configure MLOps Secret keys"
 '
-  if [[ "$overlay" == k3s ]]; then
-  # Traefik Basic auth consumes the same bcrypt file as the model Registry.
-  kubectl -n teoria get secret model-registry-auth -o json | python3 -c '
-import json,sys
-source=json.load(sys.stdin)["data"]["htpasswd"]
-json.dump({"apiVersion":"v1","kind":"Secret","metadata":{"name":"model-ui-auth","namespace":"teoria"},"type":"Opaque","data":{"users":source}},sys.stdout)
-' | kubectl apply -f -
-  fi
   kubectl kustomize "$root/base/mlops/execution" | kubectl apply -f -
-  render mlops | kubectl apply -f -
   render mlops/base | kubectl apply -f -
   for stateful in platform-postgres prefect-redis; do
     kubectl -n teoria rollout status "statefulset/$stateful" --timeout=600s
@@ -199,7 +208,7 @@ json.dump({"apiVersion":"v1","kind":"Secret","metadata":{"name":"model-ui-auth",
   run_job app-postgres-migrate
   kubectl -n teoria rollout status deployment/minio --timeout=600s
   run_job model-storage-init
-  for service in image-registry mlflow prefect-server prefect-services admin-api admin-ui; do
+  for service in mlflow prefect-server prefect-services admin-api admin-ui; do
     kubectl -n teoria rollout status "deployment/$service" --timeout=600s
   done
   run_job model-register
@@ -230,10 +239,6 @@ import json,sys
 source=json.load(sys.stdin)
 json.dump({"apiVersion":"v1","kind":"Secret","metadata":{"name":"teoria-registry","namespace":"teoria-pipelines"},"type":source["type"],"data":source["data"]},sys.stdout)
 ' | kubectl apply -f -
-if [[ -n "$model_registry_host" ]]; then
-  render mlops | kubectl apply -f -
-  kubectl -n teoria rollout status deployment/image-registry --timeout=600s
-fi
 render execution | kubectl apply -f -
 render infrastructure | kubectl apply -f -
 for service in postgres platform-postgres prefect-redis openmetadata-search; do
@@ -255,8 +260,11 @@ for service in prefect-worker prefect-metadata-worker; do
   kubectl -n teoria rollout status "deployment/$service" --timeout=600s
 done
 # Verify the public ingress before removing the retired edge proxy.
-kubectl -n teoria exec -i deployment/admin-api -- python - "$public_host" <<'PYTHON'
-import json,os,sys,urllib.request
+kubectl -n teoria exec -i deployment/admin-api -- python - "$public_host" "$overlay" <<'PYTHON'
+import json,os,ssl,sys,urllib.request
+if sys.argv[2]=='k3d':
+    context=ssl.create_default_context(cafile='/run/teoria-local-tls/tls.crt')
+    urllib.request.install_opener(urllib.request.build_opener(urllib.request.HTTPSHandler(context=context)))
 base="https://"+sys.argv[1]
 headers={"Authorization":"Bearer "+os.environ["TEORIA_ADMIN_API_TOKEN"]}
 for path in ("/", "/health", "/prefect/"):

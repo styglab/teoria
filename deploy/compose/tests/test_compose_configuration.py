@@ -31,7 +31,6 @@ class ComposeConfigurationTests(unittest.TestCase):
             "TEORIA_LOCAL_RUNTIME_DB_PASSWORD",
             "TEORIA_MINIO_ROOT_USER",
             "TEORIA_MINIO_ROOT_PASSWORD",
-            "TEORIA_IMAGE_REGISTRY_HTTP_SECRET",
         ):
             self.environment[key] = "synthetic-validation-value"
 
@@ -175,17 +174,8 @@ class ComposeConfigurationTests(unittest.TestCase):
             "opa-bundles": "opa-bundles",
             "opa-signing-keys": "opa-signing-keys",
             "opa-state": "opa-state",
-            "registry-data": "registry-data",
         }.items():
             self.assertEqual(config["volumes"][key]["name"], "teoria_" + suffix)
-
-    def test_model_registry_can_reuse_a_standalone_persistent_volume(self):
-        self.environment["TEORIA_IMAGE_REGISTRY_VOLUME_NAME"] = "teoria-registry_registry-data"
-        config = self.resolved("teoria")
-        self.assertEqual(config["volumes"]["registry-data"]["name"], "teoria-registry_registry-data")
-        registry = config["services"]["image-registry"]
-        data = next(v for v in registry["volumes"] if v["target"] == "/var/lib/registry")
-        self.assertEqual(data["source"], "registry-data")
 
     def test_different_projects_share_no_managed_volumes(self):
         first = self.resolved("teoria-test-dev")
@@ -198,7 +188,6 @@ class ComposeConfigurationTests(unittest.TestCase):
             "platform-postgres": ("TEORIA_PLATFORM_DB_VOLUME_NAME", "existing-platform-db"),
             "prefect-redis": ("TEORIA_PREFECT_REDIS_VOLUME_NAME", "existing-prefect-redis"),
             "model-objects": ("TEORIA_MODEL_OBJECTS_VOLUME_NAME", "existing-model-objects"),
-            "registry-data": ("TEORIA_IMAGE_REGISTRY_VOLUME_NAME", "existing-registry-data"),
         }
         self.environment["TEORIA_STORAGE_VOLUMES_EXTERNAL"] = "true"
         self.environment.update({variable: name for variable, name in names.values()})
@@ -386,13 +375,13 @@ class ComposeConfigurationTests(unittest.TestCase):
                 self.assertEqual("openmetadata-server" in active, "semantic" in modules)
                 self.assertEqual("prefect-worker" in active, "formatid" in modules)
                 self.assertEqual("mlflow" in active, "mlops" in modules)
-                self.assertEqual("image-registry" in active, "mlops" in modules)
+                self.assertNotIn("image-registry", active)
                 self.assertNotIn("demo-inference", active)
                 self.assertNotIn("model-deployment-worker", active)
                 self.assertEqual("postgres" in active, bool(set(modules) & {"semantic", "formatid"}))
                 self.assertEqual("opa" in active, bool(set(modules) & {"semantic", "formatid"}))
                 if modules == ("mlops",):
-                    self.assertEqual(len(active), 10)
+                    self.assertEqual(len(active), 9)
                 for name in active:
                     self.assertTrue(set(services[name].get("depends_on", {})) <= active, name)
                 env = services["admin-api"]["environment"]

@@ -1,0 +1,46 @@
+# Use local.sh up to supply the Docker-host data path and install storage/DNS.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: teoria
+# RWO volumes are shared by several workloads on this one node.
+servers: 1
+agents: 0
+image: rancher/k3s:v1.35.5-k3s1
+kubeAPI:
+  hostIP: 127.0.0.1
+  hostPort: "6550"
+volumes:
+  - volume: ${TEORIA_K3D_DATA_DIR}/storage:/var/lib/rancher/k3s/storage
+    nodeFilters: [server:0]
+ports:
+  - port: 127.0.0.1:8080:80
+    nodeFilters: [loadbalancer]
+  - port: 127.0.0.1:8443:443
+    nodeFilters: [loadbalancer]
+registries:
+  create:
+    name: k3d-teoria-images
+    host: 127.0.0.1
+    hostPort: "5111"
+    volumes:
+      - ${TEORIA_K3D_DATA_DIR}/registry:/var/lib/registry
+  config: |
+    mirrors:
+      "localhost:5111":
+        endpoint:
+          - http://k3d-teoria-images:5000
+options:
+  k3d:
+    wait: true
+    timeout: 180s
+  k3s:
+    extraArgs:
+      - arg: --secrets-encryption
+        nodeFilters: [server:0]
+      # Local compatibility with older Docker hosts; production still requires v2.
+      - arg: --kubelet-arg=fail-cgroupv1=false
+        nodeFilters: [server:0]
+  kubeconfig:
+    updateDefaultKubeconfig: false
+    switchCurrentContext: false

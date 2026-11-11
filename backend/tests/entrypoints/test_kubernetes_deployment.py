@@ -34,7 +34,7 @@ def render(environment, overlay, module, *options):
     args=['bash',str(script),'ghcr.io/example/teoria','a'*40,'teoria.example.com','--modules',module,'--render']
     args += ['--overlay',overlay]
     if overlay=='generic' and module=='semantic':args += ['--shared-storage-class','cluster-rwx']
-    if module=='mlops':args += ['--with-model-registry','registry.example.com']
+    if module=='mlops':args += ['--model-registry-host','registry.example.com']
     result=subprocess.run(args+list(options),env=environment,text=True,capture_output=True,check=True)
     return [item for item in yaml.safe_load_all(result.stdout) if item]
 
@@ -78,9 +78,9 @@ def test_generic_overlay_has_only_standard_resources_and_complete_routing(kubect
 def test_k3s_overlay_preserves_native_routing_and_storage(kubectl,module):
     direct=render(kubectl,'k3s',module)
     assert all(r['spec']['storageClassName']=='local-path' for r in direct if r['kind']=='PersistentVolumeClaim')
-    assert any(r['apiVersion'].startswith('traefik') for r in direct)
+    assert any(r['apiVersion'].startswith('traefik') for r in direct) == (module == 'semantic')
     ui=next(r for r in direct if r['kind']=='Deployment' and r['metadata']['name']=='admin-ui')
-    assert not ui['spec']['template']['spec']['containers'][0].get('command')
+    assert bool(ui['spec']['template']['spec']['containers'][0].get('command')) == (module == 'mlops')
 
 
 def test_generic_default_storage_class_is_left_to_the_cluster(kubectl):
@@ -88,21 +88,61 @@ def test_generic_default_storage_class_is_left_to_the_cluster(kubectl):
     assert all('storageClassName' not in r['spec'] for r in resources if r['kind']=='PersistentVolumeClaim')
     assert all('ingressClassName' not in r['spec'] for r in resources if r['kind']=='Ingress')
     deployments=[r for r in resources if r['kind'] in ('Deployment','StatefulSet')]
-    assert len(deployments)==10
+    assert len(deployments)==9
     assert not any(r['metadata']['name'] in ('postgres','opa','policy-control-plane','demo-inference') for r in deployments)
 
 
-@pytest.mark.parametrize('overlay', ['generic', 'k3s'])
-def test_registry_uses_shared_edge_tls_and_internal_catalog_access(kubectl, overlay):
+@pytest.mark.parametrize('overlay', ['generic', 'k3s', 'k3d'])
+def test_registry_is_external_and_mlflow_keeps_authenticated_proxy(kubectl, overlay):
     resources = render(kubectl, overlay, 'mlops')
-    ingress = next(r for r in resources if r['kind'] == 'Ingress' and r['metadata']['name'] == 'image-registry')
-    assert ingress['spec']['rules'][0]['host'] == 'registry.example.com'
-    assert ingress['spec']['rules'][0]['http']['paths'][0]['path'] == '/v2/'
-    assert ingress['spec']['tls'][0]['secretName'] == 'teoria-tls'
+    assert not any(r['metadata']['name'] in {'image-registry', 'registry-data', 'mlflow-auth'} for r in resources)
     admin = next(r for r in resources if r['kind'] == 'Deployment' and r['metadata']['name'] == 'admin-api')
     environment = {item['name']: item for item in admin['spec']['template']['spec']['containers'][0]['env']}
-    assert environment['TEORIA_IMAGE_REGISTRY_URL'] == {'name': 'TEORIA_IMAGE_REGISTRY_URL', 'value': 'http://image-registry:5000'}
+    assert environment['TEORIA_IMAGE_REGISTRY_URL']['value'] == 'https://registry.example.com'
     assert environment['TEORIA_IMAGE_REGISTRY_PUBLIC_HOST']['value'] == 'registry.example.com'
+    assert 'valueFrom' not in environment['TEORIA_IMAGE_REGISTRY_PUBLIC_HOST']
+    assert 'valueFrom' not in environment['TEORIA_IMAGE_REGISTRY_URL']
+    config = next(r for r in resources if r['kind'] == 'ConfigMap' and 'default.conf.template' in r.get('data', {}))
+    assert 'auth_request /_operations_auth' in config['data']['default.conf.template']
+
+
+def test_k3d_mlops_defaults_to_shared_development_registry(kubectl):
+    result = subprocess.run(['bash', str(KUBE / 'deploy.sh'), 'localhost:5111/teoria', 'a'*40,
+                             'teoria.localhost', '--overlay', 'k3d', '--modules', 'mlops', '--render'],
+                            env=kubectl, text=True, capture_output=True, check=True)
+    resources = [r for r in yaml.safe_load_all(result.stdout) if r]
+    admin = next(r for r in resources if r['kind'] == 'Deployment' and r['metadata']['name'] == 'admin-api')
+    environment = {e['name']: e.get('value') for e in admin['spec']['template']['spec']['containers'][0]['env']}
+    assert environment['TEORIA_IMAGE_REGISTRY_URL'] == 'http://k3d-teoria-images:5000'
+    assert environment['TEORIA_IMAGE_REGISTRY_PUBLIC_HOST'] == 'localhost:5111'
+    assert not any(r['metadata']['name'] in {'image-registry', 'registry-data'} for r in resources)
+
+
+@pytest.mark.parametrize('module', ['semantic', 'mlops'])
+def test_k3d_shares_k3s_workloads_and_uses_retained_local_storage(kubectl, module):
+    local = render(kubectl, 'k3d', module)
+    production = render(kubectl, 'k3s', module)
+    assert {identity(r) for r in local} == {identity(r) for r in production}
+    claims = [r for r in local if r['kind'] == 'PersistentVolumeClaim']
+    assert claims
+    assert all(r['spec']['storageClassName'] == 'teoria-local' for r in claims)
+    assert all(r['spec']['accessModes'] == ['ReadWriteOnce'] for r in claims)
+    if module == 'semantic':
+        admin = next(r for r in local if r['kind'] == 'Deployment' and r['metadata']['name'] == 'admin-api')
+        volume = next(v for v in admin['spec']['template']['spec']['volumes'] if v['name'] == 'local-tls')
+        assert volume['secret']['items'] == [{'key': 'tls.crt', 'path': 'tls.crt'}]
+
+
+def test_local_registry_images_are_also_used_by_later_prefect_jobs(kubectl):
+    result = subprocess.run([
+        'bash', str(KUBE / 'deploy.sh'), 'localhost:5111/teoria', 'a' * 40,
+        'teoria.localhost', '--overlay', 'k3d', '--render',
+    ], env=kubectl, text=True, capture_output=True, check=True)
+    resources = [r for r in yaml.safe_load_all(result.stdout) if r]
+    register = next(r for r in resources if r['kind'] == 'Job' and r['metadata']['name'] == 'prefect-register')
+    environment = {e['name']: e.get('value') for e in register['spec']['template']['spec']['containers'][0]['env']}
+    assert environment['TEORIA_PIPELINE_JOB_IMAGE'] == 'localhost:5111/teoria/pipelines:' + 'a' * 40
+    assert environment['TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE'] == 'localhost:5111/teoria/ingestion:' + 'a' * 40
 
 
 @pytest.mark.parametrize('arguments',[['--overlay','unknown'],['--storage-class','csi;echo bad'],['--ingress-class','https://ingress'],['--cluster-domain','invalid/domain']])

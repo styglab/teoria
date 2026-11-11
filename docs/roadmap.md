@@ -20,8 +20,11 @@ AI/AIP는 예약 폴더만 있으며 미구현이다. 기존 기능별 LLM 호�
 | 프런트엔드 기반 | Shell·라우트 분리, 소유 모듈별 API, TanStack Query·요청 취소·세션별 캐시 초기화 |
 | 별도 선택형 MLOps | 외부 이미지 공통 실행 계약·MLflow 조회·모델별 서빙·중지·이전 설정 재배포; Compose Docker와 Kubernetes 실행 구현, K3s 실운영 미검증 |
 
-모델 Image Registry를 Compose MLOps와 K3s 주 배포의 선택 옵션에 포함했다.
-Registry 내부 통신은 HTTP, 외부는 기존 Nginx·Ingress로 제공한다. Compose는 웹 포트의 `/v2/`, Kubernetes는 Registry 호스트와 공통 `teoria-tls`를 사용한다. 플랫폼 이미지는 기존 외부 배포처를 사용한다.
+플랫폼 내장 Image Registry 배포를 제거하고 기존 Registry 연결로 전환했다.
+로컬 k3d는 플랫폼·모델 이미지에 공용 Registry 하나를 사용하며 운영은 기존 Registry를 연결한다.
+MLflow 화면 인증은 Registry 계정 대신 Prefect 운영 계정을 사용한다.
+내장 Registry가 배포 결과에서 제외되는 검사, 외부 Registry 실컨테이너 연동,
+MLflow 인증 프록시와 Kubernetes API의 server dry-run을 검증했다.
 MLflow 서버 이미지는 `teoria-mlflow`로 분리하고 서버 전용 의존성만 설치한다.
 고객 이탈 샘플은 `pyproject.toml`·`uv.lock`으로 의존성을 관리하며 Python 모듈 명령으로 실행한다.
 플랫폼 이미지 prefix·릴리스 게시·pull과
@@ -68,3 +71,9 @@ generic의 표준 Ingress·공유 스토리지 선택·UI 프록시와 공통 �
 운영 클러스터별 Ingress·CSI·장애 복구 검증은 별도 범위다.
 
 K3s 별도 배포 폴더와 호환 스크립트를 제거하고 EC2 workflow·설치 설정·Secret 예시를 공통 Kubernetes 경로로 통합했다.
+
+로컬 k3d 클러스터·개발 Registry·TLS·보존 스토리지와 k3d overlay를 추가했다.
+공통 Kubernetes 배포와 이미지를 재사용하며 Compose와 EC2 운영 K3s 경로를 유지한다.
+2026-11-11 배포·문서 검사 25개와 실제 k3d 검사 1개가 통과했다.
+Registry pull·로컬 DNS/TLS 서비스 응답·클러스터 재생성 후 데이터 재접속을 확인했다.
+전체 서비스·규격서 처리와 운영 검증 여부는 [k3d 안내](deployment/k3d.md)의 범위와 구분한다.

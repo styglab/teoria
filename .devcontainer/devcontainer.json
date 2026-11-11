@@ -3,5 +3,8 @@
     "dockerComposeFile": "docker-compose.yml",
     "service": "dev",
     "workspaceFolder": "/workspace",
-    "remoteUser": "root"
+    "remoteUser": "root",
+    "features": {
+        "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {}
+      }
 }

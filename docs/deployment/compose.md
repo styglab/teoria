@@ -6,7 +6,7 @@ Teoria는 공통 기반에 MLOps, Metadata·Ontology, FormatID를 조합한다.
 [Compose 배포 진입점](../../backend/src/teoria/entrypoints/compose_deployment.py)을 호출한다.
 K3s는 [별도 절차](k3s.md)를 사용한다. 아래 Compose 구성 검증을 실제 서비스나 EC2 배포 성공으로 기록하지 않는다.
 
-모델 이미지 Registry는 MLOps에 포함하며 기존 Nginx의 `/v2/`로 접속한다. 인증·운영 TLS와 Admin 연결은
+모델 이미지는 기존 외부 Registry에 저장하며 Registry 서버는 MLOps에 포함하지 않는다. 인증·TLS와 Admin 연결은
 [이미지 Registry](image_registry.md)를 따른다. 플랫폼 이미지는 기존 배포처에서 준비한다.
 
 ## 구성 선택
@@ -83,14 +83,13 @@ bash deploy/compose/deploy.sh deploy --all
 외부 제품 이미지는 각 제품의 버전을 유지하며 모델 실행 요청은 이미지 digest를 지정한다.
 
 프로젝트 이름을 바꾸면서 기존 공통 저장소를 유지하려면 `TEORIA_PLATFORM_DB_VOLUME_NAME`,
-`TEORIA_PREFECT_REDIS_VOLUME_NAME`, `TEORIA_MODEL_OBJECTS_VOLUME_NAME`과 MLOps의
-`TEORIA_IMAGE_REGISTRY_VOLUME_NAME`에 실제 볼륨 이름을 지정하고
+`TEORIA_PREFECT_REDIS_VOLUME_NAME`, `TEORIA_MODEL_OBJECTS_VOLUME_NAME`에 실제 볼륨 이름을 지정하고
 `TEORIA_STORAGE_VOLUMES_EXTERNAL=true`로 설정한다. 이 설정은 이미 존재하는 해당 볼륨만 연결한다.
 기존 프로젝트를 볼륨 삭제 없이 종료한 뒤 새 프로젝트를 배포하며, 같은 DB 볼륨을 두 서버에서 동시에 열지 않는다.
-기본 프로젝트는 `teoria`이므로 Registry 컨테이너 이름도 `teoria-image-registry-1`이다.
+Registry는 플랫폼 외부에서 제공하며 Compose에 포함하지 않는다.
 
 공통 Admin/Runtime/정책 credential, PostgreSQL, Prefect, MinIO 계정을 준비한다.
-MLOps는 Registry HTTP secret·인증 파일과 MLflow DB 암호·허용 Registry 목록, FormatID는 별도 API/Worker 저장소 secret,
+MLOps는 외부 Registry 연결·조회 계정과 MLflow DB 암호·허용 Registry 목록, FormatID는 별도 API/Worker 저장소 secret,
 Semantic은 Runtime token·법령 Provider key가 필요하다. 빠진 필수 값은 배포 전 검사한다.
 MinIO의 관리자 계정과 FormatID의 API·Worker 계정은 구분한다.
 

@@ -320,3 +320,15 @@ backend/references/**
 
 # Private local Compose credentials, development certificates and Docker authentication.
 /deploy/compose/.local/
+
+# Deployment credentials; keep value-free examples versioned.
+/deploy/**/*.env
+/deploy/**/.env.*
+!/deploy/**/.env.example
+!/deploy/**/.env.*.example
+
+# Private Kubernetes Secret manifests, kubeconfigs and development TLS.
+/deploy/kubernetes/**/.local/
+/deploy/kubernetes/secrets/
+/deploy/kubernetes/secrets.yaml
+/deploy/kubernetes/secrets.yml

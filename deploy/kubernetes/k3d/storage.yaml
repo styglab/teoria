@@ -1,0 +1,10 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: teoria-local
+provisioner: rancher.io/local-path
+parameters:
+  # Stable across cluster recreation; the default pattern includes a new PV UUID.
+  pathPattern: "{{ .PVC.Namespace }}/{{ .PVC.Name }}/"
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer

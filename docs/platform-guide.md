@@ -5,8 +5,9 @@ Teoria에서 데이터 자산을 확인하고 업무 의미를 작성한 뒤 앱
 
 ## 시작
 
-[Compose 실행](deployment/compose.md)과 [환경 설정](deployment/configuration.md)에 따라
-서비스와 관리자 인증을 준비하고 `http://localhost:8081/`에 접속한다.
+로컬 Kubernetes 통합 환경은 [k3d 실행](deployment/k3d.md)에 따라 준비하고
+`https://teoria.localhost:8443/`에 접속한다. 기존 [Compose 실행](deployment/compose.md)은
+[환경 설정](deployment/configuration.md)에 따라 준비하고 `http://localhost:8081/`에 접속한다.
 활성화한 배포 모듈과 사용자 권한에 따라 메뉴·실행 가능 여부가 달라진다.
 메뉴는 데이터·Ontology·MLOps·도메인 관리·업무 앱·공통 운영으로 나눈다.
 AI/AIP는 예약 영역이며 현재 사용할 실행 화면은 없다.
@@ -65,9 +66,10 @@ Compose에서는 공통 Worker가 학습마다 전용 컨테이너를 실행하�
 기존 공고·계약·기업 분석과 구형 첨부 자동 수집은 비활성 보관 상태다.
 전체 구현 범위는 [로드맵](roadmap.md), URL과 권한은 [관리 화면 참조](platform/admin_ui.md)를 읽는다.
 
-개발 Compose의 이미지 등록은 기존 웹 주소 `localhost:8081`을 사용한다. Registry의 `/v2/` 요청은 Nginx가 내부로 전달하며, 운영 Kubernetes는 공통 Ingress·TLS 체계에서 Registry 호스트를 제공한다.
+이미지는 기존 Registry에 직접 push한다. 로컬 k3d는 `localhost:5111`을 사용하며
+Compose·운영 Kubernetes는 배포 환경에서 제공하는 Registry 주소를 사용한다.
 
-공통 운영의 **컨테이너 이미지**에서는 MLOps에 포함한 Registry의 모델 학습·서빙 repository와
+공통 운영의 **컨테이너 이미지**에서는 연결한 외부 Registry의 모델 학습·서빙 repository와
 태그·검증된 digest 참조를 조회한다. [Registry 연결과 배포](deployment/image_registry.md)를 참고한다.
 현재 화면은 조회용이며 이미지 push·삭제·임의 외부 모델 실행을 수행하지 않는다.
 
@@ -79,3 +81,5 @@ Compose 개발 환경과 Kubernetes는 같은 입력을 사용하며 실행 방�
 
 Kubernetes는 [공통 base와 환경별 overlay](deployment/kubernetes.md)를 사용한다. 일반 클러스터는 generic,
 기존 EC2 K3s는 k3s overlay를 선택하며 모델 실행·API 계약은 같다. 운영 환경별 검증 여부는 별도로 기록한다.
+로컬 Kubernetes는 [k3d 실행 안내](deployment/k3d.md)의 단일 노드 클러스터와 k3d overlay를 사용한다.
+기존 Semantic 배포를 공유하며 Compose의 규격서 처리 전체 배포와 같은 범위로 간주하지 않는다.

@@ -27,7 +27,8 @@ npm run test:e2e
 ```
 
 실환경 의존 검사는 DB·인증·객체 저장소 등 설정이 필요하다. skip된 검사를 성공으로 기록하지 않는다.
-배포 설정 변경 후 [Compose](deployment/compose.md) 또는 [K3s](deployment/k3s.md)의 해당 검증을 추가한다.
+로컬 Kubernetes 통합 실행은 [k3d](deployment/k3d.md)를 사용한다. 기존 Compose도 유지한다.
+배포 설정 변경 후 [Compose](deployment/compose.md), [k3d](deployment/k3d.md) 또는 [K3s](deployment/k3s.md)의 해당 검증을 추가한다.
 
 ## 구현 원칙
 

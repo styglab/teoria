@@ -36,7 +36,7 @@ def test_generic_manifests_validate_without_traefik(tmp_path):
             args=['bash',str(root/'deploy/kubernetes/deploy.sh'),'ghcr.io/example/teoria','a'*40,'teoria.example.com',
                 '--modules',module,'--overlay','generic','--storage-class','test-csi','--ingress-class','public','--render']
             if module=='semantic':args += ['--shared-storage-class','test-rwx']
-            else:args += ['--with-model-registry','registry.example.com']
+            else:args += ['--model-registry-host','registry.example.com']
             rendered=subprocess.run(args,env=environment,text=True,capture_output=True,check=True).stdout
             result=subprocess.run(['docker','exec','-i',server.name,'kubectl','apply','--dry-run=server','-f','-'],
                 input=rendered,capture_output=True,text=True)

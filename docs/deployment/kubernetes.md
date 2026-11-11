@@ -1,4 +1,4 @@
-# 일반 Kubernetes와 K3s 배포
+# 일반 Kubernetes·K3s·k3d 배포
 
 Kubernetes 공통 리소스는 `deploy/kubernetes/base/`, 환경 차이는 `overlays/`가 소유한다.
 학습 Job·모델별 서빙 Deployment·Service·RBAC는 두 환경에서 같은 계약을 사용한다.
@@ -16,24 +16,27 @@ deploy/kubernetes/
   overlays/
     generic/                 표준 Ingress·클러스터 스토리지 설정
     k3s/                     Traefik·local-path·EC2/K3s 노드 설치 설정
+    k3d/                     로컬 Traefik·인증서·보존 스토리지 선택
+  k3d/                       로컬 클러스터·Registry·수명주기 명령
 ```
 
 `--modules mlops`는 모델 운영 단독, `--modules semantic`은 기존 Metadata·Ontology·업무 기능 구성을 선택한다.
+로컬 환경의 생성·빌드·Secret·데이터 보존 절차는 [k3d 안내](k3d.md)를 따른다.
 두 모듈을 한 번에 합치는 K3s/Kubernetes 설치는 현재 지원하지 않는다. Compose의 모듈 조합과 구분한다.
 기존 Semantic 설치 위에 MLOps 단독 구성을 덮어쓰지 않도록 배포 스크립트가 검사한다.
 
 | 항목 | generic | k3s |
 |---|---|---|
 | API·UI·학습·서빙 리소스 | 공통 base | 같은 base |
-| 외부 진입 | 표준 Ingress, 경로 보존 | Traefik·기존 prefix Middleware |
-| UI·API 연결 | 기존 UI nginx가 프록시도 수행 | Traefik이 각 API로 분배 |
-| MLflow 외부 인증 | Prefect 운영 계정으로 nginx 인증 | Registry bcrypt 파일을 재사용하는 Traefik Basic 인증 |
+| 외부 진입 | 표준 Ingress, 경로 보존 | Semantic은 Traefik prefix, MLOps는 UI 프록시 |
+| UI·API 연결 | 기존 UI nginx가 프록시도 수행 | Semantic은 Traefik, MLOps는 UI nginx |
+| MLflow 외부 인증 | Prefect 운영 계정으로 nginx 인증 | Prefect 운영 계정으로 nginx 인증 |
 | 기본 PVC StorageClass | 클러스터 기본값 또는 지정값 | `local-path` 또는 지정값 |
 | CI 접근 | 배포 에이전트의 kubectl context | 기존 EC2 SSH workflow 유지 |
 
 일반 구성에 프록시 전용 상시 컨테이너를 추가하지 않는다. 기존 `admin-ui` 컨테이너에 ConfigMap을 mount하여
 `/admin-api/`, `/runtime-api/`, `/prefect/`, `/mlflow/`를 내부 Service로 전달한다.
-Registry의 `/v2/`는 별도 host의 표준 Ingress로 전달하며 자체 인증을 유지한다.
+이미지 Registry는 별도 기존 서비스를 사용하며 플랫폼 Ingress에 `/v2/`를 추가하지 않는다.
 
 ## 배포 전에
 
@@ -43,7 +46,7 @@ Bash·Python 3·`flock`·Kustomize Component를 지원하는 kubectl과 리소�
 
 1. `kubectl config current-context`와 `kubectl get nodes`로 대상 클러스터를 확인한다.
 2. Ingress controller와 IngressClass를 준비한다. generic은 controller 전용 rewrite annotation이나 CRD를 요구하지 않는다.
-3. TLS 종료는 Ingress controller에서 수행한다. 플랫폼·Registry DNS와 인증서가 대상 클러스터를 가리키게 준비한다.
+3. 플랫폼 TLS 종료는 Ingress controller에서 수행한다. 플랫폼 DNS와 인증서를 준비하고 외부 Registry의 연결·인증은 별도로 설정한다.
 4. 기본 StorageClass 또는 `--storage-class`로 지정할 CSI 저장소를 준비한다.
 5. 노드 아키텍처에 맞는 플랫폼·모델 이미지를 기존 외부 Registry에서 준비하고 플랫폼·실행 namespace에 pull 인증을 설정한다.
 6. Secret·DB 계정·게시 artifact 등 모듈별 준비를 완료한다.
@@ -63,7 +66,7 @@ namespace는 기존 식별자를 유지한다. 플랫폼은 `teoria`, 수집 Job
 ```bash
 bash deploy/kubernetes/deploy.sh ghcr.io/org/teoria <commit_sha> teoria.example.com \
   --overlay generic --modules mlops \
-  --with-model-registry registry.example.com \
+  --model-registry-host registry.example.com \
   --storage-class cluster-csi --ingress-class public --render > /tmp/teoria_mlops.yaml
 ```
 
@@ -73,7 +76,7 @@ bash deploy/kubernetes/deploy.sh ghcr.io/org/teoria <commit_sha> teoria.example.
 ```bash
 bash deploy/kubernetes/deploy.sh ghcr.io/org/teoria <commit_sha> teoria.example.com \
   --overlay generic --modules mlops \
-  --with-model-registry registry.example.com \
+  --model-registry-host registry.example.com \
   --storage-class cluster-csi --ingress-class public
 ```
 
@@ -112,7 +115,7 @@ K3s도 공통 진입점에 `--overlay k3s`를 지정한다.
 ```bash
 bash deploy/kubernetes/deploy.sh ghcr.io/org/teoria <commit_sha> teoria.example.com --overlay k3s
 bash deploy/kubernetes/deploy.sh ghcr.io/org/teoria <commit_sha> teoria.example.com \
-  --overlay k3s --modules mlops --with-model-registry registry.example.com
+  --overlay k3s --modules mlops --model-registry-host registry.example.com
 ```
 
 EC2/K3s 설치 설정은 `deploy/kubernetes/overlays/k3s/server_config.yaml`에 둔다.

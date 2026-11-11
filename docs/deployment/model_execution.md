@@ -14,7 +14,8 @@ Python 패키지 배포는 요구하지 않는다. 고객 이탈 샘플은 `pyth
 ## 책임과 기본 구성
 
 Compose `--modules mlops`는 Web·Admin API·Platform PostgreSQL·MinIO·Prefect Server·Prefect Services·Redis·
-Image Registry·MLflow·공통 실행 Worker의 10개 상시 서비스를 시작한다. 모델별 학습 컨테이너와 서빙은 별도로 생성한다.
+MLflow·공통 실행 Worker의 9개 상시 서비스를 시작한다. Registry는 기존 외부 서비스를 사용한다.
+모델별 학습 컨테이너와 서빙은 별도로 생성한다.
 기존 Data PostgreSQL과 OPA·Policy Control Plane은 기본으로 시작하지 않는다. 데이터와 기존 볼륨은 삭제하지 않는다.
 
 공통 Worker의 Prefect process pool은 `teoria-model-operations`다. 학습은 Docker 컨테이너 또는 Kubernetes Job,
@@ -153,11 +154,11 @@ K3s overlay와 모델 실행 계약은 유지하며 공통 실행 정책은 `dep
 
 ```bash
 bash deploy/kubernetes/deploy.sh ghcr.io/org/teoria <commit_sha> teoria.example.com --overlay k3s \
-  --modules mlops --with-model-registry registry.example.com
+  --modules mlops --model-registry-host registry.example.com
 ```
 
 기존 `teoria-secrets`에는 Platform DB 관리자·Application·Prefect 계정과 URL, Admin token, Prefect 인증,
-MinIO 관리자 계정을 준비한다. `model-registry-auth`는 Registry 인증용이며 Ingress TLS는 공통 `teoria-tls`를 재사용한다.
+MinIO 관리자 계정과 기존 외부 Registry 연결·조회 계정을 준비한다. 플랫폼 웹 Ingress는 `teoria-tls`를 사용한다.
 추가로 다음 Secret을 준비한다. `deploy/kubernetes/control.env.example`과 `workload.env.example`을
 checkout 밖의 보안 경로에 복사해 실제 값을 채우고 `kubectl create secret generic ... --from-env-file=...`로 생성한다.
 credential은 보안 파일에서 생성하며 예시 값을 운영에 쓰지 않는다.
@@ -172,15 +173,14 @@ credential은 보안 파일에서 생성하며 예시 값을 운영에 쓰지 �
 `MLFLOW_BACKEND_STORE_URI`는 MLflow 전용 PostgreSQL 계정의 `postgresql+psycopg2://...@platform-postgres:5432/mlflow`다.
 `TEORIA_MODEL_ALLOWED_REGISTRIES`에는 실제 모델 Registry host만 쉼표로 구분한다.
 `model-workload`의 MinIO endpoint는 다른 namespace에서 접근 가능한 `http://minio.teoria.svc:9000`을 사용한다.
-K3s의 `/mlflow/` UI는 Traefik Basic 인증으로 보호하며 모델 Registry의 계정·bcrypt 인증 파일을 재사용한다.
-generic은 기존 UI nginx가 Prefect 운영 계정으로 인증하므로 전용 인증 CRD가 필요 없다.
-배포 명령이 `model-ui-auth` Secret을 갱신한다. `/prefect/`는 기존 Prefect 인증을 사용한다.
+모든 Kubernetes overlay의 `/mlflow/` UI는 기존 UI nginx가 Prefect 운영 계정으로 인증한다.
+Registry 계정·bcrypt 파일·전용 인증 CRD는 사용하지 않는다. `/prefect/`도 Prefect 인증을 사용한다.
 `teoria-models` namespace를 만들고 Secret을 준비한 뒤 배포 명령을 실행한다. 실행 Role은 이 namespace의
 Job·Deployment·Service만 관리하며 workload Pod에는 ServiceAccount token을 mount하지 않는다.
 
 GitHub 자동 배포는 repository variable `TEORIA_DEPLOY_MODULES=mlops`와 `TEORIA_MODEL_REGISTRY_HOST`를 설정한다.
 단일 기본 PVC는 노드 간 복제·고가용성을 보장하지 않는다. 여러 서버에서 노드 장애까지 견디려면
-Platform PostgreSQL·MinIO·Registry의 외부 서비스 또는 적절한 영구 저장소와 백업·복원 구성을 별도로 준비한다.
+Platform PostgreSQL·MinIO의 외부 서비스 또는 적절한 영구 저장소와 백업·복원 구성을 별도로 준비한다.
 
 Compose는 한 Docker 호스트의 CPU·메모리·GPU 제한과 동시 실행 수를 적용한다. Kubernetes에서는 같은 자원을
 requests·limits와 GPU 리소스로 변환하여 노드에 배치한다. 기본 실행은 1 CPU·1024MiB, GPU 0이다.

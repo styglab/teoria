@@ -170,7 +170,7 @@ jobs:
           # Generic overlays must validate before installing Ingress controller CRDs.
           for module in semantic mlops; do
             registry_option=()
-            if [ "$module" = mlops ]; then registry_option=(--with-model-registry registry.example.com); fi
+            if [ "$module" = mlops ]; then registry_option=(--model-registry-host registry.example.com); fi
             bash deploy/kubernetes/deploy.sh ghcr.io/example/teoria aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa teoria.example.com \
               --modules "$module" --overlay generic --storage-class validation-csi --shared-storage-class validation-rwx --ingress-class public \
               "${registry_option[@]}" --render > "$RUNNER_TEMP/kubernetes-$module.yaml"

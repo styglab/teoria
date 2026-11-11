@@ -33,7 +33,7 @@ GitHub main → CI → GHCR의 commit SHA 이미지 → EC2 SSH → deploy.sh
 
 Kustomize는 `kubectl`에 포함된 기능만 사용한다. Helmfile이나 별도 GitOps 서버는 필요하지 않다.
 MLflow·Argo CD·Harbor·GPU Operator·MinIO·S3는 이 초기 구성에 추가하지 않는다.
-모델 전용 경량 Registry는 주 배포 명령의 `--with-model-registry <hostname>`으로 함께 설치한다.
+모델 이미지는 기존 Registry를 사용하며 `--model-registry-host <hostname>`은 연결할 host를 설정한다.
 [이미지 Registry](image_registry.md)에 설치·CI Registry 변경·Admin 조회 연결을 설명한다.
 규격서 MinIO 기본 저장소는 현재 Compose에 반영돼 있으며 K3s 연결·배포 검증은 별도다.
 모델 진단은 Codex subprocess를 사용하며 기본적으로 비활성화한다.
@@ -255,7 +255,7 @@ K3s의 Traefik CRD provider와 `middlewares.traefik.io` CRD가 필요하다. `de
 CI의 API-only K3s 검증은 Traefik을 실행하지 않으므로 공식 Traefik v3.7.16 CRD를 별도 설치한다.
 이 검증과 실제 EC2 클러스터 배포 성공은 구분한다.
 
-MLOps 단독 구성은 주 배포 명령의 `--modules mlops --with-model-registry <hostname>`으로 선택한다.
+MLOps 단독 구성은 주 배포 명령의 `--modules mlops --model-registry-host <hostname>`으로 선택한다.
 공통 학습·서빙 계약과 별도 Secret·namespace 준비는 [모델 실행 안내](model_execution.md)를 따른다.
 
 일반 Kubernetes에서는 [공통 배포 안내](kubernetes.md)의 `generic` overlay를 사용한다.

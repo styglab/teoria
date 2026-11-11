@@ -1,39 +1,4 @@
 services:
-  image-registry:
-    image: registry:3.1.2
-    restart: unless-stopped
-    cpus: 1
-    mem_limit: 512m
-    command:
-    - serve
-    - /etc/distribution/config.yaml
-    environment:
-      REGISTRY_HTTP_SECRET: ${TEORIA_IMAGE_REGISTRY_HTTP_SECRET:-}
-      OTEL_TRACES_EXPORTER: none
-    volumes:
-    - registry-data:/var/lib/registry
-    - type: bind
-      source: ${TEORIA_IMAGE_REGISTRY_CONFIG_FILE:-./registry/config.yaml}
-      target: /etc/distribution/config.yaml
-      read_only: true
-      bind:
-        create_host_path: false
-    - type: bind
-      source: ${TEORIA_IMAGE_REGISTRY_AUTH_FILE:-/secure/teoria-registry/htpasswd}
-      target: /run/registry/htpasswd
-      read_only: true
-      bind:
-        create_host_path: false
-    healthcheck:
-      test:
-      - CMD
-      - wget
-      - --quiet
-      - --spider
-      - http://127.0.0.1:5001/debug/health
-      interval: 10s
-      timeout: 5s
-      retries: 12
   mlflow-postgres-init:
     image: postgres:17
     cpus: 0.5
@@ -223,7 +188,3 @@ services:
       TEORIA_MODEL_OPERATIONS_ENABLED: 'true'
       TEORIA_MODEL_MLFLOW_URL: http://mlflow:5000/mlflow
       TEORIA_MODEL_PREFECT_AUTH: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
-volumes:
-  registry-data:
-    name: ${TEORIA_IMAGE_REGISTRY_VOLUME_NAME:-${COMPOSE_PROJECT_NAME:-teoria}_registry-data}
-    external: ${TEORIA_STORAGE_VOLUMES_EXTERNAL:-false}

@@ -63,9 +63,17 @@ spec:
               name: teoria-secrets
               key: PREFECT_API_AUTH_STRING
         - name: TEORIA_IMAGE_REGISTRY_URL
-          value: http://image-registry:5000
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_URL
+              optional: true
         - name: TEORIA_IMAGE_REGISTRY_PUBLIC_HOST
-          value: registry.teoria.invalid
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_PUBLIC_HOST
+              optional: true
         - name: TEORIA_IMAGE_REGISTRY_USERNAME
           valueFrom:
             secretKeyRef:
@@ -77,6 +85,12 @@ spec:
             secretKeyRef:
               name: teoria-secrets
               key: TEORIA_IMAGE_REGISTRY_PASSWORD
+              optional: true
+        - name: TEORIA_IMAGE_REGISTRY_CA_PEM
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_CA_PEM
               optional: true
         command:
         - teoria-admin-api

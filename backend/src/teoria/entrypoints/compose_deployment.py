@@ -168,7 +168,6 @@ def main() -> None:
                 "platform-postgres",
                 "prefect-redis",
                 "minio",
-                "image-registry",
                 "runtime-redis",
                 "openmetadata-search",
             )
@@ -182,7 +181,6 @@ def main() -> None:
             if "mlops" in modules:
                 required += [
                     ("mlflow-postgres-init", "TEORIA_MLFLOW_DB_PASSWORD"),
-                    ("image-registry", "REGISTRY_HTTP_SECRET"),
                 ]
             if "formatid" in modules:
                 required += [

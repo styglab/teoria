@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  teoria.override: |
+    rewrite stop {
+      name regex (.*\.)?teoria\.localhost traefik.kube-system.svc.cluster.local
+      answer auto
+    }

@@ -90,7 +90,7 @@ def test_registry_proxy_upload_catalog_and_persistence(tmp_path):
             "/etc/distribution",
             {
                 "config.yaml": (
-                    root / "deploy/compose/registry/config.yaml"
+                    root / "backend/tests/fixtures/image_registry/config.yaml"
                 ).read_bytes()
             },
         )
@@ -109,7 +109,7 @@ def test_registry_proxy_upload_catalog_and_persistence(tmp_path):
         containers.append(proxy)
         network.disconnect(proxy)
         network.connect(proxy, aliases=["registry-proxy"])
-        proxy_config = (root / "deploy/compose/nginx/nginx.conf").read_text().replace(
+        proxy_config = (root / "backend/tests/fixtures/image_registry/proxy.conf").read_text().replace(
             "listen 80 default_server;",
             "listen 80 default_server;\n    listen 443 ssl;\n    ssl_certificate /tmp/tls.crt;\n    ssl_certificate_key /tmp/tls.key;",
         )

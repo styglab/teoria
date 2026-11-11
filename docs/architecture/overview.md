@@ -113,9 +113,10 @@ Kubernetes에서는 같은 계약으로 학습 Job과 모델별 Deployment·Serv
 MLOps 기본 구성은 예제 Data DB·별도 OPA 서비스를 시작하지 않으며 Admin bearer 인증을 유지한다.
 Platform PostgreSQL의 플랫폼·Prefect·MLflow DB와 계정을 분리한다.
 
-Image Registry는 Compose MLOps와 K3s MLOps에 포함한다. 모델 파일과 데이터는 MinIO, 실험·모델 버전은 MLflow,
+Image Registry는 배포 환경의 기존 서비스를 연결한다. 로컬 k3d는 클러스터 공용 Registry를 재사용한다.
+모델 파일과 데이터는 MinIO, 실험·모델 버전은 MLflow,
 실행 이미지는 Registry가 소유한다. 플랫폼 자체 이미지는 외부 배포처·로컬 빌드로 준비한다.
-Registry 종료·재배포는 저장 볼륨을 삭제하지 않는다.
+플랫폼은 Registry 서버·저장 볼륨 수명주기를 소유하지 않으며 이미지 조회·실행 계약만 소비한다.
 
 [Palantir 모델 통합](https://www.palantir.com/docs/foundry/model-integration/overview/)의 외부 모델 연결·고정 버전·실행 추적 원칙을 참고한다.
 Teoria는 Prefect·MLflow의 권위를 유지하며 모델 실행을 Ontology의 필수 의존성으로 만들지 않는다.
@@ -123,4 +124,6 @@ Teoria는 Prefect·MLflow의 권위를 유지하며 모델 실행을 Ontology의
 
 Kubernetes 배포는 `deploy/kubernetes/base/`와 환경별 overlay로 분리한다. generic은 표준 Ingress와 기존 UI nginx를 사용하고,
 K3s는 기존 Traefik 경로와 PVC 설정을 보존하며 같은 배포 진입점에서 `--overlay k3s`로 선택한다. 공통 Prefect 실행 정책은 `deploy/kubernetes/prefect/`가 소유한다.
+로컬 k3d는 같은 K3s 리소스를 재사용하고 `--overlay k3d`로 로컬 인증서·보존 저장소를 선택한다.
+클러스터·개발 Registry 수명주기는 `deploy/kubernetes/k3d/`가 소유한다.
 공유 산출물의 다중 노드 접근·저장소 선택과 검증 범위는 [Kubernetes 배포](../deployment/kubernetes.md)를 따른다.

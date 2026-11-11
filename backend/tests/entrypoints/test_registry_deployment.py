@@ -1,43 +1,21 @@
-"""Model Registry belongs to the optional platform MLOps deployment."""
+"""The platform connects to an independently managed image Registry."""
 
 import subprocess
 from pathlib import Path
 
 import yaml
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_integrated_registry_uses_public_image_persistent_storage_and_no_platform_secrets():
-    compose = yaml.safe_load(
-        (ROOT / "deploy/compose/compose_mlops.yaml").read_text()
-    )
-    core = yaml.safe_load((ROOT / "deploy/compose/compose.yaml").read_text())
-    assert "image-registry" not in core["services"]
-    registry = compose["services"]["image-registry"]
-    assert registry["image"] == "registry:3.1.2"
-    assert "depends_on" not in registry
-    assert "registry-data:/var/lib/registry" in registry["volumes"]
-    config = yaml.safe_load((ROOT / "deploy/compose/registry/config.yaml").read_text())
-    assert config["auth"]["htpasswd"]["path"].endswith("htpasswd")
-    assert "tls" not in config["http"]
-    assert config["http"]["relativeurls"] is True
-    assert "ports" not in registry
-    assert not any(v.get("target", "").endswith(("tls.crt", "tls.key")) for v in registry["volumes"] if isinstance(v, dict))
-    assert config["storage"]["delete"]["enabled"] is False
-    resources = list(
-        yaml.safe_load_all((ROOT / "deploy/kubernetes/base/mlops/registry.yaml").read_text())
-    )
-    deployment = next(r for r in resources if r["kind"] == "Deployment")
-    assert deployment["spec"]["replicas"] == 1
-    assert deployment["spec"]["strategy"]["type"] == "Recreate"
-    assert (
-        deployment["spec"]["template"]["spec"]["automountServiceAccountToken"] is False
-    )
-    ingress = yaml.safe_load((ROOT / "deploy/kubernetes/overlays/k3s/mlops/registry_ingress.yaml").read_text())
-    assert ingress["spec"]["tls"][0]["secretName"] == "teoria-tls"
-    for r in resources:
-        assert "teoria-secrets" not in str(r)
+def test_platform_deployments_do_not_install_a_registry():
+    for filename in ('compose.yaml', 'compose_mlops.yaml'):
+        compose = yaml.safe_load((ROOT / 'deploy/compose' / filename).read_text())
+        assert 'image-registry' not in compose['services']
+        assert 'registry-data' not in compose.get('volumes', {})
+    assert not (ROOT / 'deploy/kubernetes/base/mlops/registry.yaml').exists()
+    assert 'location /v2/' not in (ROOT / 'deploy/compose/nginx/nginx.conf').read_text()
 
 
 def test_k3s_accepts_custom_registry_before_cluster_access(tmp_path):
@@ -63,8 +41,24 @@ def test_k3s_accepts_custom_registry_before_cluster_access(tmp_path):
 def test_k3s_rejects_invalid_model_registry_before_cluster_access():
     result = subprocess.run(
         ["bash", str(ROOT / "deploy/kubernetes/deploy.sh"), "ghcr.io/example", "a" * 40,
-         "teoria.example.com", "--overlay", "k3s", "--with-model-registry", "https://invalid.example"],
+         "teoria.example.com", "--overlay", "k3s", "--model-registry-host", "https://invalid.example"],
         capture_output=True, text=True, check=False,
     )
     assert result.returncode != 0
-    assert "Invalid model Registry hostname" in result.stderr
+    assert "Invalid model Registry host" in result.stderr
+
+
+@pytest.mark.parametrize('origin', [
+    'file:///tmp/registry',
+    'https://user:synthetic@registry.example.com',
+    'https://registry.example.com/private?token=synthetic',
+    'https://registry.example.com:99999',
+])
+def test_external_registry_origin_rejects_credentials_and_non_origin_urls(origin):
+    result = subprocess.run([
+        'bash', str(ROOT / 'deploy/kubernetes/deploy.sh'), 'ghcr.io/example', 'a' * 40,
+        'teoria.example.com', '--modules', 'mlops', '--model-registry-host', 'registry.example.com',
+        '--model-registry-url', origin,
+    ], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert 'Invalid model Registry origin' in result.stderr
