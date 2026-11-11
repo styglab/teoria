@@ -1,10 +1,9 @@
-"""MLflow model registry and configured inference services for the Admin workspace."""
+"""Model-independent MLflow catalog and workflow operations for the Admin workspace."""
 
 from __future__ import annotations
 
 import asyncio
 import re
-from collections.abc import Awaitable, Callable
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -28,10 +27,6 @@ def create_model_operations_router(
     prefect_url: str,
     prefect_auth: str,
     mlflow_url: str,
-    inference_token: str | None = None,
-    default_model_name: str | None = None,
-    parameter_names: frozenset[str] = frozenset(),
-    model_context: Callable[[str | None], Awaitable[dict]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/v1/admin/model-operations", tags=["model-operations"])
 
@@ -48,7 +43,6 @@ def create_model_operations_router(
             catalog=workflow_catalog,
             prepare_run=prepare_run,
             prefix="",
-            inference_token=inference_token,
         )
     )
 
@@ -58,7 +52,7 @@ def create_model_operations_router(
 
     def clean(value) -> str:
         text = str(value or "")[:12000]
-        for secret in (prefect_auth, inference_token, authorizer.token):
+        for secret in (prefect_auth, authorizer.token):
             if secret:
                 text = text.replace(secret, "[redacted]")
         text = re.sub(
@@ -125,7 +119,7 @@ def create_model_operations_router(
             selected = model_name or (
                 catalog["registered_models"][0]["name"]
                 if catalog["registered_models"]
-                else default_model_name
+                else None
             )
             items, next_version_token = (
                 await versions(selected) if selected else ([], None)
@@ -146,15 +140,26 @@ def create_model_operations_router(
                 return {
                     **item,
                     "experiment_id": run.get("info", {}).get("experiment_id"),
-                    "prefect_run_id": tags.get("teoria.prefect_flow_run_id"),
+                    "prefect_run_id": tags.get("teoria.prefect_flow_run_id", tags.get("teoria.training_run_id")),
                     "pipeline_run_id": tags.get("teoria.prefect_pipeline_run_id"),
+                    "training_image": tags.get("teoria.training_image"),
+                    "input_uri": tags.get("teoria.input_uri"),
+                    "input_sha256": tags.get("teoria.input_sha256"),
+                    "configuration_id": tags.get("teoria.configuration_id"),
                     "metrics": {
                         m["key"]: m["value"] for m in data.get("metrics", [])[:50]
                     },
                     "parameters": {
-                        p["key"]: p["value"]
-                        for p in data.get("params", [])
-                        if p["key"] in parameter_names
+                        clean(p["key"]): (
+                            "[redacted]"
+                            if re.search(
+                                r"password|token|secret|credential|authorization|access[_-]?key|private[_-]?key",
+                                p["key"],
+                                re.IGNORECASE,
+                            )
+                            else clean(p["value"])
+                        )
+                        for p in data.get("params", [])[:50]
                     },
                 }
             except (httpx.HTTPError, KeyError, ValueError):
@@ -166,7 +171,6 @@ def create_model_operations_router(
             "model_name": selected,
             "next_version_token": next_version_token,
             "items": items,
-            **(await model_context(selected) if model_context else {}),
         }
 
     return router

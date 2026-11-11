@@ -5,9 +5,7 @@ S3 uses native async HTTP and signed requests; no synchronous SDK in the async p
 from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime,timezone
 import hashlib
-import hmac
 import os
 from pathlib import Path
 import tempfile
@@ -23,26 +21,8 @@ def object_key(key):
     return '/'.join(parts)
 
 
-def signed_headers(method,url,body,*,access_key,secret_key,region,session_token=None,now=None,headers=None):
-    """AWS SigV4 with a signed SHA-256 payload (single-chunk S3 requests)."""
-    now=now or datetime.now(timezone.utc)
-    stamp=now.strftime('%Y%m%dT%H%M%SZ');day=now.strftime('%Y%m%d')
-    parsed=urlsplit(url)
-    if parsed.query:raise ValueError('S3 object URLs must not contain query parameters')
-    payload_hash=hashlib.sha256(body).hexdigest()
-    values={'host':parsed.netloc,'x-amz-content-sha256':payload_hash,'x-amz-date':stamp,
-            **{k.lower():v for k,v in (headers or {}).items()}}
-    if session_token:values['x-amz-security-token']=session_token
-    names=';'.join(sorted(values))
-    canonical_headers=''.join(f'{k}:{" ".join(values[k].split())}\n' for k in sorted(values))
-    canonical='\n'.join([method,parsed.path or '/','',canonical_headers,names,payload_hash])
-    scope=f'{day}/{region}/s3/aws4_request'
-    to_sign='\n'.join(['AWS4-HMAC-SHA256',stamp,scope,hashlib.sha256(canonical.encode()).hexdigest()])
-    key=('AWS4'+secret_key).encode()
-    for part in [day,region,'s3','aws4_request']:key=hmac.new(key,part.encode(),hashlib.sha256).digest()
-    signature=hmac.new(key,to_sign.encode(),hashlib.sha256).hexdigest()
-    values['authorization']=f'AWS4-HMAC-SHA256 Credential={access_key}/{scope}, SignedHeaders={names}, Signature={signature}'
-    return values
+from teoria.integrations.s3 import signed_headers
+
 
 class FileArtifactStore:
     def __init__(self,root):

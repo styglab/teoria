@@ -22,6 +22,7 @@ class PipelineRunRequest(BaseModel):
     deploy: bool | None = Field(default=None, strict=True)
     model_version: int | None = Field(default=None, ge=1, strict=True)
     manifest: dict | None = None
+    execution: dict | None = None
 
 
 class ScheduleUpdate(BaseModel):
@@ -53,7 +54,6 @@ def create_workflow_router(
     catalog: dict,
     prepare_run,
     prefix: str = "/v1/admin/workflows",
-    inference_token: str | None = None,
 ):
     router = APIRouter(prefix=prefix, tags=["workflows"])
     prefect = (
@@ -73,7 +73,7 @@ def create_workflow_router(
 
     def clean(value) -> str:
         text = str(value if value is not None else "")[:12000]
-        for secret in (prefect_auth, inference_token, authorizer.token):
+        for secret in (prefect_auth, authorizer.token):
             if secret:
                 text = text.replace(secret, "[redacted]")
         text = re.sub(
@@ -108,7 +108,7 @@ def create_workflow_router(
             ),
             None,
         )
-        summary["model_version"] = parameters.get("model_version")
+        summary["model_version"] = parameters.get("model_version") or (parameters.get("execution") or {}).get("model_version")
         return summary
 
     @router.get("/pipelines")
@@ -201,7 +201,7 @@ def create_workflow_router(
                         if run.get("deployment_id") == by_name.get(name, {}).get("id")
                     ],
                     "can_run": "metadata_admin" in principal.roles,
-                    "can_manage_schedule": "metadata_admin" in principal.roles,
+                    "can_manage_schedule": "metadata_admin" in principal.roles and catalog[name][2] not in {"training", "serving", "stop-serving"},
                 }
                 for name, label in PIPELINES.items()
             ],
@@ -243,7 +243,7 @@ def create_workflow_router(
                 "parameters": {
                     k: clean(v)
                     for k, v in item.get("parameters", {}).items()
-                    if k in {"model_version", "requested_by", "deploy"}
+                    if k in {"model_version", "requested_by", "deploy", "execution"}
                 },
                 "message": clean((item.get("state") or {}).get("message")),
             },
@@ -343,6 +343,8 @@ def create_workflow_router(
     ):
         if pipeline_id not in PIPELINES:
             raise HTTPException(404, "pipeline_not_found")
+        if catalog[pipeline_id][2] in {"training", "serving", "stop-serving"}:
+            raise HTTPException(422, "model_execution_requires_explicit_input")
         try:
             deployment = next(
                 (d for d in await deployment_list() if d["name"] == pipeline_id), None

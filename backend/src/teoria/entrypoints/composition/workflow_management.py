@@ -8,6 +8,8 @@ from fastapi import FastAPI, HTTPException
 from teoria.platform.workflow_management.admin_router import create_workflow_router
 from teoria.domains.goods.workflows.manifest_validation import validate_manifest
 from teoria.entrypoints.composition.workflow_catalog import workflow_catalog
+from teoria.platform.mlops.contracts import validate_execution
+from pydantic import ValidationError
 
 if TYPE_CHECKING:
     from teoria.entrypoints.composition.admin import AdminServices
@@ -33,7 +35,6 @@ def install_workflow_management_router(
             client=client,
             prefect_url=services.settings.model_prefect_url,
             prefect_auth=services.settings.model_prefect_auth,
-            inference_token=services.settings.demo_inference_token,
         )
     )
 
@@ -51,11 +52,19 @@ def prepare_workflow_run(catalog, application_standards=None):
             raise HTTPException(422, "model_version_required")
         if input_kind != "version" and payload.model_version is not None:
             raise HTTPException(422, "model_version_not_applicable")
+        is_execution = input_kind in {"training", "serving", "stop-serving"}
+        if (payload.execution is not None) != is_execution:
+            raise HTTPException(422, "execution_required_or_not_applicable")
         parameters = (
             {"requested_by": principal.actor}
             if catalog[pipeline_id][1] == "모델"
             else {}
         )
+        if is_execution:
+            try:
+                parameters["execution"] = validate_execution(input_kind, payload.execution)
+            except (ValidationError, ValueError):
+                raise HTTPException(422, "invalid_model_execution_contract") from None
         if payload.manifest is not None:
             parameters["manifest"] = await validate_manifest(
                 pipeline_id,

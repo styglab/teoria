@@ -136,17 +136,17 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(saved["prepared"])
 
     def test_mlflow_database_is_prepared_before_tracking_server_starts(self):
-        for name in ("mlflow-postgres-init", "model-storage-init", "model-register", "model-training-job"):
+        for name in ("mlflow-postgres-init", "model-storage-init", "model-register"):
             self.services[name] = {"image": "teoria-test:latest", "profiles": ["jobs"]}
         self.services["mlflow-postgres-init"]["environment"] = {
             "TEORIA_MLFLOW_DB_PASSWORD": "synthetic"
         }
-        self.services["mlflow"] = {"image": "teoria-test:latest"}
-        self.services["demo-inference"] = {
-            "image": "teoria-test:latest",
-            "environment": {"TEORIA_DEMO_INFERENCE_TOKEN": "synthetic"},
+        self.services["image-registry"] = {
+            "image": "registry:3.1.2",
+            "environment": {"REGISTRY_HTTP_SECRET": "synthetic"},
         }
-        self.execute("deploy", "--modules", "mlops")
+        self.services["mlflow"] = {"image": "teoria-test:latest"}
+        self.execute("deploy", "--modules", "mlops", "--pull")
         prepared = next(
             i
             for i, c in enumerate(self.calls)
@@ -158,9 +158,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertLess(prepared, started)
         self.assertFalse(any("mlflow-postgres" in c for c in self.calls))
         self.assertNotIn("model-training-job", self.jobs)
-        inspected = next(i for i, c in enumerate(self.calls) if c[:3] == ["docker", "image", "inspect"])
-        first_start = next(i for i, c in enumerate(self.calls) if "up" in c)
-        self.assertLess(inspected, first_start)
+        self.assertFalse(any("model-training-job" in c or "demo-inference" in c for c in self.calls))
 
     def test_failed_migration_does_not_start_application_or_mark_prepared(self):
         self.fail_job = "postgres-migrate"
@@ -277,6 +275,13 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("*", stops[-1])
         self.assertTrue(any("prefect-worker" in c for c in stops[:application_stop]))
 
+    def test_down_retires_removed_services_without_deleting_persistent_volumes(self):
+        self.execute("down", "--modules", "core")
+        stopped = next(c for c in self.calls if "down" in c)
+        self.assertIn("--remove-orphans", stopped)
+        self.assertNotIn("--volumes", stopped)
+        self.assertNotIn("-v", stopped)
+
     def test_build_uses_one_target_per_image_and_pins_the_builder(self):
         for name in ("admin-api", "nginx"):
             self.services[name]["build"] = {"context": "."}
@@ -311,7 +316,7 @@ class DeploymentTests(unittest.TestCase):
                     [
                         {
                             "Id": "sha256:" + identifier,
-                            "RepoTags": ["teoria-model-worker:latest"]
+                            "RepoTags": ["teoria-mlflow:latest"]
                             if identifier == "staged"
                             else [],
                             "Config": {"Labels": {"io.teoria.role": "admin"}},

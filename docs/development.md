@@ -72,7 +72,7 @@ Pipeline만 사용하는 API는 [Connector 절차](pipelines/connectors.md)를 �
 [캐시 무효화](https://tanstack.com/query/latest/docs/framework/react/guides/query-invalidation)를 따른다.
 
 모델 운영의 공통 API는 `platform/mlops/`, MLflow 통신은 `integrations/mlflow/`,
-고객 이탈 예제는 `examples/customer_churn/`를 수정한다. 예제 테스트는 `backend/tests/examples/customer_churn/`에 둔다.
+고객 이탈 샘플은 `archive/customer_churn/`의 독립 Dockerfile로 빌드한다. 실행·검증 방법은 해당 README를 따른다.
 공통 모델 API·플랫폼 화면은 예제를 import하지 않으며 composition·shell이 필요한 동작을 주입한다.
 배포 목록 문서는 별도 보관하지 않고 `teoria-pipelines deployment-docs`로 현재 선언을 출력한다.
 

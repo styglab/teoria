@@ -1,4 +1,3 @@
-# Service modules are composed by deploy.sh; jobs run explicitly with --rm.
 name: teoria
 services:
   nginx:
@@ -62,11 +61,11 @@ services:
       TEORIA_ADMIN_OIDC_AUDIENCE: ${TEORIA_ADMIN_OIDC_AUDIENCE:-}
       TEORIA_ADMIN_OIDC_JWKS_URL: ${TEORIA_ADMIN_OIDC_JWKS_URL:-}
       TEORIA_ADMIN_OIDC_ROLES_CLAIM: ${TEORIA_ADMIN_OIDC_ROLES_CLAIM:-roles}
-      TEORIA_ADMIN_OIDC_ROLE_MAPPING: "${TEORIA_ADMIN_OIDC_ROLE_MAPPING:-{}}"
-      TEORIA_ADMIN_DATA_DATABASE_URL: ${TEORIA_RUNTIME_DATA_DATABASE_URL:-postgresql://teoria_runtime:${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}@postgres:5432/teoria_data}
+      TEORIA_ADMIN_OIDC_ROLE_MAPPING: ${TEORIA_ADMIN_OIDC_ROLE_MAPPING:-{}}
+      TEORIA_ADMIN_DATA_DATABASE_URL: ''
       TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
       TEORIA_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_DATABASE_CONCURRENCY_LIMIT:-10}
-      TEORIA_POLICY_MODE: opa
+      TEORIA_POLICY_MODE: disabled
       TEORIA_OPA_URL: http://opa:8181
       TEORIA_OPA_DECISION_PATH: teoria/authz/decision
       TEORIA_SEMANTIC_MODELING_ENABLED: 'false'
@@ -76,10 +75,12 @@ services:
       TEORIA_IMAGE_REGISTRY_PUBLIC_HOST: ${TEORIA_IMAGE_REGISTRY_PUBLIC_HOST:-}
       TEORIA_IMAGE_REGISTRY_USERNAME: ${TEORIA_IMAGE_REGISTRY_USERNAME:-}
       TEORIA_IMAGE_REGISTRY_PASSWORD: ${TEORIA_IMAGE_REGISTRY_PASSWORD:-}
+      TEORIA_IMAGE_REGISTRY_CA_PEM: ${TEORIA_IMAGE_REGISTRY_CA_PEM:-}
       TEORIA_MODEL_OPERATIONS_ENABLED: 'false'
       TEORIA_OPENMETADATA_ENABLED: 'false'
       TEORIA_SPECIFICATION_UPLOAD_ENABLED: 'false'
-      TEORIA_MODEL_PREFECT_AUTH: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+      TEORIA_MODEL_PREFECT_AUTH: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set
+        TEORIA_PREFECT_PASSWORD}
     healthcheck:
       test:
       - CMD
@@ -91,31 +92,6 @@ services:
       retries: 20
     expose:
     - '8001'
-    depends_on:
-      opa:
-        condition: service_healthy
-  postgres:
-    stop_grace_period: 60s
-    cpus: 2
-    mem_limit: 4g
-    image: postgres:17
-    restart: unless-stopped
-    shm_size: 1gb
-    environment:
-      POSTGRES_DB: teoria_data
-      POSTGRES_USER: teoria_pipeline
-      POSTGRES_PASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
-    healthcheck:
-      test:
-      - CMD-SHELL
-      - pg_isready -U teoria_pipeline -d teoria_data
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    expose:
-    - '5432'
-    volumes:
-    - postgres:/var/lib/postgresql/data
   platform-postgres:
     stop_grace_period: 60s
     cpus: 2
@@ -190,7 +166,7 @@ services:
   prefect-server:
     cpus: 1
     mem_limit: 1g
-    image: prefecthq/prefect:3-python3.12
+    image: prefecthq/prefect:3.8.1-python3.12
     restart: unless-stopped
     command:
     - prefect
@@ -210,7 +186,8 @@ services:
       PREFECT_SERVER_API_HOST: 0.0.0.0
       PREFECT_SERVER_UI_API_URL: /prefect/api
       PREFECT_SERVER_UI_SERVE_BASE: /prefect
-      PREFECT_SERVER_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set TEORIA_PREFECT_PASSWORD}
+      PREFECT_SERVER_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME:?set TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD:?set
+        TEORIA_PREFECT_PASSWORD}
     depends_on:
       prefect-redis:
         condition: service_healthy
@@ -228,7 +205,7 @@ services:
   prefect-services:
     cpus: 1
     mem_limit: 1g
-    image: prefecthq/prefect:3-python3.12
+    image: prefecthq/prefect:3.8.1-python3.12
     restart: unless-stopped
     command:
     - prefect
@@ -248,115 +225,6 @@ services:
         condition: service_healthy
       prefect-server:
         condition: service_healthy
-  opa:
-    cpus: 0.5
-    mem_limit: 256m
-    image: ${TEORIA_IMAGE_PREFIX:-}teoria-opa:${TEORIA_IMAGE_TAG:-1.21.1}
-    build:
-      context: ../..
-      dockerfile: deploy/compose/opa/Dockerfile
-      target: runtime
-      labels:
-        io.teoria.project: teoria
-        io.teoria.role: runtime
-    restart: unless-stopped
-    command:
-    - run
-    - --server
-    - --addr=0.0.0.0:8181
-    - --log-format=json
-    - --config-file=/config/opa_config.yaml
-    - --set-file=keys.teoria.key=/keys/public.pem
-    environment:
-      TEORIA_ENVIRONMENT: production
-      TEORIA_OPA_CONTROL_PLANE_TOKEN: ${TEORIA_OPA_CONTROL_PLANE_TOKEN:?set TEORIA_OPA_CONTROL_PLANE_TOKEN}
-    volumes:
-    - opa-signing-keys:/keys:ro
-    - opa-state:/var/lib/opa
-    depends_on:
-      policy-control-plane:
-        condition: service_healthy
-    healthcheck:
-      test:
-      - CMD
-      - curl
-      - --fail
-      - --silent
-      - http://localhost:8181/health?bundles=true&plugins=true
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    expose:
-    - '8181'
-  policy-control-plane:
-    cpus: 0.5
-    mem_limit: 256m
-    image: ${TEORIA_IMAGE_PREFIX:-}teoria-platform-authoring:${TEORIA_IMAGE_TAG:-latest}
-    build:
-      context: ../..
-      dockerfile: backend/Dockerfile
-      target: authoring
-      labels:
-        io.teoria.project: teoria
-        io.teoria.role: authoring
-    restart: unless-stopped
-    command:
-    - teoria-policy-control-plane
-    environment:
-      TEORIA_ENVIRONMENT: production
-      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
-      TEORIA_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_DATABASE_CONCURRENCY_LIMIT:-10}
-      TEORIA_OPA_CONTROL_PLANE_TOKEN: ${TEORIA_OPA_CONTROL_PLANE_TOKEN:?set TEORIA_OPA_CONTROL_PLANE_TOKEN}
-      TEORIA_OPA_BUNDLE_PATH: /var/lib/teoria/opa/teoria.tar.gz
-    volumes:
-    - opa-bundles:/var/lib/teoria/opa:ro
-    healthcheck:
-      test:
-      - CMD
-      - python
-      - -c
-      - import urllib.request; urllib.request.urlopen('http://localhost:8002/health')
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    expose:
-    - '8002'
-  postgres-init:
-    cpus: 0.5
-    mem_limit: 256m
-    image: postgres:17
-    command:
-    - sh
-    - -ec
-    - |
-      psql --set=ON_ERROR_STOP=1 \
-        --set=runtime_password="$${TEORIA_LOCAL_RUNTIME_DB_PASSWORD}" \
-        --set=metadata_password="$${TEORIA_METADATA_DB_PASSWORD}" <<'SQL'
-      SELECT format('CREATE ROLE teoria_runtime LOGIN PASSWORD %L', :'runtime_password')
-      WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_runtime')
-      \gexec
-      ALTER ROLE teoria_runtime PASSWORD :'runtime_password';
-      ALTER ROLE teoria_runtime SET statement_timeout = '30s';
-      SELECT format('CREATE ROLE teoria_metadata LOGIN PASSWORD %L', :'metadata_password')
-      WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_metadata')
-      \gexec
-      ALTER ROLE teoria_metadata PASSWORD :'metadata_password';
-      ALTER ROLE teoria_metadata SET statement_timeout = '60s';
-      GRANT CONNECT ON DATABASE teoria_data TO teoria_metadata;
-      SQL
-    environment:
-      PGHOST: postgres
-      PGPORT: 5432
-      PGDATABASE: teoria_data
-      PGUSER: teoria_pipeline
-      PGPASSWORD: ${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}
-      TEORIA_LOCAL_RUNTIME_DB_PASSWORD: ${TEORIA_LOCAL_RUNTIME_DB_PASSWORD:?set TEORIA_LOCAL_RUNTIME_DB_PASSWORD}
-      TEORIA_METADATA_DB_PASSWORD: ${TEORIA_METADATA_DB_PASSWORD:-teoria_local_metadata}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    profiles:
-    - jobs
   platform-postgres-init:
     cpus: 0.5
     mem_limit: 256m
@@ -365,39 +233,28 @@ services:
     command:
     - sh
     - -ec
-    - |
-      psql --set=ON_ERROR_STOP=1 \
-        --set=teoria_app_password="$${TEORIA_LOCAL_APP_DB_PASSWORD}" \
-        --set=prefect_password="$${TEORIA_LOCAL_PREFECT_DB_PASSWORD}" \
-        --set=openmetadata_password="$${OPENMETADATA_DB_PASSWORD}" <<'SQL'
-      SELECT format('CREATE ROLE teoria_app LOGIN PASSWORD %L', :'teoria_app_password')
-      WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_app')
-      \gexec
-      ALTER ROLE teoria_app PASSWORD :'teoria_app_password';
-      SELECT format('CREATE ROLE prefect LOGIN PASSWORD %L', :'prefect_password')
-      WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'prefect')
-      \gexec
-      ALTER ROLE prefect PASSWORD :'prefect_password';
-      SELECT format('CREATE ROLE openmetadata_user LOGIN PASSWORD %L', :'openmetadata_password')
-      WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openmetadata_user')
-      \gexec
-      ALTER ROLE openmetadata_user PASSWORD :'openmetadata_password';
-      SELECT 'CREATE DATABASE teoria_app OWNER teoria_app'
-      WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'teoria_app')
-      \gexec
-      SELECT 'CREATE DATABASE prefect OWNER prefect'
-      WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'prefect')
-      \gexec
-      SELECT 'CREATE DATABASE openmetadata_db OWNER openmetadata_user'
-      WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'openmetadata_db')
-      \gexec
-      REVOKE CONNECT ON DATABASE teoria_app FROM PUBLIC;
-      GRANT CONNECT ON DATABASE teoria_app TO teoria_app, platform_admin;
-      REVOKE CONNECT ON DATABASE prefect FROM PUBLIC;
-      GRANT CONNECT ON DATABASE prefect TO prefect, platform_admin;
-      REVOKE CONNECT ON DATABASE openmetadata_db FROM PUBLIC;
-      GRANT CONNECT ON DATABASE openmetadata_db TO openmetadata_user, platform_admin;
-      SQL
+    - "psql --set=ON_ERROR_STOP=1 \\\n  --set=teoria_app_password=\"$${TEORIA_LOCAL_APP_DB_PASSWORD}\"\
+      \ \\\n  --set=prefect_password=\"$${TEORIA_LOCAL_PREFECT_DB_PASSWORD}\" \\\n\
+      \  --set=openmetadata_password=\"$${OPENMETADATA_DB_PASSWORD}\" <<'SQL'\nSELECT\
+      \ format('CREATE ROLE teoria_app LOGIN PASSWORD %L', :'teoria_app_password')\n\
+      WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'teoria_app')\n\\gexec\n\
+      ALTER ROLE teoria_app PASSWORD :'teoria_app_password';\nSELECT format('CREATE\
+      \ ROLE prefect LOGIN PASSWORD %L', :'prefect_password')\nWHERE NOT EXISTS (SELECT\
+      \ 1 FROM pg_roles WHERE rolname = 'prefect')\n\\gexec\nALTER ROLE prefect PASSWORD\
+      \ :'prefect_password';\nSELECT format('CREATE ROLE openmetadata_user LOGIN PASSWORD\
+      \ %L', :'openmetadata_password')\nWHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE\
+      \ rolname = 'openmetadata_user')\n\\gexec\nALTER ROLE openmetadata_user PASSWORD\
+      \ :'openmetadata_password';\nSELECT 'CREATE DATABASE teoria_app OWNER teoria_app'\n\
+      WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'teoria_app')\n\\\
+      gexec\nSELECT 'CREATE DATABASE prefect OWNER prefect'\nWHERE NOT EXISTS (SELECT\
+      \ 1 FROM pg_database WHERE datname = 'prefect')\n\\gexec\nSELECT 'CREATE DATABASE\
+      \ openmetadata_db OWNER openmetadata_user'\nWHERE NOT EXISTS (SELECT 1 FROM\
+      \ pg_database WHERE datname = 'openmetadata_db')\n\\gexec\nREVOKE CONNECT ON\
+      \ DATABASE teoria_app FROM PUBLIC;\nGRANT CONNECT ON DATABASE teoria_app TO\
+      \ teoria_app, platform_admin;\nREVOKE CONNECT ON DATABASE prefect FROM PUBLIC;\n\
+      GRANT CONNECT ON DATABASE prefect TO prefect, platform_admin;\nREVOKE CONNECT\
+      \ ON DATABASE openmetadata_db FROM PUBLIC;\nGRANT CONNECT ON DATABASE openmetadata_db\
+      \ TO openmetadata_user, platform_admin;\nSQL\n"
     environment:
       PGHOST: platform-postgres
       PGPORT: 5432
@@ -410,27 +267,6 @@ services:
     depends_on:
       platform-postgres:
         condition: service_healthy
-    profiles:
-    - jobs
-  postgres-migrate:
-    image: ${TEORIA_IMAGE_PREFIX:-}teoria-data-operations:${TEORIA_IMAGE_TAG:-latest}
-    build:
-      context: ../..
-      dockerfile: backend/Dockerfile
-      target: operations
-      labels:
-        io.teoria.project: teoria
-        io.teoria.role: operations
-    cpus: 1
-    mem_limit: 512m
-    command:
-    - teoria-pipelines
-    - migrate
-    - --migrations
-    - /app/backend/migrations/data
-    environment:
-      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
-      TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT:-10}
     profiles:
     - jobs
   app-postgres-migrate:
@@ -452,25 +288,6 @@ services:
     environment:
       TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
       TEORIA_DATABASE_CONCURRENCY_LIMIT: ${TEORIA_DATABASE_CONCURRENCY_LIMIT:-10}
-    profiles:
-    - jobs
-  opa-bundle-build:
-    cpus: 0.5
-    mem_limit: 256m
-    image: ${TEORIA_IMAGE_PREFIX:-}teoria-opa-bundle-builder:${TEORIA_IMAGE_TAG:-1.21.1}
-    build:
-      context: ../..
-      dockerfile: deploy/compose/opa/Dockerfile
-      target: bundle_builder
-      labels:
-        io.teoria.project: teoria
-        io.teoria.role: bundle_builder
-    restart: 'no'
-    environment:
-      TEORIA_OPA_BUNDLE_REVISION: ${TEORIA_OPA_BUNDLE_REVISION:-development}
-    volumes:
-    - opa-signing-keys:/keys
-    - opa-bundles:/bundle
     profiles:
     - jobs
   platform-check:
@@ -513,7 +330,7 @@ services:
     - ../../backend/contracts/ingestion/connectors:/app/backend/contracts/ingestion/connectors:ro
     - ../../backend/contracts/ingestion/pipelines:/app/backend/contracts/ingestion/pipelines:ro
     - ./prefect:/app/deploy/compose/prefect:ro
-    - ../k3s/prefect:/app/deploy/k3s/prefect:ro
+    - ../kubernetes/prefect:/app/deploy/kubernetes/prefect:ro
     - ../../backend/config:/app/backend/config:ro
     - ../../backend/verification_cases:/app/backend/verification_cases:ro
     - ../../backend/references:/app/backend/references:ro
@@ -527,8 +344,11 @@ volumes:
   postgres:
     name: ${COMPOSE_PROJECT_NAME}_data-db
   platform-postgres:
-    name: ${COMPOSE_PROJECT_NAME}_platform-db
-  prefect-redis: null
+    name: ${TEORIA_PLATFORM_DB_VOLUME_NAME:-${COMPOSE_PROJECT_NAME}_platform-db}
+    external: ${TEORIA_STORAGE_VOLUMES_EXTERNAL:-false}
+  prefect-redis:
+    name: ${TEORIA_PREFECT_REDIS_VOLUME_NAME:-${COMPOSE_PROJECT_NAME}_prefect-redis}
+    external: ${TEORIA_STORAGE_VOLUMES_EXTERNAL:-false}
   runtime-redis: null
   runtime-artifacts:
     name: ${COMPOSE_PROJECT_NAME}_runtime-artifacts
@@ -539,7 +359,8 @@ volumes:
   opa-state:
     name: ${COMPOSE_PROJECT_NAME}_opa-state
   openmetadata-search: null
-  # Legacy MLflow volume is retained for rollback; no service mounts it.
   mlflow-postgres: null
-  model-objects: null
+  model-objects:
+    name: ${TEORIA_MODEL_OBJECTS_VOLUME_NAME:-${COMPOSE_PROJECT_NAME}_model-objects}
+    external: ${TEORIA_STORAGE_VOLUMES_EXTERNAL:-false}
   model-release: null

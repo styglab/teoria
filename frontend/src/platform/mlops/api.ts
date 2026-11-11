@@ -22,7 +22,6 @@ export type ModelVersion = {
 };
 export type ModelCatalog = {
   model_name: string | null;
-  demo_model_name?: string;
   registered_models: Array<{
     name: string;
     description: string;
@@ -34,34 +33,22 @@ export type ModelCatalog = {
   next_page_token?: string;
   next_version_token?: string;
   items: ModelVersion[];
-  serving?: { status: string; model_name?: string; model_version?: number };
-  synthetic?: boolean;
 };
-export type InferenceService = {
-  id: string;
-  name: string;
-  endpoint: string;
-  method: string;
-  description: string;
-  model_name: string;
-  model_version?: number;
+export type ServingDeployment = {
+  deployment_id: string;
+  backend: string;
   status: string;
-  environment: string;
-  request_schema: {
-    properties: Record<
-      string,
-      { type: string; title?: string; minimum?: number; maximum?: number }
-    >;
-    required?: string[];
-  };
-  deployment_pipeline_id: string;
+  health: string;
+  endpoint: string;
+  specification: { model_name: string; model_version: number; image: string };
+  previous_specification?: Record<string, unknown>;
+  prefect_run_id: string;
 };
 export const modelOperationsApi = {
-  services: (signal?: AbortSignal) =>
-    getJson<{ items: InferenceService[] }>(
-      "/model-operations/services",
-      signal,
-    ),
+  deployments: (signal?: AbortSignal) =>
+    getJson<{ items: ServingDeployment[] }>("/model-operations/deployments", signal),
+  predict: (id: string, body: unknown) =>
+    postJson<unknown>(`/model-operations/deployments/${encodeURIComponent(id)}/predict`, body),
   status: (signal?: AbortSignal) =>
     getJson<{ enabled: boolean }>("/model-operations/status", signal),
   pipelines: (

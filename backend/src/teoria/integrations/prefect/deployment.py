@@ -64,20 +64,6 @@ def positive_setting(name: str, default: int) -> int:
     return value
 
 
-def docker_job_template(pool: dict) -> dict:
-    """Keep credentials as worker-side references in the persisted pool template."""
-    from prefect_docker.worker import DockerWorker
-
-    template = DockerWorker.get_default_base_job_template()
-    properties = template["variables"]["properties"]
-    for key, value in pool["job_defaults"].items():
-        properties[key]["default"] = value
-    properties["image"]["default"] = os.environ[pool["image_env"]]
-    properties["networks"]["default"] = [os.environ[pool["network_env"]]]
-    properties["env"]["default"] = pool["environment"]
-    return template
-
-
 async def configure_pool(
     client, *, backend: str, kind: str, pipeline_root: Path | None = None
 ) -> str:
@@ -95,8 +81,6 @@ async def configure_pool(
         )
         if pool["type"] == "kubernetes":
             template = kubernetes_job_template(root, secret_name=pool["job_secret"])
-        elif pool["type"] == "docker":
-            template = docker_job_template(pool)
         elif pool["type"] == "process":
             template = ProcessWorker.get_default_base_job_template()
         else:

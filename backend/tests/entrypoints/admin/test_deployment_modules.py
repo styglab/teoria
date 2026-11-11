@@ -51,7 +51,7 @@ def test_workflow_selection_does_not_offer_disabled_feature_runs():
     mlops = workflow_catalog(
         True, semantic_enabled=False, formatid_enabled=False, legal_enabled=False
     )
-    assert set(mlops) == {"demo-customer-churn-pipeline"}
+    assert set(mlops) == {"model-train", "model-deploy", "model-stop"}
     formatid = workflow_catalog(
         False, semantic_enabled=False, formatid_enabled=True, legal_enabled=False
     )

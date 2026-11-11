@@ -88,9 +88,10 @@ def selected_pools() -> set[str]:
         "legal_information": os.getenv("TEORIA_LEGAL_INFORMATION_ENABLED") == "true",
         "specification_processing": os.getenv("TEORIA_FORMATID_ENABLED") == "true",
     }
-    return set().union(
+    selected = set().union(
         *(names for feature, names in policies.items() if enabled.get(feature, False))
     )
+    return selected
 
 
 async def set_paused(

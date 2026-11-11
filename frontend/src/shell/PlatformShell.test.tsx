@@ -153,30 +153,11 @@ function mockWorkspace(modelEnabled = true) {
     items: [],
     runs: [],
   });
-  vi.spyOn(modelOperationsApi, "services").mockResolvedValue({
-    items: [
-      {
-        id: "customer-churn",
-        name: "고객 이탈 예측",
-        endpoint: "/inference-api/predict",
-        method: "POST",
-        description: "합성 검증",
-        model_name: "demo",
-        model_version: 1,
-        status: "ok",
-        environment: "검증",
-        deployment_pipeline_id: "demo-deploy-customer-churn",
-        request_schema: { properties: {}, required: [] },
-      },
-    ],
-  });
+  vi.spyOn(modelOperationsApi, "deployments").mockResolvedValue({ items: [] });
   vi.spyOn(modelOperationsApi, "models").mockResolvedValue({
     model_name: "demo",
-    demo_model_name: "demo",
     registered_models: [],
     items: [],
-    serving: { status: "ok", model_version: 1 },
-    synthetic: true,
   });
 }
 test("registry and serving routes have separate menus and screens", async () => {
@@ -194,10 +175,10 @@ test("registry and serving routes have separate menus and screens", async () => 
   ).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole("link", { name: "추론 서비스" }));
   expect(
-    await screen.findByRole("heading", { name: "추론 서비스", level: 2 }),
+    await screen.findByRole("heading", { name: "모델 서빙", level: 1 }),
   ).toBeInTheDocument();
-  fireEvent.click(await screen.findByRole("button", { name: "추론 테스트" }));
-  expect(screen.getByRole("button", { name: "추론 실행" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "추론 테스트" })).not.toBeInTheDocument();
+  expect(screen.queryByText("고객 이탈 예측")).not.toBeInTheDocument();
   expect(
     screen.queryByRole("heading", { name: "등록 모델 버전" }),
   ).not.toBeInTheDocument();

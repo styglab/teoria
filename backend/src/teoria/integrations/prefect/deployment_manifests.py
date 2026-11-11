@@ -11,7 +11,7 @@ DEPLOYMENT_FILES = {
     "model-operations": "model_operations.yaml",
     "metadata": "metadata_management.yaml",
 }
-DEPLOYMENT_ENVIRONMENTS = {"process": "compose", "kubernetes": "k3s"}
+DEPLOYMENT_ENVIRONMENTS = {"process": "compose", "kubernetes": "kubernetes"}
 
 
 def deployment_directory(pipeline_root: Path, backend: str = "process") -> Path:

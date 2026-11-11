@@ -94,5 +94,8 @@ def test_retired_training_pool_drains_but_never_resumes(monkeypatch):
     policies = maintenance.pool_policies()
     assert "teoria-model-training" in set().union(*policies.values())
     selected = maintenance.selected_pools()
-    assert "teoria-model-training-docker" in selected
+    assert "teoria-model-operations" in selected
+    assert "teoria-model-training-docker" not in selected
+    monkeypatch.setenv("TEORIA_MODEL_DEMO_ENABLED", "true")
+    assert "teoria-model-training-docker" not in maintenance.selected_pools()
     assert "teoria-model-training" not in selected

@@ -1,5 +1,3 @@
-import { customerChurnTest } from "../../examples/customer_churn/PredictionForm";
-import { customerChurnApi } from "../../examples/customer_churn/api";
 import {
   cleanup,
   fireEvent,
@@ -10,7 +8,7 @@ import {
 import { afterEach, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ModelOperations } from "./ModelOperations";
-import { modelOperationsApi, type InferenceService } from "./api";
+import { modelOperationsApi } from "./api";
 import {
   workflowsApi,
   type Pipeline,
@@ -39,32 +37,6 @@ const pipeline: Pipeline = {
       schedule: { cron: "0 5 * * *", timezone: "Asia/Seoul" },
     },
   ],
-};
-export const service: InferenceService = {
-  id: "customer-churn",
-  name: "고객 이탈 예측",
-  endpoint: "/inference-api/predict",
-  method: "POST",
-  description: "합성 검증",
-  model_name: "demo",
-  model_version: 2,
-  status: "ok",
-  environment: "검증",
-  deployment_pipeline_id: "demo-deploy-customer-churn",
-  request_schema: {
-    properties: {
-      tenure_months: { type: "integer", minimum: 1, maximum: 72 },
-      monthly_spend: { type: "number", minimum: 0 },
-      login_days_30d: { type: "integer", minimum: 0, maximum: 30 },
-      support_tickets_30d: { type: "integer", minimum: 0 },
-    },
-    required: [
-      "tenure_months",
-      "monthly_spend",
-      "login_days_30d",
-      "support_tickets_30d",
-    ],
-  },
 };
 const detail: RunDetail = {
   run: {
@@ -110,17 +82,14 @@ function setup() {
     total: 0,
   });
   vi.spyOn(workflowsApi, "runDetail").mockResolvedValue(detail);
-  vi.spyOn(modelOperationsApi, "services").mockResolvedValue({
-    items: [service],
-  });
+  vi.spyOn(modelOperationsApi, "deployments").mockResolvedValue({ items: [] });
   vi.spyOn(modelOperationsApi, "models").mockImplementation(
     async (options) => ({
       model_name: options?.model || "demo",
-      demo_model_name: "demo",
       registered_models: [
         {
           name: "demo",
-          description: "Churn",
+          description: "Classification",
           aliases: [],
           latest_versions: [{ version: "2" }],
         },
@@ -141,8 +110,6 @@ function setup() {
           metrics: { rmse: 1.2 },
         },
       ],
-      serving: { status: "ok", model_name: "demo", model_version: 2 },
-      synthetic: true,
     }),
   );
 }
@@ -252,31 +219,6 @@ it("browses models in the sidebar and shows metrics on the versions tab", async 
     expect.any(AbortSignal),
   );
 });
-it("shows inference test fields from the selected service schema", async () => {
-  setup();
-  const predict = vi.spyOn(customerChurnApi, "predict").mockResolvedValue({
-    churn_probability: 0.4,
-    predicted_churn: false,
-    model_version: 2,
-    synthetic_demo_only: true,
-  });
-  render(
-    <MemoryRouter>
-      <ModelOperations view="serving" renderInferenceTest={customerChurnTest} />
-    </MemoryRouter>,
-  );
-  fireEvent.click(await screen.findByRole("button", { name: "추론 테스트" }));
-  fireEvent.click(screen.getByRole("button", { name: "추론 실행" }));
-  await waitFor(() =>
-    expect(predict).toHaveBeenCalledWith({
-      tenure_months: 12,
-      monthly_spend: 50,
-      login_days_30d: 8,
-      support_tickets_30d: 3,
-    }),
-  );
-  expect(await screen.findByText(/합성 고객 이탈 확률 40.0%/)).toBeTruthy();
-});
 it("keeps automatic deployment opt-in in the run dialog", async () => {
   setup();
   vi.mocked(workflowsApi.pipelines).mockResolvedValue({
@@ -284,7 +226,7 @@ it("keeps automatic deployment opt-in in the run dialog", async () => {
     items: [
       {
         ...pipeline,
-        id: "demo-customer-churn-pipeline",
+        id: "training-pipeline",
         name: "모델 학습·배포",
         category: "모델",
         input_kind: "model",
@@ -295,7 +237,7 @@ it("keeps automatic deployment opt-in in the run dialog", async () => {
   const run = vi
     .spyOn(workflowsApi, "run")
     .mockResolvedValue({ flow_run_id: "run-1", name: "demo-run" });
-  renderPipeline("/?pipeline=demo-customer-churn-pipeline");
+  renderPipeline("/?pipeline=training-pipeline");
   fireEvent.click(await screen.findByRole("button", { name: "수동 실행" }));
   const checkbox = await screen.findByRole("checkbox", {
     name: /평가 통과 후 자동 배포/,
@@ -305,7 +247,7 @@ it("keeps automatic deployment opt-in in the run dialog", async () => {
   fireEvent.click(screen.getByRole("button", { name: "실행 요청" }));
   await waitFor(() =>
     expect(run).toHaveBeenCalledWith(
-      "demo-customer-churn-pipeline",
+      "training-pipeline",
       expect.any(String),
       { deploy: true },
     ),
@@ -333,4 +275,32 @@ it("browses a model registry without an example or inference service", async () 
   );
   expect(await screen.findByText("Revenue forecast")).toBeTruthy();
   expect(screen.getByText("연결된 서비스 없음")).toBeTruthy();
+});
+
+it("shows serving versions from model-specific deployments", async () => {
+  setup();
+  vi.mocked(modelOperationsApi.deployments).mockResolvedValue({
+    items: [{
+      deployment_id: "forecast-production",
+      backend: "kubernetes",
+      status: "ready",
+      health: "ok",
+      endpoint: "http://forecast:8080",
+      specification: { model_name: "forecast", model_version: 2, image: "registry.example.com/forecast@sha256:abc" },
+      prefect_run_id: "deployment-run",
+    }],
+  });
+  render(<MemoryRouter initialEntries={["/?model=forecast"]}><ModelOperations view="models" /></MemoryRouter>);
+  expect(await screen.findByRole("link", { name: "서빙 배포 확인" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "버전" }));
+  expect(await screen.findByRole("cell", { name: "서비스 중" })).toBeTruthy();
+});
+
+it("keeps model details available when deployment lookup fails", async () => {
+  setup();
+  vi.mocked(modelOperationsApi.deployments).mockRejectedValue(new Error("deployment lookup unavailable"));
+  render(<MemoryRouter initialEntries={["/?model=forecast"]}><ModelOperations view="models" /></MemoryRouter>);
+  expect(await screen.findByText("Revenue")).toBeTruthy();
+  expect(await screen.findByText("서빙 상태 확인 필요")).toBeTruthy();
+  expect(screen.queryByText("연결된 서비스 없음")).toBeNull();
 });

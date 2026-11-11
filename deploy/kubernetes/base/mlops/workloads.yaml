@@ -1,0 +1,232 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-objects
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - name: minio
+        image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+        command:
+        - minio
+        - server
+        - /data
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_MINIO_ROOT_USER
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_MINIO_ROOT_PASSWORD
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 2Gi
+        ports:
+        - containerPort: 9000
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        readinessProbe:
+          httpGet:
+            path: /minio/health/live
+            port: 9000
+          periodSeconds: 5
+      automountServiceAccountToken: false
+      imagePullSecrets:
+      - name: teoria-registry
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: model-objects
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+spec:
+  selector:
+    app: minio
+  ports:
+  - port: 9000
+    targetPort: 9000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      containers:
+      - name: mlflow
+        image: teoria/mlflow:release
+        command:
+        - mlflow
+        - server
+        - --host
+        - 0.0.0.0
+        - --port
+        - '5000'
+        - --workers
+        - '1'
+        - --static-prefix
+        - /mlflow
+        - --serve-artifacts
+        - --artifacts-destination
+        - s3://teoria-models
+        env:
+        - name: MLFLOW_BACKEND_STORE_URI
+          valueFrom:
+            secretKeyRef:
+              name: model-control
+              key: MLFLOW_BACKEND_STORE_URI
+              optional: false
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: http://minio:9000
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_MINIO_ROOT_USER
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_MINIO_ROOT_PASSWORD
+        - name: MLFLOW_SERVER_ALLOWED_HOSTS
+          value: mlflow:5000,mlflow,localhost:5000,127.0.0.1:5000
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 2Gi
+        ports:
+        - containerPort: 5000
+        readinessProbe:
+          httpGet:
+            path: /mlflow/health
+            port: 5000
+          periodSeconds: 5
+      automountServiceAccountToken: false
+      imagePullSecrets:
+      - name: teoria-registry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+spec:
+  selector:
+    app: mlflow
+  ports:
+  - port: 5000
+    targetPort: 5000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-training-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-training-worker
+  template:
+    metadata:
+      labels:
+        app: model-training-worker
+    spec:
+      containers:
+      - name: model-training-worker
+        image: teoria/model-dispatcher:release
+        command:
+        - prefect
+        - worker
+        - start
+        - --pool
+        - teoria-model-operations
+        - --type
+        - process
+        - --limit
+        - '2'
+        env:
+        - name: TEORIA_APP_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_APP_DATABASE_URL
+              optional: false
+        - name: PREFECT_API_URL
+          value: http://prefect-server:4200/api
+        - name: PREFECT_API_AUTH_STRING
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_AUTH_STRING
+              optional: false
+        - name: TEORIA_MODEL_EXECUTION_BACKEND
+          value: kubernetes
+        - name: TEORIA_MODEL_KUBERNETES_NAMESPACE
+          value: teoria-models
+        - name: MLFLOW_TRACKING_URI
+          value: http://mlflow.teoria.svc:5000/mlflow
+        - name: TEORIA_MODEL_ALLOWED_REGISTRIES
+          valueFrom:
+            secretKeyRef:
+              name: model-control
+              key: TEORIA_MODEL_ALLOWED_REGISTRIES
+              optional: false
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 2Gi
+      automountServiceAccountToken: true
+      imagePullSecrets:
+      - name: teoria-registry
+      serviceAccountName: model-executor
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-executor

@@ -29,6 +29,10 @@ def compose_command(modules: list[str], env_file: Path, project: str) -> list[st
         "-f",
         str(ROOT / "compose.yaml"),
     ]
+    if set(modules) & {"semantic", "formatid"}:
+        command += ["-f", str(ROOT / "compose_data.yaml")]
+    if set(modules) & {"semantic", "formatid"}:
+        command += ["-f", str(ROOT / "compose_policy.yaml")]
     for module in MODULES:
         if module in modules:
             command += ["-f", str(ROOT / f"compose_{module}.yaml")]
@@ -164,6 +168,7 @@ def main() -> None:
                 "platform-postgres",
                 "prefect-redis",
                 "minio",
+                "image-registry",
                 "runtime-redis",
                 "openmetadata-search",
             )
@@ -177,7 +182,7 @@ def main() -> None:
             if "mlops" in modules:
                 required += [
                     ("mlflow-postgres-init", "TEORIA_MLFLOW_DB_PASSWORD"),
-                    ("demo-inference", "TEORIA_DEMO_INFERENCE_TOKEN"),
+                    ("image-registry", "REGISTRY_HTTP_SECRET"),
                 ]
             if "formatid" in modules:
                 required += [
@@ -227,6 +232,8 @@ def main() -> None:
                 )
 
         def job(name: str, extra: list[str] | None = None) -> None:
+            if name not in services:
+                return
             require_image(name)
             log_root = state_root / "logs"
             log_root.mkdir(exist_ok=True, mode=0o700)
@@ -473,7 +480,8 @@ def main() -> None:
             )
         elif args.action in {"stop", "down"}:
             quiesce()
-            call(command + ["--profile", "*", args.action, "--timeout", "60"])
+            call(command + ["--profile", "*", args.action, "--timeout", "60"]
+                 + (["--remove-orphans"] if args.action == "down" else []))
         elif args.action == "start":
             if not state.get("prepared"):
                 raise RuntimeError("Run deploy once to initialize this configuration")
@@ -492,8 +500,6 @@ def main() -> None:
         elif args.action == "deploy":
             if args.pull:
                 call(command + ["--profile", "*", "pull", *selected_images])
-            if "mlops" in modules:
-                require_image("model-training-job")
             if state and state.get("modules") != modules:
                 # Drain using the old module configuration before changing selection.
                 old = compose_command(

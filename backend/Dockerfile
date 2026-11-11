@@ -44,7 +44,7 @@ COPY --chown=teoria:teoria backend/references ./backend/references
 COPY --chown=teoria:teoria backend/verification_cases ./backend/verification_cases
 COPY --chown=teoria:teoria backend/migrations/data ./backend/migrations/data
 COPY --chown=teoria:teoria deploy/compose/prefect ./deploy/compose/prefect
-COPY --chown=teoria:teoria deploy/k3s/prefect ./deploy/k3s/prefect
+COPY --chown=teoria:teoria deploy/kubernetes/prefect ./deploy/kubernetes/prefect
 ENV TEORIA_PIPELINE_PATH=/app/backend
 
 FROM data-operations AS operations
@@ -114,26 +114,20 @@ USER teoria
 ENV TEORIA_PLATFORM_REGISTRY_PATH=/app/backend/contracts/runtime
 CMD ["teoria-pipelines", "validate-integration", "/app/backend", "--platform-registries", "/app/backend/contracts/runtime"]
 
-# Optional MLOps processes do not contain the document parser or Codex CLI.
-FROM data-operations AS model-worker
+# MLflow only: no Teoria application, Prefect, document parser or Codex CLI.
+FROM python:3.12-slim AS mlflow
+COPY --from=ghcr.io/astral-sh/uv:0.12.0 /uv /bin/uv
+ENV UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH"
+WORKDIR /app
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --project backend --locked --no-dev --extra api --group orchestration --group model-operations --no-editable
+    uv sync --locked --only-group mlflow-server --no-install-project --no-editable && \
+    useradd --create-home --uid 10001 teoria
 USER teoria
-CMD ["prefect", "worker", "start", "--pool", "teoria-model-deployment"]
+CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
 
 # Dispatchers create ephemeral training containers without passing Docker access to jobs.
 FROM data-operations AS model-dispatcher
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --locked --no-dev --group orchestration --group docker-orchestration --no-editable
-CMD ["prefect", "worker", "start", "--pool", "teoria-model-training-docker", "--type", "docker"]
-
-# Flow code and training dependencies are baked into each execution image.
-FROM model-worker AS model-training
-CMD ["python", "-m", "prefect.engine"]
-
-# Serving has its own dependency selection and release lifecycle.
-FROM base AS model-serving
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --project backend --locked --no-dev --extra api --group model-serving --no-editable
-USER teoria
-CMD ["teoria-demo-inference"]
+CMD ["prefect", "worker", "start", "--pool", "teoria-model-operations", "--type", "process"]

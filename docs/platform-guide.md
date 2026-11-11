@@ -56,14 +56,26 @@ Draft를 검토·승인·게시하며 게시한 revision은 직접 수정하지 
 **파이프라인**은 허용된 실행·스케줄·취소 요청을 관리한다.
 **연결 및 설정**은 서비스 연결과 인증 상태를 보여준다.
 별도 선택 영역인 **MLOps**에서 모델·버전·평가를 조회한다.
-합성 고객 이탈 학습·배포·추론은 연결된 예제이며 임의 업무 모델의 배포 기능은 아니다.
-Compose에서는 학습마다 전용 컨테이너를 실행하고, 별도 이미지의 추론 서비스를 운영한다.
+MLOps는 업무 종류와 무관하게 모델을 운영한다. 학습 파라미터·평가는 MLflow에서, 서빙 상태는 모델별 배포 목록에서 조회한다.
+추론 결과를 업무 판단·승인에 사용하는 기능은 해당 도메인과 업무 앱이 맡는다.
+Compose에서는 공통 Worker가 학습마다 전용 컨테이너를 실행하고, 배포 요청에 따라 모델별 서빙 컨테이너를 생성한다.
 
 물품 2.0.0의 마지막 운영 검증 상태는 Draft이며 현재 상태는 재확인이 필요하다.
 의미 비교나 승인 API 구현만으로 실제 물품 Runtime이 활성화되지는 않는다.
 기존 공고·계약·기업 분석과 구형 첨부 자동 수집은 비활성 보관 상태다.
 전체 구현 범위는 [로드맵](roadmap.md), URL과 권한은 [관리 화면 참조](platform/admin_ui.md)를 읽는다.
 
-공통 운영의 **컨테이너 이미지**에서는 연결한 Registry의 플랫폼·학습·서빙 repository와
+개발 Compose의 이미지 등록은 기존 웹 주소 `localhost:8081`을 사용한다. Registry의 `/v2/` 요청은 Nginx가 내부로 전달하며, 운영 Kubernetes는 공통 Ingress·TLS 체계에서 Registry 호스트를 제공한다.
+
+공통 운영의 **컨테이너 이미지**에서는 MLOps에 포함한 Registry의 모델 학습·서빙 repository와
 태그·검증된 digest 참조를 조회한다. [Registry 연결과 배포](deployment/image_registry.md)를 참고한다.
 현재 화면은 조회용이며 이미지 push·삭제·임의 외부 모델 실행을 수행하지 않는다.
+
+MLOps는 [공통 모델 실행 계약](deployment/model_execution.md)으로 외부 학습·서빙 이미지를 실행한다.
+이미지의 학습·서빙 실행 명령은 요청의 `command`에 명시한다.
+Compose 개발 환경과 Kubernetes는 같은 입력을 사용하며 실행 방식만 다르다.
+고객 이탈 샘플의 소스·Dockerfile·이미지는 [archive/customer_churn](../archive/customer_churn/README.md)에 보관한다.
+플랫폼 내부 예제 API·전용 Flow·테스트 폼과 구형 구현 보관본은 제거했으며 같은 이미지에서 학습과 서빙을 실행한다.
+
+Kubernetes는 [공통 base와 환경별 overlay](deployment/kubernetes.md)를 사용한다. 일반 클러스터는 generic,
+기존 EC2 K3s는 k3s overlay를 선택하며 모델 실행·API 계약은 같다. 운영 환경별 검증 여부는 별도로 기록한다.

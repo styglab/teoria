@@ -1,4 +1,5 @@
 # Custom 
+/archive/customer_churn/
 /archive/kory_parser/verification/
 ##archive/*
 ##!archive/kory_parser/
@@ -316,3 +317,6 @@ backend/references/**
 # Private Docker registry login material; keep only the mount directory guide.
 /deploy/compose/docker_auth/*
 !/deploy/compose/docker_auth/README.md
+
+# Private local Compose credentials, development certificates and Docker authentication.
+/deploy/compose/.local/

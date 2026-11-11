@@ -16,6 +16,11 @@ export function ModelOperationsOverview({
     (signal) => modelOperationsApi.models(undefined, signal),
     { enabled: availability.enabled },
   );
+  const deployments = useServerQuery(
+    ["mlops", "deployments"],
+    (signal) => modelOperationsApi.deployments(signal),
+    { enabled: availability.enabled },
+  );
   const catalog = result.data;
   const error = result.error;
   if (!availability.enabled && !showDisabled) return null;
@@ -61,10 +66,10 @@ export function ModelOperationsOverview({
               <div>
                 <dt>추론 서비스</dt>
                 <dd>
-                  {catalog?.serving?.status === "ok"
-                    ? `정상 · v${catalog.serving?.model_version}`
-                    : catalog
-                      ? "상태 확인 필요"
+                  {deployments.error
+                    ? "상태 확인 필요"
+                    : deployments.data
+                      ? `${deployments.data.items.filter((item) => item.status === "ready" && item.health === "ok").length}개 정상`
                       : "확인 중"}
                 </dd>
               </div>

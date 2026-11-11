@@ -1,4 +1,3 @@
-import { customerChurnTest } from "../examples/customer_churn/PredictionForm";
 import { lazy, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { WorkspaceFrame } from "../components/workspace/WorkspaceLayout";
@@ -131,7 +130,6 @@ export function WorkspaceRoutes({
         element={workspacePage(
           <ModelOperations
             view="serving"
-            renderInferenceTest={customerChurnTest}
           />,
           true,
         )}

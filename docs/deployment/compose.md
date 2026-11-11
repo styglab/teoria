@@ -6,29 +6,33 @@ Teoria는 공통 기반에 MLOps, Metadata·Ontology, FormatID를 조합한다.
 [Compose 배포 진입점](../../backend/src/teoria/entrypoints/compose_deployment.py)을 호출한다.
 K3s는 [별도 절차](k3s.md)를 사용한다. 아래 Compose 구성 검증을 실제 서비스나 EC2 배포 성공으로 기록하지 않는다.
 
-이미지 레지스트리의 독립 설치·Admin 조회·Registry 릴리스 배포는
-[이미지 Registry](image_registry.md)를 따른다. Registry는 모듈 서비스 수에 포함하지 않는다.
+모델 이미지 Registry는 MLOps에 포함하며 기존 Nginx의 `/v2/`로 접속한다. 인증·운영 TLS와 Admin 연결은
+[이미지 Registry](image_registry.md)를 따른다. 플랫폼 이미지는 기존 배포처에서 준비한다.
 
 ## 구성 선택
 
 | 선택 | 추가되는 상시 서비스 | 목적 |
 |---|---|---|
-| `core` | 공통 서비스 10개 | Web·Admin API·정책, Data/Application PostgreSQL, MinIO, Prefect·Redis |
-| `mlops` | 4개 | MLflow, 학습/평가·배포 Worker, 데모 추론 API |
-| `semantic` | 6개, 진단 활성 시 +1개 | Runtime·캐시, OpenMetadata·검색·ingestion Worker, 법령 Worker·선택형 진단 Worker |
-| `formatid` | 1개 | FormatID 규격서 전용 Worker·파서·Codex 실행 |
-| `--all` | 공통 포함 21개, 진단 활성 시 22개 | 위 세 기능을 모두 실행 |
+| `core` | 공통 서비스 7개 | Web·Admin API, Platform PostgreSQL, MinIO, Prefect Server·Services·Redis |
+| `mlops` | 3개 추가, 총 10개 | Image Registry, MLflow, 공통 모델 실행 Worker |
+| `semantic` | 9개, 진단 활성 시 +1개 | Data DB·정책 기반, Runtime·캐시, OpenMetadata·검색·ingestion Worker·법령 Worker |
+| `formatid` | 4개; Data DB·정책 기반은 Semantic과 공유 | Data DB·정책 기반, 규격서 전용 Worker |
+| `--all` | 공통 포함 20개, 진단 활성 시 21개 | 제품 모듈만 선택하며 예제는 포함하지 않음 |
 
-`compose.yaml`은 공통 기반, `compose_mlops.yaml`, `compose_semantic.yaml`,
-`compose_formatid.yaml`은 기능별 서비스와 Admin API 설정을 추가한다.
-공통 서비스는 같은 Compose 프로젝트에서 한 번만 생성한다.
-MLOps에는 모델 서빙이 포함되며 OpenMetadata·Semantic Runtime을 요구하지 않는다.
-MLOps 학습 Dispatcher는 요청마다 일회성 컨테이너를 만들며 상시 서비스 수에 학습 실행은 포함하지 않는다.
-`model-training-job`은 `jobs` profile의 학습 이미지 빌드 선언이며 초기화 작업으로 실행하지 않는다.
-`TEORIA_MODEL_TRAINING_IMAGE`와 `TEORIA_MODEL_SERVING_IMAGE`로 학습·서빙 이미지를 각각 지정한다.
-재현이 필요한 환경에서는 불변 tag 또는 digest를 사용한다. 학습 이미지 변경은 build·deploy 후 새 실행부터,
-서빙 이미지 변경은 Compose 서비스 재생성 후 적용된다. pool 기본값을 바꾸므로 실행 중 학습을 먼저 종료한다.
-기존 process pool `teoria-model-training`은 유지·pause하고 Deployment를 새 Docker pool에 연결한다.
+`compose.yaml`은 공통 기반이며 기능별 파일을 배포 진입점이 함께 선택한다.
+Data DB와 OPA·Policy Control Plane은 Semantic·FormatID에만 자동 포함한다.
+MLOps 단독은 기존 `platform-postgres`에서 플랫폼·Prefect·MLflow DB와 계정을 분리하고,
+기존 Data PostgreSQL과 데이터를 삭제하거나 이동하지 않는다. Admin bearer 인증은 유지한다.
+
+공통 학습 Worker는 process pool에서 실행을 조립하고, 등록한 외부 이미지의 일회성 컨테이너를 생성한다.
+모델별 Worker·고정 예제 서빙은 기본으로 만들지 않는다. 서빙 컨테이너는 모델 배포 요청 시 생성한다.
+실행 입력·자원·서빙·Kubernetes 대응은 [모델 실행 계약](model_execution.md)을 따른다.
+
+```bash
+bash deploy/compose/deploy.sh deploy --modules mlops
+```
+
+구성 변경은 기존 선택으로 `down` 후 새 선택으로 `deploy`한다. 기존 데이터 볼륨은 보존한다. `down`은 같은 Compose 프로젝트의 제거된 서비스 컨테이너도 정리하며 볼륨 삭제 옵션은 사용하지 않는다.
 
 기본·MLOps Admin 이미지는 Codex CLI를 포함하지 않고, Semantic·FormatID는 작성용 이미지로 확장한다.
 공통 Data DB migration도 파서·Codex가 없는 operations 이미지를 재사용한다.
@@ -71,8 +75,22 @@ bash deploy/compose/deploy.sh deploy --all
 프로젝트 이름은 기본 `teoria`이며 기존 운영 프로젝트 이름을 유지한다.
 필요한 경우 모든 명령에 동일한 `--project-name`을 사용한다.
 
+로컬 플랫폼 이미지는 모듈과 관계없이 `teoria-nginx`, `teoria-platform-admin`,
+`teoria-model-dispatcher`, `teoria-mlflow` 같은 이름을 사용한다. `--modules`는 실행할
+서비스를 선택하며 이미지 이름에 모듈 prefix를 붙이지 않는다. `TEORIA_IMAGE_PREFIX`는
+외부 Registry·조직 경로가 필요할 때 설정한다. Compose 프로젝트 이름은 컨테이너·네트워크·볼륨을 구분한다.
+현재 Teoria 이미지 태그는 `.env.example`의 `TEORIA_IMAGE_TAG=0.1.0`을 사용한다.
+외부 제품 이미지는 각 제품의 버전을 유지하며 모델 실행 요청은 이미지 digest를 지정한다.
+
+프로젝트 이름을 바꾸면서 기존 공통 저장소를 유지하려면 `TEORIA_PLATFORM_DB_VOLUME_NAME`,
+`TEORIA_PREFECT_REDIS_VOLUME_NAME`, `TEORIA_MODEL_OBJECTS_VOLUME_NAME`과 MLOps의
+`TEORIA_IMAGE_REGISTRY_VOLUME_NAME`에 실제 볼륨 이름을 지정하고
+`TEORIA_STORAGE_VOLUMES_EXTERNAL=true`로 설정한다. 이 설정은 이미 존재하는 해당 볼륨만 연결한다.
+기존 프로젝트를 볼륨 삭제 없이 종료한 뒤 새 프로젝트를 배포하며, 같은 DB 볼륨을 두 서버에서 동시에 열지 않는다.
+기본 프로젝트는 `teoria`이므로 Registry 컨테이너 이름도 `teoria-image-registry-1`이다.
+
 공통 Admin/Runtime/정책 credential, PostgreSQL, Prefect, MinIO 계정을 준비한다.
-MLOps는 MLflow DB 암호·데모 추론 token, FormatID는 별도 API/Worker 저장소 secret,
+MLOps는 Registry HTTP secret·인증 파일과 MLflow DB 암호·허용 Registry 목록, FormatID는 별도 API/Worker 저장소 secret,
 Semantic은 Runtime token·법령 Provider key가 필요하다. 빠진 필수 값은 배포 전 검사한다.
 MinIO의 관리자 계정과 FormatID의 API·Worker 계정은 구분한다.
 
@@ -89,7 +107,7 @@ FormatID Codex 인증은 `specification-model-auth`, 자산 진단 인증은 `me
 작업은 `jobs` 프로필에 두며 일반 `up`에 포함하지 않는다.
 배포 명령이 다음 단계를 순서대로 실행한다.
 
-1. DB·MinIO·Redis·선택한 검색 엔진을 시작하고 healthcheck를 기다린다.
+1. 선택한 DB·MinIO·Redis·이미지 Registry·검색 엔진을 시작하고 healthcheck를 기다린다.
 2. DB 계정·권한, Data/Application migration과 OPA 서명 정책을 준비한다.
 3. 선택 기능의 bucket·계정, OpenMetadata migration·권한, Runtime artifact를 확인한다.
 4. API·Prefect·선택한 관리 서비스를 시작한다.

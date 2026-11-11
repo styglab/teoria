@@ -154,7 +154,7 @@ export const navigationItems: NavigationItem[] = [
   {
     path: navigationPaths.images,
     label: "컨테이너 이미지",
-    description: "플랫폼·학습·서빙 이미지와 버전 참조",
+    description: "모델 학습·서빙 이미지와 버전 참조",
     icon: Boxes,
     group: "common_operations",
     placement: "footer",

@@ -144,3 +144,118 @@ class ImageRegistryClient:
                 item.get("platform", {}) for item in manifest.get("manifests", [])
             ],
         }
+
+
+def prepare_docker_archive(archive_path, directory, *, max_expanded_bytes=20*1024**3):
+    """Read a single docker-save image without extracting archive-controlled paths."""
+    import gzip
+    import json
+    from pathlib import Path, PurePosixPath
+    import tarfile
+
+    directory = Path(directory)
+    tar_path = directory / "image.tar"
+    with open(archive_path, "rb") as source:
+        compressed = source.read(2) == b"\x1f\x8b"
+        source.seek(0)
+        reader = gzip.GzipFile(fileobj=source) if compressed else source
+        total = 0
+        with tar_path.open("wb") as output:
+            while chunk := reader.read(1024*1024):
+                total += len(chunk)
+                if total > max_expanded_bytes:
+                    raise ValueError("expanded_image_archive_too_large")
+                output.write(chunk)
+    with tarfile.open(tar_path, "r:") as archive:
+        entries = {}
+        for index, member in enumerate(archive):
+            if index >= 50000:
+                raise ValueError("image_archive_has_too_many_members")
+            path = PurePosixPath(member.name)
+            if path.is_absolute() or ".." in path.parts or "\\" in member.name or not (member.isfile() or member.isdir()):
+                raise ValueError("unsafe_image_archive_member")
+            name = str(path)
+            if name in entries:
+                raise ValueError("duplicate_image_archive_member")
+            entries[name] = member
+        def member(name, limit):
+            item = entries.get(str(PurePosixPath(name)))
+            if not item or not item.isfile() or item.size > limit:
+                raise ValueError("invalid_image_archive_reference")
+            return archive.extractfile(item)
+        with member("manifest.json", 1024*1024) as stream:
+            manifests = json.load(stream)
+        if not isinstance(manifests, list) or len(manifests) != 1:
+            raise ValueError("upload_one_docker_save_image")
+        manifest = manifests[0]
+        with member(manifest['Config'], 1024*1024) as stream:
+            config = stream.read()
+        metadata = json.loads(config)
+        if metadata.get('os') != 'linux':
+            raise ValueError('only_linux_images_supported')
+        layers, diff_ids = manifest['Layers'], metadata['rootfs']['diff_ids']
+        if len(layers) != len(diff_ids) or len(layers) > 1000:
+            raise ValueError('invalid_image_layer_count')
+        config_path = directory / 'config.json'
+        config_path.write_bytes(config)
+        descriptors = [(config_path, {'mediaType':'application/vnd.oci.image.config.v1+json',
+            'digest':'sha256:'+hashlib.sha256(config).hexdigest(), 'size':len(config)})]
+        expanded_layers = 0
+        for index, name in enumerate(layers):
+            layer_path = directory / f'layer_{index}.tar.gz'
+            digest = hashlib.sha256()
+            with member(name, max_expanded_bytes) as stream:
+                compressed = stream.read(2) == b'\x1f\x8b'; stream.seek(0)
+                reader = gzip.GzipFile(fileobj=stream) if compressed else stream
+                with layer_path.open('wb') as output, gzip.GzipFile(fileobj=output,mode='wb',compresslevel=1,mtime=0) as writer:
+                    while chunk := reader.read(1024*1024):
+                        expanded_layers += len(chunk)
+                        if expanded_layers > max_expanded_bytes:
+                            raise ValueError('expanded_image_layers_too_large')
+                        digest.update(chunk); writer.write(chunk)
+            if 'sha256:'+digest.hexdigest() != diff_ids[index]:
+                raise ValueError('image_layer_checksum_mismatch')
+            digest = hashlib.sha256()
+            with layer_path.open('rb') as stream:
+                while chunk := stream.read(1024*1024):digest.update(chunk)
+            descriptors.append((layer_path, {'mediaType':'application/vnd.oci.image.layer.v1.tar+gzip',
+                'digest':'sha256:'+digest.hexdigest(),'size':layer_path.stat().st_size}))
+    manifest = {'schemaVersion':2,'mediaType':'application/vnd.oci.image.manifest.v1+json',
+                'config':descriptors[0][1],'layers':[d for _,d in descriptors[1:]]}
+    return descriptors, json.dumps(manifest,separators=(',',':')).encode()
+
+
+async def import_docker_archive(registry, archive_path, directory, repository, tag):
+    """Publish validated OCI content; the importer never executes the image or uses Docker."""
+    import asyncio
+    from urllib.parse import urljoin
+    if not re.fullmatch(REPOSITORY, repository) or not re.fullmatch(TAG, tag):
+        raise ValueError('invalid_image_destination')
+    descriptors, manifest = await asyncio.to_thread(prepare_docker_archive, archive_path, directory)
+    for path, descriptor in descriptors:
+        endpoint = registry.url+'/v2/'+repository+'/blobs/'+descriptor['digest']
+        response = await registry.client.head(endpoint, auth=registry.auth, timeout=30)
+        if response.status_code == 200:continue
+        if response.status_code != 404:response.raise_for_status()
+        response = await registry.client.post(registry.url+'/v2/'+repository+'/blobs/uploads/',
+                                              auth=registry.auth,content=b'',timeout=30)
+        response.raise_for_status()
+        upload = urljoin(registry.url+'/',response.headers['Location'])
+        target, origin = urlsplit(upload), urlsplit(registry.url)
+        if (target.scheme,target.netloc) != (origin.scheme,origin.netloc) or target.username or target.fragment or not target.path.startswith('/v2/'+repository+'/blobs/uploads/'):
+            raise ValueError('unsafe_registry_upload_location')
+        async def chunks():
+            with path.open('rb') as stream:
+                while data := await asyncio.to_thread(stream.read,1024*1024):yield data
+        response = await registry.client.put(upload+('&' if target.query else '?')+'digest='+descriptor['digest'],
+            auth=registry.auth,content=chunks(),headers={'Content-Type':'application/octet-stream','Content-Length':str(descriptor['size'])},timeout=900)
+        response.raise_for_status()
+        if response.headers.get('Docker-Content-Digest') != descriptor['digest']:
+            raise ValueError('registry_blob_checksum_mismatch')
+    response = await registry.client.put(registry.url+'/v2/'+repository+'/manifests/'+tag,
+        auth=registry.auth,content=manifest,headers={'Content-Type':'application/vnd.oci.image.manifest.v1+json'},timeout=60)
+    response.raise_for_status()
+    digest = 'sha256:'+hashlib.sha256(manifest).hexdigest()
+    if response.headers.get('Docker-Content-Digest') != digest:
+        raise ValueError('registry_manifest_checksum_mismatch')
+    return await registry.manifest(repository,digest)

@@ -156,7 +156,13 @@ class OpaPolicyEvaluator:
 
 def create_policy_evaluator(settings: Settings) -> PolicyEvaluator:
     if settings.policy_mode == "disabled":
-        if settings.environment == "production":
+        authenticated_management_only = (
+            not settings.semantic_modeling_enabled
+            and not settings.formatid_enabled
+            and settings.admin_auth_mode == "bearer"
+            and bool(settings.admin_api_token)
+        )
+        if settings.environment == "production" and not authenticated_management_only:
             raise RuntimeError("TEORIA_POLICY_MODE=opa is required in production")
         return DisabledPolicyEvaluator()
     return OpaPolicyEvaluator(

@@ -53,12 +53,9 @@ def validate_deployment_contracts(
                     )
                 )
             continue
-        if module == "teoria.examples.customer_churn.flows":
-            if deployment["entrypoint"].rsplit(".", 1)[-1] not in {
-                "seed_demo_customers", "train_demo_customer_churn", "deploy_demo_customer_churn", "customer_churn_pipeline"
-            } or "feature:model_operations" not in deployment.get("tags", []) or deployment.get("schedules"):
-                diagnostics.append(Diagnostic("invalid_model_operations_deployment",
-                    f"'{name}' must be an explicit manual model operations flow", path))
+        if module == "teoria.platform.mlops.flows":
+            if deployment["entrypoint"].rsplit(".", 1)[-1] not in {"train_model", "deploy_model", "stop_model"} or deployment.get("schedules"):
+                diagnostics.append(Diagnostic("invalid_model_operations_deployment", "model execution must be explicit", path))
             continue
         if module.startswith("teoria.platform.data.metadata.ingestion."):
             continue

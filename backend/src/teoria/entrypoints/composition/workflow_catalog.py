@@ -11,27 +11,22 @@ PIPELINES = {
     ),
     "specification-document-processing": ("규격서 표준 적용", "규격서", "manifest"),
     "specification-standard-workflow": ("규격서 표준관리", "규격서", "manifest"),
-    "demo-customer-churn-pipeline": ("고객 이탈 모델 학습·배포", "모델", "model"),
-}
-INTERNAL_PIPELINES = {
-    "demo-seed-customers": ("합성 고객 데이터 준비", "모델", "none"),
-    "demo-train-customer-churn": ("고객 이탈 모델 학습·평가", "모델", "none"),
-    "demo-deploy-customer-churn": ("고정 모델 버전 서빙 배포·복구", "모델", "version"),
+    "model-train": ("모델 이미지 학습", "모델", "training"),
+    "model-deploy": ("모델 이미지 서빙 배포", "모델", "serving"),
+    "model-stop": ("모델 이미지 서빙 중지", "모델", "stop-serving"),
 }
 
 
 def workflow_catalog(
     mlops_enabled: bool,
-    include_internal: bool = False,
     *,
     semantic_enabled: bool = True,
     formatid_enabled: bool = True,
     legal_enabled: bool = True,
 ):
-    items = {**PIPELINES, **(INTERNAL_PIPELINES if include_internal else {})}
     return {
         key: value
-        for key, value in items.items()
+        for key, value in PIPELINES.items()
         if {
             "모델": mlops_enabled,
             "메타데이터": semantic_enabled,

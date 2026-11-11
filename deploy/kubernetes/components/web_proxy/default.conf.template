@@ -1,0 +1,80 @@
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    "" close;
+}
+resolver ${TEORIA_DNS_RESOLVER} valid=10s;
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    client_max_body_size 40m;
+    location = /health {
+        access_log off;
+        default_type application/json;
+        return 200 '{"status":"ok"}';
+    }
+    location /admin-api/ {
+        set $api admin-api.teoria.svc.${TEORIA_CLUSTER_DOMAIN}:8001;
+        rewrite ^/admin-api/(.*)$ /$1 break;
+        proxy_pass http://$api;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+    location /runtime-api/ {
+        set $runtime runtime-api.teoria.svc.${TEORIA_CLUSTER_DOMAIN}:8000;
+        rewrite ^/runtime-api/(.*)$ /$1 break;
+        proxy_pass http://$runtime;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+    location = /_operations_auth {
+        internal;
+        set $prefect prefect-server.teoria.svc.${TEORIA_CLUSTER_DOMAIN}:4200;
+        proxy_pass http://$prefect/api/admin/version;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header Authorization $http_authorization;
+    }
+    location @operations_login {
+        add_header WWW-Authenticate 'Basic realm="Teoria operations"' always;
+        return 401;
+    }
+    location /mlflow/ {
+        auth_request /_operations_auth;
+        error_page 401 = @operations_login;
+        set $tracking mlflow.teoria.svc.${TEORIA_CLUSTER_DOMAIN}:5000;
+        proxy_pass http://$tracking;
+        proxy_set_header Host mlflow:5000;
+        proxy_set_header Authorization "";
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    }
+    location /prefect/api/ {
+        set $prefect_api prefect-server.teoria.svc.${TEORIA_CLUSTER_DOMAIN}:4200;
+        rewrite ^/prefect/api/(.*)$ /api/$1 break;
+        proxy_pass http://$prefect_api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+    location /prefect/ {
+        set $prefect_ui prefect-server.teoria.svc.${TEORIA_CLUSTER_DOMAIN}:4200;
+        proxy_pass http://$prefect_ui;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+    location / { try_files $uri /index.html; }
+}

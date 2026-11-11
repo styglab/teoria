@@ -18,11 +18,24 @@ AI/AIP는 예약 폴더만 있으며 미구현이다. 기존 기능별 LLM 호�
 | 법령 | 전용 Worker의 수집·시점 검색·진단 근거 조회 |
 | FormatID | 문서 입력·실행·결과·원문 근거·재처리·단계 상태·검증된 평가 근거 연결 |
 | 프런트엔드 기반 | Shell·라우트 분리, 소유 모듈별 API, TanStack Query·요청 취소·세션별 캐시 초기화 |
-| 별도 선택형 MLOps | 공통 모델·버전 조회; 고객 이탈 예제는 Compose의 실행별 학습 컨테이너·별도 서빙 이미지로 연결, K3s MLOps 미구현 |
+| 별도 선택형 MLOps | 외부 이미지 공통 실행 계약·MLflow 조회·모델별 서빙·중지·이전 설정 재배포; Compose Docker와 Kubernetes 실행 구현, K3s 실운영 미검증 |
 
-경량 Image Registry의 Compose·K3s 독립 배포 설정, 플랫폼 이미지 prefix·릴리스 게시·pull,
+모델 Image Registry를 Compose MLOps와 K3s 주 배포의 선택 옵션에 포함했다.
+Registry 내부 통신은 HTTP, 외부는 기존 Nginx·Ingress로 제공한다. Compose는 웹 포트의 `/v2/`, Kubernetes는 Registry 호스트와 공통 `teoria-tls`를 사용한다. 플랫폼 이미지는 기존 외부 배포처를 사용한다.
+MLflow 서버 이미지는 `teoria-mlflow`로 분리하고 서버 전용 의존성만 설치한다.
+고객 이탈 샘플은 `pyproject.toml`·`uv.lock`으로 의존성을 관리하며 Python 모듈 명령으로 실행한다.
+플랫폼 이미지 prefix·릴리스 게시·pull과
 Admin의 repository·tag·digest 조회를 추가했다. 격리 Docker에서 TLS·인증·이미지 게시·조회·보존을 검증했다.
-실제 K3s Registry 배포와 임의 외부 학습 이미지 실행 계약은 아직 검증·구현 범위에 포함하지 않는다.
+공통 학습·서빙 실행 계약을 구현했다. Compose 실컨테이너 검증과 K3s 운영 배포 검증은 구분하며,
+K3s 클러스터의 실제 배포·GPU·다중 노드 장애 복구는 별도 검증 대상이다.
+고객 이탈 전용 API·Flow·화면 연결과 이미지 빌드 target을 제거하고
+기존 전용 구현·테스트 보관본은 제거했다.
+현재 이미지 실행 계약을 따르는 독립 학습·서빙 샘플과 Dockerfile은
+[archive/customer_churn](../archive/customer_churn/README.md)에 보관한다.
+
+MLOps의 특정 예제 파라미터 목록·단일 모델 기본값·구형 추론 서비스 화면 연결을 제거했다.
+모델 레지스트리와 배포 목록의 조회를 분리하고 업무 앱·도메인·모델 운영의 책임 기준을 명시했다.
+실제 운영 배포 검증과 향후 AI 실행 기반 구현은 별도 범위다.
 
 ## 다음 순서
 
@@ -49,3 +62,9 @@ Admin의 repository·tag·digest 조회를 추가했다. 격리 Docker에서 TLS
 v1 사전 쓰기는 과거 평가·재현을 위한 호환 영역에 둔다.
 
 [아키텍처](architecture/overview.md) · [사용 안내](platform-guide.md) · [검증 기록](roadmap.md)
+
+Kubernetes 리소스·Prefect 정책을 배포판 독립 base로 옮기고 generic·K3s overlay를 분리했다.
+generic의 표준 Ingress·공유 스토리지 선택·UI 프록시와 공통 진입점의 K3s overlay를 검증한다.
+운영 클러스터별 Ingress·CSI·장애 복구 검증은 별도 범위다.
+
+K3s 별도 배포 폴더와 호환 스크립트를 제거하고 EC2 workflow·설치 설정·Secret 예시를 공통 Kubernetes 경로로 통합했다.

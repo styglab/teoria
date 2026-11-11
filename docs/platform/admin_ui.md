@@ -7,7 +7,7 @@
 platform/data/metadata, Ontology·Binding은 platform/ontology/authoring·platform/ontology/bindings,
 Capability는 platform/ontology/runtime, 인증은 platform/access_control에 둔다.
 FormatID 화면은 apps/formatid이며 플랫폼 정의와 분리한다.
-고객 이탈 테스트 폼은 `examples/customer_churn/`에 두고 shell이 공통 서빙 화면에 주입한다.
+고객 이탈 예제와 기존 테스트 폼은 `archive/customer_churn/`에 보관하며 활성 화면에 주입하지 않는다.
 라우팅·메뉴는 shell에서 조립하고 기존 URL을 유지한다. 미사용 governance 전체 자산 스캔 화면은 제거했다.
 
 ## 작업 공간과 공통 운영

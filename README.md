@@ -13,7 +13,7 @@
 | MLOps | 공통 모델 목록·버전·운영 API | `backend/src/teoria/platform/mlops/` |
 | 도메인 | 물품·법령의 업무 규칙과 처리 | `backend/src/teoria/domains/` |
 | 앱 | 플랫폼과 도메인을 이용하는 사용자 업무 | `backend/src/teoria/apps/formatid/` |
-| 예제 | 합성 고객 이탈 학습·배포·추론 | `backend/src/teoria/examples/customer_churn/` |
+| 예제 | 합성 고객 이탈 학습·배포·추론 | `archive/customer_churn/` |
 | 연결·조립 | 외부 서비스 연결, API·Worker 프로세스 구성 | `integrations/`, `entrypoints/` |
 
 OpenMetadata가 자산·스키마·용어를, Teoria가 업무 Ontology와 승인 이력을,

@@ -98,7 +98,7 @@ export function ImageRegistry() {
     >
       <PageHeader
         title="컨테이너 이미지"
-        description="플랫폼·학습·서빙 이미지와 고정된 버전 참조를 확인합니다."
+        description="모델 학습·서빙 이미지와 고정된 버전 참조를 확인합니다."
         actions={
           <button
             className="page-icon-button"

@@ -19,7 +19,7 @@ MLOps(`mlops/`)는 별도로 제공한다. AIP·Agent·Tool 실행 계층은 현
 | 업무 도메인 | 물품 추출·정규화·표현 연결, 법령 수집·검색 | `domains/` |
 | AI (예정) | 향후 AIP 예약 영역; 현재 실행 기능 없음 | `platform/ai/` |
 | MLOps | 공통 모델 목록·버전·운영 API | `platform/mlops/` |
-| 예제 | 합성 고객 이탈 데이터·학습·배포·추론 | `examples/customer_churn/` |
+| 예제 | 합성 고객 이탈 데이터·학습·배포·추론 | `archive/customer_churn/` |
 | 업무 앱 | 사용자 입력·권한 확인·업무 결과 제공 | `apps/formatid/` |
 
 ```mermaid
@@ -92,21 +92,35 @@ OpenMetadata entity 상태를 Teoria DB에 복제하지 않는다. 외부 자산
 
 구체적인 변경 위치는 [저장소 구조](repository-structure.md), 현재 범위는 [로드맵](../roadmap.md)을 읽는다.
 
-## MLOps 예제 실행 환경
+## MLOps 실행 환경
 
-Compose에서 Prefect Docker Worker가 학습 실행마다 전용 이미지의 컨테이너를 생성한다.
-서빙 이미지는 별도로 빌드·배포하고 MLflow의 고정 모델 버전과 checksum으로 로드한다.
-예제 업무 정책은 `examples/customer_churn/`, pool·자원·네트워크 정책은
-`deploy/compose/prefect/model_operations.yaml`, 공통 등록은 `integrations/prefect/`가 소유한다.
+모델 서빙의 배포·상태·추론 전달은 공통 플랫폼 기능으로 `platform/mlops/`가 소유한다.
+모델의 업무적 해석과 조치 규칙은 도메인, 업무 화면을 위한 API 조합은 `apps/`가 소유한다.
+`platform/ai/`는 현재 미구현 예약 영역이며 MLOps의 상위 계층으로 사용하지 않는다.
+자세한 판단 기준은 [업무 앱과 모델 운영의 경계](repository-structure.md#업무-앱과-모델-운영의-경계)를 따른다.
 
-[Palantir 모델 통합](https://www.palantir.com/docs/foundry/model-integration/overview/)의
-실행 환경·모델 버전·재현성 분리 원칙을 참고했다. Teoria는 Prefect·MLflow·Compose를 사용하며,
-Ontology를 학습 실행의 필수 조건으로 추가하지 않는다.
-[Prefect Docker Worker](https://reference.prefect.io/prefect_docker/worker/)의 실행별 컨테이너 방식을 사용한다.
-K3s MLOps 실행 경로와 실제 운영 배포 검증은 별도 작업이다.
+MLOps의 공통 계약은 외부 이미지 digest·실행 명령·S3 입력 checksum·출력 참조·자원과 고정 모델 버전을 받는다.
+계약과 Flow·배포 참조는 `platform/mlops/`, Docker·Kubernetes 실행은 `integrations/model_execution/`가 소유한다.
+Prefect는 실행 상태·실행 입력과 이력을 관리하고, Application DB의 `mlops.deployments`는 활성·이전 서빙 설정과
+요청 principal·Prefect 실행 참조를 관리한다. MLflow의 모델 버전·실험 본문은 복제하지 않는다.
 
-컨테이너 Image Registry는 모델 버전을 관리하는 MLflow Model Registry와 분리한다.
-이미지 파일은 Registry의 영구 저장 공간, 데이터·모델 산출물은 기존 객체 저장소가 소유한다.
-HTTP 연동은 `integrations/image_registry.py`, 인증된 조회는 `platform/mlops/image_registry_router.py`,
-Admin 조립은 composition이 맡는다. Registry 설치는 플랫폼 lifecycle과 독립된 선택형 기반이다.
-[이미지 Registry 설계·검증 범위](../deployment/image_registry.md)를 따른다.
+Compose는 공통 Worker가 일회성 Docker 학습 컨테이너와 모델별 서빙 컨테이너를 생성한다.
+Kubernetes에서는 같은 계약으로 학습 Job과 모델별 Deployment·Service를 생성한다.
+새 서빙의 준비 상태를 확인하고 실패 시 이전 배포를 복원한다. 배포·중지는 모델별 DB lock으로 직렬화한다.
+개발 Compose는 한 Docker 호스트를 사용하며 여러 노드의 자원 배치는 Kubernetes가 맡는다.
+
+고객 이탈 샘플의 소스·Dockerfile은 `archive/customer_churn/`에 보관한다. 플랫폼 내부 API·화면·Prefect 배포에서 제거하고 외부 이미지 실행 계약만 사용한다.
+MLOps 기본 구성은 예제 Data DB·별도 OPA 서비스를 시작하지 않으며 Admin bearer 인증을 유지한다.
+Platform PostgreSQL의 플랫폼·Prefect·MLflow DB와 계정을 분리한다.
+
+Image Registry는 Compose MLOps와 K3s MLOps에 포함한다. 모델 파일과 데이터는 MinIO, 실험·모델 버전은 MLflow,
+실행 이미지는 Registry가 소유한다. 플랫폼 자체 이미지는 외부 배포처·로컬 빌드로 준비한다.
+Registry 종료·재배포는 저장 볼륨을 삭제하지 않는다.
+
+[Palantir 모델 통합](https://www.palantir.com/docs/foundry/model-integration/overview/)의 외부 모델 연결·고정 버전·실행 추적 원칙을 참고한다.
+Teoria는 Prefect·MLflow의 권위를 유지하며 모델 실행을 Ontology의 필수 의존성으로 만들지 않는다.
+[모델 실행 계약·검증 범위](../deployment/model_execution.md)와 [이미지 Registry](../deployment/image_registry.md)를 따른다.
+
+Kubernetes 배포는 `deploy/kubernetes/base/`와 환경별 overlay로 분리한다. generic은 표준 Ingress와 기존 UI nginx를 사용하고,
+K3s는 기존 Traefik 경로와 PVC 설정을 보존하며 같은 배포 진입점에서 `--overlay k3s`로 선택한다. 공통 Prefect 실행 정책은 `deploy/kubernetes/prefect/`가 소유한다.
+공유 산출물의 다중 노드 접근·저장소 선택과 검증 범위는 [Kubernetes 배포](../deployment/kubernetes.md)를 따른다.

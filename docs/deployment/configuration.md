@@ -23,7 +23,8 @@ API·MCP extra와 Worker별 dependency group으로 실행 환경을 구분한다
 | DB 연결 상한 | Application DB `integrations/application_database/postgres.py`, Data DB `integrations/data_database/connection.py`의 환경변수 |
 | MCP | `backend/src/teoria/entrypoints/mcp/settings.py` |
 | Compose 서비스·포트·이미지·필수 인증 | `deploy/compose/compose*.yaml`, `.env.example` |
-| EC2 K3s·GitHub CD | `deploy/k3s/`, `.github/workflows/deploy_k3s.yaml` |
+| 공통 Kubernetes·환경 overlay | `deploy/kubernetes/` |
+| EC2 K3s·GitHub CD | `deploy/kubernetes/overlays/k3s/`, `.github/workflows/deploy_k3s.yaml` |
 
 쉘 환경변수가 env 파일보다 우선한다. Compose 밖의 실행은 `TEORIA_ENV_FILE`로 파일을
 선택한다. `TEORIA_ENVIRONMENT=production`에서 파일을 명시하지 않으면 작업 디렉터리의
@@ -57,7 +58,10 @@ Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할
 
 `deploy/compose/.env`에는 Compose가 실제로 참조하는 인증정보·계정, 배포 이미지 태그와
 의도적인 override만 둔다. `.env.example`은 같은 이름·기능별 구분으로 지원 입력과 기본값을 안내한다.
-예시의 모든 항목을 운영 `.env`에 남길 필요는 없다. 컨테이너 내부 경로·주소·인증 모드는
+예제의 앞부분에서 공통 필수값과 선택한 모듈의 필수값을 입력하고, 사용하지 않는 모듈 구간은 삭제한다.
+뒷부분의 선택 설정은 주석 상태로 두면 Compose 기본값을 사용한다. 변경할 항목만 주석을 해제한다.
+OpenMetadata 인증 토큰은 연결 대상의 인증 설정에 맞춰 지정하고, Registry 인증·TLS 파일은 별도로 준비한다.
+기존 배포의 DB 암호와 검증한 이미지 태그는 유지한다. 컨테이너 내부 경로·주소·인증 모드는
 `compose.yaml`이 소유하며 `.env`의 임의 변수가 자동으로 컨테이너에 전달되지는 않는다.
 호스트 직접 실행용 Settings와 비활성 Provider credential을 Compose 파일에 섞지 않는다.
 

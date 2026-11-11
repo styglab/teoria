@@ -1,5 +1,39 @@
-# Service modules are composed by deploy.sh; jobs run explicitly with --rm.
 services:
+  image-registry:
+    image: registry:3.1.2
+    restart: unless-stopped
+    cpus: 1
+    mem_limit: 512m
+    command:
+    - serve
+    - /etc/distribution/config.yaml
+    environment:
+      REGISTRY_HTTP_SECRET: ${TEORIA_IMAGE_REGISTRY_HTTP_SECRET:-}
+      OTEL_TRACES_EXPORTER: none
+    volumes:
+    - registry-data:/var/lib/registry
+    - type: bind
+      source: ${TEORIA_IMAGE_REGISTRY_CONFIG_FILE:-./registry/config.yaml}
+      target: /etc/distribution/config.yaml
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${TEORIA_IMAGE_REGISTRY_AUTH_FILE:-/secure/teoria-registry/htpasswd}
+      target: /run/registry/htpasswd
+      read_only: true
+      bind:
+        create_host_path: false
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - --quiet
+      - --spider
+      - http://127.0.0.1:5001/debug/health
+      interval: 10s
+      timeout: 5s
+      retries: 12
   mlflow-postgres-init:
     image: postgres:17
     cpus: 0.5
@@ -10,18 +44,30 @@ services:
     command:
     - sh
     - -ec
-    - |
-      psql --set=ON_ERROR_STOP=1 --set=mlflow_password="$${TEORIA_MLFLOW_DB_PASSWORD}" <<'SQL'
-      SELECT format('CREATE ROLE mlflow LOGIN PASSWORD %L', :'mlflow_password')
-      WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'mlflow')
+    - 'psql --set=ON_ERROR_STOP=1 --set=mlflow_password="$${TEORIA_MLFLOW_DB_PASSWORD}"
+      <<''SQL''
+
+      SELECT format(''CREATE ROLE mlflow LOGIN PASSWORD %L'', :''mlflow_password'')
+
+      WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ''mlflow'')
+
       \gexec
-      ALTER ROLE mlflow NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'mlflow_password';
-      SELECT 'CREATE DATABASE mlflow OWNER mlflow'
-      WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'mlflow')
+
+      ALTER ROLE mlflow NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :''mlflow_password'';
+
+      SELECT ''CREATE DATABASE mlflow OWNER mlflow''
+
+      WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = ''mlflow'')
+
       \gexec
+
       REVOKE CONNECT ON DATABASE mlflow FROM PUBLIC;
+
       GRANT CONNECT ON DATABASE mlflow TO mlflow, platform_admin;
+
       SQL
+
+      '
     environment:
       PGHOST: platform-postgres
       PGPORT: 5432
@@ -33,14 +79,14 @@ services:
       platform-postgres:
         condition: service_healthy
   mlflow:
-    image: ${TEORIA_IMAGE_PREFIX:-}teoria-model-worker:${TEORIA_IMAGE_TAG:-latest}
+    image: ${TEORIA_IMAGE_PREFIX:-}teoria-mlflow:${TEORIA_IMAGE_TAG:-latest}
     build:
       context: ../..
       dockerfile: backend/Dockerfile
-      target: model-worker
+      target: mlflow
       labels:
         io.teoria.project: teoria
-        io.teoria.role: model-worker
+        io.teoria.role: mlflow
     cpus: 1
     mem_limit: 2g
     restart: unless-stopped
@@ -92,26 +138,12 @@ services:
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
-      TEORIA_MODEL_TRAINING_IMAGE: ${TEORIA_MODEL_TRAINING_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-model-training:${TEORIA_IMAGE_TAG:-latest}}
       TEORIA_MODEL_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME}_default
     depends_on:
       prefect-server:
         condition: service_healthy
     profiles:
     - jobs
-  # Build the execution image without starting a permanent training container.
-  model-training-job:
-    image: ${TEORIA_MODEL_TRAINING_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-model-training:${TEORIA_IMAGE_TAG:-latest}}
-    build:
-      context: ../..
-      dockerfile: backend/Dockerfile
-      target: model-training
-      labels:
-        io.teoria.project: teoria
-        io.teoria.role: model-training
-    profiles: [jobs]
-    cpus: 2
-    mem_limit: 2g
   model-training-worker:
     image: ${TEORIA_IMAGE_PREFIX:-}teoria-model-dispatcher:${TEORIA_IMAGE_TAG:-latest}
     build:
@@ -122,25 +154,30 @@ services:
         io.teoria.project: teoria
         io.teoria.role: model-dispatcher
     user: root
-    cpus: 0.5
-    mem_limit: 512m
+    cpus: 1
+    mem_limit: 1g
     restart: unless-stopped
     command:
     - prefect
     - worker
     - start
     - --pool
-    - teoria-model-training-docker
+    - teoria-model-operations
     - --type
-    - docker
+    - process
     - --limit
-    - '1'
+    - '2'
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
       DOCKER_CONFIG: /run/docker-auth
-      TEORIA_PIPELINE_DATA_DATABASE_URL: ${TEORIA_PIPELINE_DATA_DATABASE_URL:-postgresql://teoria_pipeline:${TEORIA_LOCAL_DATA_DB_PASSWORD:-teoria_local_data}@postgres:5432/teoria_data}
       MLFLOW_TRACKING_URI: http://mlflow:5000/mlflow
+      TEORIA_APP_DATABASE_URL: postgresql://teoria_app:${TEORIA_LOCAL_APP_DB_PASSWORD:-teoria_local_app}@platform-postgres:5432/teoria_app
+      TEORIA_MODEL_EXECUTION_BACKEND: docker
+      TEORIA_COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+      TEORIA_MODEL_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME}_default
+      TEORIA_MODEL_ALLOWED_REGISTRIES: ${TEORIA_MODEL_ALLOWED_REGISTRIES:-}
+      TEORIA_MODEL_WORKLOAD_ENVIRONMENT: ${TEORIA_MODEL_WORKLOAD_ENVIRONMENT:-}
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
     - type: bind
@@ -152,64 +189,6 @@ services:
     depends_on:
       mlflow:
         condition: service_healthy
-  model-deployment-worker:
-    image: ${TEORIA_IMAGE_PREFIX:-}teoria-model-worker:${TEORIA_IMAGE_TAG:-latest}
-    user: root
-    cpus: 1
-    mem_limit: 1g
-    restart: unless-stopped
-    command:
-    - prefect
-    - worker
-    - start
-    - --pool
-    - teoria-model-deployment
-    - --limit
-    - '1'
-    environment:
-      PREFECT_API_URL: http://prefect-server:4200/api
-      PREFECT_API_AUTH_STRING: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
-      MLFLOW_TRACKING_URI: http://mlflow:5000/mlflow
-      TEORIA_DEMO_RELEASE_DIRECTORY: /app/model_release
-      TEORIA_COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
-      TEORIA_DEMO_INFERENCE_TOKEN: ${TEORIA_DEMO_INFERENCE_TOKEN:-}
-    volumes:
-    - model-release:/app/model_release
-    - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      mlflow:
-        condition: service_healthy
-  demo-inference:
-    image: ${TEORIA_MODEL_SERVING_IMAGE:-${TEORIA_IMAGE_PREFIX:-}teoria-model-serving:${TEORIA_IMAGE_TAG:-latest}}
-    build:
-      context: ../..
-      dockerfile: backend/Dockerfile
-      target: model-serving
-      labels:
-        io.teoria.project: teoria
-        io.teoria.role: model-serving
-    cpus: 1
-    mem_limit: 1g
-    restart: unless-stopped
-    command:
-    - teoria-demo-inference
-    labels:
-      io.teoria.role: demo-inference
-    environment:
-      MLFLOW_TRACKING_URI: http://mlflow:5000/mlflow
-      TEORIA_DEMO_RELEASE_DIRECTORY: /app/model_release
-      TEORIA_DEMO_INFERENCE_TOKEN: ${TEORIA_DEMO_INFERENCE_TOKEN:-}
-    volumes:
-    - model-release:/app/model_release:ro
-    healthcheck:
-      test:
-      - CMD
-      - python
-      - -c
-      - import urllib.request;urllib.request.urlopen('http://localhost:8003/live')
-      interval: 5s
-      timeout: 5s
-      retries: 30
   model-storage-init:
     image: ${TEORIA_IMAGE_PREFIX:-}teoria-storage-init:${TEORIA_IMAGE_TAG:-latest}
     build:
@@ -229,9 +208,10 @@ services:
     - /bin/sh
     - -ec
     command:
-    - |-
-      mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null
-      mc mb --ignore-existing local/teoria-models >/dev/null
+    - 'mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+      >/dev/null
+
+      mc mb --ignore-existing local/teoria-models >/dev/null'
     environment:
       MINIO_ROOT_USER: ${TEORIA_MINIO_ROOT_USER:?set TEORIA_MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${TEORIA_MINIO_ROOT_PASSWORD:?set TEORIA_MINIO_ROOT_PASSWORD}
@@ -243,4 +223,7 @@ services:
       TEORIA_MODEL_OPERATIONS_ENABLED: 'true'
       TEORIA_MODEL_MLFLOW_URL: http://mlflow:5000/mlflow
       TEORIA_MODEL_PREFECT_AUTH: ${TEORIA_PREFECT_USERNAME}:${TEORIA_PREFECT_PASSWORD}
-      TEORIA_DEMO_INFERENCE_TOKEN: ${TEORIA_DEMO_INFERENCE_TOKEN:-}
+volumes:
+  registry-data:
+    name: ${TEORIA_IMAGE_REGISTRY_VOLUME_NAME:-${COMPOSE_PROJECT_NAME:-teoria}_registry-data}
+    external: ${TEORIA_STORAGE_VOLUMES_EXTERNAL:-false}

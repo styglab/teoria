@@ -19,21 +19,21 @@ GitHub main → CI → GHCR의 commit SHA 이미지 → EC2 SSH → deploy.sh
 
 | 목적 | 기준 파일 |
 |---|---|
-| EC2 K3s 설치 설정 | `deploy/k3s/server_config.yaml` |
-| DB·캐시·검색·영속 볼륨 | `deploy/k3s/infrastructure/` |
-| OpenMetadata Server | `deploy/k3s/openmetadata/` |
-| API·UI·진단 Worker | `deploy/k3s/application/platform.yaml` |
-| OPA와 정책 관리 | `deploy/k3s/application/policy.yaml` |
-| Prefect와 수집 Worker | `deploy/k3s/application/prefect.yaml` |
-| HTTPS와 요청 경로 | `deploy/k3s/application/ingress.yaml` |
-| 순서가 있는 초기화·migration·등록 | `deploy/k3s/jobs/` |
-| 배포 순서·대기·실패 처리 | `deploy/k3s/deploy.sh` |
-| 환경별 인증정보의 키 목록 | `deploy/k3s/secrets.env.example` |
+| EC2 K3s 설치 설정 | `deploy/kubernetes/overlays/k3s/server_config.yaml` |
+| DB·캐시·검색·영속 볼륨 | `deploy/kubernetes/base/infrastructure/` |
+| OpenMetadata Server | `deploy/kubernetes/base/openmetadata/` |
+| API·UI·진단 Worker | `deploy/kubernetes/base/application/platform.yaml` |
+| OPA와 정책 관리 | `deploy/kubernetes/base/application/policy.yaml` |
+| Prefect와 수집 Worker | `deploy/kubernetes/base/application/prefect.yaml` |
+| HTTPS와 요청 경로 | `deploy/kubernetes/overlays/k3s/application/ingress.yaml` |
+| 순서가 있는 초기화·migration·등록 | `deploy/kubernetes/base/jobs/` |
+| 배포 순서·대기·실패 처리 | `deploy/kubernetes/deploy.sh --overlay k3s` |
+| 환경별 인증정보의 키 목록 | `deploy/kubernetes/secrets.env.example` |
 | 이미지 빌드·EC2 배포 | `.github/workflows/deploy_k3s.yaml` |
 
 Kustomize는 `kubectl`에 포함된 기능만 사용한다. Helmfile이나 별도 GitOps 서버는 필요하지 않다.
 MLflow·Argo CD·Harbor·GPU Operator·MinIO·S3는 이 초기 구성에 추가하지 않는다.
-선택형 경량 Registry는 기본 application 배포와 독립적으로 설치한다.
+모델 전용 경량 Registry는 주 배포 명령의 `--with-model-registry <hostname>`으로 함께 설치한다.
 [이미지 Registry](image_registry.md)에 설치·CI Registry 변경·Admin 조회 연결을 설명한다.
 규격서 MinIO 기본 저장소는 현재 Compose에 반영돼 있으며 K3s 연결·배포 검증은 별도다.
 모델 진단은 Codex subprocess를 사용하며 기본적으로 비활성화한다.
@@ -51,7 +51,7 @@ MLflow·Argo CD·Harbor·GPU Operator·MinIO·S3는 이 초기 구성에 추가�
 
 ```bash
 sudo install -d -m 700 /etc/rancher/k3s
-sudo install -m 600 deploy/k3s/server_config.yaml /etc/rancher/k3s/config.yaml
+sudo install -m 600 deploy/kubernetes/overlays/k3s/server_config.yaml /etc/rancher/k3s/config.yaml
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION='v1.37.1+k3s1' sh -s - server
 sudo k3s kubectl get nodes
 ```
@@ -80,7 +80,7 @@ GitHub 호스티드 runner가 SSH에 접근할 경로를 준비한다. 그 경�
 
 ```bash
 kubectl create namespace teoria
-cp deploy/k3s/secrets.env.example /secure/teoria-secrets.env
+cp deploy/kubernetes/secrets.env.example /secure/teoria-secrets.env
 chmod 600 /secure/teoria-secrets.env
 # 파일을 채운 다음 실행한다.
 kubectl -n teoria create secret generic teoria-secrets \
@@ -145,7 +145,7 @@ GitHub Environment `production`을 만들고 다음을 설정한다. 자동 배�
 - CI에서 K3s API 서버의 server dry-run으로 매니페스트를 검증한다.
 - `CI`가 성공한 `main` push만 이미지 빌드·배포한다. PR·fork 실행 결과는 배포하지 않는다.
 - 이미지 9종은 commit SHA tag로 저장한다. `latest`로 배포하지 않는다.
-- EC2에는 Git에 커밋된 `deploy/k3s/`만 전달한다. 비밀값은 GitHub에서 전송하지 않고
+- EC2에는 Git에 커밋된 `deploy/kubernetes/`를 전달한다. 비밀값은 GitHub에서 전송하지 않고
   사전 생성된 클러스터 Secret을 사용하며 수집 namespace에 필요한 키만 동기화한다.
 - GitHub concurrency와 EC2의 파일 lock으로 배포를 직렬화한다. 이미 더 최신 main이 있으면 과거 실행을 건너뛴다.
 - Secret 사전 확인 → DB·검색 준비 → 계정 초기화 → SQL migration → OPA bundle → 게시 artifact 확인 → API·Worker 갱신 → Prefect 등록 → API 동작 확인 순서다.
@@ -154,7 +154,7 @@ GitHub Environment `production`을 만들고 다음을 설정한다. 자동 배�
 관리 작업은 저장된 커밋 디렉터리에서 같은 스크립트로 실행한다.
 
 ```bash
-bash deploy/k3s/deploy.sh ghcr.io/owner/repository COMMIT_SHA teoria.example.com
+bash deploy/kubernetes/deploy.sh ghcr.io/owner/repository COMMIT_SHA teoria.example.com --overlay k3s
 ```
 
 API와 Worker는 단일 replica·Recreate 방식이므로 갱신 중 잠깐 중단될 수 있다.
@@ -169,7 +169,7 @@ Kubernetes Job이다. Docker socket·Docker daemon·Airflow를 요구하지 않�
 ## 정해진 자원 안에서 파이프라인 병렬 실행
 
 수집 Flow·Task와 `backend/config/specification_processing/prefect_deployments.yaml`의 기본 파라미터·스케줄은 공통이다.
-K3s Pool·Queue는 `deploy/k3s/prefect/`, namespace·자원·Secret 주입 정책은 그 안의 `execution.yaml`에서 읽는다.
+K3s Pool·Queue는 `deploy/kubernetes/prefect/`, namespace·자원·Secret 주입 정책은 그 안의 `execution.yaml`에서 읽는다.
 Compose는 기존 `teoria-ingestion` Process Worker 내부에서 실행한다. K3s는 등록 시
 work pool만 `teoria-ingestion-k3s`로 바꾸고, Kubernetes Worker가 실행마다 별도 Job을 만든다.
 Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.
@@ -178,7 +178,7 @@ Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.
 
 | 설정 | 기본값 | 변경 위치 |
 |---|---|---|
-| 수집 전체 requests 예산 | CPU 2·메모리 4Gi | `deploy/k3s/execution/resource_quota.yaml` |
+| 수집 전체 requests 예산 | CPU 2·메모리 4Gi | `deploy/kubernetes/base/execution/resource_quota.yaml` |
 | 수집 전체 limits 예산 | CPU 4·메모리 8Gi | 같은 ResourceQuota |
 | 작업당 requests | CPU 1·메모리 2Gi | 등록 Job의 `TEORIA_JOB_CPU_REQUEST`, `TEORIA_JOB_MEMORY_REQUEST` |
 | 작업당 limits | CPU 2·메모리 4Gi | 등록 Job의 `TEORIA_JOB_CPU_LIMIT`, `TEORIA_JOB_MEMORY_LIMIT` |
@@ -187,7 +187,7 @@ Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.
 
 공통 등록 명령은 `teoria-pipelines register --backend kubernetes --kind all`이다.
 작업당 기본값은 `backend/src/teoria/integrations/prefect/deployment.py`, 운영 override는
-`deploy/k3s/jobs/prefect-register.yaml`의 환경변수로 관리한다. Prefect work pool의
+`deploy/kubernetes/base/jobs/prefect-register.yaml`의 환경변수로 관리한다. Prefect work pool의
 base job template에 등록되며, Deployment의 `work_pool.job_variables`로 작업별 CPU·메모리를
 다르게 지정할 수도 있다. 등록 Job이 원본 YAML을 임시 사본으로 변환하므로
 Compose의 Deployment·스케줄·입력 파라미터는 바뀌지 않는다.
@@ -254,3 +254,9 @@ K3s의 Traefik CRD provider와 `middlewares.traefik.io` CRD가 필요하다. `de
 
 CI의 API-only K3s 검증은 Traefik을 실행하지 않으므로 공식 Traefik v3.7.16 CRD를 별도 설치한다.
 이 검증과 실제 EC2 클러스터 배포 성공은 구분한다.
+
+MLOps 단독 구성은 주 배포 명령의 `--modules mlops --with-model-registry <hostname>`으로 선택한다.
+공통 학습·서빙 계약과 별도 Secret·namespace 준비는 [모델 실행 안내](model_execution.md)를 따른다.
+
+일반 Kubernetes에서는 [공통 배포 안내](kubernetes.md)의 `generic` overlay를 사용한다.
+공통 리소스와 Prefect 실행 정책은 배포판과 분리하며 K3s의 Traefik·local-path 설정만 전용 overlay에 둔다.

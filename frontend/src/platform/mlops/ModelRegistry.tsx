@@ -45,6 +45,16 @@ export function ModelRegistry() {
       ),
     { refresh },
   );
+  const deployments = useServerQuery(
+    ["mlops", "deployments"],
+    (signal) => modelOperationsApi.deployments(signal),
+    { refresh },
+  );
+  const serving = deployments.data?.items.filter((item) => item.status === "ready") || [];
+  const isServing = (name: string, version?: string) => serving.some((item) =>
+    item.specification.model_name === name &&
+    (version === undefined || item.specification.model_version === Number(version)),
+  );
   const catalog = result.data;
   const error = result.error;
   const selected =
@@ -69,8 +79,7 @@ export function ModelRegistry() {
           item.latest_versions.map((v) => `v${v.version}`).join(" · ") ||
           "버전 없음",
         status:
-          catalog?.serving?.status === "ok" &&
-          catalog.serving?.model_name === item.name ? (
+          isServing(item.name) ? (
             <span className="selection-status COMPLETED">서비스 중</span>
           ) : undefined,
       }))}
@@ -197,15 +206,9 @@ export function ModelRegistry() {
                 <div>
                   <dt>연결된 추론 서비스</dt>
                   <dd>
-                    {catalog.serving?.model_name === catalog.model_name ? (
-                      <Link className="operations-link" to="/admin/serving">
-                        {catalog.serving?.status === "ok"
-                          ? `v${catalog.serving?.model_version} 서비스 중`
-                          : "서비스 상태 확인"}
-                      </Link>
-                    ) : (
-                      "연결된 서비스 없음"
-                    )}
+                    {deployments.error ? "서빙 상태 확인 필요" : isServing(catalog.model_name || "") ? (
+                      <Link className="operations-link" to="/admin/serving">서빙 배포 확인</Link>
+                    ) : deployments.data ? "연결된 서비스 없음" : "서빙 상태 확인 중"}
                   </dd>
                 </div>
                 <div>
@@ -254,12 +257,7 @@ export function ModelRegistry() {
                         <td>{item.status}</td>
                         <td>{dateLabel(item.creation_timestamp)}</td>
                         <td>
-                          {catalog.serving?.model_name === item.name &&
-                          catalog.serving?.status === "ok" &&
-                          catalog.serving?.model_version ===
-                            Number(item.version)
-                            ? "서비스 중"
-                            : "—"}
+                          {isServing(item.name, item.version) ? "서비스 중" : "—"}
                         </td>
                       </tr>
                     ))}

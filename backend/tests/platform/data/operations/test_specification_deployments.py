@@ -9,7 +9,7 @@ from teoria.platform.data.operations.loader import PipelineLoader
 ROOT = (Path(__file__).resolve().parents[5] / 'backend')
 
 
-def test_active_jobs_include_only_owned_workflows_and_optional_synthetic_demo():
+def test_active_jobs_include_only_owned_workflows():
     catalog = PipelineLoader(ROOT).load()
     assert set(catalog.connectors) == {"moleg_law_api"}
     assert set(catalog.pipelines) == {"moleg_law_ingestion"}
@@ -19,15 +19,10 @@ def test_active_jobs_include_only_owned_workflows_and_optional_synthetic_demo():
         "specification-standard-workflow",
         "openmetadata-postgres-metadata-sync",
         "moleg-law-daily", "moleg-law-weekly-reconciliation",
-        "demo-seed-customers", "demo-train-customer-churn", "demo-deploy-customer-churn",
-        "demo-customer-churn-pipeline",
+        "model-train", "model-deploy", "model-stop",
     }
     assert validate_deployment_contracts(catalog, deployments) == []
     for _, d in deployments:
-        if d["name"].startswith("demo-"):
-            assert not d["schedules"]
-            assert "demo:synthetic" in d["tags"]
-            assert d["work_pool"]["name"] in {"teoria-model-training-docker", "teoria-model-deployment"}
         if "specification" in d["name"]:
             assert d["schedules"] == []
             assert d["work_pool"] == {"name": "teoria-specification", "work_queue_name": "documents"}

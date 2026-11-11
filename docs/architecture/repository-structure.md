@@ -19,7 +19,7 @@ backend/src/teoria/
       contracts/           Source·Mapping·Capability 검증·artifact
       runtime/             게시 계약 실행·Context
     ai/                    향후 AIP 예약 영역; README만 있고 미구현
-    mlops/                 공통 모델 목록·버전·운영 API
+    mlops/                 모델 실행 계약·Flow·서빙 배포 참조·운영 API
     access_control/        인증·권한·정책
     workflow_management/   Prefect 실행·스케줄 관리
   domains/
@@ -40,7 +40,6 @@ backend/src/teoria/
     legal_information/     법령 수집·검색
   apps/
     formatid/              업무 HTTP API·입력 권한·결과 조합
-  examples/customer_churn/ 합성 데이터·학습·평가·배포·추론 예제
   integrations/            Provider·Codex·OpenMetadata·MLflow·Prefect·DB 연결
   entrypoints/             API·MCP·CLI 프로세스 진입점
     composition/           플랫폼·도메인·앱 객체 조립
@@ -62,7 +61,6 @@ frontend/src/
     workflow_management/   공통 실행·스케줄 화면
   domains/goods/           물품 표현 연결 화면
   apps/formatid/           규격서 처리·결과 분석 화면
-  examples/customer_churn/ 고객 이탈 추론 테스트 폼
   api/                     HTTP 전송·인증 오류·Query 공통 정책
   components/, lib/        실제 공유하는 UI와 기반 코드
 ```
@@ -78,14 +76,38 @@ frontend/src/
 | 개념·속성·관계의 게시 정책 | `platform/ontology/authoring/` |
 | 용어·자산·API·Capability의 의미 연결 | `platform/ontology/bindings/` |
 | FormatID API·결과 조합 | `apps/formatid/` |
-| 합성 고객 데이터·학습·이탈 추론 | `examples/customer_churn/` |
+| 외부 고객 이탈 샘플 이미지·소스 | `archive/customer_churn/` |
 | 서비스 연결·주입·lifespan | `entrypoints/composition/` |
+
+## 업무 앱과 모델 운영의 경계
+
+화면·HTTP API·컨테이너가 있다는 이유로 `apps/`에 두지 않는다. 소유하는 업무 책임으로 판단한다.
+
+| 영역 | 소유 책임 |
+|---|---|
+| `platform/data/` | 데이터 수집·처리·품질·메타데이터 기반 |
+| `platform/ontology/` | 업무 의미 정의·Binding·승인·게시·Runtime |
+| `platform/mlops/` | 모델 공통 실행 계약·학습·서빙 배포·중지·복구·상태 조회 |
+| `platform/ai/` | 향후 AI 업무 실행 기반의 예약 영역; 현재 미구현 |
+| `domains/<domain>/` | 해당 업무의 입력 해석·판단·승인·적용 규칙 |
+| `apps/<app>/` | 사용자가 업무를 수행하도록 도메인과 플랫폼 기능을 조합하는 HTTP API |
+
+모델마다 앱 패키지를 만들지 않는다. 모델의 알고리즘·특징·임계값은 외부 이미지나 소유 업무에 두고,
+MLOps는 이미지 digest·모델 버전·실행 입력·배포 상태를 관리한다. 추론 결과를 해석해 업무 조치를
+결정하는 규칙은 도메인에, 사용자의 조회·검토·승인 경험은 앱에 둔다.
+MLflow의 모델 목록·평가 지표·학습 파라미터와 서빙 배포 목록은 각각의 소유 API에서 조회한다.
+단일 기본 모델이나 특정 업무의 파라미터 이름을 플랫폼 조립 코드에 고정하지 않는다.
+
+[Foundry 모델 통합](https://www.palantir.com/docs/foundry/model-integration/models)과
+[Functions on models](https://www.palantir.com/docs/foundry/model-integration/functions-on-models)의
+모델 배포와 애플리케이션 소비 구분을 참고한다. Teoria는 공통 운영만 MLOps가 소유하며,
+Foundry와 동일한 모델·Ontology 연결 기능을 구현했다는 의미는 아니다.
 
 ## 의존성
 
 `apps → domains → platform` 방향을 따른다. 외부 연결은 `integrations`, 객체 조립은 `entrypoints`가 맡는다.
 플랫폼은 도메인·앱·예제를 역으로 import하지 않는다.
-예제는 플랫폼·외부 연결을 소비하고 API와 테스트 폼 연결은 composition·shell이 주입한다. 실행 코드가 `entrypoints`를 import하지 않는다.
+보관된 고객 이탈 샘플은 독립 이미지로 빌드하며 플랫폼 실행 코드에서 import하지 않는다. 실행 코드가 `entrypoints`를 import하지 않는다.
 기능 간 의존성은 순환하지 않는다. 이 규칙은 `backend/tests/architecture/`에서 검사한다.
 
 Workflow 플랫폼은 실행할 업무 목록이나 업무별 입력 규칙을 소유하지 않는다.
@@ -109,8 +131,9 @@ Worker는 Ontology 저장소를 직접 변경하지 않고 인증된 Admin HTTP 
 | `backend/config/` | 운영 입력·공통 Prefect 등록과 기본 파라미터 |
 | `backend/authoring/` | 작성 입력·Ontology 이관 |
 | `backend/migrations/application/`, `backend/migrations/data/` | 저장소별 순번 migration |
-| `deploy/compose/`, `deploy/k3s/` | 환경별 배포·pool·queue·Job 정책 |
-| `backend/tests/platform/`, `domains/`, `apps/`, `examples/` | 소유 코드에 대응하는 테스트 |
+| `deploy/compose/`, `deploy/kubernetes/` | Compose·공통 Kubernetes 배포·pool·queue·Job 정책 |
+| `deploy/kubernetes/overlays/k3s/` | K3s 전용 overlay·EC2 설치 설정 |
+| `backend/tests/platform/`, `domains/`, `apps/` | 소유 코드에 대응하는 테스트 |
 | `backend/tests/integration/` | 백엔드 모듈 간 연동·실환경 검사 |
 | `tests/documentation/` | 문서 링크·목차 검사 |
 | `archive/kory_parser/` | 별도 설치·실행하는 문서 파서·사용 문서·라이선스 |

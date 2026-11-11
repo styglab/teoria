@@ -34,7 +34,7 @@ pps_contract_api → pps_contract_ingestion
   `pipeline:<definition_id>`·`domain:<domain_id>` tag는 수집 계약과 소유권을 연결한다.
   공고의 면허·지역 API 보강 등 후속 처리는 입력 공고를 제공하는 수집 계약에 연결한다.
 - 조회 대상 같은 업무 입력은 `config/`, schedule·work pool·실행 파라미터는
-  `deploy/compose/prefect/`와 `deploy/k3s/prefect/`에 둔다. 공통 파라미터·스케줄은 기능별 `backend/config/`에서만 정의한다. 선언된 값은 `teoria-pipelines deployment-docs`로 조회한다.
+  `deploy/compose/prefect/`와 `deploy/kubernetes/prefect/`에 둔다. 공통 파라미터·스케줄은 기능별 `backend/config/`에서만 정의한다. 선언된 값은 `teoria-pipelines deployment-docs`로 조회한다.
 - Flow는 Task 조합만 담당한다.
 - API·DB side effect는 Task, 순수 정규화는 일반 함수로 구현한다.
 - API→DB 변환은 `backend/src/teoria/domains/<domain>/`,

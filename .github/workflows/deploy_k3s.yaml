@@ -45,10 +45,8 @@ jobs:
           - {name: pipelines-compose, dockerfile: backend/Dockerfile, target: worker, compose_name: teoria-pipelines}
           - {name: operations, dockerfile: backend/Dockerfile, target: operations, compose_name: teoria-data-operations}
           - {name: law-worker, dockerfile: backend/Dockerfile, target: law-worker, compose_name: teoria-pipelines-law}
-          - {name: model-worker, dockerfile: backend/Dockerfile, target: model-worker, compose_name: teoria-model-worker}
+          - {name: mlflow, dockerfile: backend/Dockerfile, target: mlflow, compose_name: teoria-mlflow}
           - {name: model-dispatcher, dockerfile: backend/Dockerfile, target: model-dispatcher, compose_name: teoria-model-dispatcher}
-          - {name: model-training, dockerfile: backend/Dockerfile, target: model-training, compose_name: teoria-model-training}
-          - {name: model-serving, dockerfile: backend/Dockerfile, target: model-serving, compose_name: teoria-model-serving}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,6 +101,8 @@ jobs:
           EC2_USER: ${{ vars.EC2_USER }}
           EC2_SSH_PORT: ${{ vars.EC2_SSH_PORT || '22' }}
           PUBLIC_HOST: ${{ vars.TEORIA_PUBLIC_HOST }}
+          MODEL_REGISTRY_HOST: ${{ vars.TEORIA_MODEL_REGISTRY_HOST }}
+          DEPLOY_MODULES: ${{ vars.TEORIA_DEPLOY_MODULES || 'semantic' }}
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.EC2_SSH_KNOWN_HOSTS }}
         run: |
@@ -120,6 +120,13 @@ jobs:
           [[ "$EC2_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
           [[ "$EC2_SSH_PORT" =~ ^[0-9]+$ ]]
           [[ "$PUBLIC_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]]
+          [[ "$DEPLOY_MODULES" == semantic || "$DEPLOY_MODULES" == mlops ]]
+          model_registry_option=
+          if [[ -n "$MODEL_REGISTRY_HOST" ]]; then
+            [[ "$MODEL_REGISTRY_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]]
+            [[ "$DEPLOY_MODULES" == semantic || "$DEPLOY_MODULES" == mlops ]]
+          model_registry_option="--with-model-registry $MODEL_REGISTRY_HOST"
+          fi
           umask 077
           printf '%s\n' "$SSH_PRIVATE_KEY" > "$RUNNER_TEMP/ec2_key"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/known_hosts"
@@ -127,9 +134,9 @@ jobs:
           ssh_args=(-i "$RUNNER_TEMP/ec2_key" -o "UserKnownHostsFile=$RUNNER_TEMP/known_hosts" -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=20)
           target="$EC2_USER@$EC2_HOST"
           ssh "${ssh_args[@]}" -p "$EC2_SSH_PORT" "$target" "mkdir -p ~/.teoria/releases/$revision"
-          git archive --format=tar.gz --output="$RUNNER_TEMP/k3s_release.tar.gz" HEAD deploy/k3s
-          scp "${ssh_args[@]}" -P "$EC2_SSH_PORT" "$RUNNER_TEMP/k3s_release.tar.gz" "$target:.teoria/releases/$revision/release.tar.gz"
+          git archive --format=tar.gz --output="$RUNNER_TEMP/kubernetes_release.tar.gz" HEAD deploy/kubernetes
+          scp "${ssh_args[@]}" -P "$EC2_SSH_PORT" "$RUNNER_TEMP/kubernetes_release.tar.gz" "$target:.teoria/releases/$revision/release.tar.gz"
           image_prefix="${REGISTRY_PREFIX:-ghcr.io/${GITHUB_REPOSITORY,,}}"
           [[ "$image_prefix" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]]
           ssh "${ssh_args[@]}" -p "$EC2_SSH_PORT" "$target" \
-            "cd ~/.teoria/releases/$revision && tar -xzf release.tar.gz && bash deploy/k3s/deploy.sh '$image_prefix' '$revision' '$PUBLIC_HOST'"
+            "cd ~/.teoria/releases/$revision && tar -xzf release.tar.gz && bash deploy/kubernetes/deploy.sh '$image_prefix' '$revision' '$PUBLIC_HOST' --overlay k3s --modules '$DEPLOY_MODULES' $model_registry_option"

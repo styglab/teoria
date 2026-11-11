@@ -25,6 +25,7 @@ export function ManualRunDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const key = useRef(requestKey());
+  const executionInput = ["training", "serving", "stop-serving"].includes(pipeline.input_kind || "");
   useEffect(() => {
     if (dialog.current?.showModal) dialog.current.showModal();
     else dialog.current?.setAttribute("open", "");
@@ -45,7 +46,7 @@ export function ManualRunDialog({
           if (busy) return;
           setError("");
           let parsed: Record<string, unknown> | undefined;
-          if (pipeline.input_kind === "manifest") {
+          if ((pipeline.input_kind === "manifest" || executionInput)) {
             try {
               parsed = JSON.parse(manifest);
               if (
@@ -63,7 +64,7 @@ export function ManualRunDialog({
           try {
             const result = await workflowsApi.run(pipeline.id, key.current, {
               ...(pipeline.input_kind === "model" ? { deploy } : {}),
-              ...(parsed ? { manifest: parsed } : {}),
+              ...(parsed ? (executionInput ? { execution: parsed } : { manifest: parsed }) : {}),
             });
             onStarted(result.flow_run_id);
           } catch (reason) {
@@ -75,7 +76,7 @@ export function ManualRunDialog({
       >
         <h2 id="manual-run-title">수동 실행</h2>
         <p>{pipeline.name}</p>
-        {pipeline.input_kind === "manifest" ? (
+        {(pipeline.input_kind === "manifest" || executionInput) ? (
           <label>
             실행 입력(JSON)
             <textarea
@@ -87,7 +88,7 @@ export function ManualRunDialog({
               placeholder="{}"
             />
             <small>
-              선택한 파이프라인의 실행 입력을 JSON 객체로 입력하세요.
+              {executionInput ? "학습·서빙 이미지 digest, 실행 명령과 자원을 입력하세요. 비밀값은 운영자가 관리하는 실행 환경에 설정합니다." : "선택한 파이프라인의 실행 입력을 JSON 객체로 입력하세요."}
             </small>
           </label>
         ) : pipeline.input_kind === "model" ? (

@@ -1,4 +1,3 @@
-from functools import partial
 
 import httpx
 import pytest
@@ -6,15 +5,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from teoria.entrypoints.composition.workflow_catalog import workflow_catalog
 from teoria.entrypoints.composition.workflow_management import prepare_workflow_run
-from teoria.examples.customer_churn import MODEL_NAME
-from teoria.examples.customer_churn.admin_router import describe_models
 from teoria.platform.access_control.auth import AdminAuthorizer
 from teoria.platform.mlops.admin_router import create_model_operations_router
 from teoria.settings import Settings
 
 MODEL_WORKFLOWS = workflow_catalog(
     True,
-    include_internal=True,
     semantic_enabled=False,
     formatid_enabled=False,
     legal_enabled=False,
@@ -42,9 +38,6 @@ def test_authentication_and_explicit_pipeline_parameters():
             prefect_url="http://prefect/api",
             prefect_auth="user:password",
             mlflow_url="http://mlflow",
-            default_model_name=MODEL_NAME,
-            model_context=partial(describe_models, client, "http://inference"),
-            inference_token="secret",
         )
     )
     with TestClient(app) as api:
@@ -61,7 +54,7 @@ def test_authentication_and_explicit_pipeline_parameters():
         )
         assert (
             api.post(
-                "/v1/admin/model-operations/pipelines/demo-deploy-customer-churn/runs",
+                "/v1/admin/model-operations/pipelines/model-deploy/runs",
                 json=body,
                 headers=headers,
             ).status_code
@@ -69,7 +62,7 @@ def test_authentication_and_explicit_pipeline_parameters():
         )
         assert (
             api.post(
-                "/v1/admin/model-operations/pipelines/demo-seed-customers/runs",
+                "/v1/admin/model-operations/pipelines/model-stop/runs",
                 json={**body, "requested_by": "forged"},
                 headers=headers,
             ).status_code
@@ -93,9 +86,6 @@ def make_api(handler):
             prefect_url="http://prefect/api",
             prefect_auth="user:password",
             mlflow_url="http://mlflow",
-            default_model_name=MODEL_NAME,
-            model_context=partial(describe_models, client, "http://inference"),
-            inference_token="inference-secret",
         )
     )
     return TestClient(app)
@@ -109,7 +99,7 @@ def test_run_detail_does_not_expose_unrelated_flow_logs():
         if "/flow_runs/" in request.url.path:
             return httpx.Response(200, json={"id": "run", "deployment_id": "foreign"})
         return httpx.Response(
-            200, json=[{"id": "allowed", "name": "demo-seed-customers"}]
+            200, json=[{"id": "allowed", "name": "model-stop"}]
         )
 
     with make_api(handler) as api:
@@ -126,7 +116,7 @@ def test_run_detail_redacts_secrets_and_allowlists_parameters():
         path = request.url.path
         if path.endswith("/deployments/filter"):
             return httpx.Response(
-                200, json=[{"id": "allowed", "name": "demo-seed-customers"}]
+                200, json=[{"id": "allowed", "name": "model-stop"}]
             )
         if path.endswith("/flow_runs/filter"):
             return httpx.Response(200, json=[])
@@ -150,7 +140,7 @@ def test_run_detail_redacts_secrets_and_allowlists_parameters():
                     "id": "log",
                     "timestamp": "2026-10-27T00:00:00Z",
                     "level": 40,
-                    "message": "postgresql://user:dbpass@db/demo Bearer bearer-secret inference-secret user:password test-token",
+                    "message": "postgresql://user:dbpass@db/demo Bearer bearer-secret Bearer inference-secret user:password test-token",
                 }
             ],
         )
@@ -183,7 +173,7 @@ def test_history_pagination_and_state_are_applied_at_prefect():
         requests.append((request.url.path, body))
         if "/deployments/" in request.url.path:
             return httpx.Response(
-                200, json=[{"id": "allowed", "name": "demo-seed-customers"}]
+                200, json=[{"id": "allowed", "name": "model-stop"}]
             )
         return httpx.Response(
             200, json=61 if request.url.path.endswith("/count") else []
@@ -191,7 +181,7 @@ def test_history_pagination_and_state_are_applied_at_prefect():
 
     with make_api(handler) as api:
         response = api.get(
-            "/v1/admin/model-operations/pipelines?pipeline_id=demo-seed-customers&state=FAILED&offset=25&limit=25",
+            "/v1/admin/model-operations/pipelines?pipeline_id=model-stop&state=FAILED&offset=25&limit=25",
             headers={"Authorization": "Bearer test-token"},
         )
     assert response.status_code == 200 and response.json()["total"] == 61
@@ -234,7 +224,12 @@ def test_registry_reads_multiple_models_and_selected_model_versions():
                     "run": {
                         "data": {
                             "metrics": [{"key": "rmse", "value": 1.2}],
-                            "params": [],
+                            "params": [
+                                {"key": "learning_rate", "value": "0.01"},
+                                {"key": "window_size", "value": "24"},
+                                {"key": "api_token", "value": "private-token"},
+                                {"key": "source", "value": "s3://user:source-secret@bucket/data"},
+                            ],
                         }
                     }
                 },
@@ -251,14 +246,22 @@ def test_registry_reads_multiple_models_and_selected_model_versions():
     assert len(data["registered_models"]) == 2
     assert data["model_name"] == "forecast"
     assert data["items"][0]["metrics"] == {"rmse": 1.2}
-    assert data["serving"]["model_name"] != "forecast"
+    assert data["items"][0]["parameters"] == {
+        "learning_rate": "0.01",
+        "window_size": "24",
+        "api_token": "[redacted]",
+        "source": "s3://[redacted]@bucket/data",
+    }
+    assert "private-token" not in response.text
+    assert "source-secret" not in response.text
+    assert "serving" not in data
     assert data["next_page_token"] == "next-models"
 
 
 def test_auto_deployment_is_only_applicable_to_parent_pipeline():
     with make_api(lambda request: httpx.Response(200, json=[])) as api:
         response = api.post(
-            "/v1/admin/model-operations/pipelines/demo-seed-customers/runs",
+            "/v1/admin/model-operations/pipelines/model-stop/runs",
             headers={"Authorization": "Bearer test-token"},
             json={
                 "idempotency_key": "12345678-1234-1234-1234-123456789012",

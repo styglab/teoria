@@ -27,7 +27,8 @@
 
 ## 배포·운영
 
-- [Compose](deployment/compose.md) · [K3s](deployment/k3s.md) · [환경 설정](deployment/configuration.md)
+- [Compose](deployment/compose.md) · [Kubernetes](deployment/kubernetes.md) · [K3s](deployment/k3s.md) · [환경 설정](deployment/configuration.md)
+- [모델 실행·서빙](deployment/model_execution.md) · [모델 이미지 Registry](deployment/image_registry.md)
 - [Prefect](pipelines/prefect.md) · [Connector](pipelines/connectors.md) · [Data DB](pipelines/database.md)
 - [OpenMetadata Server·수집](deployment/openmetadata.md) · [법령 수집](pipelines/domains/legal_information.md)
 

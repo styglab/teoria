@@ -25,3 +25,6 @@ deploy/compose/.state/
 **/__pycache__
 **/.pytest_cache
 **/.ruff_cache
+
+# Private development credentials, certificates and local image caches.
+deploy/compose/.local/

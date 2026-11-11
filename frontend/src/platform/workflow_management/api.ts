@@ -25,7 +25,7 @@ export type Pipeline = {
   work_pool_name?: string;
   latest_run?: ModelRun | null;
   category?: string;
-  input_kind?: "none" | "manifest" | "model" | "version";
+  input_kind?: "none" | "manifest" | "model" | "version" | "training" | "serving" | "stop-serving";
   schedules?: Array<{
     id: string;
     active: boolean;
@@ -91,7 +91,7 @@ export const workflowsApi = {
   run: (
     id: string,
     key: string,
-    options?: { deploy?: boolean; manifest?: Record<string, unknown> },
+    options?: { deploy?: boolean; manifest?: Record<string, unknown>; execution?: Record<string, unknown> },
   ) =>
     postJson<{ flow_run_id: string; name: string }>(
       `/workflows/pipelines/${encodeURIComponent(id)}/runs`,

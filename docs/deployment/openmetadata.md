@@ -75,7 +75,7 @@ DB 백업은 인증 설정을 포함할 수 있으므로 접근을 제한하고 
 샘플·Profiler·usage·query lineage는 별도 workflow가 필요하다.
 
 - 공통 Flow·일정: `backend/config/metadata_management/prefect_deployments.yaml`
-- 환경별 image·pool·Job: `deploy/compose/prefect/metadata_management.yaml`, `deploy/k3s/prefect/metadata_management.yaml`
+- 환경별 image·pool·Job: `deploy/compose/prefect/metadata_management.yaml`, `deploy/kubernetes/prefect/metadata_management.yaml`
 - 설정 예시: `deploy/compose/openmetadata/ingestion/teoria-postgres.yaml.example`
 
 Server와 같은 버전으로 이미지를 빌드한다. `TEORIA_METADATA_DB_PASSWORD`는 read-only DB 계정,

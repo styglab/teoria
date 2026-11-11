@@ -4,53 +4,36 @@ build: null
 push: null
 pull: null
 deployments:
-- name: demo-customer-churn-pipeline
-  version: 1.0.0
-  description: 데이터 검증 → 학습 → 평가 → MLflow 등록을 수행하고, deploy=true이면 별도 배포 Worker에서 배포·추론
-    검증까지 완료한다.
-  entrypoint: teoria.examples.customer_churn.flows.customer_churn_pipeline
+- name: model-train
+  version: 2.0.0
+  description: 외부 이미지로 모델 학습
+  entrypoint: teoria.platform.mlops.flows.train_model
   tags:
   - feature:model_operations
-  - demo:synthetic
   concurrency_limit:
     limit: 1
-    collision_strategy: CANCEL_NEW
-  parameters:
-    deploy: false
-  schedules: []
-- name: demo-seed-customers
-  version: 1.0.0
-  description: 실제 개인정보가 없는 가상 고객·이용 이력 600건을 재현 가능하게 적재한다.
-  entrypoint: teoria.examples.customer_churn.flows.seed_demo_customers
-  tags:
-  - feature:model_operations
-  - demo:synthetic
-  concurrency_limit:
-    limit: 1
-    collision_strategy: CANCEL_NEW
+    collision_strategy: ENQUEUE
   parameters: {}
   schedules: []
-- name: demo-train-customer-churn
-  version: 1.0.0
-  description: 식별정보를 제외한 합성 이용 이력으로 고객 이탈 모델을 학습·평가하고 MLflow에 등록한다.
-  entrypoint: teoria.examples.customer_churn.flows.train_demo_customer_churn
+- name: model-deploy
+  version: 2.0.0
+  description: 고정 모델 버전의 서빙 배포
+  entrypoint: teoria.platform.mlops.flows.deploy_model
   tags:
   - feature:model_operations
-  - demo:synthetic
   concurrency_limit:
     limit: 1
-    collision_strategy: CANCEL_NEW
+    collision_strategy: ENQUEUE
   parameters: {}
   schedules: []
-- name: demo-deploy-customer-churn
-  version: 1.0.0
-  description: 명시한 합성 고객 모델 버전을 checksum 검증한 뒤 전용 추론 서버에 반영한다. 실패 시 이전 release를 복원한다.
-  entrypoint: teoria.examples.customer_churn.flows.deploy_demo_customer_churn
+- name: model-stop
+  version: 2.0.0
+  description: 모델 서빙 중지
+  entrypoint: teoria.platform.mlops.flows.stop_model
   tags:
   - feature:model_operations
-  - demo:synthetic
   concurrency_limit:
     limit: 1
-    collision_strategy: CANCEL_NEW
+    collision_strategy: ENQUEUE
   parameters: {}
   schedules: []

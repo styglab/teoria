@@ -54,7 +54,7 @@ FormatID가 사용하는 물품 처리 파이프라인이다. 원문에서 관�
 
 이름은 기존 Prefect 배포와 CLI의 외부 계약이므로 코드 디렉터리와 별도로 유지한다.
 공통 파라미터는 `backend/config/specification_processing/prefect_deployments.yaml`,
-환경별 pool·queue 정책은 `deploy/compose/prefect/`, `deploy/k3s/prefect/`에 있다.
+환경별 pool·queue 정책은 `deploy/compose/prefect/`, `deploy/kubernetes/prefect/`에 있다.
 
 화면에서는 [FormatID 사용 순서](../../../platform-guide.md#formatid-사용)를 따른다.
 CLI 입력 계약은 다음 명령으로 확인한다.

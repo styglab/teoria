@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-storage-init
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: model-register
+    spec:
+      containers:
+      - name: model-storage-init
+        image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+        command:
+        - /bin/sh
+        - -ec
+        - mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+          >/dev/null; mc mb --ignore-existing local/teoria-models >/dev/null
+        env:
+        - name: MINIO_ROOT_USER
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_MINIO_ROOT_USER
+        - name: MINIO_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_MINIO_ROOT_PASSWORD
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 2Gi
+      automountServiceAccountToken: false
+      imagePullSecrets:
+      - name: teoria-registry
+      restartPolicy: Never
