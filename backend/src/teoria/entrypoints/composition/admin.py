@@ -46,10 +46,10 @@ from teoria.settings import Settings
 from teoria.settings import bootstrap_settings
 
 from teoria.entrypoints.composition.formatid import install_formatid_routers
-from teoria.entrypoints.composition.goods_authoring import install_goods_authoring_routers
+from teoria.entrypoints.composition.goods_authoring import install_goods_authoring_routers, goods_ontology_migration_manifest
 from teoria.entrypoints.composition.metadata_management import install_metadata_routers
 from teoria.entrypoints.composition.legal_information import install_legal_routers
-from teoria.entrypoints.composition.semantic_modeling import install_semantic_routers
+from teoria.entrypoints.composition.ontology import install_ontology_routers
 from teoria.entrypoints.composition.model_operations import install_model_operations_router
 from teoria.entrypoints.composition.workflow_management import install_workflow_management_router
 
@@ -88,7 +88,14 @@ def create_admin_services(
 ) -> AdminServices:
     resolved_settings = settings or bootstrap_settings()
     resources = []
-    authorizer = AdminAuthorizer(resolved_settings)
+    from teoria.domains.goods.authoring_client import specification_service_account
+
+    token = resolved_settings.specification_authoring_api_token
+    service_accounts = (
+        (specification_service_account(token.get_secret_value()),)
+        if token and resolved_settings.goods_authoring_active else ()
+    )
+    authorizer = AdminAuthorizer(resolved_settings, service_accounts=service_accounts)
     resources.append(authorizer)
     resolved_policy_evaluator = policy_evaluator or create_policy_evaluator(
         resolved_settings
@@ -101,7 +108,7 @@ def create_admin_services(
     resolved_metadata_service = metadata_service
     resolved_binding_repository = binding_repository or (
         BindingRepository(resolved_settings.app_database_url)
-        if resolved_settings.app_database_url
+        if resolved_settings.app_database_url and (resolved_settings.ontology_enabled or resolved_settings.formatid_enabled)
         else None
     )
     resolved_suggestion_repository = suggestion_repository or (
@@ -111,12 +118,12 @@ def create_admin_services(
     )
     resolved_ontology_authoring_service = (
         OntologyAuthoringService(resolved_settings.app_database_url)
-        if resolved_settings.app_database_url
+        if resolved_settings.app_database_url and (resolved_settings.ontology_enabled or resolved_settings.formatid_enabled)
         else None
     )
     if (
         resolved_metadata_service is None
-        and resolved_settings.semantic_modeling_enabled
+        and resolved_settings.metadata_enabled
         and resolved_settings.openmetadata_enabled
     ):
         resolved_metadata_service = OpenMetadataService(
@@ -132,7 +139,7 @@ def create_admin_services(
         resources.append(resolved_metadata_service.client)
     context_runtime_client = None
     if (
-        resolved_settings.semantic_modeling_enabled
+        resolved_settings.ontology_enabled
         and context_engine is None
         and resolved_settings.context_runtime_api_token
     ):
@@ -144,7 +151,7 @@ def create_admin_services(
         resources.append(context_runtime_client)
     runtime_context_repository = (
         None
-        if not resolved_settings.semantic_modeling_enabled
+        if not resolved_settings.ontology_enabled
         else (
             BundleContextRepository.from_path(resolved_settings.runtime_artifact_path)
             if resolved_settings.runtime_artifact_path is not None
@@ -220,14 +227,7 @@ def create_admin_services(
             if resolved_settings.admin_data_database_url
             else None
         ),
-        ontology_migration_manifest=(
-            (
-                resolved_settings.registry_path.parent.parent
-                if resolved_settings.registry_path.parent.name == "contracts"
-                else resolved_settings.registry_path.parent
-            )
-            / "authoring/ontology_migrations/pending/2026_10_goods_focus/ontology_v2.yaml"
-        ),
+        ontology_migration_manifest=goods_ontology_migration_manifest(resolved_settings.registry_path),
     )
 
 
@@ -241,4 +241,4 @@ def install_admin_routers(app: FastAPI, services: AdminServices) -> None:
     dependency_reader = install_goods_authoring_routers(app, services)
     install_metadata_routers(app, services)
     install_legal_routers(app, services)
-    install_semantic_routers(app, services, dependency_reader)
+    install_ontology_routers(app, services, dependency_reader)

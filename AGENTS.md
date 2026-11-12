@@ -24,13 +24,13 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
 - Pipeline 실행 코드에서 Capability 또는 Mapping Runtime을 직접 호출하지 않는다. 표준관리 Flow의 의미 작성 요청은 인증된 Admin HTTP API를 사용한다.
 - Provider wire 계약·요청·응답·HTTP 실행은 `integrations/provider_api/`, Codex subprocess 추론은 `integrations/codex/`, Prefect 배포·pool·queue 정책은 `integrations/prefect/`가 소유한다.
 - 실행 계약은 `backend/contracts/runtime/`, 수집 계약은 `backend/contracts/ingestion/`, 운영 입력은 `backend/config/`, 작성 입력·이관은 `backend/authoring/`에 둔다.
-- Prefect Flow·Task는 소유 기능에 둔다. 공통 Flow 등록 정보·기본 파라미터·스케줄은 `backend/config/<feature>/prefect_deployments.yaml`, 환경별 pool·queue·Job 정책은 `deploy/compose/prefect/`와 `deploy/kubernetes/prefect/`에 둔다.
+- Prefect Flow·Task는 소유 기능에 둔다. 공통 Flow 등록 정보·기본 파라미터·스케줄은 `backend/config/<feature>/prefect_deployments.yaml`, 환경별 pool·queue·Job 정책은 `deploy/kubernetes/prefect/`에 둔다.
 - Python 의존성은 `backend/pyproject.toml`, 잠금은 `backend/uv.lock` 한곳에서 관리한다. API·MCP·각 Worker는 별도 이미지와 역할별 의존성·권한을 유지한다.
 - 별도 설치형 `packages/`는 둘 이상의 독립 프로젝트가 실제 소비할 때만 추가한다. 현재 통합한 내부 코드를 다시 패키지로 분리하거나 `common`, `shared`, `utils` 묶음을 만들지 않는다.
 - 프런트엔드는 `frontend/src/`에 두며 플랫폼 화면 조립은 `shell/`, 플랫폼 화면은 `platform/`, 도메인 화면은 `domains/`, FormatID는 `apps/formatid/`에 둔다.
 - 프런트엔드 업무 API·응답 타입은 소유 모듈의 `api.ts`, 공통 HTTP·Query 정책은 `api/`에 둔다. 서버 조회는 TanStack Query로 관리하고 요청 취소 신호를 전달한다. 토큰은 캐시 키에 넣지 않으며 인증 변경 시 캐시를 비운다. 승인·게시 자동 재시도는 금지한다.
 - 라우트는 `shell/routes.tsx`, 메뉴 경로는 `shell/navigation.ts`에 둔다. 공유할 필터·페이지·탭은 URL, 편집 중 값·대화상자는 화면 상태로 관리한다.
-- 로컬 Compose 배포는 `deploy/compose/`, 공통 Kubernetes 리소스·배포는 `deploy/kubernetes/`, K3s 전용 overlay는 `deploy/kubernetes/overlays/k3s/`, EC2 K3s 설치 설정은 해당 overlay의 `server_config.yaml`, GitHub 자동 배포는 `.github/workflows/deploy_k3s.yaml`에 두고 공통 진입점을 `--overlay k3s`로 호출한다. 실제 환경 검증 전에는 템플릿 검증을 운영 배포 성공으로 기록하지 않는다.
+- 개발 k3d와 공통 Kubernetes 리소스·배포는 `deploy/kubernetes/`, K3s 전용 overlay는 `deploy/kubernetes/overlays/k3s/`, EC2 K3s 설치 설정은 해당 overlay의 `server_config.yaml`, GitHub 자동 배포는 `.github/workflows/deploy_k3s.yaml`에 두고 공통 진입점을 `--overlay k3s`로 호출한다. 실제 환경 검증 전에는 템플릿 검증을 운영 배포 성공으로 기록하지 않는다.
 - 명시적으로 입력한 규격서의 파싱·정보 추출·표준 후보 관리·고정 표준 적용은
   `backend/src/teoria/domains/goods/`에서 재개한다.
   산출물 본문은 객체 저장소, 실행 상태·산출물 참조·문서별 결과는 Data DB에 둔다.
@@ -38,7 +38,7 @@ Domain Registry 또는 이름 있는 기능 패키지에 두고, 두 번째 doma
   구형 공고 첨부 자동 수집·참가자격 판단과 `archive/bid_document_processing/`의 실행 경로는
   계속 보류하며 활성 Registry·Skill·배포에 다시 연결하지 않는다.
   현재 활성 범위는 규격서 처리와 물품 Ontology 구축이다. 기존 공고·계약·낙찰·개찰·업종
-  수집과 기업·조달 분석은 `archive/procurement_services/`에 비활성 보관하며 활성 배포에 연결하지 않는다.
+  수집과 기업·조달 분석은 현재 checkout의 실행 코드·배포에서 제외하며 Git 이력 또는 별도 보관본으로만 관리한다.
   Ontology·Binding·Mapping·Capability·Runtime·OpenMetadata·Prefect 기반과 기존 게시·DB 이력은 유지한다.
   메타데이터 진단용 법령 수집·조회는 활성화하며 `legal_information` 패키지와 전용 Prefect pool에서 운영한다.
 
@@ -141,7 +141,7 @@ Application DB migration을 변경하면 새 순번 migration만 추가하고 �
 
 ```bash
 uv run --project backend --locked --all-extras --group orchestration pytest backend/tests
-docker compose -f deploy/compose/compose.yaml config --quiet
+uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/entrypoints/test_kubernetes_deployment.py
 ```
 
 ## Provider contract work
@@ -186,9 +186,7 @@ uv run --locked --project backend --extra api \
 Prefect Flow 또는 Data DB migration을 변경하면 Pipeline 단위 테스트에 더해 다음을 검증한다.
 
 ```bash
-docker compose \
-  -f deploy/compose/compose.yaml \
-  config --quiet
+uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/entrypoints/test_kubernetes_deployment.py
 ```
 
 - Flow의 주요 단계는 Prefect Task로 표현해 UI에서 실행 순서와 실패 지점을 식별할 수 있어야 한다.

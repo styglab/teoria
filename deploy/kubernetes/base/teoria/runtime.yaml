@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runtime-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: runtime-api
+  template:
+    metadata:
+      labels:
+        app: runtime-api
+    spec:
+      containers:
+      - name: runtime-api
+        image: teoria/runtime:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_POLICY_MODE
+          value: opa
+        - name: TEORIA_OPA_URL
+          value: http://opa:8181
+        - name: TEORIA_OPA_DECISION_PATH
+          value: teoria/authz/decision
+        - name: TEORIA_REGISTRY_REQUIRE_PUBLISHED
+          value: 'true'
+        - name: TEORIA_RUNTIME_ARTIFACT_STORE
+          value: /app/runtime_artifacts
+        - name: TEORIA_RUNTIME_API_ROOT_PATH
+          value: /runtime-api
+        - name: TEORIA_RUNTIME_CACHE_BACKEND
+          value: redis
+        - name: TEORIA_RUNTIME_CACHE_URL
+          value: redis://runtime-redis:6379/0
+        - name: TEORIA_RUNTIME_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_API_TOKEN
+        - name: TEORIA_RUNTIME_DATA_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_DATA_DATABASE_URL
+        command:
+        - teoria-runtime-api
+        ports:
+        - containerPort: 8000
+        readinessProbe:
+          httpGet: &id001
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 90
+        volumeMounts:
+        - name: runtime-artifacts
+          mountPath: /app/runtime_artifacts
+          readOnly: true
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      volumes:
+      - name: runtime-artifacts
+        persistentVolumeClaim:
+          claimName: runtime-artifacts
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: runtime-api
+spec:
+  selector:
+    app: runtime-api
+  ports:
+  - port: 8000
+    targetPort: 8000

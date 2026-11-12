@@ -28,3 +28,22 @@ deploy/compose/.state/
 
 # Private development credentials, certificates and local image caches.
 deploy/compose/.local/
+deploy/kubernetes/**/.local/
+deploy/kubernetes/.release_*/
+**/.env
+**/.env.*
+!**/.env.example
+**/kubeconfig
+**/kubeconfig.*
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
+**/tls.crt
+**/*.tar
+**/*.tar.gz
+**/.local/
+**/*.env
+**/*secret*.yaml
+**/*secret*.yml
+**/*.oci

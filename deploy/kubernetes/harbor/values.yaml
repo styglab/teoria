@@ -1,0 +1,30 @@
+# Independent infrastructure release; never included in Teoria module deployment.
+expose:
+  type: ingress
+  tls:
+    enabled: true
+    certSource: secret
+    secret:
+      secretName: harbor-tls
+  ingress:
+    hosts:
+      core: harbor.example.com
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+externalURL: https://harbor.example.com
+existingSecretAdminPassword: harbor-secrets
+existingSecretSecretKey: harbor-secrets
+persistence:
+  enabled: true
+  resourcePolicy: keep
+  persistentVolumeClaim:
+    registry:
+      size: 100Gi
+    database:
+      size: 5Gi
+# Enable only after the offline scanner database has been provisioned.
+trivy:
+  enabled: false

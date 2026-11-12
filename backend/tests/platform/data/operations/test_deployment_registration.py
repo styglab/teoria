@@ -21,7 +21,7 @@ def test_register_cli_returns_success_after_synchronous_registration(monkeypatch
             "teoria-pipelines",
             "register",
             "--backend",
-            "process",
+            "kubernetes",
             "--kind",
             kind,
             "--pipelines",
@@ -32,7 +32,7 @@ def test_register_cli_returns_success_after_synchronous_registration(monkeypatch
         deployment, "register_deployments", return_value=None
     ) as register:
         assert main() == 0
-    register.assert_called_once_with(Path("backend"), backend="process", kind=kind)
+    register.assert_called_once_with(Path("backend"), backend="kubernetes", kind=kind)
 
 
 @pytest.mark.asyncio
@@ -67,7 +67,7 @@ async def test_job_resources_and_secrets_survive_prefect_render(monkeypatch):
     assert pod["imagePullSecrets"] == [{"name": "teoria-registry"}]
 
 
-@pytest.mark.parametrize("backend", ["process", "kubernetes"])
+@pytest.mark.parametrize("backend", ["kubernetes"])
 @pytest.mark.parametrize("kind", ["ingestion", "legal-information", "metadata"])
 def test_registration_preserves_shared_flow_contract(monkeypatch, backend, kind):
     original = load_deployment_manifest(ROOT / "backend", kind, backend)
@@ -110,7 +110,7 @@ async def test_invalid_concurrency_is_rejected_before_pool_mutation(
     monkeypatch.setenv("TEORIA_PIPELINE_CONCURRENCY", total)
     client = AsyncMock()
     with pytest.raises(ValueError):
-        await deployment.configure_pool(client, backend="process", kind="ingestion")
+        await deployment.configure_pool(client, backend="kubernetes", kind="ingestion")
     client.create_work_pool.assert_not_called()
 
 

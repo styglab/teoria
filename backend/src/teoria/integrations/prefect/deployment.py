@@ -22,7 +22,8 @@ def pipeline_directory(pipeline_root: Path | None = None) -> Path:
 
 
 def kubernetes_job_template(
-    pipeline_root: Path | None = None, *, secret_name: str | None = None
+    pipeline_root: Path | None = None, *, secret_name: str | None = None,
+    configuration_secret: str | None = None, codex_secret: str | None = None
 ) -> dict:
     from prefect_kubernetes.worker import KubernetesWorker
 
@@ -52,8 +53,17 @@ def kubernetes_job_template(
     pod["containers"][0]["envFrom"] = [
         {"secretRef": {"name": secret_name or policy["job_secret"]}}
     ]
+    pod["securityContext"] = {"runAsNonRoot": True, "runAsUser": 10001, "runAsGroup": 10001, "fsGroup": 10001}
+    if configuration_secret:
+        pod["containers"][0]["envFrom"].append({"secretRef": {"name": configuration_secret}})
+    if codex_secret:
+        pod["volumes"] = [{"name": "codex-auth", "secret": {"secretName": codex_secret, "defaultMode": 0o440}}]
+        pod["containers"][0]["volumeMounts"] = [{"name": "codex-auth", "mountPath": "/var/run/teoria/codex", "readOnly": True}]
     # Never materialize the dispatcher's credentials into the Job declaration.
-    template["job_configuration"]["env"] = policy["environment"]
+    template["job_configuration"]["env"] = dict(policy["environment"])
+    if codex_secret:
+        template["job_configuration"]["env"]["TEORIA_CODEX_AUTH_PATH"] = "/var/run/teoria/codex/auth.json"
+        template["job_configuration"]["env"]["TEORIA_SPECIFICATION_REQUIRE_OBJECT_STORAGE"] = "true"
     return template
 
 
@@ -80,7 +90,8 @@ async def configure_pool(
             else pool["concurrency_limit"]
         )
         if pool["type"] == "kubernetes":
-            template = kubernetes_job_template(root, secret_name=pool["job_secret"])
+            template = kubernetes_job_template(root, secret_name=pool["job_secret"],
+                configuration_secret=pool.get("configuration_secret"), codex_secret=pool.get("codex_secret"))
         elif pool["type"] == "process":
             template = ProcessWorker.get_default_base_job_template()
         else:
@@ -146,7 +157,7 @@ def register_deployments(
 ) -> None:
     from prefect.client.orchestration import get_client
 
-    if backend not in {"process", "kubernetes"} or kind not in {
+    if backend != "kubernetes" or kind not in {
         "ingestion",
         "metadata",
         "legal-information",
@@ -154,6 +165,9 @@ def register_deployments(
         "all",
     }:
         raise ValueError("Unsupported deployment backend or kind")
+    schedule_setting = os.getenv("TEORIA_PREFECT_SCHEDULES_ENABLED")
+    if schedule_setting is not None and schedule_setting not in {"true", "false"}:
+        raise ValueError("TEORIA_PREFECT_SCHEDULES_ENABLED must be true or false")
     kinds = ("ingestion", "legal-information", "metadata") if kind == "all" else (kind,)
     documents = {
         item: load_deployment_manifest(pipeline_root, item, backend) for item in kinds
@@ -174,6 +188,9 @@ def register_deployments(
             document = documents[item]
             filename = f"{item}.yaml"
             for deployment in document["deployments"]:
+                if schedule_setting is not None:
+                    for schedule in deployment.get("schedules", []):
+                        schedule["active"] = schedule_setting == "true"
                 if (
                     item != "model-operations"
                     and deployment["work_pool"]["name"] != pools[item]

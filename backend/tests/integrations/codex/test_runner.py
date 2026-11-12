@@ -95,3 +95,26 @@ async def test_authoring_control_credentials_are_not_inherited_by_inference(monk
         return Process(Path(argv[argv.index('-o')+1]),[])
     monkeypatch.setattr(asyncio,'create_subprocess_exec',spawn)
     assert await CodexRunner().generate('instruction',{},tmp_path/'answer.json')=={'ready':True}
+
+
+async def test_role_auth_is_copied_to_disposable_home_without_storage_credentials(monkeypatch, tmp_path):
+    auth = tmp_path / 'auth.json'
+    auth.write_text('{"OPENAI_API_KEY":"synthetic-model-credential"}')
+    monkeypatch.setenv('TEORIA_CODEX_AUTH_PATH', str(auth))
+    monkeypatch.setenv('AWS_SECRET_ACCESS_KEY', 'must-not-leak')
+    monkeypatch.setenv('PREFECT_API_AUTH_STRING', 'must-not-leak')
+    monkeypatch.setenv('TEORIA_PIPELINE_DATA_DATABASE_URL', 'must-not-leak')
+    homes = []
+    async def spawn(*argv, **kwargs):
+        environment = kwargs['env']
+        assert 'must-not-leak' not in str(environment)
+        home = Path(environment['CODEX_HOME'])
+        homes.append(home)
+        assert home != auth.parent
+        assert (home / 'auth.json').read_bytes() == auth.read_bytes()
+        assert (home / 'auth.json').stat().st_mode & 0o777 == 0o600
+        return Process(Path(argv[argv.index('-o') + 1]), [])
+    monkeypatch.setattr(asyncio, 'create_subprocess_exec', spawn)
+    await CodexRunner().generate('instruction', {}, tmp_path / 'answer.json')
+    assert homes and not homes[0].exists()
+    assert auth.exists()

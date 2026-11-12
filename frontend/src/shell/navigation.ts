@@ -73,9 +73,9 @@ export type NavigationItem = {
   icon: LucideIcon;
   group: (typeof navigationGroups)[number]["id"] | "";
   modelOperations?: boolean;
-  module?: "semantic" | "formatid" | "mlops";
+  module?: "metadata" | "ontology" | "goods" | "formatid" | "mlops";
   placement?: "footer";
-  availableIn?: Array<"semantic" | "formatid" | "mlops">;
+  availableIn?: Array<"metadata" | "ontology" | "goods" | "formatid" | "mlops">;
 };
 export const navigationItems: NavigationItem[] = [
   {
@@ -87,7 +87,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: navigationPaths.dataCatalog,
-    module: "semantic",
+    module: "metadata",
     label: "데이터 자산",
     description: "데이터 탐색과 자산별 AI 진단",
     icon: Database,
@@ -95,7 +95,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: navigationPaths.ontology,
-    module: "semantic",
+    module: "ontology",
     label: "온톨로지",
     description: "업무 개념·관계·버전 관리",
     icon: Boxes,
@@ -103,7 +103,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: navigationPaths.goodsDictionary,
-    availableIn: ["semantic", "formatid"],
+    module: "goods",
     label: "물품 사전",
     description: "품목별 유형·속성·원문 표현과 공통 정의 관리",
     icon: Boxes,
@@ -111,11 +111,11 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: navigationPaths.review,
-    module: "semantic",
+    availableIn: ["metadata", "ontology"],
     label: "검토함",
     description: "제안·의미 연결·온톨로지 검토",
     icon: Inbox,
-    group: "ontology",
+    group: "",
   },
   {
     path: navigationPaths.workflows,
@@ -169,7 +169,7 @@ export const navigationItems: NavigationItem[] = [
   },
   {
     path: navigationPaths.capabilities,
-    module: "semantic",
+    module: "ontology",
     label: "실행 계약·Capability",
     description: "Source·Mapping·Capability의 연결과 계약 검증",
     icon: Braces,
@@ -186,7 +186,7 @@ export function currentNavigation(path: string) {
 
 export function navigationAvailable(
   item: NavigationItem,
-  modules: { semantic: boolean; formatid: boolean; mlops: boolean },
+  modules: { metadata: boolean; ontology: boolean; goods: boolean; formatid: boolean; mlops: boolean },
 ) {
   return (
     (!item.module || modules[item.module]) &&

@@ -6,9 +6,9 @@ Teoria에서 데이터 자산을 확인하고 업무 의미를 작성한 뒤 앱
 ## 시작
 
 로컬 Kubernetes 통합 환경은 [k3d 실행](deployment/k3d.md)에 따라 준비하고
-`https://teoria.localhost:8443/`에 접속한다. 기존 [Compose 실행](deployment/compose.md)은
-[환경 설정](deployment/configuration.md)에 따라 준비하고 `http://localhost:8081/`에 접속한다.
-활성화한 배포 모듈과 사용자 권한에 따라 메뉴·실행 가능 여부가 달라진다.
+`local.sh status`에 표시된 주소로 접속한다. 운영은 [통합 Kubernetes 배포](deployment/kubernetes.md)를 따른다.
+Kubernetes는 [통합 배포](deployment/kubernetes.md)로 Metadata·Ontology·MLOps를 함께 실행한다.
+규격서 처리·물품 사전·법령 수집은 별도 도메인 설정이다. 사용자 권한도 실행 가능 여부를 제한한다.
 메뉴는 데이터·Ontology·MLOps·도메인 관리·업무 앱·공통 운영으로 나눈다.
 AI/AIP는 예약 영역이며 현재 사용할 실행 화면은 없다.
 
@@ -66,8 +66,13 @@ Compose에서는 공통 Worker가 학습마다 전용 컨테이너를 실행하�
 기존 공고·계약·기업 분석과 구형 첨부 자동 수집은 비활성 보관 상태다.
 전체 구현 범위는 [로드맵](roadmap.md), URL과 권한은 [관리 화면 참조](platform/admin_ui.md)를 읽는다.
 
-이미지는 기존 Registry에 직접 push한다. 로컬 k3d는 `localhost:5111`을 사용하며
-Compose·운영 Kubernetes는 배포 환경에서 제공하는 Registry 주소를 사용한다.
+이미지는 반입 PC에서 Harbor에 직접 push한다. 로컬 k3d는 `harbor.teoria.localhost`를 사용하며
+운영은 내부 Harbor 주소를 설정한다. 외부에서 빌드한 이미지를 반입하므로 폐쇄망 빌드·GitHub Actions는 필수가 아니다.
+Teoria는 대용량 이미지 파일을 업로드하거나 Registry로 중계하지 않는다.
+
+Kubernetes MLOps는 PostgreSQL·MinIO·Prefect·MLflow·Teoria를 독립 배포 단위로 관리한다.
+플랫폼 업데이트는 기본 `platform`, 개발 최초 전체 설치는 `all`을 선택한다.
+[배포 수명주기](deployment/kubernetes.md#명령과-실행-순서)를 따른다.
 
 공통 운영의 **컨테이너 이미지**에서는 연결한 외부 Registry의 모델 학습·서빙 repository와
 태그·검증된 digest 참조를 조회한다. [Registry 연결과 배포](deployment/image_registry.md)를 참고한다.
@@ -83,3 +88,8 @@ Kubernetes는 [공통 base와 환경별 overlay](deployment/kubernetes.md)를 �
 기존 EC2 K3s는 k3s overlay를 선택하며 모델 실행·API 계약은 같다. 운영 환경별 검증 여부는 별도로 기록한다.
 로컬 Kubernetes는 [k3d 실행 안내](deployment/k3d.md)의 단일 노드 클러스터와 k3d overlay를 사용한다.
 기존 Semantic 배포를 공유하며 Compose의 규격서 처리 전체 배포와 같은 범위로 간주하지 않는다.
+
+배포 구조 정리로 이미지 빌드 입력을 `deploy/image_builds/`로 옮기고, 작업 배정 Worker와 규격서·법령 실행 이미지를 분리했다.
+규격서 API 인증·S3·역할별 Codex 연결과 업로드 설정을 추가했으며, OpenMetadata 콘솔 주소는 별도 공개 URL을 사용한다.
+[최초 설치 절차](deployment/bootstrap.md)에 따라 기반 서비스·계정·승인 artifact·플랫폼을 순서대로 준비한다.
+실제 통합 신규 설치와 규격서 실행은 아직 운영 검증 전이다.

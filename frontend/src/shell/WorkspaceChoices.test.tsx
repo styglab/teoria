@@ -53,3 +53,26 @@ it.each([
   expect(screen.queryByRole("link", { name: "파이프라인" })).toBeNull();
   expect(screen.queryByRole("link", { name: "FormatID" })).toBeNull();
 });
+
+it.each([
+  { metadata: true, ontology: false, mlops: false },
+  { metadata: false, ontology: true, mlops: false },
+  { metadata: true, ontology: true, mlops: true },
+])("uses explicit features independently of the semantic compatibility field: %j", async (features) => {
+  vi.spyOn(deploymentApi, "status").mockResolvedValue({
+    semantic: false, formatid: false, goods: false, ...features,
+  });
+  render(
+    <MemoryRouter>
+      <DeploymentAvailability>
+        <WorkspaceChoices modelOperationsEnabled={features.mlops} />
+        <span>features loaded</span>
+      </DeploymentAvailability>
+    </MemoryRouter>,
+  );
+  await screen.findByText("features loaded");
+  expect(!!screen.queryByRole("navigation", { name: "데이터 시작" })).toBe(features.metadata);
+  expect(!!screen.queryByRole("navigation", { name: "Ontology 시작" })).toBe(features.ontology);
+  expect(!!screen.queryByRole("navigation", { name: "MLOps 시작" })).toBe(features.mlops);
+  expect(screen.queryByRole("link", { name: "물품 사전" })).toBeNull();
+});

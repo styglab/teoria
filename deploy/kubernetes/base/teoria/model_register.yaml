@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-register
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app: model-register
+    spec:
+      containers:
+      - name: model-register
+        image: teoria/model-dispatcher:release
+        command:
+        - teoria-pipelines
+        - register
+        - --backend
+        - kubernetes
+        - --kind
+        - model-operations
+        env:
+        - name: PREFECT_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: PREFECT_API_URL
+        - name: PREFECT_API_AUTH_STRING
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_AUTH_STRING
+              optional: false
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 2Gi
+      automountServiceAccountToken: false
+      imagePullSecrets:
+      - name: teoria-registry
+      restartPolicy: Never

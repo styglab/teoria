@@ -134,22 +134,11 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Test shared Prefect execution policies
         run: uv run --project backend --locked --all-extras --group orchestration --group kubernetes-orchestration pytest backend/tests/platform/data/operations/test_deployment_registration.py backend/tests/integration/data_operations/test_prefect_scheduling.py
-      - name: Validate Docker Compose
-        env:
-          TEORIA_ADMIN_API_TOKEN: validation
-          TEORIA_MINIO_ROOT_USER: validation
-          TEORIA_MINIO_ROOT_PASSWORD: validation
-          TEORIA_LOCAL_RUNTIME_DB_PASSWORD: validation
-          TEORIA_OPA_CONTROL_PLANE_TOKEN: validation
-          TEORIA_PREFECT_PASSWORD: validation
-          TEORIA_PREFECT_USERNAME: validation
-          TEORIA_RUNTIME_API_TOKEN: validation
-        run: docker compose -f deploy/compose/compose.yaml config --quiet
       - uses: azure/setup-kubectl@v4
         with:
           version: v1.37.1
       - name: Test portable Kubernetes rendering
-        run: uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/entrypoints/test_kubernetes_deployment.py -q
+        run: uv run --project backend --locked --all-extras --group orchestration --group kubernetes-orchestration pytest backend/tests/entrypoints/test_kubernetes_deployment.py backend/tests/integration/test_specification_execution_contract.py -q
       - name: Validate manifests against a Kubernetes API server
         run: |
           set -euo pipefail
@@ -167,31 +156,12 @@ jobs:
           docker exec teoria-ci-k3s kubectl create namespace teoria
           docker exec teoria-ci-k3s kubectl create namespace teoria-pipelines
           docker exec teoria-ci-k3s kubectl create namespace teoria-models
-          # Generic overlays must validate before installing Ingress controller CRDs.
-          for module in semantic mlops; do
-            registry_option=()
-            if [ "$module" = mlops ]; then registry_option=(--model-registry-host registry.example.com); fi
+          # All environments use the same standard Ingress and UI proxy routing.
+          for overlay in generic k3s k3d; do
             bash deploy/kubernetes/deploy.sh ghcr.io/example/teoria aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa teoria.example.com \
-              --modules "$module" --overlay generic --storage-class validation-csi --shared-storage-class validation-rwx --ingress-class public \
-              "${registry_option[@]}" --render > "$RUNNER_TEMP/kubernetes-$module.yaml"
-            docker exec -i teoria-ci-k3s kubectl apply --dry-run=server -f - < "$RUNNER_TEMP/kubernetes-$module.yaml"
-          done
-          # Traefik CRDs are installed separately because this API-only test disables Traefik.
-          docker exec teoria-ci-k3s kubectl apply --server-side -f https://raw.githubusercontent.com/traefik/traefik/v3.7.16/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
-          for phase in execution infrastructure openmetadata application; do
-            namespace=teoria
-            source="base/$phase"
-            if [ "$phase" = execution ]; then namespace=teoria-pipelines; fi
-            if [ "$phase" = application ] || [ "$phase" = infrastructure ]; then source="overlays/k3s/$phase"; fi
-            docker run --rm --entrypoint kubectl -v "$PWD:/work" -w /work \
-              ghcr.io/helmfile/helmfile:v1.7.1 kustomize "deploy/kubernetes/$source" \
-              --load-restrictor LoadRestrictionsNone \
-              > "$RUNNER_TEMP/k3s-$phase.yaml"
-            docker exec -i teoria-ci-k3s kubectl -n "$namespace" apply --dry-run=server -f - \
-              < "$RUNNER_TEMP/k3s-$phase.yaml"
-          done
-          for job in deploy/kubernetes/base/jobs/*.yaml; do
-            docker exec -i teoria-ci-k3s kubectl -n teoria apply --dry-run=server -f - < "$job"
+              --component all --overlay "$overlay" --storage-class validation-csi --shared-storage-class validation-rwx --ingress-class public \
+              --model-registry-host registry.example.com --render > "$RUNNER_TEMP/kubernetes-$overlay.yaml"
+            docker exec -i teoria-ci-k3s kubectl apply --dry-run=server -f - < "$RUNNER_TEMP/kubernetes-$overlay.yaml"
           done
           bash -n deploy/kubernetes/deploy.sh
       - name: Test portable UI proxy routing and authentication
@@ -201,28 +171,9 @@ jobs:
           TEORIA_TEST_KUBERNETES_PROXY_DOCKER=1 TEORIA_KUBERNETES_PROXY_CLIENT_IMAGE=teoria-kubernetes-proxy-client:validation \
             uv run --project backend --locked --all-extras --group orchestration --group docker-orchestration \
             pytest backend/tests/integration/test_kubernetes_proxy_docker.py -q
-      - name: Test Compose volume isolation and authentication
-        run: python3 -m unittest discover -s deploy/compose/tests -v
       - name: Test Registry through the shared edge proxy
         run: |
           docker pull registry:3.1.2
           TEORIA_TEST_REGISTRY_DOCKER=1 TEORIA_REGISTRY_TEST_CLIENT_IMAGE=teoria-kubernetes-proxy-client:validation \
             uv run --project backend --locked --all-extras --group orchestration --group docker-orchestration \
             pytest backend/tests/integration/test_image_registry_docker.py -q
-      - name: Validate Semantic Compose module
-        env:
-          TEORIA_ADMIN_API_TOKEN: validation
-          TEORIA_MINIO_ROOT_USER: validation
-          TEORIA_MINIO_ROOT_PASSWORD: validation
-          TEORIA_LOCAL_RUNTIME_DB_PASSWORD: validation
-          TEORIA_OPA_CONTROL_PLANE_TOKEN: validation
-          TEORIA_PREFECT_PASSWORD: validation
-          TEORIA_PREFECT_USERNAME: validation
-          TEORIA_RUNTIME_API_TOKEN: validation
-        run: >-
-          docker compose
-          -f deploy/compose/compose.yaml
-          -f deploy/compose/compose_data.yaml
-          -f deploy/compose/compose_policy.yaml
-          -f deploy/compose/compose_semantic.yaml
-          config --quiet

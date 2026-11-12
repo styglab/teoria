@@ -18,10 +18,24 @@ AI/AIP는 예약 폴더만 있으며 미구현이다. 기존 기능별 LLM 호�
 | 법령 | 전용 Worker의 수집·시점 검색·진단 근거 조회 |
 | FormatID | 문서 입력·실행·결과·원문 근거·재처리·단계 상태·검증된 평가 근거 연결 |
 | 프런트엔드 기반 | Shell·라우트 분리, 소유 모듈별 API, TanStack Query·요청 취소·세션별 캐시 초기화 |
-| 별도 선택형 MLOps | 외부 이미지 공통 실행 계약·MLflow 조회·모델별 서빙·중지·이전 설정 재배포; Compose Docker와 Kubernetes 실행 구현, K3s 실운영 미검증 |
+| 플랫폼 MLOps | 외부 이미지 공통 실행 계약·MLflow 조회·모델별 서빙·중지·이전 설정 재배포; Kubernetes 실행 구현과 공통 Docker 실행 라이브러리, K3s 실운영 미검증 |
 
 플랫폼 내장 Image Registry 배포를 제거하고 기존 Registry 연결로 전환했다.
-로컬 k3d는 플랫폼·모델 이미지에 공용 Registry 하나를 사용하며 운영은 기존 Registry를 연결한다.
+개발 k3d와 운영은 독립 Harbor release를 이미지 저장소로 사용하도록 구성했다.
+외부 빌드·파일 반입 뒤 내부 PC에서 직접 push하며 Teoria는 프로젝트 목록·태그·digest만 조회한다.
+사용하지 않는 이미지 파일 반입 API·Flow·변환 코드를 제거하고 적용 migration·DB 이력은 유지했다.
+Harbor 프로젝트 API·토큰 인증·고정 chart 렌더링을 검증하며 개발 k3d에서 실제 설치·792MiB 이미지 파일 반입·학습 2회·서빙 전환·실패 후보 복구·롤백을 검증했다.
+[검증 기록](deployment/harbor_validation.md)을 따른다. 원격 개발은 IP의 18443(Teoria)·18444(Harbor) HTTPS 진입을 추가하고
+브라우저 로그인·Registry 인증을 검증했다. 운영은 서비스별 DNS·Ingress 443을 유지한다.
+수십 GB·완전 폐쇄망·운영 배포는 미검증이다.
+Kubernetes MLOps의 배포 단위를 database·storage·workflow·mlflow·platform으로 분리했다.
+기본 코드 배포는 platform만 갱신하고 최초 전체 설치는 all을 명시한다.
+연결 주소는 운영 ConfigMap으로 분리하고 기존 설정을 유지한다.
+배포 정의는 `base/teoria/`·`base/services/`·`base/domains/`에 소유자별로 둔다.
+Kubernetes는 Metadata·Ontology·MLOps 통합 구성 하나를 사용하며 `--modules`·`--features`·조합 프로필을 제거했다.
+기본 배포는 Teoria만 갱신하고 `--component all`은 기반 서비스 준비까지 포함한다.
+규격서·법령 실행과 메타데이터 정기 동기화는 운영 설정으로 별도 활성화한다.
+Compose 배포·전용 코드·CI 검사는 제거하고 Kubernetes 실행 정책만 유지한다. AI/AIP 실행은 미구현이다. [통합 배포 안내](deployment/kubernetes.md)의 실제 환경 검증 범위를 따른다.
 MLflow 화면 인증은 Registry 계정 대신 Prefect 운영 계정을 사용한다.
 내장 Registry가 배포 결과에서 제외되는 검사, 외부 Registry 실컨테이너 연동,
 MLflow 인증 프록시와 Kubernetes API의 server dry-run을 검증했다.
@@ -54,12 +68,12 @@ MLOps의 특정 예제 파라미터 목록·단일 모델 기본값·구형 추�
 후보·연결 판단은 소유 모듈에 두고, 표준 구축 Flow·Task는 I/O·순서·대기·재개를 조립한다.
 격리 PostgreSQL에서 migration·동시 승인·불변 재적용·감사를 검증했으며 실제 문서의 의미 승인·운영 배포는 남아 있다.
 
-구조 변경의 단위 테스트·빌드·Compose 템플릿 검증과 실제 배포 성공은 구분한다.
+구조 변경의 단위 테스트·빌드·Kubernetes 렌더링 검증과 실제 배포 성공은 구분한다.
 현재 물품 Draft 준비의 실제 검증 범위는 [11월 9일 기록](verification/goods_native_draft_preparation_2026_11_09.md)에 있다.
 
 ## 유지하는 범위
 
-공고·계약·낙찰·개찰·업종 수집과 기업 분석은 `archive/procurement_services/`에 비활성 보관한다.
+공고·계약·낙찰·개찰·업종 수집과 기업 분석은 현재 checkout의 실행 코드·배포에서 제외한다. 과거 구현은 Git 이력 또는 별도 보관본에서 확인한다.
 구형 첨부 자동 수집과 참가자격 판단도 재활성화하지 않는다.
 기존 게시·DB·migration 이력을 유지하며, 새 업무 정의는 Ontology에서 작성한다.
 v1 사전 쓰기는 과거 평가·재현을 위한 호환 영역에 둔다.
@@ -73,7 +87,12 @@ generic의 표준 Ingress·공유 스토리지 선택·UI 프록시와 공통 �
 K3s 별도 배포 폴더와 호환 스크립트를 제거하고 EC2 workflow·설치 설정·Secret 예시를 공통 Kubernetes 경로로 통합했다.
 
 로컬 k3d 클러스터·개발 Registry·TLS·보존 스토리지와 k3d overlay를 추가했다.
-공통 Kubernetes 배포와 이미지를 재사용하며 Compose와 EC2 운영 K3s 경로를 유지한다.
+공통 Kubernetes 배포와 이미지를 재사용하며 개발 k3d와 운영 K3s 경로를 유지한다.
 2026-11-11 배포·문서 검사 25개와 실제 k3d 검사 1개가 통과했다.
 Registry pull·로컬 DNS/TLS 서비스 응답·클러스터 재생성 후 데이터 재접속을 확인했다.
 전체 서비스·규격서 처리와 운영 검증 여부는 [k3d 안내](deployment/k3d.md)의 범위와 구분한다.
+
+배포 구조 정리로 이미지 빌드 입력을 `deploy/image_builds/`로 옮기고, 작업 배정 Worker와 규격서·법령 실행 이미지를 분리했다.
+규격서 API 인증·S3·역할별 Codex 연결과 업로드 설정을 추가했으며, OpenMetadata 콘솔 주소는 별도 공개 URL을 사용한다.
+[최초 설치 절차](deployment/bootstrap.md)에 따라 기반 서비스·계정·승인 artifact·플랫폼을 순서대로 준비한다.
+실제 통합 신규 설치와 규격서 실행은 아직 운영 검증 전이다.

@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,10 +39,15 @@ class Settings(BaseSettings):
     admin_data_database_url: str | None = None
     app_database_url: str | None = None
     specification_upload_enabled: bool = False
-    # Legacy API/K3s callers keep their existing routes; Compose sets these explicitly.
+    specification_authoring_api_token: SecretStr | None = None
+    # Kubernetes sets platform/domain activation explicitly; direct API callers retain defaults.
     semantic_modeling_enabled: bool = True
+    goods_authoring_enabled: bool | None = None
+
     formatid_enabled: bool = True
     legal_information_enabled: bool = True
+    image_registry_provider: Literal["distribution", "harbor"] = "distribution"
+    image_registry_project: str = "models"
     image_registry_url: str = ""
     image_registry_public_host: str = ""
     image_registry_username: str = ""
@@ -58,6 +64,7 @@ class Settings(BaseSettings):
     assessment_codex_timeout_seconds: int = Field(default=180, ge=1, le=360)
     openmetadata_enabled: bool = False
     openmetadata_base_url: str = "http://localhost:8585/api"
+    openmetadata_public_url: str = ""
     openmetadata_auth_token: str | None = None
     openmetadata_timeout_seconds: float = Field(default=10.0, gt=0)
     openmetadata_verify_ssl: bool = True
@@ -78,6 +85,34 @@ class Settings(BaseSettings):
     goods_runtime_view_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     runtime_artifact_path: Path | None = None
     runtime_artifact_store: Path | None = None
+
+    @field_validator("openmetadata_public_url")
+    @classmethod
+    def public_console_url(cls, value: str) -> str:
+        if not value:
+            return value
+        parsed = urlsplit(value)
+        try:
+            valid = parsed.scheme in {"http", "https"} and parsed.hostname and parsed.port != 0
+        except ValueError:
+            valid = False
+        if not valid or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("public console URL requires HTTP(S), without credentials, query or fragment")
+        return value.rstrip("/")
+
+    @property
+    def metadata_enabled(self) -> bool:
+        return self.semantic_modeling_enabled
+
+    @property
+    def ontology_enabled(self) -> bool:
+        return self.semantic_modeling_enabled
+
+    @property
+    def goods_authoring_active(self) -> bool:
+        if self.goods_authoring_enabled is not None:
+            return self.goods_authoring_enabled
+        return self.formatid_enabled or self.semantic_modeling_enabled
 
     @field_validator("goods_runtime_view_path", "goods_runtime_view_sha256", mode="before")
     @classmethod

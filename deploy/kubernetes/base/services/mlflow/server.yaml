@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      containers:
+      - name: mlflow
+        image: teoria/mlflow:release
+        command:
+        - mlflow
+        - server
+        - --host
+        - 0.0.0.0
+        - --port
+        - '5000'
+        - --workers
+        - '1'
+        - --static-prefix
+        - /mlflow
+        - --serve-artifacts
+        - --artifacts-destination
+        - s3://teoria-models
+        env:
+        - name: MLFLOW_BACKEND_STORE_URI
+          valueFrom:
+            secretKeyRef:
+              name: model-control
+              key: MLFLOW_BACKEND_STORE_URI
+              optional: false
+        - name: MLFLOW_S3_ENDPOINT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_MODEL_STORAGE_ENDPOINT
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_MINIO_ROOT_USER
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_MINIO_ROOT_PASSWORD
+        - name: MLFLOW_SERVER_ALLOWED_HOSTS
+          value: mlflow:5000,mlflow,mlflow.teoria.svc:5000,mlflow.teoria.svc.cluster.local:5000,localhost:5000,127.0.0.1:5000
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 2Gi
+        ports:
+        - containerPort: 5000
+        readinessProbe:
+          httpGet:
+            path: /mlflow/health
+            port: 5000
+            httpHeaders:
+            - name: Host
+              value: mlflow:5000
+          periodSeconds: 5
+      automountServiceAccountToken: false
+      imagePullSecrets:
+      - name: teoria-registry
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+spec:
+  selector:
+    app: mlflow
+  ports:
+  - port: 5000
+    targetPort: 5000

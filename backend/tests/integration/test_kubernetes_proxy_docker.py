@@ -43,7 +43,7 @@ time.sleep(300)
         content=io.BytesIO()
         with tarfile.open(fileobj=content,mode='w') as archive:
             for filename in ('default.conf.template','start.sh'):
-                archive.add(root/'deploy/kubernetes/components/web_proxy'/filename,arcname='teoria_proxy/'+filename)
+                archive.add(root/'deploy/kubernetes/base/teoria/web_proxy'/filename,arcname='teoria_proxy/'+filename)
         content.seek(0);proxy.put_archive('/etc',content.read());proxy.start()
         deadline=time.monotonic()+20
         while proxy.exec_run(['wget','--quiet','--spider','http://127.0.0.1/health']).exit_code:

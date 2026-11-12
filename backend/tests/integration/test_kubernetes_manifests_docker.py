@@ -32,11 +32,10 @@ def test_generic_manifests_validate_without_traefik(tmp_path):
         else:pytest.fail('isolated Kubernetes API did not become ready')
         for namespace in ('teoria','teoria-pipelines','teoria-models'):
             assert server.exec_run(['kubectl','create','namespace',namespace]).exit_code==0
-        for module in ('mlops','semantic'):
+        for overlay in ('generic','k3s','k3d'):
             args=['bash',str(root/'deploy/kubernetes/deploy.sh'),'ghcr.io/example/teoria','a'*40,'teoria.example.com',
-                '--modules',module,'--overlay','generic','--storage-class','test-csi','--ingress-class','public','--render']
-            if module=='semantic':args += ['--shared-storage-class','test-rwx']
-            else:args += ['--model-registry-host','registry.example.com']
+                '--component','all','--overlay',overlay,'--storage-class','test-csi','--shared-storage-class','test-rwx',
+                '--ingress-class','public','--model-registry-host','registry.example.com','--render']
             rendered=subprocess.run(args,env=environment,text=True,capture_output=True,check=True).stdout
             result=subprocess.run(['docker','exec','-i',server.name,'kubectl','apply','--dry-run=server','-f','-'],
                 input=rendered,capture_output=True,text=True)

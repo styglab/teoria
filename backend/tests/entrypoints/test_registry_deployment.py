@@ -10,12 +10,8 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_platform_deployments_do_not_install_a_registry():
-    for filename in ('compose.yaml', 'compose_mlops.yaml'):
-        compose = yaml.safe_load((ROOT / 'deploy/compose' / filename).read_text())
-        assert 'image-registry' not in compose['services']
-        assert 'registry-data' not in compose.get('volumes', {})
-    assert not (ROOT / 'deploy/kubernetes/base/mlops/registry.yaml').exists()
-    assert 'location /v2/' not in (ROOT / 'deploy/compose/nginx/nginx.conf').read_text()
+    assert not any((ROOT / 'deploy/kubernetes/base').rglob('registry.yaml'))
+    assert 'location /v2/' not in (ROOT / 'deploy/kubernetes/base/teoria/web_proxy/default.conf.template').read_text()
 
 
 def test_k3s_accepts_custom_registry_before_cluster_access(tmp_path):
@@ -57,8 +53,33 @@ def test_k3s_rejects_invalid_model_registry_before_cluster_access():
 def test_external_registry_origin_rejects_credentials_and_non_origin_urls(origin):
     result = subprocess.run([
         'bash', str(ROOT / 'deploy/kubernetes/deploy.sh'), 'ghcr.io/example', 'a' * 40,
-        'teoria.example.com', '--modules', 'mlops', '--model-registry-host', 'registry.example.com',
+        'teoria.example.com', '--overlay', 'k3s', '--model-registry-host', 'registry.example.com',
         '--model-registry-url', origin,
     ], capture_output=True, text=True)
     assert result.returncode != 0
     assert 'Invalid model Registry origin' in result.stderr
+
+
+def test_docker_context_excludes_private_deployment_state_and_keeps_parser(tmp_path):
+    pytest.importorskip('docker')
+    from docker.utils.build import exclude_paths
+    samples = {
+        'deploy/kubernetes/k3d/.local/secrets.env': False,
+        'deploy/kubernetes/k3d/.local/cached_model.tar': False,
+        'deploy/kubernetes/k3d/.local/kubeconfig': False,
+        'deploy/kubernetes/.release_example/kustomization.yaml': False,
+        'deploy/kubernetes/private.env': False,
+        'deploy/kubernetes/private.key': False,
+        'deploy/kubernetes/kubeconfig': False,
+        'backend/src/teoria/settings.py': True,
+        'archive/kory_parser/src/kory_parser/__init__.py': True,
+        'deploy/kubernetes/specification.env.example': True,
+    }
+    for name in samples:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('synthetic input')
+    included = set(exclude_paths(str(tmp_path), (ROOT / '.dockerignore').read_text().splitlines(),
+                                dockerfile='backend/Dockerfile'))
+    for name, expected in samples.items():
+        assert (name in included) is expected, name

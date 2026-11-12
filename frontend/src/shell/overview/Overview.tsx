@@ -33,17 +33,17 @@ export function Overview({
   const statusQuery = useServerQuery(
     ["metadata", "status"],
     (signal) => metadataApi.metadataStatus(signal),
-    { enabled: modules.semantic, refresh },
+    { enabled: modules.metadata, refresh },
   );
   const totalQuery = useServerQuery(
     ["metadata", "table-count-summary"],
     (signal) => metadataApi.metadataTables({ limit: 1 }, signal),
-    { enabled: modules.semantic, refresh },
+    { enabled: modules.metadata, refresh },
   );
   const reviewQuery = useServerQuery(
-    ["metadata", "review-work"],
-    () => loadReviewWork(),
-    { enabled: modules.semantic && !!principal, refresh },
+    ["metadata", "review-work", modules.metadata, modules.ontology],
+    (signal) => loadReviewWork(modules, signal),
+    { enabled: (modules.metadata || modules.ontology) && !!principal, refresh },
   );
   const recentQuery = useServerQuery(
     ["workflows", "home-recent"],
@@ -130,7 +130,7 @@ export function Overview({
       />
       {workspaceChoices}
       <div className="home-shortcuts">
-        {!workspaceChoices && modules.semantic && (
+        {!workspaceChoices && modules.metadata && (
           <Link to="/admin/data-catalog">
             데이터 자산 찾기 <ArrowRight size={13} />
           </Link>
@@ -140,7 +140,7 @@ export function Overview({
             FormatID 시작 <ArrowRight size={13} />
           </Link>
         )}
-        {!workspaceChoices && modules.semantic && (
+        {!workspaceChoices && modules.ontology && (
           <Link to="/admin/semantic-model/ontology">
             의미 모델 탐색 <ArrowRight size={13} />
           </Link>
@@ -161,7 +161,7 @@ export function Overview({
         </section>
       ) : (
         <>
-          {modules.semantic && (
+          {(modules.metadata || modules.ontology) && (
             <section className="home-work-section">
               <header>
                 <h3>검토 대기</h3>
@@ -211,7 +211,7 @@ export function Overview({
           </div>
         </>
       )}
-      {modules.semantic && (
+      {modules.metadata && (
         <footer className="home-service-status">
           <Link to="/admin/data-catalog">
             데이터 자산{" "}
@@ -246,7 +246,7 @@ export function OperationsSettings() {
   const result = useServerQuery(
     ["metadata", "status"],
     (signal) => metadataApi.metadataStatus(signal),
-    { enabled: modules.semantic },
+    { enabled: modules.metadata },
   );
   const status = result.data;
   const error = result.error;
@@ -257,7 +257,7 @@ export function OperationsSettings() {
         description="외부 서비스 연결, 실행 도구와 현재 접근 권한을 확인합니다."
       />
       <div className="overview-columns">
-        {modules.semantic && (
+        {modules.metadata && (
           <section className="workspace-card">
             <h3>메타데이터 연결</h3>
             {error ? (
@@ -279,13 +279,13 @@ export function OperationsSettings() {
               </>
             )}
             <p>자산·설명·소유자·태그·용어의 원천은 OpenMetadata입니다.</p>
-            <a
-              href={`${window.location.protocol}//${window.location.hostname}:8585`}
+            {status?.public_url && <a
+              href={status.public_url}
               target="_blank"
               rel="noreferrer"
             >
               OpenMetadata 열기 ↗
-            </a>
+            </a>}
           </section>
         )}
         <section className="workspace-card">

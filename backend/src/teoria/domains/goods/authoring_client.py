@@ -123,3 +123,32 @@ class GoodsAuthoringClient:
         if not response.is_success:
             raise RuntimeError(f'dictionary meaning API returned HTTP {response.status_code}')
         return response.json()
+
+
+def specification_service_account(token: str):
+    """Allow the active workflows' authoring calls, never Ontology publication or metadata writes.
+
+    The owning services still validate draft/approval state and audit the service actor.
+    Routes use FastAPI templates so IDs cannot expand the permitted API surface.
+    """
+    from teoria.platform.access_control.auth import AdminPrincipal, ServiceAccount
+
+    routes = {
+        ("GET", "/v1/admin/auth/session"),
+        ("GET", "/v1/admin/goods/normalization-profiles/{revision_id}/package"),
+        ("POST", "/v1/admin/goods/normalization-profiles/semantic-operations/{operation_id}"),
+        ("GET", "/v1/admin/goods/normalization-profiles/semantic-operations/{operation_id}"),
+        ("GET", "/v1/admin/goods/dictionary/snapshot"),
+        ("POST", "/v1/admin/goods/dictionary/resolve"),
+        ("POST", "/v1/admin/goods/dictionary/related-context"),
+        ("POST", "/v1/admin/goods/dictionary/operations/{operation_id}"),
+        ("POST", "/v1/admin/goods/dictionary/mappings"),
+        ("GET", "/v1/admin/goods/interpretations/{revision_id}/approval"),
+        ("GET", "/v1/admin/ontology-authoring/versions/{version_id}"),
+        ("GET", "/v1/admin/ontology-authoring/versions/{version_id}/publication"),
+        ("GET", "/v1/admin/specification-processing/application-standards/{release_id}"),
+        ("GET", "/v1/admin/specification-processing/application-standards/sources/{run_id}"),
+        ("POST", "/v1/admin/specification-processing/application-standards"),
+    }
+    return ServiceAccount(token, AdminPrincipal("service:specification-processing", frozenset({"ontology_owner"})),
+                          frozenset(routes))

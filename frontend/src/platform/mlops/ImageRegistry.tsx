@@ -98,7 +98,7 @@ export function ImageRegistry() {
     >
       <PageHeader
         title="컨테이너 이미지"
-        description="모델 학습·서빙 이미지와 고정된 버전 참조를 확인합니다."
+        description="Harbor에 직접 등록한 학습·서빙 이미지와 고정된 버전 참조를 확인합니다."
         actions={
           <button
             className="page-icon-button"
@@ -127,7 +127,7 @@ export function ImageRegistry() {
       ) : !repositories.data ? (
         <PageState loading={!error} title="이미지를 불러오고 있습니다…" />
       ) : !repository ? (
-        <PageState title="등록된 이미지가 없습니다" />
+        <PageState title="등록된 이미지가 없습니다" description="이미지를 Harbor에 push한 뒤 새로고침하세요." />
       ) : (
         <>
           <div className="operations-detail-heading">

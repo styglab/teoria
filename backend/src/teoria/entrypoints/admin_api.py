@@ -80,7 +80,10 @@ def create_admin_app(
     async def deployment(response: Response) -> dict[str, bool]:
         response.headers["Cache-Control"] = "no-store"
         return {
-            "semantic": services.settings.semantic_modeling_enabled,
+            "semantic": services.settings.metadata_enabled and services.settings.ontology_enabled,
+            "metadata": services.settings.metadata_enabled,
+            "ontology": services.settings.ontology_enabled,
+            "goods": services.settings.goods_authoring_active,
             "formatid": services.settings.formatid_enabled,
             "mlops": services.settings.model_operations_enabled,
         }

@@ -12,7 +12,7 @@ from teoria.integrations.prefect.deployment_manifests import (
 
 
 def load_deployments(
-    pipeline_root: Path, backend: str = "process"
+    pipeline_root: Path, backend: str = "kubernetes"
 ) -> list[tuple[Path, dict[str, Any]]]:
     return [
         (deployment_path(pipeline_root, kind, backend), deployment)
@@ -28,7 +28,7 @@ def render_deployment_docs(pipeline_root: Path) -> str:
     lines = [
         "# Pipeline Deployment 목록",
         "",
-        "이 표는 `backend/config/*/prefect_deployments.yaml`과 `deploy/{compose,k3s}/prefect/*.yaml`에서 생성한다. 수동으로 수정하지 않는다.",
+        "이 표는 `backend/config/*/prefect_deployments.yaml`과 `deploy/kubernetes/prefect/*.yaml`에서 생성한다. 수동으로 수정하지 않는다.",
         "저장소에 선언된 설정이며 실행 중인 Prefect Server 상태를 조회한 결과는 아니다.",
         "",
         "```bash",
@@ -36,7 +36,7 @@ def render_deployment_docs(pipeline_root: Path) -> str:
         "```",
         "",
     ]
-    for backend, environment in (("process", "Compose"), ("kubernetes", "K3s")):
+    for backend, environment in (("kubernetes", "Kubernetes"),):
         lines.extend([f"## {environment}", ""])
         for path, deployment in load_deployments(pipeline_root, backend):
             name = deployment["name"]

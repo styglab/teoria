@@ -33,6 +33,8 @@ def install_model_operations_router(
         ImageRegistryClient(
             registry_client,
             url=settings.image_registry_url,
+            provider=settings.image_registry_provider,
+            project=settings.image_registry_project,
             public_host=settings.image_registry_public_host,
             username=settings.image_registry_username,
             password=settings.image_registry_password,

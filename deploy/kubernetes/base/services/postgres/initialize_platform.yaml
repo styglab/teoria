@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: platform-databases-init
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1200
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app: platform-databases-init
+    spec:
+      containers:
+      - name: platform-databases-init
+        image: postgres:17
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: PGHOST
+          value: platform-postgres
+        - name: PGPORT
+          value: '5432'
+        - name: PGDATABASE
+          value: postgres
+        - name: PGUSER
+          value: platform_admin
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_PLATFORM_DB_PASSWORD
+        - name: TEORIA_LOCAL_APP_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_APP_DB_PASSWORD
+        - name: TEORIA_LOCAL_PREFECT_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_LOCAL_PREFECT_DB_PASSWORD
+        - name: TEORIA_MLFLOW_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: model-control
+              key: TEORIA_MLFLOW_DB_PASSWORD
+        - name: OPENMETADATA_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: OPENMETADATA_DB_PASSWORD
+        command:
+        - sh
+        - -ec
+        - "provision() {\n  psql --set=ON_ERROR_STOP=1 --set=db=\"$1\" --set=role=\"\
+          ${3:-$1}\" --set=password=\"$2\" <<'SQL'\nSELECT format('CREATE ROLE %I\
+          \ LOGIN PASSWORD %L', :'role', :'password')\nWHERE NOT EXISTS (SELECT 1\
+          \ FROM pg_roles WHERE rolname=:'role');\n\\gexec\nSELECT format('ALTER ROLE\
+          \ %I PASSWORD %L', :'role', :'password');\n\\gexec\nSELECT format('CREATE\
+          \ DATABASE %I OWNER %I', :'db', :'role')\nWHERE NOT EXISTS (SELECT 1 FROM\
+          \ pg_database WHERE datname=:'db');\n\\gexec\nSELECT format('REVOKE CONNECT\
+          \ ON DATABASE %I FROM PUBLIC', :'db');\n\\gexec\nSELECT format('GRANT CONNECT\
+          \ ON DATABASE %I TO %I, platform_admin', :'db', :'role');\n\\gexec\nSQL\n\
+          }\nprovision teoria_app \"$TEORIA_LOCAL_APP_DB_PASSWORD\"\nprovision prefect\
+          \ \"$TEORIA_LOCAL_PREFECT_DB_PASSWORD\"\nprovision openmetadata_db \"$OPENMETADATA_DB_PASSWORD\"\
+          \ openmetadata_user\nprovision mlflow \"$TEORIA_MLFLOW_DB_PASSWORD\"\n"
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      restartPolicy: Never

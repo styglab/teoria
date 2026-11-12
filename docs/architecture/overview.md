@@ -104,26 +104,38 @@ MLOps의 공통 계약은 외부 이미지 digest·실행 명령·S3 입력 chec
 Prefect는 실행 상태·실행 입력과 이력을 관리하고, Application DB의 `mlops.deployments`는 활성·이전 서빙 설정과
 요청 principal·Prefect 실행 참조를 관리한다. MLflow의 모델 버전·실험 본문은 복제하지 않는다.
 
-Compose는 공통 Worker가 일회성 Docker 학습 컨테이너와 모델별 서빙 컨테이너를 생성한다.
+배포는 Kubernetes를 사용하며 공통 Worker가 학습 Job과 모델별 서빙 Deployment·Service를 생성한다.
 Kubernetes에서는 같은 계약으로 학습 Job과 모델별 Deployment·Service를 생성한다.
 새 서빙의 준비 상태를 확인하고 실패 시 이전 배포를 복원한다. 배포·중지는 모델별 DB lock으로 직렬화한다.
-개발 Compose는 한 Docker 호스트를 사용하며 여러 노드의 자원 배치는 Kubernetes가 맡는다.
+개발 k3d는 한 Docker 호스트를 사용하며 운영의 여러 노드 자원 배치는 Kubernetes가 맡는다.
 
 고객 이탈 샘플의 소스·Dockerfile은 `archive/customer_churn/`에 보관한다. 플랫폼 내부 API·화면·Prefect 배포에서 제거하고 외부 이미지 실행 계약만 사용한다.
-MLOps 기본 구성은 예제 Data DB·별도 OPA 서비스를 시작하지 않으며 Admin bearer 인증을 유지한다.
+통합 Teoria 구성은 Metadata·Ontology·MLOps와 OPA 정책 서비스를 함께 실행하며 Admin bearer 인증을 유지한다.
+Data DB는 `database` 단위로 별도 준비하고 예제 고객 이탈 서비스는 기본 배포에 연결하지 않는다.
 Platform PostgreSQL의 플랫폼·Prefect·MLflow DB와 계정을 분리한다.
 
-Image Registry는 배포 환경의 기존 서비스를 연결한다. 로컬 k3d는 클러스터 공용 Registry를 재사용한다.
+Image Registry는 개발·운영의 독립 Harbor release를 연결한다. 설치 설정은 `deploy/kubernetes/harbor/`가 소유한다.
+이미지는 외부에서 빌드·검증하고 반입 PC에서 Harbor로 직접 push하며 Teoria API·객체 저장소로 이미지 파일을 중계하지 않는다.
 모델 파일과 데이터는 MinIO, 실험·모델 버전은 MLflow,
 실행 이미지는 Registry가 소유한다. 플랫폼 자체 이미지는 외부 배포처·로컬 빌드로 준비한다.
+Kubernetes 배포는 DB·객체 저장소·Workflow·MLflow·Teoria의 배포 수명주기를 분리한다.
+기본 플랫폼 배포는 Teoria와 Application DB migration·Flow 등록만 수행하고 기존 기반 서비스를 연결한다.
+개발 최초 설치 명령이 각 단위를 조립하며 데이터 의미·업무 정책의 기존 소유권은 유지한다.
 플랫폼은 Registry 서버·저장 볼륨 수명주기를 소유하지 않으며 이미지 조회·실행 계약만 소비한다.
 
 [Palantir 모델 통합](https://www.palantir.com/docs/foundry/model-integration/overview/)의 외부 모델 연결·고정 버전·실행 추적 원칙을 참고한다.
 Teoria는 Prefect·MLflow의 권위를 유지하며 모델 실행을 Ontology의 필수 의존성으로 만들지 않는다.
 [모델 실행 계약·검증 범위](../deployment/model_execution.md)와 [이미지 Registry](../deployment/image_registry.md)를 따른다.
 
-Kubernetes 배포는 `deploy/kubernetes/base/`와 환경별 overlay로 분리한다. generic은 표준 Ingress와 기존 UI nginx를 사용하고,
-K3s는 기존 Traefik 경로와 PVC 설정을 보존하며 같은 배포 진입점에서 `--overlay k3s`로 선택한다. 공통 Prefect 실행 정책은 `deploy/kubernetes/prefect/`가 소유한다.
+Kubernetes는 Metadata·Ontology·MLOps를 하나의 Teoria 구성으로 배포한다.
+`base/teoria/`는 플랫폼 실행·권한·Job, `base/services/`는 기반 서비스·초기화,
+`base/domains/`는 도메인 Worker·등록 Job을 소유한다.
+공통 조립은 `base/teoria/kustomization.yaml`, 환경 차이는 `overlays/`가 관리한다.
+기능 조합 프로필과 `--modules`·`--features` 선택은 제거했다.
+도메인 API·Worker·일정은 운영 ConfigMap으로 활성화하며 기본 비활성화한다.
+[통합 배포](../deployment/kubernetes.md)의 준비·이관·검증 범위를 따른다.
+사용자의 시작점은 [배포 안내](../../deploy/README.md)이며 기존 Kustomize·Helm과 운영 경계를 유지한다. generic은 표준 Ingress와 기존 UI nginx를 사용하고,
+K3s도 공통 UI 프록시를 사용하며 같은 배포 진입점에서 `--overlay k3s`로 선택한다. 공통 Prefect 실행 정책은 `deploy/kubernetes/prefect/`가 소유한다.
 로컬 k3d는 같은 K3s 리소스를 재사용하고 `--overlay k3d`로 로컬 인증서·보존 저장소를 선택한다.
 클러스터·개발 Registry 수명주기는 `deploy/kubernetes/k3d/`가 소유한다.
 공유 산출물의 다중 노드 접근·저장소 선택과 검증 범위는 [Kubernetes 배포](../deployment/kubernetes.md)를 따른다.

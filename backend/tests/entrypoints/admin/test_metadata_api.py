@@ -271,3 +271,18 @@ def test_binding_context_filter_validates_and_forwards_exact_ids():
         status=None, limit=100, binding_ids=[UUID(binding_id)]
     )
     assert client.get("/v1/admin/bindings?binding_id=invalid").status_code == 422
+
+
+def test_metadata_browser_url_is_explicit_and_separate_from_internal_api():
+    import pytest
+    for invalid in ('javascript:alert(1)', '//console.example', 'https://user:password@example.com',
+                    'https://example.com:99999', 'https://example.com/?token=private'):
+        with pytest.raises(ValueError):
+            Settings(openmetadata_public_url=invalid)
+    for configured, expected in [('', None), ('https://metadata.example.com/console/', 'https://metadata.example.com/console')]:
+        app = create_admin_app(settings=Settings(openmetadata_public_url=configured),
+            catalog=RegistryLoader(REGISTRIES).load(), metadata_service=FakeMetadataService())
+        with TestClient(app) as client:
+            status = client.get('/v1/admin/metadata/status').json()
+            assert status['public_url'] == expected
+            assert status['base_url'] == 'http://openmetadata/api'

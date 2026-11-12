@@ -157,7 +157,7 @@ class OpaPolicyEvaluator:
 def create_policy_evaluator(settings: Settings) -> PolicyEvaluator:
     if settings.policy_mode == "disabled":
         authenticated_management_only = (
-            not settings.semantic_modeling_enabled
+            not settings.ontology_enabled
             and not settings.formatid_enabled
             and settings.admin_auth_mode == "bearer"
             and bool(settings.admin_api_token)

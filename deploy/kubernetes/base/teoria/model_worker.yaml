@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-training-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-training-worker
+  template:
+    metadata:
+      labels:
+        app: model-training-worker
+    spec:
+      containers:
+      - name: model-training-worker
+        image: teoria/model-dispatcher:release
+        command:
+        - prefect
+        - worker
+        - start
+        - --pool
+        - teoria-model-operations
+        - --type
+        - process
+        - --limit
+        - '2'
+        env:
+        - name: TEORIA_APP_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_APP_DATABASE_URL
+              optional: false
+        - name: PREFECT_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: PREFECT_API_URL
+        - name: PREFECT_API_AUTH_STRING
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_AUTH_STRING
+              optional: false
+        - name: TEORIA_MODEL_STORAGE_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_MODEL_STORAGE_ENDPOINT
+        - name: TEORIA_MODEL_STORAGE_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: model-control
+              key: TEORIA_MODEL_STORAGE_ACCESS_KEY
+        - name: TEORIA_MODEL_STORAGE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: model-control
+              key: TEORIA_MODEL_STORAGE_SECRET_KEY
+        - name: TEORIA_MODEL_EXECUTION_BACKEND
+          value: kubernetes
+        - name: TEORIA_MODEL_KUBERNETES_NAMESPACE
+          value: teoria-models
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: MLFLOW_TRACKING_URI
+        - name: TEORIA_MODEL_ALLOWED_REGISTRIES
+          valueFrom:
+            secretKeyRef:
+              name: model-control
+              key: TEORIA_MODEL_ALLOWED_REGISTRIES
+              optional: false
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 2Gi
+      automountServiceAccountToken: true
+      imagePullSecrets:
+      - name: teoria-registry
+      serviceAccountName: model-executor
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-executor

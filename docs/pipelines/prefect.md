@@ -13,7 +13,7 @@
 | `specification-document-processing` | `mode=document_processing`과 고정 표준을 포함한 manifest | 수동 |
 | `openmetadata-postgres-metadata-sync` | 허용된 ingestion image | 매일 05:00 Asia/Seoul |
 
-규격서 pool은 Compose `teoria-specification`, K3s `teoria-specification-k3s`다.
+규격서 pool은 개발·운영 모두 `teoria-specification-k3s`다. 이름은 기존 실행 이력 호환을 위해 유지한다.
 queue는 `documents`, 전체 동시 실행 상한은 기본 2개이며 각 Deployment는 중복 실행을 막는다.
 Metadata는 별도 `teoria-metadata` pool에서 동시 실행 1개다.
 이전 `teoria-ingestion` pool과 해당 배포는 이력을 보존한 일시정지 상태로 유지한다.
@@ -24,19 +24,19 @@ Metadata는 별도 `teoria-metadata` pool에서 동시 실행 1개다.
 `teoria-legal-information` / `laws`에서 동시 실행 1개로 운영한다.
 월~토 04:15 변경 동기화, 일요일 04:15 전체 연혁 보정이며 시간대는 Asia/Seoul이다.
 일요일 법령 보정은 법령 저장소 전용이며 조달 Backfill을 재개하지 않는다.
-등록은 `prefect-law-deploy`, 실행은 `prefect-law-worker`가 담당한다.
+등록은 `legal-register` Job, 실행은 `prefect-law-worker`가 담당한다.
 세부 수집 정책은 [법령 운영](domains/legal_information.md)을 따른다.
 
 ## 등록과 실행
 
 ```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml -f deploy/compose/compose_formatid.yaml run --rm --no-deps prefect-deploy
+bash deploy/kubernetes/k3d/local.sh deploy
 ```
 
 등록 명령의 `--kind ingestion`은 기존 CLI 호환 이름이다. 현재는 규격서 작업만 등록한다.
 공통 등록 정보는 `backend/config/specification_processing/prefect_deployments.yaml`과
 `backend/config/metadata_management/prefect_deployments.yaml`이다. 환경별 Pool·Queue는
-`deploy/compose/prefect/`와 `deploy/kubernetes/prefect/`에서 선택한다. 등록 명령은 공통 선언과 환경 설정을
+`deploy/kubernetes/prefect/`에 둔다. 등록 명령은 공통 선언과 환경 설정을
 합성한 Prefect YAML을 만들어 실제 `prefect deploy`에 전달한다. 원본 설정 파일은 수정하지 않는다.
 자동화 등록은 과거 수집 pool을 재개하지 않는다.
 
@@ -61,15 +61,15 @@ Prefect UI의 규격서 Deployment에서 `manifest` 객체를 입력해 실행�
 새 이미지 빌드 → 대상 pool 일시정지 → 실행 중 작업 종료 확인 → 배포 등록 →
 Worker 교체 → heartbeat·기동 검사 → 원래 pool 상태 복원 순서로 진행한다.
 이번 전환으로 중단한 과거 수집 pool은 복원 대상이 아니다.
-`up --no-deps`로 DB·다른 서비스를 불필요하게 교체하지 않는다.
+기본 플랫폼 배포는 기반 DB·MinIO·Prefect 서버를 다시 적용하지 않는다.
 기존 작업을 종료한 증거 없이 DB 상태나 checkpoint를 강제로 진행시키지 않는다.
 
 ```bash
-docker compose -f deploy/compose/compose.yaml -f deploy/compose/compose_formatid.yaml logs --tail 100 prefect-worker
+kubectl -n teoria logs deployment/prefect-worker --tail=100
 uv run --locked --project backend teoria-pipelines deployment-docs
 ```
 
-운영 절차와 볼륨·인증은 [Compose](../deployment/compose.md), Metadata 격리는
+운영 절차와 볼륨·인증은 [Kubernetes](../deployment/kubernetes.md), Metadata 격리는
 [OpenMetadata Job](../deployment/openmetadata.md)을 따른다.
 
 ## MLOps 이미지 실행
@@ -77,7 +77,7 @@ uv run --locked --project backend teoria-pipelines deployment-docs
 공통 모델 학습·배포·중지는 `platform/mlops/`의 `model-train`, `model-deploy`,
 `model-stop` 배포가 맡는다. 공통 Worker가 요청한 외부 이미지와 명령을 실행한다.
 모델 소스·학습 의존성·서빙 서버는 해당 이미지에 포함하며 Prefect를 설치할 필요가 없다.
-Compose는 일회성 Docker 컨테이너와 모델별 서빙 컨테이너, Kubernetes는 Job과 Deployment·Service를 사용한다.
+Kubernetes는 학습 Job과 모델별 Deployment·Service를 사용한다. Prefect의 process pool은 클러스터 내부 controller의 실행 방식이며 Compose 배포를 의미하지 않는다.
 
 고객 이탈 전용 Flow·데이터 적재·API·화면은 활성 플랫폼에서 제거했다.
 현재 계약을 사용하는 독립 샘플은 [고객 이탈 이미지](../../archive/customer_churn/README.md)를 따른다.

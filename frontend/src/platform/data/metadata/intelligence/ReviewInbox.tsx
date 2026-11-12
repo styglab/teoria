@@ -12,17 +12,19 @@ import {
   PageState,
   SearchField,
 } from "../../../../components/workspace/WorkspaceLayout";
+import { useDeploymentModules } from "../../../access_control/DeploymentAvailability";
 import { loadReviewWork } from "./review_work";
 import { SuggestionReview } from "./SuggestionReview";
 
 export function ReviewInbox() {
+  const modules = useDeploymentModules();
   const [params, setParams] = useSearchParams();
   const detail =
     params.has("suggestion") ||
     params.has("assetId") ||
     params.has("status") ||
     params.get("kind") === "suggestions";
-  return detail ? (
+  return detail && modules.metadata ? (
     <div className="review-detail-workspace">
       <Link className="breadcrumb-link" to="/admin/changes/review">
         ← 검토함
@@ -34,14 +36,15 @@ export function ReviewInbox() {
   );
 }
 function ReviewQueue() {
+  const modules = useDeploymentModules();
   const [params, setParams] = useSearchParams();
   const kind = params.get("type") || "all";
   const query = params.get("q") || "";
 
   const [refresh, setRefresh] = useState(0);
   const result = useServerQuery(
-    ["metadata", "review-work"],
-    () => loadReviewWork(),
+    ["metadata", "review-work", modules.metadata, modules.ontology],
+    (signal) => loadReviewWork(modules, signal),
     { refresh },
   );
   const data = result.data;
@@ -73,12 +76,12 @@ function ReviewQueue() {
         description="변경 전후와 근거를 확인하고, 유형별 검토 절차로 이어갑니다."
         actions={
           <>
-            <Link
+            {modules.metadata && <Link
               className="operations-link"
               to="/admin/changes/review?kind=suggestions&status=all"
             >
               처리한 제안 보기
-            </Link>
+            </Link>}
             <button
               className="page-icon-button"
               aria-label="검토함 새로고침"

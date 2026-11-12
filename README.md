@@ -26,6 +26,7 @@ AI의 제안과 승인된 정의를 구분한다.
 - [저장소 구조](docs/architecture/repository-structure.md): 코드를 수정할 위치
 - [사용 안내](docs/platform-guide.md): 화면에서 할 수 있는 일
 - [개발 안내](docs/development.md): 설치와 검증 명령
+- [배포 시작 안내](deploy/README.md): Compose와 Kubernetes의 대응·자주 쓰는 명령
 - [k3d 실행](docs/deployment/k3d.md): 로컬 Kubernetes·이미지 빌드·배포·데이터 보존
 - [Compose 실행](docs/deployment/compose.md): 기존 로컬 구성·실행·종료
 - [구현 상태](docs/roadmap.md): 구현한 것과 남은 일

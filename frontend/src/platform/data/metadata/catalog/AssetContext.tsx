@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useServerQuery } from "../../../../api/server_queries";
+import { useDeploymentModules } from "../../../access_control/DeploymentAvailability";
 import { metadataApi } from "./api";
 
 const statuses: Record<string, string> = {
@@ -34,6 +35,7 @@ export function AssetContext({
   tableId: string;
   section?: string;
 }) {
+  const modules = useDeploymentModules();
   const contextQuery = useServerQuery(
     ["metadata", "asset-context", tableId],
     (signal) => metadataApi.assetContext(tableId, signal),
@@ -160,11 +162,11 @@ export function AssetContext({
                 )}
               </>
             )}
-            <Link
+            {modules.ontology && <Link
               to={`/admin/semantic-model/bindings?${new URLSearchParams({ asset: context.technical.reference.fully_qualified_name || "", assetId: tableId })}`}
             >
               의미 연결 관리
-            </Link>
+            </Link>}
           </article>
         )}
         {(section === "all" || section === "governance") && (

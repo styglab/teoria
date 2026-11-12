@@ -12,13 +12,15 @@ export function WorkspaceChoices({
   modelOperationsEnabled: boolean;
 }) {
   const modules = useDeploymentModules();
-  const workspaces = navigationGroups.filter((group) =>
-    group.id === "data" || group.id === "ontology"
-      ? modules.semantic
-      : group.id === "goods_domain"
-        ? modules.semantic || modules.formatid
-        : group.id === "mlops" && modules.mlops && modelOperationsEnabled,
-  );
+  const workspaces = navigationGroups.filter((group) => {
+    switch (group.id) {
+      case "data": return modules.metadata;
+      case "ontology": return modules.ontology;
+      case "goods_domain": return modules.goods;
+      case "mlops": return modules.mlops && modelOperationsEnabled;
+      default: return false;
+    }
+  });
   if (!workspaces.length) return null;
   return (
     <section className="workspace-choices" aria-label="작업 공간 선택">

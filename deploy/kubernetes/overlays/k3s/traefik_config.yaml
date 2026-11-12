@@ -1,0 +1,12 @@
+# K3s/k3d packaged Traefik: large pushes need more than the default read timeout.
+# This is an entrypoint setting and applies to all HTTPS routes on this controller.
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - --entrypoints.websecure.transport.respondingTimeouts.readTimeout=3600s
+      - --entrypoints.websecure.transport.respondingTimeouts.writeTimeout=3600s

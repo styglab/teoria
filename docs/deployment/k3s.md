@@ -5,6 +5,9 @@ K3s를 갱신한다. 현재 구현은 Linux **x86_64 EC2 1대**를 대상으로 
 GitHub 설정은 운영자가 준비한다. 저장소 구성 검증과 실제 EC2 배포 성공은 구분한다.
 현재 환경에서 실제 EC2 연결과 배포는 아직 수행하지 않았다.
 
+Metadata·Ontology·MLOps는 [통합 Teoria 배포](kubernetes.md)를 사용한다.
+workflow는 `TEORIA_DEPLOY_COMPONENT`로 갱신 범위를 고른다. 도메인 실행은 운영 ConfigMap으로 관리한다.
+
 ## 실행 구성과 기준 파일
 
 ```text
@@ -20,22 +23,25 @@ GitHub main → CI → GHCR의 commit SHA 이미지 → EC2 SSH → deploy.sh
 | 목적 | 기준 파일 |
 |---|---|
 | EC2 K3s 설치 설정 | `deploy/kubernetes/overlays/k3s/server_config.yaml` |
-| DB·캐시·검색·영속 볼륨 | `deploy/kubernetes/base/infrastructure/` |
-| OpenMetadata Server | `deploy/kubernetes/base/openmetadata/` |
-| API·UI·진단 Worker | `deploy/kubernetes/base/application/platform.yaml` |
-| OPA와 정책 관리 | `deploy/kubernetes/base/application/policy.yaml` |
-| Prefect와 수집 Worker | `deploy/kubernetes/base/application/prefect.yaml` |
-| HTTPS와 요청 경로 | `deploy/kubernetes/overlays/k3s/application/ingress.yaml` |
-| 순서가 있는 초기화·migration·등록 | `deploy/kubernetes/base/jobs/` |
+| DB·캐시·검색·영속 볼륨 | `deploy/kubernetes/base/services/`, `base/teoria/runtime_storage.yaml` |
+| OpenMetadata Server·검색·schema migration | `deploy/kubernetes/base/services/openmetadata/` |
+| 공통 API·UI·진단 Worker | `deploy/kubernetes/base/teoria/application.yaml`, `base/teoria/assessment_worker.yaml` |
+| OPA와 정책 관리 | `deploy/kubernetes/base/teoria/policy.yaml` |
+| Prefect Server·Redis | `deploy/kubernetes/base/services/prefect/` |
+| 수집 Worker | `deploy/kubernetes/base/domains/` |
+| HTTPS와 요청 경로 | `deploy/kubernetes/base/teoria/ingress.yaml` |
+| 순서가 있는 초기화·migration·등록 | `deploy/kubernetes/base/teoria/`, `base/services/<service>/` |
 | 배포 순서·대기·실패 처리 | `deploy/kubernetes/deploy.sh --overlay k3s` |
 | 환경별 인증정보의 키 목록 | `deploy/kubernetes/secrets.env.example` |
 | 이미지 빌드·EC2 배포 | `.github/workflows/deploy_k3s.yaml` |
 
 Kustomize는 `kubectl`에 포함된 기능만 사용한다. Helmfile이나 별도 GitOps 서버는 필요하지 않다.
-MLflow·Argo CD·Harbor·GPU Operator·MinIO·S3는 이 초기 구성에 추가하지 않는다.
+통합 구성은 MLflow·MinIO를 포함한다. Argo CD·GPU Operator는 기본 설치에 추가하지 않는다.
+Harbor는 플랫폼 배포와 분리된 `deploy/kubernetes/harbor/`의 독립 release로 설치한다.
+기본 배포는 통합 Teoria를 갱신하며 기반 서비스 설치에는 `--component all`을 명시한다.
 모델 이미지는 기존 Registry를 사용하며 `--model-registry-host <hostname>`은 연결할 host를 설정한다.
 [이미지 Registry](image_registry.md)에 설치·CI Registry 변경·Admin 조회 연결을 설명한다.
-규격서 MinIO 기본 저장소는 현재 Compose에 반영돼 있으며 K3s 연결·배포 검증은 별도다.
+규격서 객체 저장소의 계정·bucket·API 연결은 도메인 운영 조건에 맞춰 별도로 준비한다.
 모델 진단은 Codex subprocess를 사용하며 기본적으로 비활성화한다.
 
 ## EC2 최초 준비
@@ -98,8 +104,9 @@ kubectl -n teoria create secret tls teoria-tls \
 선택적 Provider key는 사용하는 연동에만 채운다.
 
 빈 클러스터에서는 기존 DB와 **이미 게시된 Runtime bundle**을 한 번 이관해야 한다.
-`deploy.sh`는 DB 초기화·migration과 OpenMetadata 기동 이후 artifact 확인에서 멈추므로
-이 시점에 DB 복원과 최초 OpenMetadata 계정·ingestion bot 설정을 진행할 수 있다.
+[최초 설치 절차](bootstrap.md)에 따라 기반 서비스를 먼저 준비한 뒤
+DB 복원과 최초 OpenMetadata 계정·ingestion bot 설정을 진행한다.
+`platform`·`all`은 필요한 연동 토큰을 사전에 검사하므로 빈 환경에서 바로 실행하지 않는다.
 OpenMetadata 관리는 EC2에서 `kubectl port-forward service/openmetadata-server 8585:8585`
 후 SSH tunnel을 통해 접속한다. bot JWT를 얻으면 Secret의
 `OPENMETADATA_INGESTION_BOT_TOKEN`, `TEORIA_OPENMETADATA_AUTH_TOKEN`을 갱신한다.
@@ -178,7 +185,7 @@ Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.
 
 | 설정 | 기본값 | 변경 위치 |
 |---|---|---|
-| 수집 전체 requests 예산 | CPU 2·메모리 4Gi | `deploy/kubernetes/base/execution/resource_quota.yaml` |
+| 수집 전체 requests 예산 | CPU 2·메모리 4Gi | `deploy/kubernetes/base/teoria/pipeline_execution/resource_quota.yaml` |
 | 수집 전체 limits 예산 | CPU 4·메모리 8Gi | 같은 ResourceQuota |
 | 작업당 requests | CPU 1·메모리 2Gi | 등록 Job의 `TEORIA_JOB_CPU_REQUEST`, `TEORIA_JOB_MEMORY_REQUEST` |
 | 작업당 limits | CPU 2·메모리 4Gi | 등록 Job의 `TEORIA_JOB_CPU_LIMIT`, `TEORIA_JOB_MEMORY_LIMIT` |
@@ -187,10 +194,10 @@ Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.
 
 공통 등록 명령은 `teoria-pipelines register --backend kubernetes --kind all`이다.
 작업당 기본값은 `backend/src/teoria/integrations/prefect/deployment.py`, 운영 override는
-`deploy/kubernetes/base/jobs/prefect-register.yaml`의 환경변수로 관리한다. Prefect work pool의
+`deploy/kubernetes/base/domains/*/register.yaml`의 환경변수로 관리한다. Prefect work pool의
 base job template에 등록되며, Deployment의 `work_pool.job_variables`로 작업별 CPU·메모리를
 다르게 지정할 수도 있다. 등록 Job이 원본 YAML을 임시 사본으로 변환하므로
-Compose의 Deployment·스케줄·입력 파라미터는 바뀌지 않는다.
+공통 Flow 선언의 스케줄·입력 파라미터는 바뀌지 않는다.
 
 최신 수집은 `latest` Queue, Backfill·보정은 `backfill` Queue를 사용한다.
 기본 동시 실행 상한 내에서 최대 2개 Job을 생성하되 Backfill·보정은 1개까지만 실행한다.
@@ -207,7 +214,7 @@ Job 종료 후 사용 자원은 반환되고 완료 Job은 1시간 뒤 정리된
 자격증명을 받지 않으며 Job에만 필요한 Secret을 전달한다. 배포 스크립트는 `teoria`의 Secret에서
 수집용 키와 registry 인증만 `teoria-pipelines`로 동기화하므로 Secret 회전 후 재배포한다.
 Kubernetes Dispatcher 재시작은 별도 실행 중인 Job을 일괄 취소하지 않는다.
-Compose 시작 시에는 Prefect가 종료를 확인한 실행의 미완료 DB 기록만 정리한다.
+실행 상태 정리는 Prefect가 종료를 확인한 기록을 기준으로 수행한다.
 실행 중이거나 Prefect와 연결을 확인할 수 없는 기록은 자동 취소하지 않는다.
 
 이는 실행 요청에 따라 제한된 범위에서 Job 수를 늘리고 줄이는 구조다. 단일 Flow의 연산을
@@ -235,28 +242,14 @@ Control Plane HA는 CPU·GPU agent 추가와 별개의 datastore·server 구성 
 기존 [scaffold 안내 주소](k3s.md)는 문서 링크 호환을 위해 새 안내를 가리킨다.
 
 
-## HTTP 진입점
+## 공통 Ingress와 배포 경계
 
-Traefik Ingress가 Admin·Runtime API, Prefect와 Admin UI Service로 직접 연결한다.
-Teoria 전용 진입점 nginx Deployment·Service는 사용하지 않는다. UI 이미지는
-`frontend/Dockerfile`의 `standalone` target이며 정적 파일만 제공한다.
+모든 환경에서 표준 Ingress 하나가 Teoria UI에 연결된다.
+UI nginx가 Admin·Runtime API·Prefect·MLflow 경로를 전달하며 MLflow는 운영 계정으로 인증한다.
+Traefik 전용 prefix Middleware와 별도 nginx Deployment는 새 구성에 포함하지 않는다.
+기존 설치에 남은 이전 Ingress·Middleware·nginx는 트래픽 전환 확인 후 운영자가 정리한다.
+배포 스크립트는 기존 리소스를 자동 삭제하지 않는다.
 
-`application/ingress.yaml`은 다음 두 Ingress와 `api-prefix` Middleware를 정의한다.
-
-- `teoria`: `/`는 UI, `/prefect`는 접두어를 유지해 Prefect UI에 전달한다.
-- `teoria-api`: `/admin-api`, `/runtime-api`, `/prefect/api`는 해당 서비스로 전달하며
-  Middleware가 `/admin-api`, `/runtime-api`, `/prefect`를 제거한다.
-- TLS host와 인증서는 두 Ingress에 동일하게 적용한다. Prefect API의 WebSocket은 Traefik이 전달한다.
-
-K3s의 Traefik CRD provider와 `middlewares.traefik.io` CRD가 필요하다. `deploy.sh`는
-두 Ingress의 host를 함께 치환하며, 공개 HTTPS·인증 API·게시 artifact 확인 후 구형
-`Deployment/nginx`와 `Service/nginx`를 제거한다. Traefik 자체는 클러스터의 공용 진입점으로 유지한다.
-
-CI의 API-only K3s 검증은 Traefik을 실행하지 않으므로 공식 Traefik v3.7.16 CRD를 별도 설치한다.
-이 검증과 실제 EC2 클러스터 배포 성공은 구분한다.
-
-MLOps 단독 구성은 주 배포 명령의 `--modules mlops --model-registry-host <hostname>`으로 선택한다.
-공통 학습·서빙 계약과 별도 Secret·namespace 준비는 [모델 실행 안내](model_execution.md)를 따른다.
-
-일반 Kubernetes에서는 [공통 배포 안내](kubernetes.md)의 `generic` overlay를 사용한다.
-공통 리소스와 Prefect 실행 정책은 배포판과 분리하며 K3s의 Traefik·local-path 설정만 전용 overlay에 둔다.
+MLflow·MinIO·OpenMetadata의 독립 갱신과 Secret·게시 artifact 준비는
+[통합 배포 순서](kubernetes.md#명령과-실행-순서)를 따른다.
+일반 Kubernetes에서도 동일한 API·UI·Runtime·Worker 정의를 사용한다.

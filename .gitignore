@@ -1,6 +1,7 @@
 # Custom 
 /archive/customer_churn/
 /archive/kory_parser/verification/
+/archive/deploy/compose
 ##archive/*
 ##!archive/kory_parser/
 references/
@@ -332,3 +333,6 @@ backend/references/**
 /deploy/kubernetes/secrets/
 /deploy/kubernetes/secrets.yaml
 /deploy/kubernetes/secrets.yml
+
+# Temporary offline/lifecycle manifest rendering.
+deploy/kubernetes/.release_*/

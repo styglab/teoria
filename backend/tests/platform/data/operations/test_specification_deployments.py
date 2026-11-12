@@ -25,7 +25,7 @@ def test_active_jobs_include_only_owned_workflows():
     for _, d in deployments:
         if "specification" in d["name"]:
             assert d["schedules"] == []
-            assert d["work_pool"] == {"name": "teoria-specification", "work_queue_name": "documents"}
+            assert d["work_pool"] == {"name": "teoria-specification-k3s", "work_queue_name": "documents"}
             assert "manifest" not in d["parameters"]
 
 

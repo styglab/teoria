@@ -1,21 +1,15 @@
-"""Model settings, archive imports and workload artifacts for the MLOps workspace."""
-import asyncio
-import hashlib
-import json
+"""Model settings and workload artifacts for the MLOps workspace."""
 import os
-from pathlib import Path
-import tempfile
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from teoria.integrations.prefect.http_client import PrefectManagementClient
 from teoria.platform.mlops.artifacts import storage, TrainingResult
 from teoria.platform.mlops.configurations import ConfigurationRepository, ModelConfiguration
 from teoria.platform.mlops.contracts import Name, ServingRequest, TrainingRequest
-from teoria.platform.mlops.image_imports import ImageImportRepository, ImageImportRequest
 
 
 class TrainingInput(BaseModel):
@@ -39,8 +33,6 @@ class DeploymentInput(BaseModel):
 def create_workspace_router(*, settings, authorizer, client, registry):
     router = APIRouter(prefix='/v1/admin', tags=['model-workspace'])
     configs = ConfigurationRepository(settings.app_database_url)
-    imports = ImageImportRepository(settings.app_database_url)
-    slots = asyncio.Semaphore(2)
 
     def ready():
         if not settings.model_operations_enabled or not settings.app_database_url:
@@ -66,12 +58,6 @@ def create_workspace_router(*, settings, authorizer, client, registry):
         ready()
         item = await configs.get(identifier)
         if not item:raise HTTPException(404,'model_configuration_not_found')
-        return item
-
-    async def image_import(identifier):
-        ready()
-        item = await imports.get(identifier)
-        if not item:raise HTTPException(404,'image_import_not_found')
         return item
 
     def contract(kind, value):
@@ -157,59 +143,5 @@ def create_workspace_router(*, settings, authorizer, client, registry):
             return TrainingResult.model_validate_json(body).model_dump()
         except FileNotFoundError:raise HTTPException(404,'training_result_not_available') from None
         except (httpx.HTTPError,ValueError):raise HTTPException(503,'model_artifacts_unavailable') from None
-
-    @router.get('/image-registry/imports')
-    async def list_imports(principal=Depends(authorizer.require())):
-        ready();return {'items':await imports.list()}
-
-    @router.post('/image-registry/imports',status_code=201)
-    async def create_import(payload: ImageImportRequest, principal=Depends(authorizer.require('metadata_admin'))):
-        ready()
-        if registry is None:raise HTTPException(503,'image_registry_not_configured')
-        return await imports.create(uuid4(),payload,principal.actor)
-
-    @router.put('/image-registry/imports/{identifier}/content')
-    async def upload(identifier: UUID, request: Request, principal=Depends(authorizer.require('metadata_admin'))):
-        item = await image_import(identifier)
-        if request.headers.get('content-length') and int(request.headers['content-length']) != item['size_bytes']:
-            raise HTTPException(422,'image_upload_size_mismatch')
-        item = await imports.transition(identifier,['created'],'uploading')
-        if not item:raise HTTPException(409,'image_upload_already_started')
-        try:
-            async with slots:
-                with tempfile.TemporaryDirectory(prefix='teoria-upload-') as directory:
-                    path=Path(directory)/'archive.bin';size=0;digest=hashlib.sha256()
-                    with path.open('wb') as output:
-                        async for chunk in request.stream():
-                            size+=len(chunk)
-                            if size>item['size_bytes']:raise HTTPException(413,'image_archive_too_large')
-                            digest.update(chunk);await asyncio.to_thread(output.write,chunk)
-                    if size != item['size_bytes']:raise HTTPException(422,'image_upload_size_mismatch')
-                    uri=os.getenv('TEORIA_MODEL_ARTIFACT_ROOT','s3://teoria-mlops')+'/imports/'+str(identifier)+'/archive.bin'
-                    await storage(client).upload(uri,path,digest.hexdigest(),size)
-                return await imports.transition(identifier,['uploading'],'uploaded',archive_uri=uri,sha256=digest.hexdigest())
-        except BaseException:
-            await imports.transition(identifier,['uploading'],'failed',error='image_upload_failed')
-            raise
-
-    @router.post('/image-registry/imports/{identifier}/start',status_code=202)
-    async def start_import(identifier: UUID, principal=Depends(authorizer.require('metadata_admin'))):
-        item = await image_import(identifier)
-        if item['status'] in {'queued','importing'}:
-            if item.get('prefect_run_id'):
-                run=await prefect().run(item['prefect_run_id'])
-                if (run.get('state') or {}).get('type') in {'FAILED','CRASHED','CANCELLED'}:
-                    await imports.transition(identifier,['queued','importing'],'failed',error='image_import_interrupted')
-                else:return item
-            else:return item
-        item = await imports.queue(identifier)
-        if not item:raise HTTPException(409,'image_import_not_uploaded')
-        try:
-            run=await submit('model-image-import',{'import_id':str(identifier),'requested_by':principal.actor},principal.actor,
-                             f'import:{identifier}:{item["attempt"]}')
-            return await imports.transition(identifier,['queued','importing'],'queued' if item['status']=='queued' else item['status'],prefect_run_id=run['flow_run_id'])
-        except Exception:
-            await imports.transition(identifier,['queued'],'failed',error='image_import_dispatch_failed')
-            raise
 
     return router

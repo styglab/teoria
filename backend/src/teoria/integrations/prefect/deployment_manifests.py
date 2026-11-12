@@ -11,18 +11,15 @@ DEPLOYMENT_FILES = {
     "model-operations": "model_operations.yaml",
     "metadata": "metadata_management.yaml",
 }
-DEPLOYMENT_ENVIRONMENTS = {"process": "compose", "kubernetes": "kubernetes"}
 
 
-def deployment_directory(pipeline_root: Path, backend: str = "process") -> Path:
-    try:
-        environment = DEPLOYMENT_ENVIRONMENTS[backend]
-    except KeyError:
-        raise ValueError(f"Unsupported deployment backend: {backend}") from None
-    return pipeline_root.resolve().parent / "deploy" / environment / "prefect"
+def deployment_directory(pipeline_root: Path, backend: str = "kubernetes") -> Path:
+    if backend != "kubernetes":
+        raise ValueError(f"Unsupported deployment backend: {backend}")
+    return pipeline_root.resolve().parent / "deploy/kubernetes/prefect"
 
 
-def deployment_path(pipeline_root: Path, kind: str, backend: str = "process") -> Path:
+def deployment_path(pipeline_root: Path, kind: str, backend: str = "kubernetes") -> Path:
     return deployment_directory(pipeline_root, backend) / DEPLOYMENT_FILES[kind]
 
 
@@ -34,7 +31,7 @@ def load_execution_policy(pipeline_root: Path, kind: str, backend: str) -> dict:
 
 
 def load_deployment_manifest(
-    pipeline_root: Path, kind: str, backend: str = "process"
+    pipeline_root: Path, kind: str, backend: str = "kubernetes"
 ) -> dict:
     policy = load_execution_policy(pipeline_root, kind, backend)
     feature = Path(DEPLOYMENT_FILES[kind]).stem

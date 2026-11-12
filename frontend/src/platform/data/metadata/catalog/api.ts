@@ -1,6 +1,7 @@
 import { getJson } from "../../../../api/http_client";
 
 export type MetadataStatus = {
+  public_url?: string | null;
   enabled: boolean;
   available: boolean;
   provider: "openmetadata";

@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metadata-assessment-worker
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: metadata-assessment-worker
+  template:
+    metadata:
+      labels:
+        app: metadata-assessment-worker
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      volumes:
+      - name: metadata-model-auth
+        persistentVolumeClaim:
+          claimName: metadata-model-auth
+      containers:
+      - name: metadata-assessment-worker
+        image: teoria/authoring:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_OPENMETADATA_ENABLED
+          value: 'true'
+        - name: TEORIA_OPENMETADATA_BASE_URL
+          value: http://openmetadata-server:8585/api
+        - name: TEORIA_APP_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_APP_DATABASE_URL
+        - name: TEORIA_ADMIN_DATA_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_DATA_DATABASE_URL
+        - name: TEORIA_OPENMETADATA_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_OPENMETADATA_AUTH_TOKEN
+        - name: TEORIA_ASSESSMENT_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_ENABLED
+        - name: TEORIA_ASSESSMENT_CODEX_MODEL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_CODEX_MODEL
+              optional: true
+        - name: TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS
+              optional: true
+        volumeMounts:
+        - name: metadata-model-auth
+          mountPath: /home/teoria/.codex
+        command:
+        - teoria-metadata-assessment-worker
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+  strategy:
+    type: Recreate

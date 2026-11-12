@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import signal
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -100,12 +101,22 @@ class CodexRunner:
                     schema_path = Path(temp) / "schema.json"
                     schema_path.write_text(json.dumps(output_schema))
                     argv[2:2] = ["--output-schema", str(schema_path)]
-                inference_env = dict(os.environ)
-                for name in (
-                    "TEORIA_SPECIFICATION_AUTHORING_API_TOKEN",
-                    "TEORIA_ADMIN_API_TOKEN",
-                ):
-                    inference_env.pop(name, None)
+                # Inference never inherits DB, object-store, workflow or Admin credentials.
+                allowed = {"PATH", "HOME", "LANG", "TMPDIR", "CODEX_HOME", "OPENAI_API_KEY",
+                           "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY",
+                           "http_proxy", "https_proxy", "all_proxy", "no_proxy",
+                           "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS"}
+                inference_env = {name: value for name, value in os.environ.items()
+                                 if name in allowed or name.startswith("LC_")}
+                auth_path = os.getenv("TEORIA_CODEX_AUTH_PATH")
+                if auth_path:
+                    # A read-only role Secret is copied into a disposable, writable Codex home.
+                    # Token refreshes are local to this call; operators rotate the source Secret.
+                    codex_directory = Path(temp) / "codex"
+                    codex_directory.mkdir(mode=0o700)
+                    shutil.copyfile(auth_path, codex_directory / "auth.json")
+                    (codex_directory / "auth.json").chmod(0o600)
+                    inference_env["CODEX_HOME"] = str(codex_directory)
                 process = await asyncio.create_subprocess_exec(
                     *argv,
                     stdin=asyncio.subprocess.PIPE,

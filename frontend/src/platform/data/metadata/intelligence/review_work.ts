@@ -11,15 +11,17 @@ export type ReviewWorkItem = {
   created: string;
   href: string;
 };
-export async function loadReviewWork() {
+export async function loadReviewWork(features = { metadata: true, ontology: true }, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const items: ReviewWorkItem[] = [];
   const errors: string[] = [];
   let limited = false;
   const results = await Promise.allSettled([
-    suggestionApi.suggestionPage("pending"),
-    bindingApi.bindings("draft"),
-    ontologyApi.authoredOntologies(),
+    features.metadata ? suggestionApi.suggestionPage("pending", undefined, undefined, signal) : Promise.resolve({ items: [], next_cursor: null }),
+    features.ontology ? bindingApi.bindings("draft", undefined, undefined, signal) : Promise.resolve({ items: [] }),
+    features.ontology ? ontologyApi.authoredOntologies(signal) : Promise.resolve({ items: [] }),
   ]);
+  signal?.throwIfAborted();
   const [suggestions, bindings, ontologies] = results;
   if (suggestions.status === "fulfilled") {
     limited = !!suggestions.value.next_cursor;
@@ -58,9 +60,10 @@ export async function loadReviewWork() {
     await Promise.all(
       Array.from({ length: Math.min(4, namespaces.length) }, async () => {
         while (position < Math.min(20, namespaces.length)) {
+          signal?.throwIfAborted();
           const item = namespaces[position++];
           try {
-            const versions = await ontologyApi.ontologyVersions(item.namespace);
+            const versions = await ontologyApi.ontologyVersions(item.namespace, signal);
             items.push(
               ...versions.items
                 .filter((v) => ["in_review", "approved"].includes(v.status))
@@ -79,12 +82,14 @@ export async function loadReviewWork() {
                 })),
             );
           } catch {
+            signal?.throwIfAborted();
             errors.push(`${item.name} 버전`);
           }
         }
       }),
     );
   } else errors.push("온톨로지");
+  signal?.throwIfAborted();
   items.sort((a, b) => b.created.localeCompare(a.created));
   return { items, errors, limited };
 }

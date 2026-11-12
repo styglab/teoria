@@ -1,0 +1,14 @@
+expose:
+  ingress:
+    className: traefik
+persistence:
+  persistentVolumeClaim:
+    registry:
+      storageClass: local-path
+    database:
+      storageClass: local-path
+    redis:
+      storageClass: local-path
+    jobservice:
+      jobLog:
+        storageClass: local-path

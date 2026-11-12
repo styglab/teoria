@@ -40,8 +40,8 @@ def test_registry_pull_and_retained_volume_survive_cluster_recreation(tmp_path):
     config['kubeAPI']['hostPort'] = str(registry_port + 1)
     config['ports'] = []
     config['volumes'][0]['volume'] = host_path + '/storage:/var/lib/rancher/k3s/storage'
-    config['registries']['create'].update(
-        name=registry, hostPort=str(registry_port),
+    config['registries']['create'] = dict(
+        name=registry, host='127.0.0.1', hostPort=str(registry_port),
         volumes=[host_path + '/registry:/var/lib/registry'],
     )
     config['registries']['config'] = yaml.safe_dump({'mirrors': {

@@ -148,7 +148,7 @@ def main() -> int:
         "register", help="register Prefect deployments and queue policies"
     )
     register_parser.add_argument(
-        "--backend", choices=("process", "kubernetes"), required=True
+        "--backend", choices=("kubernetes",), default="kubernetes"
     )
     register_parser.add_argument(
         "--kind",
@@ -413,7 +413,7 @@ def main() -> int:
 
         diagnostics.extend(
             diagnostic
-            for backend in ("process", "kubernetes")
+            for backend in ("kubernetes",)
             for diagnostic in validate_deployment_contracts(
                 pipeline_catalog, load_deployments(args.path, backend)
             )

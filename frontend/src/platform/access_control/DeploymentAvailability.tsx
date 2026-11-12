@@ -3,12 +3,15 @@ import { getJson } from "../../api/http_client";
 import { useServerQuery } from "../../api/server_queries";
 
 export type DeploymentModules = {
-  semantic: boolean;
+  semantic: boolean; // Compatibility with servers predating feature selection.
+  metadata?: boolean;
+  ontology?: boolean;
+  goods?: boolean;
   formatid: boolean;
   mlops: boolean;
 };
 export const deploymentApi = {
-  status: () => getJson<DeploymentModules>("/deployment"),
+  status: (signal?: AbortSignal) => getJson<DeploymentModules>("/deployment", signal),
 };
 // Standalone component tests and legacy embedding retain their existing defaults.
 const DeploymentContext = createContext<DeploymentModules>({
@@ -16,10 +19,18 @@ const DeploymentContext = createContext<DeploymentModules>({
   formatid: true,
   mlops: true,
 });
-export const useDeploymentModules = () => useContext(DeploymentContext);
+export const useDeploymentModules = () => {
+  const modules = useContext(DeploymentContext);
+  return {
+    ...modules,
+    metadata: modules.metadata ?? modules.semantic,
+    ontology: modules.ontology ?? modules.semantic,
+    goods: modules.goods ?? (modules.semantic || modules.formatid),
+  };
+};
 
 export function DeploymentAvailability({ children }: { children: ReactNode }) {
-  const result = useServerQuery(["deployment"], () => deploymentApi.status());
+  const result = useServerQuery(["deployment"], (signal) => deploymentApi.status(signal));
   const modules = result.data;
   const error = result.error;
   if (error)

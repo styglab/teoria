@@ -131,9 +131,15 @@ Worker는 Ontology 저장소를 직접 변경하지 않고 인증된 Admin HTTP 
 | `backend/config/` | 운영 입력·공통 Prefect 등록과 기본 파라미터 |
 | `backend/authoring/` | 작성 입력·Ontology 이관 |
 | `backend/migrations/application/`, `backend/migrations/data/` | 저장소별 순번 migration |
-| `deploy/compose/`, `deploy/kubernetes/` | Compose·공통 Kubernetes 배포·pool·queue·Job 정책 |
+| `deploy/kubernetes/` | 공통 Kubernetes 배포·pool·queue·Job 정책 |
+| `deploy/kubernetes/base/services/` | 독립 PostgreSQL·MinIO·Prefect·MLflow·OpenMetadata 정의와 소유 초기화 Job |
+| `deploy/kubernetes/base/teoria/` | 공통 API·UI·Ingress·선택 Runtime·Worker·모델 실행 권한·등록 Job |
+| `deploy/kubernetes/base/domains/` | 규격서 처리·법령 수집 등 도메인 Worker |
+| `deploy/kubernetes/base/teoria/kustomization.yaml` | Metadata·Ontology·MLOps 통합 플랫폼 조립 |
+| `deploy/image_builds/` | OPA·OpenMetadata ingestion 이미지 빌드 입력 |
+| `deploy/kubernetes/harbor/` | 독립 Harbor Helm release·고정 chart 검증·환경별 values |
 | `deploy/kubernetes/overlays/k3s/` | K3s 전용 overlay·EC2 설치 설정 |
-| `deploy/kubernetes/k3d/`, `deploy/kubernetes/overlays/k3d/` | 로컬 클러스터·Registry·보존 스토리지 설정과 k3d overlay |
+| `deploy/kubernetes/k3d/`, `deploy/kubernetes/overlays/k3d/` | 로컬 클러스터·Harbor DNS/TLS·보존 스토리지·원격 IP 진입과 k3d overlay |
 | `backend/tests/platform/`, `domains/`, `apps/` | 소유 코드에 대응하는 테스트 |
 | `backend/tests/integration/` | 백엔드 모듈 간 연동·실환경 검사 |
 | `tests/documentation/` | 문서 링크·목차 검사 |

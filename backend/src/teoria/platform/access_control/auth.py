@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import httpx
 import jwt
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from teoria.settings import Settings
@@ -17,6 +17,15 @@ class AdminPrincipal:
     roles: frozenset[str]
 
 
+@dataclass(frozen=True)
+class ServiceAccount:
+    """A service identity restricted to explicit HTTP route templates and methods."""
+
+    token: str = field(repr=False)
+    principal: AdminPrincipal
+    routes: frozenset[tuple[str, str]]
+
+
 class AdminAuthorizer:
     """Authentication and role checks at the Admin API boundary.
 
@@ -25,9 +34,14 @@ class AdminAuthorizer:
     role mappings. A shared bearer credential is never an OIDC fallback.
     """
 
-    def __init__(self, settings: Settings, *, oidc_client: httpx.AsyncClient | None = None) -> None:
+    def __init__(self, settings: Settings, *, oidc_client: httpx.AsyncClient | None = None,
+                 service_accounts: tuple[ServiceAccount, ...] = ()) -> None:
         self.mode = settings.admin_auth_mode
         self.token = settings.admin_api_token
+        self.service_accounts = service_accounts
+        tokens = [account.token for account in service_accounts]
+        if any(not token for token in tokens) or len(set(tokens)) != len(tokens) or self.token in tokens:
+            raise ValueError("service credentials must be nonempty, unique and distinct from the Admin token")
         self.actor = settings.admin_api_actor
         self.roles = frozenset(role.strip() for role in settings.admin_api_roles.split(",") if role.strip())
         self.oidc = None
@@ -49,11 +63,19 @@ class AdminAuthorizer:
 
     def require(self, *required_roles: str):
         async def dependency(
+            request: Request,
             credentials: HTTPAuthorizationCredentials | None = Depends(self._bearer),
         ) -> AdminPrincipal:
             if self.mode == "bearer":
                 supplied = credentials.credentials if credentials and credentials.scheme.lower() == "bearer" else ""
-                if self.oidc is not None:
+                account = next((account for account in self.service_accounts
+                                if secrets.compare_digest(supplied, account.token)), None)
+                if account is not None:
+                    route = request.scope.get("route")
+                    if (request.method, getattr(route, "path", "")) not in account.routes:
+                        raise HTTPException(status_code=403, detail={"code": "service_route_forbidden"})
+                    principal = account.principal
+                elif self.oidc is not None:
                     try:
                         actor, roles = await self.oidc.verify(supplied)
                         principal = AdminPrincipal(actor, roles)

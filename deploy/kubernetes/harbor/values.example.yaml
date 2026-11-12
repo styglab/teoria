@@ -1,0 +1,16 @@
+# Copy outside the checkout, chmod 600 and replace every CHANGE_ME.
+# The DB password is an initial setting; updates require a DB rotation procedure.
+externalURL: https://harbor.example.com
+expose:
+  ingress:
+    hosts:
+      core: harbor.example.com
+    # generic: set the installed IngressClass; k3d/k3s use traefik.
+    # className: public
+# k3d: change both addresses above to harbor.teoria.localhost.
+database:
+  internal:
+    password: CHANGE_ME
+# For generic, configure all PVC classes if the default is unsuitable.
+# For offline installation, override image repositories here if bootstrapped
+# images are served by an existing internal registry rather than preloaded.

@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: legal-register
+spec:
+  activeDeadlineSeconds: 1200
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: legal-register
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - command:
+        - teoria-pipelines
+        - register
+        - --backend
+        - kubernetes
+        - --kind
+        - legal-information
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_PIPELINE_PATH
+          value: /app/backend
+        - name: PREFECT_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: PREFECT_API_URL
+        - name: TEORIA_OPENMETADATA_INGESTION_ALLOWED_IMAGE
+          value: teoria/ingestion:release
+        - name: PREFECT_API_AUTH_STRING
+          valueFrom:
+            secretKeyRef:
+              key: PREFECT_API_AUTH_STRING
+              name: teoria-secrets
+        - name: TEORIA_PIPELINE_JOB_IMAGE
+          value: teoria/legal-job:release
+        - name: TEORIA_PIPELINE_CONCURRENCY
+          value: '2'
+        - name: TEORIA_PREFECT_SCHEDULES_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_LEGAL_INFORMATION_ENABLED
+        image: teoria/pipelines:release
+        name: legal-register
+        resources:
+          limits:
+            cpu: '1'
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+      imagePullSecrets:
+      - name: teoria-registry
+      restartPolicy: Never
+  ttlSecondsAfterFinished: 86400

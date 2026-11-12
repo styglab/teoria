@@ -61,7 +61,7 @@ def validate(root: Path) -> tuple[list[str], int, int]:
     docs = sorted((root / 'docs').rglob('*.md'))
     docs += sorted((root / 'archive/kory_parser/docs').rglob('*.md'))
     docs += sorted((root / 'archive/kory_parser_evaluation/docs').rglob('*.md'))
-    sources = [p for p in [root / 'README.md', root / 'AGENTS.md',
+    sources = [p for p in [root / 'README.md', root / 'AGENTS.md', root / 'deploy/README.md',
                            root / 'archive/kory_parser/README.md',
                            root / 'archive/kory_parser_evaluation/README.md'] if p.exists()]
     sources += docs + sorted((root / '.agents/skills').rglob('*.md'))

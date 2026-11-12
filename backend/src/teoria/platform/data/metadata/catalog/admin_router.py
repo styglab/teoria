@@ -17,6 +17,7 @@ def create_metadata_router(
     context_service=None,
     *,
     public_read: bool = False,
+    public_url: str = "",
 ) -> APIRouter:
     router = APIRouter(
         prefix="/v1/admin/metadata",
@@ -47,7 +48,7 @@ def create_metadata_router(
                 enabled=False, available=False, reason="openmetadata_disabled"
             ).model_dump()
         try:
-            return (await service.status()).model_dump()
+            return {**(await service.status()).model_dump(), "public_url": public_url or None}
         except OpenMetadataError as exc:
             return MetadataStatus(
                 enabled=True,
@@ -55,7 +56,7 @@ def create_metadata_router(
                 base_url=service.base_url,
                 database_service=service.database_service,
                 reason=exc.code,
-            ).model_dump()
+            ).model_dump() | {"public_url": public_url or None}
 
     @router.get("/services")
     async def services(

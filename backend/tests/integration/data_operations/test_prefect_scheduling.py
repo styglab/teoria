@@ -17,7 +17,7 @@ def prefect_server():
         yield
 
 
-@pytest.mark.parametrize("backend", ["process", "kubernetes"])
+@pytest.mark.parametrize("backend", ["kubernetes"])
 @pytest.mark.asyncio
 async def test_queue_priority_concurrency_and_slot_release(
     prefect_server, monkeypatch, backend
@@ -88,13 +88,13 @@ def execute(directory: str):
 
     sample = load_flow_from_entrypoint(f"{source}:execute")
     async with get_client() as client:
-        pool = await configure_pool(client, backend="process", kind="ingestion")
+        pool = await configure_pool(client, backend="kubernetes", kind="metadata")
         flow_id = await client.create_flow(sample)
         deployment_id = await client.create_deployment(
             flow_id=flow_id,
             name="retry-check",
             work_pool_name=pool,
-            work_queue_name="documents",
+            work_queue_name="default",
             entrypoint=f"{source}:execute",
             path=str(tmp_path),
             pull_steps=[],

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7.0
 FROM node:22-bookworm-slim AS model_cli
 RUN npm install --global @openai/codex@0.162.1
 
@@ -19,7 +20,6 @@ CMD ["teoria-runtime-api"]
 
 FROM runtime AS admin
 COPY --chown=teoria:teoria backend/config ./backend/config
-COPY --chown=teoria:teoria deploy/compose/prefect ./deploy/compose/prefect
 COPY --chown=teoria:teoria backend/authoring/ontology_migrations ./backend/authoring/ontology_migrations
 COPY --chown=teoria:teoria backend/authoring/ontology_blueprints ./backend/authoring/ontology_blueprints
 COPY --chown=teoria:teoria backend/authoring/normalization_profiles ./backend/authoring/normalization_profiles
@@ -43,7 +43,6 @@ COPY --chown=teoria:teoria backend/config ./backend/config
 COPY --chown=teoria:teoria backend/references ./backend/references
 COPY --chown=teoria:teoria backend/verification_cases ./backend/verification_cases
 COPY --chown=teoria:teoria backend/migrations/data ./backend/migrations/data
-COPY --chown=teoria:teoria deploy/compose/prefect ./deploy/compose/prefect
 COPY --chown=teoria:teoria deploy/kubernetes/prefect ./deploy/kubernetes/prefect
 ENV TEORIA_PIPELINE_PATH=/app/backend
 
@@ -87,8 +86,7 @@ RUN mkdir -p /app/specification_inputs /app/specification_artifacts /home/teoria
 USER teoria
 CMD ["teoria-pipelines", "worker", "--pool", "teoria-specification"]
 
-FROM worker AS kubernetes-worker
-USER root
+FROM data-operations AS kubernetes-worker
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --locked --no-dev --group orchestration --group kubernetes-orchestration --no-editable
 USER teoria
@@ -96,7 +94,8 @@ USER teoria
 FROM data-operations AS metadata-worker
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --project backend --locked --no-dev --group metadata-orchestration --no-editable
-# Docker socket privileges are isolated to this worker; ingestion runs in its own image.
+# Ingestion runs in a separate ephemeral Kubernetes Job.
+USER teoria
 CMD ["prefect", "worker", "start", "--pool", "teoria-metadata"]
 
 FROM base AS mcp
@@ -126,8 +125,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 USER teoria
 CMD ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000"]
 
-# Dispatchers create ephemeral training containers without passing Docker access to jobs.
+# Dispatchers create ephemeral training Jobs using the native async HTTP executor.
 FROM data-operations AS model-dispatcher
+ENV TEORIA_MODEL_EXECUTION_BACKEND=kubernetes
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --project backend --locked --no-dev --group orchestration --group docker-orchestration --no-editable
+    uv sync --project backend --locked --no-dev --group orchestration --no-editable
+USER teoria
 CMD ["prefect", "worker", "start", "--pool", "teoria-model-operations", "--type", "process"]

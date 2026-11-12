@@ -18,10 +18,7 @@ if TYPE_CHECKING:
 def install_goods_authoring_routers(app: FastAPI, services: AdminServices):
     """Domain authoring consumes Ontology contracts; it is not a FormatID implementation."""
     dependency_reader = None
-    if (
-        services.settings.semantic_modeling_enabled
-        or services.settings.formatid_enabled
-    ):
+    if services.settings.goods_authoring_active:
         profiles = (
             NormalizationProfileService(
                 services.settings.app_database_url,
@@ -79,3 +76,9 @@ def install_goods_authoring_routers(app: FastAPI, services: AdminServices):
             )
         )
     return dependency_reader
+
+
+def goods_ontology_migration_manifest(registry_path):
+    """Compatibility manifest for the goods migration; selected by the goods composition."""
+    root = registry_path.parent.parent if registry_path.parent.name == "contracts" else registry_path.parent
+    return root / "authoring/ontology_migrations/pending/2026_10_goods_focus/ontology_v2.yaml"

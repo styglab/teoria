@@ -1,256 +1,82 @@
 # 환경 설정과 인증정보
 
-```bash
-cp deploy/compose/.env.example deploy/compose/.env
-uv sync --project backend --locked --all-extras --all-groups
-```
-
-Python 의존성은 `backend/pyproject.toml`, 잠금은 `backend/uv.lock`에 둔다.
-API·MCP extra와 Worker별 dependency group으로 실행 환경을 구분한다.
-
-현재 조달·기업 API credential은 활성 Compose 서비스에 주입하지 않는다.
-법령 전용 Worker에는 `TEORIA_CONNECTOR_MOLEG_LAW_API_KEY`를 주입한다.
-아래 Provider 관련 변수는 공통 엔진의 설정 참조이며 현재 수집 기능을 뜻하지 않는다.
-규격서 모델 인증은 별도 `specification-model-auth` volume, parser는
-`TEORIA_SPECIFICATION_PARSER_PYTHON`을 사용한다.
+배포 입력은 `deploy/kubernetes/`의 값 없는 예시와 소유 리소스를 기준으로 관리한다.
+현재 실행 환경은 개발 k3d와 운영 k3s·일반 Kubernetes다. `deploy/compose/` 배포 경로는 제거했다.
+[통합 배포](kubernetes.md)와 [개발 k3d](k3d.md)의 준비 순서를 따른다.
 
 ## 설정을 읽는 위치
 
-| 대상 | 기준 코드·설정 |
+| 대상 | 기준 위치 |
 |---|---|
-| Platform·Runtime·Admin | `backend/src/teoria/settings.py` |
-| Pipelines | `backend/src/teoria/platform/data/operations/settings.py` |
-| DB 연결 상한 | Application DB `integrations/application_database/postgres.py`, Data DB `integrations/data_database/connection.py`의 환경변수 |
-| MCP | `backend/src/teoria/entrypoints/mcp/settings.py` |
-| Compose 서비스·포트·이미지·필수 인증 | `deploy/compose/compose*.yaml`, `.env.example` |
-| 공통 Kubernetes·환경 overlay | `deploy/kubernetes/` |
-| EC2 K3s·GitHub CD | `deploy/kubernetes/overlays/k3s/`, `.github/workflows/deploy_k3s.yaml` |
+| Python 설정·기본값 | `backend/src/teoria/settings.py` |
+| 일반 연결 주소·도메인 실행 여부 | `deploy/kubernetes/connections.env.example` → ConfigMap |
+| 플랫폼·서비스 비밀값 | `deploy/kubernetes/secrets.env.example` → `teoria-secrets` |
+| 모델 controller 비밀값 | `deploy/kubernetes/control.env.example` → `model-control` |
+| 모델 Job·서빙 비밀값 | `deploy/kubernetes/workload.env.example` → `model-workload` |
+| 컨테이너 실행·Secret 주입 | `deploy/kubernetes/base/`의 소유 리소스 |
+| 환경별 저장소·Ingress | `deploy/kubernetes/overlays/` |
+| Prefect pool·queue·Job 정책 | `deploy/kubernetes/prefect/` |
 
-쉘 환경변수가 env 파일보다 우선한다. Compose 밖의 실행은 `TEORIA_ENV_FILE`로 파일을
-선택한다. `TEORIA_ENVIRONMENT=production`에서 파일을 명시하지 않으면 작업 디렉터리의
-`.env`를 자동으로 읽지 않는다. 아래는 주요 변수의 참조이며 전체 기본값은 위 코드가 기준이다.
+API는 `bootstrap_settings()`를 통해 환경변수와 명시적 `TEORIA_ENV_FILE`을 읽는다.
+운영 컨테이너는 호스트의 `.env`를 자동으로 읽지 않는다.
+소스 checkout에 실제 비밀번호·토큰을 저장하지 않고 보안 운영 경로에서 Secret을 준비한다.
 
-## 프로세스 기본값과 Compose 주입값
+## 통합 플랫폼과 도메인 설정
 
-아래 표의 기본값은 Python 설정 모델 기준이다. Compose 전용 변수는 배포 정의의
-기본값을 표시한다. `.env.example`은 설정 예이며 실제 환경변수와 Compose의 고정값·
-fallback이 최종 실행값을 결정한다. `mlops`·`semantic`·`formatid` 모듈은 해당 Compose 파일이
-API 기능 flag를 함께 설정한다. `.env`의 예전 `TEORIA_MODEL_OPERATIONS_ENABLED`만으로 모듈을 켜지 않는다.
-다음 차이를 먼저 확인한다.
+Kubernetes 정의는 Metadata·Ontology·MLOps를 함께 활성화한다.
+기능 조합용 `TEORIA_FEATURES`와 배포의 `--modules`·`--features`는 사용하지 않는다.
+규격서 처리·법령 수집과 원천별 일정은 다음 ConfigMap 값으로 운영한다.
 
-| 설정 | Python 기본값 | 현재 Compose 주입 |
+| 키 | 기본값 | 효과 |
 |---|---|---|
-| `TEORIA_ENVIRONMENT` | `development` | Platform 서비스 `production` |
-| `TEORIA_ADMIN_AUTH_MODE` | `disabled` | `bearer`; Admin token 필수 |
-| `TEORIA_POLICY_MODE` | `disabled` | Runtime·Admin에 `opa` |
-| `TEORIA_OPENMETADATA_ENABLED` | `false` | `semantic` 선택 시 Admin·진단 Worker에서 기본 `true`; 기본 구성은 `false` |
-| `TEORIA_OPENMETADATA_BASE_URL` | `http://localhost:8585/api` | 기본 `http://openmetadata-server:8585/api` |
-| `TEORIA_OPENMETADATA_AUTH_TOKEN` | 없음 | 명시 token이 없으면 ingestion bot token fallback |
-| `TEORIA_RUNTIME_ARTIFACT_STORE` | 없음 | `semantic` 선택 시 Runtime·Admin의 `/app/runtime_artifacts` |
-| `TEORIA_CONTEXT_RUNTIME_API_URL` | `http://localhost:8000` | `semantic` 선택 시 Admin의 `http://runtime-api:8000` |
-| `TEORIA_CONTEXT_RUNTIME_API_TOKEN` | 없음 | Runtime service token 주입 |
-| Data DB URL | Python 설정값 없음 | 외부 URL 또는 내부 PostgreSQL의 역할별 URL |
+| `TEORIA_SPECIFICATION_PROCESSING_ENABLED` | `false` | FormatID·물품 작성 API·규격서 Worker·선언된 일정 |
+| `TEORIA_LEGAL_INFORMATION_ENABLED` | `false` | 법령 API·전용 Worker·선언된 일정 |
+| `TEORIA_METADATA_SYNC_SCHEDULE_ENABLED` | `false` | Teoria Data DB 메타데이터 정기 동기화 |
 
-Compose의 hostname은 내부 network용이다. 호스트에서 API를 호출할 때는 공개 nginx
-주소를 사용한다. 토큰과 암호를 포함한 설정 전체를 로그에 출력하지 않는다.
+값은 `true` 또는 `false`다. 입력·저장소·소유 API 인증·법령 키 등 해당 기능의 실행 조건을 준비한 뒤 활성화한다.
+설정을 바꾼 후 플랫폼을 다시 배포하면 API와 Worker·Flow 등록에 함께 반영한다.
+배포는 기존 ConfigMap을 기본값으로 덮어쓰지 않는다.
 
-### Compose 환경 파일 관리
+## DB·객체 저장소·Registry
 
-`deploy/compose/.env`에는 Compose가 실제로 참조하는 인증정보·계정, 배포 이미지 태그와
-의도적인 override만 둔다. `.env.example`은 같은 이름·기능별 구분으로 지원 입력과 기본값을 안내한다.
-예제의 앞부분에서 공통 필수값과 선택한 모듈의 필수값을 입력하고, 사용하지 않는 모듈 구간은 삭제한다.
-뒷부분의 선택 설정은 주석 상태로 두면 Compose 기본값을 사용한다. 변경할 항목만 주석을 해제한다.
-OpenMetadata 인증 토큰은 연결 대상의 인증 설정에 맞춰 지정한다. 외부 Registry의 주소·조회 계정·필요한 CA는 연결 설정으로 제공한다.
-기존 배포의 DB 암호와 검증한 이미지 태그는 유지한다. 컨테이너 내부 경로·주소·인증 모드는
-`compose.yaml`이 소유하며 `.env`의 임의 변수가 자동으로 컨테이너에 전달되지는 않는다.
-호스트 직접 실행용 Settings와 비활성 Provider credential을 Compose 파일에 섞지 않는다.
+`TEORIA_APP_DATABASE_URL`은 Teoria Application DB 전용 계정이다.
+Data DB 수집·이관은 `TEORIA_PIPELINE_DATA_DATABASE_URL`, Runtime 조회는 `TEORIA_RUNTIME_DATA_DATABASE_URL`로 분리한다.
+Platform PostgreSQL 관리 계정은 DB·계정 준비 Job에만 사용한다.
+Prefect·MLflow·OpenMetadata는 각자의 DB와 계정을 사용하며 Teoria API가 내부 테이블을 직접 관리하지 않는다.
+URL 안의 비밀번호는 URL-encode하고 DB 계정 암호와 일치시킨다.
 
-| 입력 | 의미 |
-|---|---|
-| `TEORIA_MINIO_ROOT_USER` / `TEORIA_MINIO_ROOT_PASSWORD` | MinIO 관리자 로그인과 초기화 계정; 현재 로컬 MLflow 저장 연결에도 사용 |
-| `TEORIA_SPECIFICATION_WORKER_STORAGE_ACCESS_KEY` / `TEORIA_SPECIFICATION_WORKER_STORAGE_SECRET_KEY` | 규격서 원본·산출물 쓰기 계정 |
-| `TEORIA_SPECIFICATION_API_STORAGE_ACCESS_KEY` / `TEORIA_SPECIFICATION_API_STORAGE_SECRET_KEY` | 규격서 Admin API의 조회 계정 |
-| `TEORIA_RUNTIME_API_IMAGE` | Runtime API 이미지 선택 |
-| `TEORIA_ADMIN_API_IMAGE` | Admin HTTP 이미지 선택 |
-| `TEORIA_SPECIFICATION_WORKER_IMAGE` | 규격서 Worker 이미지 선택 |
-| `TEORIA_MINIO_MC_BUILD_CONTEXT` | 선택형 MinIO 클라이언트 빌드 원본; 기본은 공식 이미지 |
-| `TEORIA_OPENMETADATA_INGESTION_BUILD_CONTEXT` | 선택형 OpenMetadata ingestion 빌드 원본; 기본은 공식 이미지 |
+모델 객체 저장소 계정은 controller와 workload로 분리한다. Job에는 허용한 저장소 credential만 전달한다.
+OpenMetadata ingestion bot은 `OPENMETADATA_INGESTION_BOT_TOKEN`, 플랫폼 조회 연결은
+`TEORIA_OPENMETADATA_AUTH_TOKEN`을 사용한다.
 
-두 빌드 원본 입력은 실행 컨테이너나 저장소 설정이 아니다. 레지스트리 장애 시 검증한 동일 버전의
-로컬 OCI 이미지(`oci-layout:///절대경로:태그`)를 지정할 수 있다. 이 경로는 빌드하는 머신에 있어야 한다.
-기본 공식 이미지에 접근할 수 있으면 값을 비워 둔다. 서버별 캐시를 새 환경에서 그대로 참조하지 않는다.
+이미지 Registry는 [Harbor](image_registry.md)로 별도 운영한다. 플랫폼은 Registry 서버를 설치하지 않는다.
+조회 계정과 이미지 pull·개발자 push 계정의 역할을 구분한다.
 
-이전 MinIO `TEORIA_MINIO_ACCESS_KEY` / `TEORIA_MINIO_SECRET_KEY`는 각각
-`TEORIA_MINIO_ROOT_USER` / `TEORIA_MINIO_ROOT_PASSWORD`로 이름을 바꿨다.
-기존 `.env`를 사용하는 다른 배포에서는 값을 그대로 새 이름으로 옮긴다. 계정·암호를 변경하는 작업은 아니다.
-이미지 태그를 생략하면 Compose의 `latest` 기본값을 사용한다. 기존에 검증한 릴리스 태그는
-유지하고 명시적인 배포 때 변경한다. 태그 변경이나 `.env` 편집 자체가 빌드·재배포를 실행하지는 않는다.
+## API·Runtime·정책 인증
 
-### 공통·경로
+운영 Admin API는 `TEORIA_ADMIN_AUTH_MODE=bearer`와 `TEORIA_ADMIN_API_TOKEN`을 사용한다.
+Runtime token은 `TEORIA_RUNTIME_API_TOKEN`, Context의 Runtime 호출 인증은 별도로 주입한다.
+인증된 principal이 작성·검토·승인의 주체이며 요청 body의 actor·reviewer 문자열을 권위로 삼지 않는다.
+개발용 disabled 인증을 외부로 노출하지 않는다.
 
-| 변수 | 기본값 | 의미 |
-|---|---|---|
-| `TEORIA_ENVIRONMENT` | `development` | 개발·테스트·운영 구분: `development`, `test`, `production` |
-| `TEORIA_ENV_FILE` | 개발 시 작업 디렉터리 `.env` | 로컬 프로세스가 읽을 환경 파일 경로 |
-| `TEORIA_REGISTRY_PATH` | `backend/contracts/runtime` | Platform Registry |
+Ontology Runtime은 checksum 검증된 게시 artifact만 적재한다.
+`TEORIA_RUNTIME_ARTIFACT_STORE`는 versioned artifact 저장소이며 authoring YAML을 운영 fallback으로 읽지 않는다.
+운영 의미 실행은 OPA를 사용한다. 정책 control-plane token·서명키·bundle은 API bearer token과 별도로 관리한다.
+배포가 의미 정의를 자동 승인·게시하지 않는다.
 
-### Runtime·Context·정책
+## 자산 진단 Worker
 
-| 변수 | 기본값 | 의미 |
-|---|---|---|
-| `TEORIA_SOURCE_TIMEOUT_SECONDS` | `15` | Runtime Source timeout |
-| `TEORIA_SOURCE_MAX_ATTEMPTS` | `3` | Runtime Source 요청 횟수 |
-| `TEORIA_SOURCE_MAX_PAGES` | `100` | Capability 최대 페이지 |
-| `TEORIA_CAPABILITY_TIMEOUT_SECONDS` | `120` | Capability deadline |
-| `TEORIA_RUNTIME_API_TOKEN` | 없음 | Runtime API Bearer token |
-| `TEORIA_RUNTIME_ARTIFACT_PATH` | 없음 | 단일 immutable Runtime bundle version 디렉터리 |
-| `TEORIA_RUNTIME_ARTIFACT_STORE` | 없음 | atomic `active.json`을 가진 Runtime bundle store |
-| `TEORIA_RUNTIME_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Runtime API 앞에 붙이는 URL 경로 |
-| `TEORIA_RUNTIME_CACHE_BACKEND` | `memory` | Runtime 공유 캐시 구현: `memory`, `redis`, `disabled` |
-| `TEORIA_RUNTIME_CACHE_URL` | `redis://localhost:6379/0` | Redis Runtime 캐시 접속 URL |
-| `TEORIA_RUNTIME_CACHE_PREFIX` | `teoria:runtime` | Registry 버전과 Capability 키 앞에 붙는 캐시 namespace |
-| `TEORIA_CONTEXT_RUNTIME_API_URL` | `http://localhost:8000` | Context Engine이 승인된 Capability를 실행할 Runtime API 내부 주소 |
-| `TEORIA_CONTEXT_RUNTIME_API_TOKEN` | 없음 | Context Engine 전용 Runtime API service credential; Compose에서는 Runtime token을 주입 |
-| `TEORIA_CONTEXT_RUNTIME_TIMEOUT_SECONDS` | `150` | Context Engine의 Runtime API 호출 제한시간 |
-| `TEORIA_CONTEXT_MAX_PERIOD_YEARS` | `10` | Context 계획이 허용하는 최대 조회 기간 |
-| `TEORIA_CONTEXT_MAX_PAGES` | `100` | Context 실행당 Runtime 페이지 상한 |
-| `TEORIA_POLICY_MODE` | `disabled` | 정책 결정 방식: 개발·테스트용 `disabled`, 운영용 `opa` |
-| `TEORIA_OPA_URL` | `http://localhost:8181` | OPA REST API base URL |
-| `TEORIA_OPA_DECISION_PATH` | `teoria/authz/decision` | OPA Data API에서 평가할 decision document |
-| `TEORIA_OPA_TIMEOUT_SECONDS` | `3` | OPA 정책 결정 제한시간. 실패·undefined decision은 fail-closed |
-| `TEORIA_OPA_CONTROL_PLANE_TOKEN` | 없음 | OPA Bundle·decision log·status 관리 API 전용 bearer credential |
-| `TEORIA_OPA_BUNDLE_PATH` | `/var/lib/teoria/opa/teoria.tar.gz` | Policy Control Plane이 배포할 서명 Bundle 경로 |
-| `TEORIA_OPA_BUNDLE_REVISION` | `development` | Bundle manifest와 decision log에 기록할 불변 revision |
-| `TEORIA_REGISTRY_REQUIRE_PUBLISHED` | `false` | 주입된 Registry catalog에 published provenance가 있는지 검사하는 개발·테스트 안전장치. 운영 Runtime은 Artifact 설정이 필수 |
-| `TEORIA_RUNTIME_DATA_DATABASE_URL` | 없음 | Runtime 읽기 DB URL; 외부 DB 사용 시 read-only role URL |
-
-### Admin·Application DB
-
-| 변수 | 기본값 | 의미 |
-|---|---|---|
-| `TEORIA_ADMIN_API_ROOT_PATH` | 빈 문자열 | reverse proxy가 Admin API 앞에 붙이는 URL 경로 |
-| `TEORIA_ADMIN_AUTH_MODE` | `disabled` | Admin API 인증 방식. 공유·운영 환경은 `bearer` 사용 |
-| `TEORIA_ADMIN_API_TOKEN` | 없음 | `bearer` mode의 Admin API credential |
-| `TEORIA_ADMIN_METADATA_PUBLIC_READ` | `false` | `true`면 메타데이터 카탈로그·상세·통합 패널·계보·프로파일의 토큰 없는 조회 허용. 데이터 샘플과 변경 API의 인증은 유지 |
-| `TEORIA_ADMIN_API_ACTOR` | `system:admin` | 감사 기록에 남길 인증 principal ID |
-| `TEORIA_ADMIN_API_ROLES` | `metadata_admin,metadata_reviewer,binding_reviewer,ontology_owner` | 쉼표로 구분한 Admin 승인 역할 |
-| `TEORIA_ADMIN_DATA_DATABASE_URL` | 없음 | 향후 데이터 조회를 위한 read-only Data DB URL |
-| `TEORIA_DATABASE_CONCURRENCY_LIMIT` | `10` | Platform event loop별·DB별 활성 연결 상한. 여러 프로세스는 상한 합산 |
-| `TEORIA_APP_DATABASE_URL` | 없음 | Ontology v2, Binding, Intelligence를 저장하는 Teoria Application DB URL |
-
-### Pipelines
-
-| 변수 | 기본값 | 의미 |
-|---|---|---|
-| `TEORIA_PIPELINE_PATH` | `backend` | 수집 계약·설정·migration의 백엔드 루트 |
-| `TEORIA_PIPELINE_CONCURRENCY` | `2` | 규격서 pool 전체 동시 실행 상한. Compose Worker 자체 실행 상한에도 적용 |
-| `TEORIA_PIPELINE_WORKER_CPUS` | `4` | Compose 규격서 Worker 전체 CPU 상한 |
-| `TEORIA_PIPELINE_WORKER_MEMORY` | `8g` | Compose 규격서 Worker 전체 메모리 상한 |
-| `TEORIA_PLATFORM_REGISTRY_PATH` | `backend/contracts/runtime` | Pipeline 통합 검증 대상 |
-| `TEORIA_PIPELINE_SOURCE_TIMEOUT_SECONDS` | `30` | Connector timeout |
-| `TEORIA_PIPELINE_SOURCE_MAX_ATTEMPTS` | `5` | Connector의 멱등 요청 최대 시도 횟수 |
-| `TEORIA_PIPELINE_SOURCE_RETRY_BACKOFF_SECONDS` | `60` | Connector 재시도 지수 backoff의 최초 대기시간 |
-| `TEORIA_PIPELINE_DATABASE_CONCURRENCY_LIMIT` | `10` | Pipeline event loop별·DB별 활성 연결 상한. 여러 Worker·프로세스는 상한 합산 |
-| `TEORIA_PIPELINE_DATA_DATABASE_URL` | 없음 | Pipeline migration·적재용 writer DB URL |
-
-### MCP
-
-| 변수 | 기본값 | 의미 |
-|---|---|---|
-| `TEORIA_MCP_RUNTIME_MODE` | `remote` | MCP 실행 모드 |
-| `TEORIA_MCP_RUNTIME_API_URL` | 없음 | Remote Runtime URL |
-| `TEORIA_MCP_RUNTIME_API_TOKEN` | 없음 | MCP가 사용하는 Runtime API token |
-| `TEORIA_MCP_RUNTIME_TIMEOUT_SECONDS` | `150` | Runtime API 호출 timeout |
-| `TEORIA_MCP_RUNTIME_MAX_ATTEMPTS` | `3` | MCP capability discovery의 일시 장애 포함 최대 시도 횟수 |
-| `TEORIA_MCP_RUNTIME_RETRY_BACKOFF_SECONDS` | `0.25` | MCP discovery 재시도의 최초 지수 backoff 초 |
-
-### OpenMetadata·배포
-
-| 변수 | 기본값 | 의미 |
-|---|---|---|
-| `TEORIA_OPENMETADATA_ENABLED` | `false` | Admin API OpenMetadata integration 활성화 여부 |
-| `TEORIA_OPENMETADATA_BASE_URL` | `http://localhost:8585/api` | OpenMetadata REST API base URL |
-| `TEORIA_OPENMETADATA_AUTH_TOKEN` | 없음 | Backend 전용 OpenMetadata bot JWT. 운영에서는 조회·검토에 필요한 최소권한 별도 토큰 권장 |
-| `TEORIA_OPENMETADATA_TIMEOUT_SECONDS` | `10` | OpenMetadata REST 요청 제한시간 |
-| `TEORIA_OPENMETADATA_VERIFY_SSL` | `true` | OpenMetadata TLS 인증서 검증 여부 |
-| `TEORIA_OPENMETADATA_DATABASE_SERVICE` | `teoria_postgresql` | 기본 Teoria PostgreSQL Database Service 이름 |
-| `OPENMETADATA_VERSION` | `2.0.5` | Server와 ephemeral ingestion image에 공통 적용하는 OpenMetadata 버전 |
-| `OPENMETADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata 전용 PostgreSQL 암호 |
-| `OPENMETADATA_INGESTION_BOT_TOKEN` | 없음 | 일회성 ingestion Job이 OpenMetadata REST API에 쓰는 bot JWT |
-| `TEORIA_METADATA_DB_PASSWORD` | 로컬 개발값 | OpenMetadata PostgreSQL connector의 Teoria Data DB read-only 암호 |
-| `TEORIA_LOCAL_PLATFORM_DB_PASSWORD` | 로컬 개발값 | Compose의 Control/Application PostgreSQL 관리 계정 암호 |
-
-로컬 Compose 암호 변수는 `deploy/compose/.env.example`을 따른다. 공유·운영 환경에서는 managed secret으로 덮어쓴다.
-`TEORIA_ADMIN_API_TOKEN`, `TEORIA_RUNTIME_API_TOKEN`, `TEORIA_OPA_CONTROL_PLANE_TOKEN`과
-`TEORIA_LOCAL_RUNTIME_DB_PASSWORD`에는 기본값이 없으며 Compose 실행 전에 반드시 설정한다.
-Compose의 Admin API는 `bearer`로 고정한다. `TEORIA_ADMIN_AUTH_MODE=disabled`는
-호스트 개발용 설정이며 Compose 인증을 비활성화하지 않는다.
-`.env.example`에는 Compose가 실제로 받는 입력값만 둔다.
-컨테이너 내부 OpenMetadata 주소는 `http://openmetadata-server:8585/api`다.
-
-## 호스트에서 직접 실행
-
-호스트 프로세스는 각 프로젝트의 Settings 기본값과 명시한 환경 파일을 사용한다.
-Compose 입력 파일을 재사용하면 컨테이너 전용 주소를 호스트 주소로 덮어써야 한다.
-로컬 Python 실행용 `TEORIA_ENVIRONMENT=development`, 경로와 timeout 기본값은 Settings가 소유한다.
-
-```bash
-TEORIA_ENV_FILE=deploy/compose/.env \
-TEORIA_ADMIN_AUTH_MODE=bearer \
-TEORIA_OPENMETADATA_BASE_URL=http://localhost:8585/api \
-  uv run --locked --project backend --extra api teoria-admin-api
-```
-
-이 예시는 주소·인증 차이를 보여준다. DB를 사용하는 호스트 실행은 별도 접근 경로와
-DB URL도 설정해야 한다. Compose 내부 DB 포트를 기본 공개하지 않는다.
-독립적인 호스트 개발 환경 파일을 쓰면 `TEORIA_ENV_FILE`로 그 파일을 선택한다.
-
-## 자산 진단 Worker 설정
-
-| 변수 | 기본값 | 의미 |
-|---|---|---|
-| `TEORIA_ASSESSMENT_ENABLED` | `false` | 진단 요청 활성화 |
-| `TEORIA_ASSESSMENT_CODEX_MODEL` | 없음 | Codex 모델 고정값; 비우면 로그인한 CLI의 설정 사용 |
-| `TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS` | `180` | 개별 Codex 호출 제한시간, 최대 360초 |
-| `TEORIA_ASSESSMENT_WORKER_IMAGE` | `teoria-platform-authoring:latest` | Compose 진단 Worker만 선택하는 이미지 태그 |
-
-이전 HTTP 모델 주소·이름·토큰·출력 토큰 설정은 사용하지 않는다. Codex 인증은 Compose의
-`metadata-model-auth` 전용 볼륨에 두며 `.env`에 저장하지 않는다.
-요청·응답 계약과 시작 방법은 [자산 진단](../platform/metadata.md)을 따른다.
-
-## Secret 규칙
-
-- Source: `TEORIA_SOURCE_<SOURCE_ID>_API_KEY`
-- Connector: `TEORIA_CONNECTOR_<CONNECTOR_ID>_API_KEY`
-- YAML에는 실제 값이 아닌 환경변수 이름만 기록한다.
-- 로그, verification case와 archive에 키·개인정보·비공개 원본 응답을 남기지 않는다.
-- Pipeline writer와 Runtime reader의 DB 계정·권한을 분리하고 MCP에는 DB 권한을 주지 않는다.
-- Runtime bearer token은 service authentication이며 최종 사용자 권한을 대신하지 않는다.
-  사용자 principal과 role은 신뢰된 Admin/MCP gateway가 Runtime으로 전달하고 OPA가
-  Capability와 Context 정책을 결정한다. 운영 gateway에 OIDC를 연결하기 전에는
-  외부 사용자가 identity 전달 header를 직접 설정할 수 없도록 한다.
-- OPA signing private key는 `opa-signing-keys` volume 또는 외부 secret manager에만
-  보관하고 이미지, Git, 일반 로그에 포함하지 않는다. 공유 환경에서는 revision을
-  소스 commit 또는 policy release ID로 고정한다.
-
-K3s는 Compose `.env`를 자동으로 읽지 않는다. 역할별 Secret 참조와 GitHub Environment 설정은
-[EC2 K3s 배포](k3s.md)를 따른다.
-
+진단 실행은 `TEORIA_ASSESSMENT_ENABLED`와 모델 인증을 별도로 준비한다.
+Codex subprocess를 사용하는 소유 기능이며 AI/AIP 실행 플랫폼 구현을 뜻하지 않는다.
+선택할 모델과 timeout은 `TEORIA_ASSESSMENT_CODEX_MODEL`·`TEORIA_ASSESSMENT_CODEX_TIMEOUT_SECONDS`로 관리한다.
+모델 인증 자료는 전용 저장소로 주입하고 이미지·Git·로그에 넣지 않는다.
 
 ## 실행 자원 제한
 
-Compose의 CPU·메모리 상한은 `deploy/compose/compose.yaml`이 기준이다.
-설명과 적용 주의점은 [자원 예산](compose.md#cpu메모리-예산)을 따른다.
-
-| 입력 | 기본값 | 적용 대상 |
-|---|---|---|
-| `TEORIA_OPENMETADATA_INGESTION_CPUS` | `1` | Docker ingestion Job과 수동 ingestion 서비스 |
-| `TEORIA_OPENMETADATA_INGESTION_MEMORY` | `2g` | 위 Job의 컨테이너 메모리 상한 |
-| `TEORIA_MCP_CONTAINER_CPUS` | `0.5` | Codex bridge 프로세스 환경에서 지정하는 MCP 세션 상한 |
-| `TEORIA_MCP_CONTAINER_MEMORY` | `256m` | 위 MCP 세션의 메모리 상한 |
-
-MCP bridge의 자원 변수는 실행 프로세스 환경에서 읽는다. `.env`에서 자동으로 읽는 값은
-기존 Runtime token이며, 자원 변수는 필요한 경우 Codex server env나 실행 환경으로 전달한다.
+API·DB·Worker의 CPU·메모리 requests·limits는 `deploy/kubernetes/base/`가 기준이다.
+Pipeline Job 기본값·상한은 `deploy/kubernetes/prefect/execution.yaml`, 모델 실행 자원은
+[모델 실행 계약](model_execution.md)을 따른다.
+requests·limits와 quota는 해당 클러스터의 실제 자원·GPU·스토리지에서 별도로 검증한다.
 
 ## 개인·서비스 계정의 OIDC 토큰 검증
 
@@ -271,11 +97,11 @@ OIDC 제공자가 서명한 API access token을 검증할 수 있다.
 actor는 변경 가능한 표시명 대신 issuer와 sub로 구성하며 자동 작업도 고유 sub를 사용한다.
 
 issuer를 설정하면 공용 Admin token으로 되돌아가는 인증 경로는 없다. Worker와 배포 검증
-요청도 API audience를 가진 유효한 서비스 access token을 공급해야 한다. Compose의 기존
+요청도 API audience를 가진 유효한 서비스 access token을 공급해야 한다. Kubernetes의 기존
 `TEORIA_ADMIN_API_TOKEN` 필수 입력은 호환을 위해 유지하지만 OIDC 모드의 인증 근거가 되지 않는다.
 ID token의 브라우저 client audience를 API audience로 지정하지 않는다.
 
-Compose는 위 설정을 Admin API에 전달한다. K3s는 해당 환경변수를 Admin Deployment에
+OIDC 설정은 해당 환경변수를 Admin Deployment에
 명시적으로 설정해야 한다. 제공자별 로그인 redirect·PKCE·서비스 토큰 자동 갱신은 아직 연결하지
 않았으며 현재 관리자 연결창은 access token 입력을 사용한다. 실제 SSO 구성은 issuer·client와
 역할 설정, 만료·키 교체·개인별 승인 기록을 해당 환경에서 확인한 뒤 완료로 기록한다.

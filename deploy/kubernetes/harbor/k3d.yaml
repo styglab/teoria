@@ -1,0 +1,17 @@
+externalURL: https://harbor.teoria.localhost
+expose:
+  ingress:
+    className: traefik
+    hosts:
+      core: harbor.teoria.localhost
+persistence:
+  persistentVolumeClaim:
+    registry:
+      storageClass: teoria-local
+    database:
+      storageClass: teoria-local
+    redis:
+      storageClass: teoria-local
+    jobservice:
+      jobLog:
+        storageClass: teoria-local

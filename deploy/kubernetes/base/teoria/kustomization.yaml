@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- application.yaml
+- ingress.yaml
+- runtime.yaml
+- runtime_storage.yaml
+- policy.yaml
+- metadata_worker.yaml
+- model_worker.yaml
+- assessment_worker.yaml
+- assessment_storage.yaml
+- pipeline_execution/service_account.yaml
+- ../services/redis/runtime.yaml
+- ../domains/goods/worker.yaml
+- ../domains/legal_information/worker.yaml
+configMapGenerator:
+- name: teoria-web-proxy
+  files:
+  - web_proxy/default.conf.template
+  - web_proxy/start.sh
+patches:
+- target:
+    kind: Deployment
+    name: admin-ui
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: admin-ui
+    spec:
+      template:
+        spec:
+          containers:
+          - name: admin-ui
+            command:
+            - /bin/sh
+            - /etc/teoria_proxy/start.sh
+            env:
+            - name: TEORIA_CLUSTER_DOMAIN
+              value: cluster.local
+            volumeMounts:
+            - name: web-proxy
+              mountPath: /etc/teoria_proxy
+              readOnly: true
+          volumes:
+          - name: web-proxy
+            configMap:
+              name: teoria-web-proxy

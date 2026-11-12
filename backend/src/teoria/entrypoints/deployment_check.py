@@ -1,4 +1,4 @@
-"""Verify the selected Compose API modules before starting workers or pruning images."""
+"""Verify the integrated platform and its connections before enabling workers."""
 
 from __future__ import annotations
 
@@ -21,9 +21,17 @@ async def verify(expected: dict[str, bool]) -> None:
         response.raise_for_status()
         response = await client.get("http://localhost:8001/v1/admin/deployment")
         response.raise_for_status()
-        if response.json() != expected:
+        if any(response.json().get(key) != value for key, value in expected.items()):
             raise ValueError("Selected modules do not match the running Admin API")
-        if expected["semantic"]:
+        if expected.get("metadata", False):
+            response = await client.get(
+                "http://localhost:8001/v1/admin/metadata/status",
+                headers={"Authorization": f"Bearer {settings.admin_api_token}"},
+            )
+            response.raise_for_status()
+            if not response.json().get("available"):
+                raise ValueError("OpenMetadata connection is unavailable")
+        if expected.get("ontology", expected.get("semantic", False)):
             response = await client.get(
                 settings.context_runtime_api_url.rstrip("/") + "/v1/version",
                 headers={

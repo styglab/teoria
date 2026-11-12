@@ -1,7 +1,9 @@
 # 공통 모델 실행과 배포
 
-Teoria는 외부에서 만든 일반 OCI 이미지를 실행한다. 학습·서빙 이미지에 Teoria나 Prefect를 설치할 필요는 없다.
-Compose 개발 환경과 Kubernetes 운영 환경은 같은 실행 입력을 사용한다. 플랫폼 소스 변경 없이
+Teoria는 외부에서 만든 일반 OCI 이미지를 실행한다.
+폐쇄망은 외부에서 빌드·검증한 이미지 파일을 반입 PC에서 Harbor에 직접 push한다.
+Teoria는 이미지 파일 업로드·빌드를 수행하지 않으며 [Harbor 연결과 반입](image_registry.md)을 따른다. 학습·서빙 이미지에 Teoria나 Prefect를 설치할 필요는 없다.
+개발 k3d와 운영 Kubernetes는 같은 실행 입력을 사용한다. 플랫폼 소스 변경 없이
 서로 다른 모델 이미지·명령·자원을 지정하며, 관리 작업은 Admin bearer 인증과 `metadata_admin` 역할을 검증한다.
 
 ## 실행 명령
@@ -13,10 +15,8 @@ Python 패키지 배포는 요구하지 않는다. 고객 이탈 샘플은 `pyth
 
 ## 책임과 기본 구성
 
-Compose `--modules mlops`는 Web·Admin API·Platform PostgreSQL·MinIO·Prefect Server·Prefect Services·Redis·
-MLflow·공통 실행 Worker의 9개 상시 서비스를 시작한다. Registry는 기존 외부 서비스를 사용한다.
-모델별 학습 컨테이너와 서빙은 별도로 생성한다.
-기존 Data PostgreSQL과 OPA·Policy Control Plane은 기본으로 시작하지 않는다. 데이터와 기존 볼륨은 삭제하지 않는다.
+Kubernetes의 통합 Teoria에는 모델 운영 API·공통 Worker를 포함한다.
+MLflow·MinIO·Prefect·PostgreSQL은 [통합 배포](kubernetes.md)의 별도 수명주기로 관리한다.
 
 공통 Worker의 Prefect process pool은 `teoria-model-operations`다. 학습은 Docker 컨테이너 또는 Kubernetes Job,
 서빙은 모델별 Docker 컨테이너 또는 Deployment·Service로 실행한다. 실행 이미지는 허용 Registry의 고정 digest만 받는다.
@@ -26,32 +26,22 @@ MLflow·공통 실행 Worker의 9개 상시 서비스를 시작한다. Registry�
 의존성 그룹만 설치하며 Teoria 애플리케이션·Prefect·수집 계약은 포함하지 않는다.
 `teoria-model-dispatcher`는 Prefect와 컨테이너 실행을 담당하는 별도 공통 Worker 이미지다.
 
-## 개발 Compose 시작
+## 개발 k3d 시작
 
-[Compose 준비](compose.md)와 [이미지 Registry 인증·TLS](image_registry.md)를 먼저 설정한다.
-플랫폼 이미지는 기존 외부 배포처 또는 로컬 빌드로 준비한다. `.env`에 허용 Registry와 런타임 전용 환경을 지정한다.
-
-```dotenv
-TEORIA_MODEL_ALLOWED_REGISTRIES=registry.example.com:5000
-TEORIA_DOCKER_CONFIG_DIRECTORY=/secure/teoria-docker-auth
-TEORIA_MODEL_WORKLOAD_ENVIRONMENT={"AWS_ACCESS_KEY_ID":"<workload_account>","AWS_SECRET_ACCESS_KEY":"<workload_secret>","AWS_ENDPOINT_URL_S3":"http://minio:9000","MLFLOW_S3_ENDPOINT_URL":"http://minio:9000"}
-```
-
-위 JSON은 비밀 설정이며 Git·Flow 입력·명령 출력에 기록하지 않는다. 예시의 저장소 계정은 학습·산출물 bucket만 접근하게 준비한다.
-각 이미지가 신뢰할 수 있는 개발자·CI에서 게시되었는지 확인한다. Registry 허용 목록은 이미지 제작자에 대한 신뢰를 대신하지 않는다.
-Worker는 Docker socket을 사용하지만 학습·서빙 컨테이너에는 socket·호스트 볼륨·Admin·Prefect·Application DB credential을 주지 않는다.
+[통합 Teoria 배포](kubernetes.md)와 [이미지 Registry 인증·TLS](image_registry.md)를 준비한다.
+클러스터·Secret·게시 artifact를 준비한 뒤 다음 명령을 사용한다.
 
 ```bash
-bash deploy/compose/deploy.sh config --modules mlops
-bash deploy/compose/deploy.sh build --modules mlops
-bash deploy/compose/deploy.sh deploy --modules mlops
-bash deploy/compose/deploy.sh status
+source deploy/kubernetes/k3d/.local/session.env
+bash deploy/kubernetes/k3d/local.sh render
+bash deploy/kubernetes/k3d/local.sh deploy --component all
+bash deploy/kubernetes/k3d/local.sh status
 ```
 
-기존 모듈·addon 선택에서 전환할 때는 기존 구성으로 `down` 후 새 구성으로 `deploy`한다.
-`--all`은 제품 모듈을 선택한다. 고객 이탈 예제는 Compose 배포에 포함하지 않는다.
-이 addon은 Data DB·예제 Docker Dispatcher·배포 Worker·추론 API와 기존 Flow ID를 추가한다.
-예제 학습·서빙 이미지는 addon을 선택한 구성으로 미리 빌드한다. 기본 MLOps 실행에는 필요 없다.
+후속 플랫폼 갱신은 `local.sh deploy`로 수행한다. `control.env.example`은 controller 계정,
+`workload.env.example`은 학습·서빙 이미지에 허용할 객체 저장소 계정이다.
+Job에는 Admin·Prefect·Application DB credential이나 Docker socket을 전달하지 않는다.
+고객 이탈 예제는 `archive/customer_churn/`의 독립 이미지이며 플랫폼 배포에 연결하지 않는다.
 
 ## 학습 이미지 계약
 
@@ -127,8 +117,8 @@ Content-Type: application/json
 ```
 
 API는 `model-deploy` Workflow에 같은 `execution`을 제출한다. 모델별 동시 배포·중지는 DB advisory lock으로 직렬화한다.
-Compose는 후보 컨테이너의 준비 상태를 확인한 뒤 기존 컨테이너를 교체한다. 전환 중 짧은 중단이 생길 수 있으며
-무중단 배포를 보장하지 않는다. 실패하면 기존 컨테이너를 유지·복원한다. 개발 Compose의 서빙 복제본은 1개만 지원한다.
+공통 Docker 실행 라이브러리는 후보 컨테이너의 준비 상태를 확인한 뒤 기존 컨테이너를 교체한다. 전환 중 짧은 중단이 생길 수 있으며
+무중단 배포를 보장하지 않는다. 실패하면 기존 컨테이너를 유지·복원한다. 공통 Docker 실행 라이브러리는 서빙 복제본 1개를 지원한다.
 Kubernetes는 RollingUpdate·readiness와 지정 복제본을 사용하고 준비 실패 시 이전 Deployment 설정을 복원한다.
 
 Admin **모델 서빙**에서 배포 상태·추론 요청·이전 설정 재배포·중지를 사용할 수 있다.
@@ -141,7 +131,7 @@ POST /admin-api/v1/admin/model-operations/deployments/<deployment_id>/predict
 
 중지는 `model-stop` Workflow에 `{"deployment_id":"my-model-production"}`를 전달한다.
 이전 설정 재배포도 새 Prefect 실행으로 기록하며 모델을 다시 학습하지 않는다.
-동적 서빙은 Compose 본체가 소유하는 고정 서비스가 아니므로, 플랫폼 `stop/down` 후에도 실행 중일 수 있다.
+모델 서빙은 개별 Deployment이며 Teoria API 갱신과 수명주기가 다르다. 플랫폼 API를 중지해도 모델 서빙이 실행 중일 수 있다.
 서빙을 함께 종료하려면 플랫폼 종료 전에 명시적으로 중지한다. 이미지·모델·DB의 영구 데이터는 지우지 않는다.
 
 ## Kubernetes 설치와 자원
@@ -149,16 +139,20 @@ POST /admin-api/v1/admin/model-operations/deployments/<deployment_id>/predict
 일반 Kubernetes는 [공통 Kubernetes 배포](kubernetes.md)의 `--overlay generic`을 사용한다.
 K3s overlay와 모델 실행 계약은 유지하며 공통 실행 정책은 `deploy/kubernetes/prefect/`가 소유한다.
 
-공통 배포 명령에서 다음처럼 K3s를 선택한다. 현재 Kubernetes CLI는 기존 Semantic 배포 또는 MLOps 단독 배포를 지원하며
-두 모듈의 결합 설치는 지원하지 않는다. 기존 Semantic 설치 위에 MLOps를 덮어쓰지 않도록 검사한다.
+공통 배포 명령에서 다음처럼 K3s를 선택한다. Metadata·Ontology·MLOps는 하나의 Teoria 구성으로 실행한다.
 
 ```bash
 bash deploy/kubernetes/deploy.sh ghcr.io/org/teoria <commit_sha> teoria.example.com --overlay k3s \
-  --modules mlops --model-registry-host registry.example.com
+  --component all --model-registry-host registry.example.com
 ```
 
-기존 `teoria-secrets`에는 Platform DB 관리자·Application·Prefect 계정과 URL, Admin token, Prefect 인증,
+최초 전체 설치에는 `--component all`을 명시한다. 후속 플랫폼 배포의 기본값은 `platform`이며
+DB·MinIO·Prefect·MLflow를 갱신하지 않는다. [서비스별 배포 수명주기](kubernetes.md#명령과-실행-순서)를 따른다.
+최초 기반 서비스 구성용 `teoria-secrets`에는 Platform DB 관리자·Application·Prefect 계정과 URL, Admin token, Prefect 인증,
 MinIO 관리자 계정과 기존 외부 Registry 연결·조회 계정을 준비한다. 플랫폼 웹 Ingress는 `teoria-tls`를 사용한다.
+Worker는 `model-control`의 `TEORIA_MODEL_STORAGE_ACCESS_KEY`·`TEORIA_MODEL_STORAGE_SECRET_KEY`로
+학습 결과를 읽고 `teoria-mlops` bucket에 로그를 보존한다. 모델 컨테이너용 S3 계정과 분리하고
+결과 bucket 읽기·로그 bucket 쓰기 권한만 부여한다. 모델 계정에는 입력 읽기·결과 쓰기만 부여한다.
 추가로 다음 Secret을 준비한다. `deploy/kubernetes/control.env.example`과 `workload.env.example`을
 checkout 밖의 보안 경로에 복사해 실제 값을 채우고 `kubectl create secret generic ... --from-env-file=...`로 생성한다.
 credential은 보안 파일에서 생성하며 예시 값을 운영에 쓰지 않는다.
@@ -166,7 +160,7 @@ credential은 보안 파일에서 생성하며 예시 값을 운영에 쓰지 �
 | namespace | Secret | 내용 |
 |---|---|---|
 | `teoria` | `teoria-registry` | 플랫폼 이미지 pull 인증 |
-| `teoria` | `model-control` | `TEORIA_MLFLOW_DB_PASSWORD`, `MLFLOW_BACKEND_STORE_URI`, `TEORIA_MODEL_ALLOWED_REGISTRIES` |
+| `teoria` | `model-control` | `TEORIA_MLFLOW_DB_PASSWORD`, `MLFLOW_BACKEND_STORE_URI`, `TEORIA_MODEL_ALLOWED_REGISTRIES`, 결과·로그 저장소 계정 |
 | `teoria-models` | `model-images` | 모델 이미지 pull 인증 (`kubernetes.io/dockerconfigjson`) |
 | `teoria-models` | `model-workload` | 학습·서빙 이미지용 S3 계정·endpoint 등 환경변수 |
 
@@ -178,11 +172,12 @@ Registry 계정·bcrypt 파일·전용 인증 CRD는 사용하지 않는다. `/p
 `teoria-models` namespace를 만들고 Secret을 준비한 뒤 배포 명령을 실행한다. 실행 Role은 이 namespace의
 Job·Deployment·Service만 관리하며 workload Pod에는 ServiceAccount token을 mount하지 않는다.
 
-GitHub 자동 배포는 repository variable `TEORIA_DEPLOY_MODULES=mlops`와 `TEORIA_MODEL_REGISTRY_HOST`를 설정한다.
+GitHub 자동 배포는 repository variable `TEORIA_MODEL_REGISTRY_HOST`를 설정하며 통합 Teoria를 배포한다. 갱신 범위는 `TEORIA_DEPLOY_COMPONENT`로 고른다.
+`TEORIA_DEPLOY_COMPONENT` 기본값은 `platform`이다. 최초 환경 준비 시에만 `all`을 명시한다.
 단일 기본 PVC는 노드 간 복제·고가용성을 보장하지 않는다. 여러 서버에서 노드 장애까지 견디려면
 Platform PostgreSQL·MinIO의 외부 서비스 또는 적절한 영구 저장소와 백업·복원 구성을 별도로 준비한다.
 
-Compose는 한 Docker 호스트의 CPU·메모리·GPU 제한과 동시 실행 수를 적용한다. Kubernetes에서는 같은 자원을
+Kubernetes에서는 실행 계약의 CPU·메모리·GPU 자원을
 requests·limits와 GPU 리소스로 변환하여 노드에 배치한다. 기본 실행은 1 CPU·1024MiB, GPU 0이다.
 GPU는 Docker의 NVIDIA runtime 또는 Kubernetes device plugin이 설치된 실제 환경에서 별도 검증해야 한다.
 
@@ -190,13 +185,15 @@ GPU는 Docker의 NVIDIA runtime 또는 Kubernetes device plugin이 설치된 실
 
 ```bash
 uv run --project backend --locked --all-extras --group orchestration pytest backend/tests
-python3 -m unittest discover -s deploy/compose/tests -q
+uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/entrypoints/test_kubernetes_deployment.py -q
 TEORIA_TEST_MODEL_EXECUTION_DOCKER=1 uv run --project backend --locked --all-extras --group orchestration --group docker-orchestration pytest backend/tests/integration/test_model_execution_docker.py backend/tests/integration/test_mlops_database_docker.py -q
 ```
 
 Docker 검사는 격리 Registry·네트워크·외부 실행 이미지로 학습·서빙·버전 전환·실패 후보 복구·중지를 확인한다.
 DB 검사는 격리 PostgreSQL에서 전체 migration·배포 이력·모델별 lock을 확인한다.
-Kubernetes API의 요청·rollback 검사는 가짜 transport로 수행하며 실제 클러스터 배포 성공과 구분한다.
+Kubernetes API의 요청·rollback 단위 검사는 가짜 transport로 수행한다.
+개발 k3d에서 Harbor 이미지 pull·실제 학습·서빙·실패 후보 복구·이전 버전 재배포도 검증했다.
+범위와 재현 방법은 [검증 기록](harbor_validation.md)을 따르며 운영 성공과 구분한다.
 
 장애 후 자동 정리·재조정, 분산 학습, 오토스케일링, 카나리 트래픽 분배, 모델 drift 감지는 현재 범위에 포함하지 않는다.
 Worker 강제 종료 시 Docker 학습·후보 컨테이너가 남을 수 있으므로 `io.teoria.project`·`io.teoria.run` label로 점검한다.

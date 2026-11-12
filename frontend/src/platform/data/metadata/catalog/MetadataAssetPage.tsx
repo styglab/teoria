@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useServerQuery } from "../../../../api/server_queries";
 import { PageHeader } from "../../../../components/workspace/WorkspaceLayout";
+import { useDeploymentModules } from "../../../access_control/DeploymentAvailability";
 import { useAdminAccess } from "../../../access_control/AdminAccess";
 import { bindingApi } from "../../../ontology/bindings/api";
 import {
@@ -48,6 +49,7 @@ const diagnosisRequests = {
   },
 };
 export function MetadataAssetPage() {
+  const modules = useDeploymentModules();
   const { fqn } = useParams();
   const [params, setParams] = useSearchParams();
   const tab = tabs.some((item) => item.id === params.get("tab"))
@@ -281,7 +283,7 @@ export function MetadataAssetPage() {
                   Object.keys(diagnosisRequests) as Array<
                     keyof typeof diagnosisRequests
                   >
-                ).map((kind) => (
+                ).filter((kind) => kind !== "semantics" || modules.ontology).map((kind) => (
                   <button key={kind} onClick={() => copyAnalysisRequest(kind)}>
                     {copied === kind
                       ? `${diagnosisRequests[kind].label} 요청 복사됨`
@@ -399,7 +401,7 @@ export function MetadataAssetPage() {
                         >
                           설명 변경
                         </button>
-                        <button
+                        {modules.ontology && <button
                           disabled={busy === column.name}
                           onClick={async () => {
                             if (!principal) {
@@ -424,7 +426,7 @@ export function MetadataAssetPage() {
                           }}
                         >
                           {busy === column.name ? "생성 중…" : "연결 제안"}
-                        </button>
+                        </button>}
                       </div>
                     </td>
                   </tr>

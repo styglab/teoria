@@ -1,0 +1,321 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-api
+  template:
+    metadata:
+      labels:
+        app: admin-api
+    spec:
+      containers:
+      - name: admin-api
+        image: teoria/authoring:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env:
+        - name: TEORIA_ENVIRONMENT
+          value: production
+        - name: TEORIA_ADMIN_AUTH_MODE
+          value: bearer
+        - name: TEORIA_POLICY_MODE
+          value: opa
+        - name: TEORIA_SEMANTIC_MODELING_ENABLED
+          value: 'true'
+        - name: TEORIA_FORMATID_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_SPECIFICATION_PROCESSING_ENABLED
+        - name: TEORIA_LEGAL_INFORMATION_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_LEGAL_INFORMATION_ENABLED
+        - name: TEORIA_OPENMETADATA_ENABLED
+          value: 'true'
+        - name: TEORIA_MODEL_OPERATIONS_ENABLED
+          value: 'true'
+        - name: TEORIA_MODEL_MLFLOW_URL
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: MLFLOW_TRACKING_URI
+        - name: TEORIA_ADMIN_API_ROOT_PATH
+          value: /admin-api
+        - name: TEORIA_MODEL_PREFECT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: PREFECT_API_URL
+        - name: TEORIA_APP_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_APP_DATABASE_URL
+              optional: false
+        - name: TEORIA_ADMIN_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ADMIN_API_TOKEN
+              optional: false
+        - name: TEORIA_MODEL_PREFECT_AUTH
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: PREFECT_API_AUTH_STRING
+        - name: TEORIA_IMAGE_REGISTRY_PROVIDER
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_PROVIDER
+              optional: true
+        - name: TEORIA_IMAGE_REGISTRY_PROJECT
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_PROJECT
+              optional: true
+        - name: TEORIA_IMAGE_REGISTRY_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_URL
+              optional: true
+        - name: TEORIA_IMAGE_REGISTRY_PUBLIC_HOST
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_PUBLIC_HOST
+              optional: true
+        - name: TEORIA_IMAGE_REGISTRY_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_USERNAME
+              optional: true
+        - name: TEORIA_IMAGE_REGISTRY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_PASSWORD
+              optional: true
+        - name: TEORIA_IMAGE_REGISTRY_CA_PEM
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_IMAGE_REGISTRY_CA_PEM
+              optional: true
+        - name: TEORIA_OPA_URL
+          value: http://opa:8181
+        - name: TEORIA_REGISTRY_REQUIRE_PUBLISHED
+          value: 'true'
+        - name: TEORIA_RUNTIME_ARTIFACT_STORE
+          value: /app/runtime_artifacts
+        - name: TEORIA_CONTEXT_RUNTIME_API_URL
+          value: http://runtime-api:8000
+        - name: TEORIA_GOODS_AUTHORING_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_SPECIFICATION_PROCESSING_ENABLED
+        - name: TEORIA_OPENMETADATA_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_OPENMETADATA_BASE_URL
+        - name: TEORIA_CONTEXT_RUNTIME_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_API_TOKEN
+              optional: false
+        - name: TEORIA_OPENMETADATA_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_OPENMETADATA_AUTH_TOKEN
+              optional: false
+        - name: TEORIA_ADMIN_DATA_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_RUNTIME_DATA_DATABASE_URL
+              optional: false
+        - name: TEORIA_ASSESSMENT_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: teoria-secrets
+              key: TEORIA_ASSESSMENT_ENABLED
+              optional: true
+        - name: TEORIA_OPENMETADATA_PUBLIC_URL
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_OPENMETADATA_PUBLIC_URL
+              optional: true
+        - name: TEORIA_SPECIFICATION_UPLOAD_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_SPECIFICATION_UPLOAD_ENABLED
+              optional: true
+        - name: TEORIA_SPECIFICATION_AUTHORING_API_URL
+          valueFrom:
+            secretKeyRef:
+              name: specification-processing
+              key: TEORIA_SPECIFICATION_AUTHORING_API_URL
+              optional: true
+        - name: TEORIA_SPECIFICATION_AUTHORING_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: specification-processing
+              key: TEORIA_SPECIFICATION_AUTHORING_API_TOKEN
+              optional: true
+        - name: TEORIA_SPECIFICATION_ARTIFACT_ROOT
+          valueFrom:
+            secretKeyRef:
+              name: specification-processing
+              key: TEORIA_SPECIFICATION_ARTIFACT_ROOT
+              optional: true
+        - name: TEORIA_SPECIFICATION_S3_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: specification-processing
+              key: TEORIA_SPECIFICATION_S3_ENDPOINT
+              optional: true
+        - name: TEORIA_SPECIFICATION_S3_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: specification-processing
+              key: TEORIA_SPECIFICATION_S3_ACCESS_KEY
+              optional: true
+        - name: TEORIA_SPECIFICATION_S3_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: specification-processing
+              key: TEORIA_SPECIFICATION_S3_SECRET_KEY
+              optional: true
+        - name: TEORIA_SPECIFICATION_REQUIRE_OBJECT_STORAGE
+          value: 'true'
+        - name: TEORIA_CODEX_AUTH_PATH
+          value: /var/run/teoria/codex/auth.json
+        command:
+        - teoria-admin-api
+        ports:
+        - containerPort: 8001
+        readinessProbe:
+          httpGet: &id001
+            path: /health
+            port: 8001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 90
+        volumeMounts:
+        - name: runtime-artifacts
+          mountPath: /app/runtime_artifacts
+          readOnly: true
+        - name: authoring-codex
+          mountPath: /var/run/teoria/codex
+          readOnly: true
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+      volumes:
+      - name: runtime-artifacts
+        persistentVolumeClaim:
+          claimName: runtime-artifacts
+      - name: authoring-codex
+        secret:
+          secretName: authoring-codex
+          optional: true
+          defaultMode: 288
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-api
+spec:
+  selector:
+    app: admin-api
+  ports:
+  - port: 8001
+    targetPort: 8001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-ui
+  template:
+    metadata:
+      labels:
+        app: admin-ui
+    spec:
+      containers:
+      - name: admin-ui
+        image: teoria/admin-ui:release
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
+            cpu: '1'
+        env: []
+        ports:
+        - containerPort: 80
+        readinessProbe:
+          httpGet: &id001
+            path: /
+            port: 80
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        startupProbe:
+          httpGet: *id001
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 90
+      imagePullSecrets:
+      - name: teoria-registry
+      automountServiceAccountToken: false
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-ui
+spec:
+  selector:
+    app: admin-ui
+  ports:
+  - port: 80
+    targetPort: 80

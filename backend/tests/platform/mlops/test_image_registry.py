@@ -154,3 +154,82 @@ def test_malformed_registry_document_returns_a_safe_error(path):
         response = client.get("/v1/admin/image-registry/" + path, headers=HEADERS)
     assert response.status_code == 502
     assert response.json()["detail"]["code"] == "invalid_image_registry_response"
+
+
+@pytest.mark.asyncio
+async def test_harbor_catalog_uses_project_reader_and_pages_without_following_links():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        assert request.url.path == '/api/v2.0/projects/models/repositories'
+        assert request.url.params['sort'] == 'name'
+        assert request.headers['authorization'].startswith('Basic ')
+        assert request.url.params['page_size'] == '1'
+        page = request.url.params['page']
+        return httpx.Response(200, json=[{'name': 'models/' + ('train' if page == '1' else 'serve')}],
+                              headers={'X-Total-Count': '2', 'Link': '<https://attacker.invalid/>; rel="next"'})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        registry = ImageRegistryClient(client, url='https://harbor.internal', provider='harbor',
+                                       project='models', username='robot$reader', password='secret')
+        first = await registry.repositories(limit=1)
+        assert first == {'items': ['models/train'], 'next': '2'}
+        assert await registry.repositories(after=first['next'], limit=1) == {'items': ['models/serve'], 'next': None}
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_harbor_token_exchange_requests_only_pull_and_preserves_manifest_identity():
+    content = b'{"schemaVersion":2,"layers":[]}'
+    digest = 'sha256:' + hashlib.sha256(content).hexdigest()
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if request.url.path == '/service/token':
+            assert request.headers['authorization'].startswith('Basic ')
+            assert request.url.params['scope'] == 'repository:models/team/train:pull'
+            return httpx.Response(200, json={'token': 'scoped-reader-token'})
+        assert request.url.path == '/v2/models/team/train/manifests/v1'
+        if request.headers['authorization'] == 'Bearer scoped-reader-token':
+            assert 'application/vnd.oci.image.manifest.v1+json' in request.headers['accept']
+            return httpx.Response(200, content=content, headers={'Docker-Content-Digest': digest})
+        return httpx.Response(401, headers={'WWW-Authenticate':
+            'Bearer realm="https://harbor.internal/service/token",service="harbor-registry",scope="repository:models/team/train:pull,push"'})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        registry = ImageRegistryClient(client, url='https://harbor.internal', provider='harbor',
+                                       username='robot$reader', password='secret')
+        assert (await registry.manifest('models/team/train', 'v1'))['image'] == 'harbor.internal/models/team/train@' + digest
+    assert len(calls) == 3
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('realm', [
+    'https://attacker.invalid/service/token', 'http://harbor.internal/service/token',
+    'https://user:password@harbor.internal/service/token',
+    'https://harbor.internal/service/token?secret=value', 'https://harbor.internal/other',
+])
+async def test_registry_does_not_send_credentials_to_untrusted_token_endpoints(realm):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(401, headers={'WWW-Authenticate': f'Bearer realm="{realm}"'})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        registry = ImageRegistryClient(client, url='https://harbor.internal', username='reader', password='secret')
+        with pytest.raises(ValueError, match='Untrusted registry token endpoint'):
+            await registry.tags('models/train')
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_harbor_catalog_rejects_repositories_outside_selected_project():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json=[{'name': 'other/private'}]),
+    )) as client:
+        registry = ImageRegistryClient(client, url='https://harbor.internal', provider='harbor')
+        with pytest.raises(ValueError, match='Invalid Harbor repository'):
+            await registry.repositories()

@@ -23,7 +23,7 @@ def install_workflow_management_router(
 ) -> None:
     catalog = workflow_catalog(
         services.settings.model_operations_enabled,
-        semantic_enabled=services.settings.semantic_modeling_enabled,
+        metadata_enabled=services.settings.metadata_enabled,
         formatid_enabled=services.settings.formatid_enabled,
         legal_enabled=services.settings.legal_information_enabled,
     )

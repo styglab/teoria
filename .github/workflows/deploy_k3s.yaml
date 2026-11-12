@@ -32,21 +32,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {name: runtime, dockerfile: backend/Dockerfile, target: runtime, compose_name: teoria-platform-runtime}
-          - {name: authoring, dockerfile: backend/Dockerfile, target: authoring, compose_name: teoria-platform-authoring}
-          - {name: admin-ui, dockerfile: frontend/Dockerfile, target: standalone, compose_name: teoria-admin-ui}
-          - {name: pipelines, dockerfile: backend/Dockerfile, target: kubernetes-worker, compose_name: teoria-pipelines-kubernetes}
-          - {name: metadata-worker, dockerfile: backend/Dockerfile, target: metadata-worker, compose_name: teoria-pipelines-metadata}
-          - {name: opa, dockerfile: deploy/compose/opa/Dockerfile, target: runtime, compose_name: teoria-opa}
-          - {name: opa-builder, dockerfile: deploy/compose/opa/Dockerfile, target: bundle_builder, compose_name: teoria-opa-bundle-builder}
-          - {name: ingestion, dockerfile: deploy/compose/openmetadata/Dockerfile, compose_name: teoria-openmetadata-ingestion}
-          - {name: admin, dockerfile: backend/Dockerfile, target: admin, compose_name: teoria-platform-admin}
-          - {name: gateway, dockerfile: frontend/Dockerfile, target: gateway, compose_name: teoria-nginx}
-          - {name: pipelines-compose, dockerfile: backend/Dockerfile, target: worker, compose_name: teoria-pipelines}
-          - {name: operations, dockerfile: backend/Dockerfile, target: operations, compose_name: teoria-data-operations}
-          - {name: law-worker, dockerfile: backend/Dockerfile, target: law-worker, compose_name: teoria-pipelines-law}
-          - {name: mlflow, dockerfile: backend/Dockerfile, target: mlflow, compose_name: teoria-mlflow}
-          - {name: model-dispatcher, dockerfile: backend/Dockerfile, target: model-dispatcher, compose_name: teoria-model-dispatcher}
+          - {name: runtime, dockerfile: backend/Dockerfile, target: runtime}
+          - {name: authoring, dockerfile: backend/Dockerfile, target: authoring}
+          - {name: admin-ui, dockerfile: frontend/Dockerfile, target: standalone}
+          - {name: pipelines, dockerfile: backend/Dockerfile, target: kubernetes-worker}
+          - {name: specification-job, dockerfile: backend/Dockerfile, target: worker}
+          - {name: legal-job, dockerfile: backend/Dockerfile, target: law-worker}
+          - {name: metadata-worker, dockerfile: backend/Dockerfile, target: metadata-worker}
+          - {name: opa, dockerfile: deploy/image_builds/opa/Dockerfile, target: runtime}
+          - {name: opa-builder, dockerfile: deploy/image_builds/opa/Dockerfile, target: bundle_builder}
+          - {name: ingestion, dockerfile: deploy/image_builds/openmetadata/Dockerfile}
+          - {name: mlflow, dockerfile: backend/Dockerfile, target: mlflow}
+          - {name: model-dispatcher, dockerfile: backend/Dockerfile, target: model-dispatcher}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,7 +77,6 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/${{ matrix.name }}:${{ env.REVISION }}
-            ${{ env.IMAGE_PREFIX }}/${{ matrix.compose_name }}:${{ env.REVISION }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
@@ -102,7 +98,7 @@ jobs:
           EC2_SSH_PORT: ${{ vars.EC2_SSH_PORT || '22' }}
           PUBLIC_HOST: ${{ vars.TEORIA_PUBLIC_HOST }}
           MODEL_REGISTRY_HOST: ${{ vars.TEORIA_MODEL_REGISTRY_HOST }}
-          DEPLOY_MODULES: ${{ vars.TEORIA_DEPLOY_MODULES || 'semantic' }}
+          DEPLOY_COMPONENT: ${{ vars.TEORIA_DEPLOY_COMPONENT || 'platform' }}
           SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           SSH_KNOWN_HOSTS: ${{ secrets.EC2_SSH_KNOWN_HOSTS }}
         run: |
@@ -120,11 +116,10 @@ jobs:
           [[ "$EC2_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
           [[ "$EC2_SSH_PORT" =~ ^[0-9]+$ ]]
           [[ "$PUBLIC_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]]
-          [[ "$DEPLOY_MODULES" == semantic || "$DEPLOY_MODULES" == mlops ]]
+          [[ "$DEPLOY_COMPONENT" == openmetadata || "$DEPLOY_COMPONENT" == platform || "$DEPLOY_COMPONENT" == database || "$DEPLOY_COMPONENT" == storage || "$DEPLOY_COMPONENT" == workflow || "$DEPLOY_COMPONENT" == mlflow || "$DEPLOY_COMPONENT" == all ]]
           model_registry_option=
           if [[ -n "$MODEL_REGISTRY_HOST" ]]; then
             [[ "$MODEL_REGISTRY_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]]
-            [[ "$DEPLOY_MODULES" == semantic || "$DEPLOY_MODULES" == mlops ]]
           model_registry_option="--model-registry-host $MODEL_REGISTRY_HOST"
           fi
           umask 077
@@ -139,4 +134,4 @@ jobs:
           image_prefix="${REGISTRY_PREFIX:-ghcr.io/${GITHUB_REPOSITORY,,}}"
           [[ "$image_prefix" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]]
           ssh "${ssh_args[@]}" -p "$EC2_SSH_PORT" "$target" \
-            "cd ~/.teoria/releases/$revision && tar -xzf release.tar.gz && bash deploy/kubernetes/deploy.sh '$image_prefix' '$revision' '$PUBLIC_HOST' --overlay k3s --modules '$DEPLOY_MODULES' $model_registry_option"
+            "cd ~/.teoria/releases/$revision && tar -xzf release.tar.gz && bash deploy/kubernetes/deploy.sh '$image_prefix' '$revision' '$PUBLIC_HOST' --overlay k3s --component '$DEPLOY_COMPONENT' $model_registry_option"

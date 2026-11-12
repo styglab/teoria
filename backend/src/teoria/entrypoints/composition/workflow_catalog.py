@@ -21,6 +21,7 @@ def workflow_catalog(
     mlops_enabled: bool,
     *,
     semantic_enabled: bool = True,
+    metadata_enabled: bool | None = None,
     formatid_enabled: bool = True,
     legal_enabled: bool = True,
 ):
@@ -29,7 +30,7 @@ def workflow_catalog(
         for key, value in PIPELINES.items()
         if {
             "모델": mlops_enabled,
-            "메타데이터": semantic_enabled,
+            "메타데이터": semantic_enabled if metadata_enabled is None else metadata_enabled,
             "규격서": formatid_enabled,
             "법령": legal_enabled,
         }.get(value[1], False)

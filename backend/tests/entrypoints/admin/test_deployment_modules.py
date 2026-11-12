@@ -27,6 +27,7 @@ def test_mlops_app_does_not_load_semantic_artifact_or_expose_authoring_routes(
         assert client.get("/health").status_code == 200
         assert client.get("/v1/admin/deployment").json() == {
             "semantic": False,
+            "metadata": False, "ontology": False, "goods": False,
             "formatid": False,
             "mlops": True,
         }
@@ -86,8 +87,24 @@ def test_platform_authoring_is_available_without_any_business_app():
         # Routes belong to the platform even when their database is not configured.
         assert client.get("/v1/admin/ontology-authoring/ontologies").status_code == 503
         assert client.get("/v1/admin/deployment").json() == {
-            "semantic": True, "formatid": False, "mlops": False,
+            "semantic": True, "metadata": True, "ontology": True, "goods": True, "formatid": False, "mlops": False,
         }
         assert client.get("/v1/admin/specification-processing/status").json() == {
             "uploads_enabled": False, "results_enabled": False,
         }
+
+
+
+def test_integrated_platform_keeps_domain_workflows_separately_controlled():
+    settings = Settings(environment="test", semantic_modeling_enabled=True,
+        model_operations_enabled=True, formatid_enabled=False, legal_information_enabled=False,
+        goods_authoring_enabled=False)
+    app = create_admin_app(settings=settings)
+    with TestClient(app) as client:
+        status = client.get("/v1/admin/deployment").json()
+        assert status == {"semantic": True, "metadata": True, "ontology": True,
+                          "mlops": True, "formatid": False, "goods": False}
+        assert client.get("/v1/admin/ontology-authoring/ontologies").status_code != 404
+        assert client.get("/v1/admin/metadata/status").status_code != 404
+    catalog = workflow_catalog(True, metadata_enabled=True, formatid_enabled=False, legal_enabled=False)
+    assert set(catalog) == {"model-train", "model-deploy", "model-stop", "openmetadata-postgres-metadata-sync"}
