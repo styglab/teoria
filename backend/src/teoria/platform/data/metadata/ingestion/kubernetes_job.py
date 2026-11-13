@@ -30,10 +30,19 @@ def run_ingestion_job(*, image: str, timeout_seconds: int) -> dict:
                     "restartPolicy": "Never",
                     "automountServiceAccountToken": False,
                     "imagePullSecrets": [{"name": pull_secret}],
+                    "volumes": [{
+                        "name": "ingestion-config",
+                        "configMap": {"name": "openmetadata-ingestion-config"},
+                    }],
                     "containers": [
                         {
                             "name": "ingestion",
                             "image": image,
+                            "volumeMounts": [{
+                                "name": "ingestion-config",
+                                "mountPath": "/config",
+                                "readOnly": True,
+                            }],
                             "command": [
                                 "metadata",
                                 "ingest",

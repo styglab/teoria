@@ -36,10 +36,13 @@ def test_register_cli_returns_success_after_synchronous_registration(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_job_resources_and_secrets_survive_prefect_render(monkeypatch):
+@pytest.mark.parametrize("environment", ["development", "production"])
+async def test_job_resources_and_secrets_survive_prefect_render(monkeypatch, environment):
     pytest.importorskip("prefect_kubernetes")
     from prefect_kubernetes.worker import KubernetesWorkerJobConfiguration
 
+    monkeypatch.setenv("PREFECT_API_URL", "http://prefect.external.test:4200/api")
+    monkeypatch.setenv("TEORIA_ENVIRONMENT", environment)
     monkeypatch.setenv(
         "TEORIA_PIPELINE_JOB_IMAGE", "ghcr.io/example/teoria/pipelines:commit"
     )
@@ -54,6 +57,8 @@ async def test_job_resources_and_secrets_survive_prefect_render(monkeypatch):
         )
     pod = config.job_manifest["spec"]["template"]["spec"]
     container = pod["containers"][0]
+    assert {item["name"]: item["value"] for item in container["env"]}["TEORIA_ENVIRONMENT"] == environment
+    assert {item["name"]: item["value"] for item in container["env"]}["PREFECT_API_URL"] == "http://prefect.external.test:4200/api"
     assert config.namespace == "teoria-pipelines"
     assert container["image"] == "ghcr.io/example/teoria/pipelines:commit"
     assert container["resources"] == {
@@ -65,6 +70,18 @@ async def test_job_resources_and_secrets_survive_prefect_render(monkeypatch):
     assert "PREFECT_API_AUTH_STRING" not in {item["name"] for item in container["env"]}
     assert pod["automountServiceAccountToken"] is False
     assert pod["imagePullSecrets"] == [{"name": "teoria-registry"}]
+
+
+@pytest.mark.parametrize("environment", [None, "", "prod", "invalid"])
+def test_job_registration_requires_explicit_valid_environment(monkeypatch, environment):
+    pytest.importorskip("prefect_kubernetes")
+    if environment is None:
+        monkeypatch.delenv("TEORIA_ENVIRONMENT", raising=False)
+    else:
+        monkeypatch.setenv("TEORIA_ENVIRONMENT", environment)
+    monkeypatch.setenv("PREFECT_API_URL", "http://prefect.external.test:4200/api")
+    with pytest.raises(ValueError, match="TEORIA_ENVIRONMENT"):
+        deployment.kubernetes_job_template()
 
 
 @pytest.mark.parametrize("backend", ["kubernetes"])
@@ -79,9 +96,9 @@ def test_registration_preserves_shared_flow_contract(monkeypatch, backend, kind)
     def capture(command, **kwargs):
         registered.append(yaml.safe_load(Path(command[-1]).read_text()))
 
-    pool = "teoria-specification-k3s" if backend == "kubernetes" else "teoria-specification"
+    pool = "teoria-specification"
     if kind == "legal-information":
-        pool = "teoria-legal-information-k3s" if backend == "kubernetes" else "teoria-legal-information"
+        pool = "teoria-legal-information"
     if kind == "metadata":
         pool = "teoria-metadata"
     with (
@@ -117,11 +134,13 @@ async def test_invalid_concurrency_is_rejected_before_pool_mutation(
 @pytest.mark.asyncio
 async def test_legal_kubernetes_jobs_use_only_the_dedicated_secret(monkeypatch):
     pytest.importorskip("prefect_kubernetes")
+    monkeypatch.setenv("PREFECT_API_URL", "http://prefect.external.test:4200/api")
+    monkeypatch.setenv("TEORIA_ENVIRONMENT", "production")
     monkeypatch.setenv("TEORIA_PIPELINE_JOB_IMAGE", "ghcr.io/example/law-worker:test")
     client = AsyncMock()
     client.read_work_pool.return_value.type = 'kubernetes'
     pool = await deployment.configure_pool(client, backend='kubernetes', kind='legal-information')
-    assert pool == 'teoria-legal-information-k3s'
+    assert pool == 'teoria-legal-information'
     update = client.update_work_pool.call_args.args[1]
     pod = update.base_job_template['job_configuration']['job_manifest']['spec']['template']['spec']
     assert pod['containers'][0]['envFrom'] == [{'secretRef': {'name': 'teoria-legal-information-secrets'}}]

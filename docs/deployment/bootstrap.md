@@ -22,6 +22,9 @@ k3d는 `local.sh deploy --component <이름>`으로 같은 단계를 실행한�
 일반 Kubernetes는 `--overlay generic`과 저장소·IngressClass 옵션을 지정한다.
 기존 외부 서비스를 연결한 경우 해당 설치 단계를 생략하고 Service/DNS·ConfigMap 연결을 준비한다.
 
+일반 설정과 역할별 입력은 [envs/dev·prod](../../deploy/kubernetes/envs/README.md)에서 준비한다. 필요한 namespace를 준비한 뒤 `--role connections`와 사용하는 Secret 역할을 명시적으로 등록한다.
+ConfigMap이 없는 환경에서 플랫폼·MLflow 배포가 예시를 자동 등록하지 않는다. 기존 리소스 이름은 유지한다.
+
 ## 2. 계정과 공개 URL
 
 OpenMetadata에 관리자·ingestion bot을 준비하고 `teoria-secrets`의
@@ -95,7 +98,7 @@ API 연결·Runtime artifact 확인과 Prefect 등록을 마친 뒤 Worker를 �
 
 다음 세 가지를 별도로 준비한다.
 
-- `specification-processing`: [specification.env.example](../../deploy/kubernetes/specification.env.example)의 API·S3 설정.
+- `specification-processing`: [specification.env.example](../../deploy/kubernetes/envs/dev/specification.env.example)의 API·S3 설정.
   API 토큰은 Admin 토큰과 다른 난수다. 인증 주체는 `service:specification-processing`이며
   허용 경로는 `domains/goods/authoring_client.py`가 소유한다. Ontology 게시·메타데이터 쓰기 권한을 부여하지 않는다.
   기존 서비스의 draft·승인 정책과 감사는 그대로 적용된다.

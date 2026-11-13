@@ -1,7 +1,7 @@
 # Teoria MCP Gateway
 
-현재 배포된 Runtime은 업무 Capability를 노출하지 않으므로 Tool 목록은 비어 있다.
-기존 조달 Tool을 다시 노출하지 않는다. Gateway는 시작할 때 discovery를 고정하므로
+Tool 목록은 연결한 Runtime의 게시 artifact와 공개 Capability 설정에 따른다.
+업무 Capability가 없는 Runtime의 빈 Tool 목록은 정상이며 기존 조달 Tool을 다시 노출하지 않는다. Gateway는 시작할 때 discovery를 고정하므로
 Runtime bundle 변경 뒤 MCP 프로세스와 클라이언트 연결을 재시작한다.
 
 MCP는 Runtime API의 공개 Capability discovery를 MCP Tool로 노출한다.
@@ -17,36 +17,32 @@ MCP protocol 패키지는 Runtime HTTP client를 사용하며 DB·기능 구현�
 
 ## 실행
 
-저장소 루트에서 `TEORIA_ENV_FILE=deploy/compose/.env`를 지정하고 Runtime API URL과
-token을 준비한다. 호스트에서 Compose Runtime에 접속하면 URL은
-`http://localhost:8081/runtime-api`다. `http://runtime-api:8000`은 Compose 내부 주소다.
-`TEORIA_MCP_RUNTIME_MODE=remote`만 지원한다.
-
-MCP는 Runtime HTTP API를 호출하며 DB 권한과 Source 인증정보를 갖지 않는다.
+Kubernetes에 배포한 Runtime의 접근 가능한 HTTPS 주소와 전용 token을 준비한다.
+MCP는 클라이언트 호스트에서 실행하며 Kubernetes 내부 DNS나 Docker 네트워크에 의존하지 않는다.
+`TEORIA_MCP_RUNTIME_MODE=remote`만 지원하며 DB 권한과 Source 인증정보를 갖지 않는다.
 
 ```bash
-uv run --project backend --locked --extra api teoria validate backend/contracts/runtime
+export TEORIA_MCP_RUNTIME_MODE=remote
+export TEORIA_MCP_RUNTIME_API_URL=https://teoria.example.com/runtime-api
+# token은 프로세스 환경 또는 접근을 제한한 TEORIA_ENV_FILE로 공급한다.
 uv run --project backend --locked --extra mcp teoria-mcp
 ```
 
-Codex 설정:
+`TEORIA_MCP_RUNTIME_API_TOKEN`도 실행 전에 설정해야 한다. token을 저장소 설정에 기록하지 않는다.
+사설 인증서를 쓰는 환경은 MCP 호스트의 신뢰 저장소를 구성한다.
+
+저장소의 `.codex/config.toml`은 같은 `teoria-mcp` 명령을 직접 실행하며 기본 비활성화 상태다.
+실제 checkout에 맞게 `cwd`를 설정하고 URL·token을 공급한 뒤 활성화한다.
 
 ```toml
 [mcp_servers.teoria]
 command = "uv"
 args = ["run", "--project", "backend", "--locked", "--extra", "mcp", "teoria-mcp"]
 cwd = "/absolute/path/to/teoria"
-
-[mcp_servers.teoria.env]
-TEORIA_MCP_RUNTIME_MODE = "remote"
-TEORIA_MCP_RUNTIME_API_URL = "http://localhost:8081/runtime-api"
-TEORIA_MCP_RUNTIME_API_TOKEN = "development-token"
 ```
 
-위 URL은 호스트에서 실행하는 예다. Compose 내부 MCP 컨테이너는
-`http://runtime-api:8000`을 사용하고 token 예시는 실제 배포의 secret으로 교체한다.
-
-운영 구조는 `AI Client → MCP Gateway → Runtime HTTP API`다. MCP는 Registry, Source 키와 DB 권한을 갖지 않는다.
+운영 구조는 `AI Client → 로컬 MCP STDIO 프로세스 → Runtime HTTP API`다.
+별도 MCP 컨테이너·Compose bridge·상시 MCP 서버 배포를 요구하지 않는다.
 
 Tool은 `exposure: public`인 Capability만 발견하며 제목과 설명에 active Artifact의
 CapabilityVersion을 표시한다. Tool은 Ontology Object·Link와 provenance를 반환한다.
@@ -72,16 +68,8 @@ Capability 실행은 POST이며 향후 side effect Capability가 추가될 수 �
 시도 횟수와 재시도 가능 여부를 함께 분류한다. 호출자는 `retryable=true`만으로 재실행하지
 말고 해당 Capability의 effect와 실행 결과 수신 여부를 확인해야 한다.
 
-MCP는 클라이언트 연결마다 STDIO 프로세스를 실행한다. 상시 `teoria-mcp-1` 기동은 필요하지 않다.
-Codex bridge는 `teoria-mcp-session-<id>` 이름과 client-session label을 사용하며 종료 후 `--rm`으로 제거한다.
-열린 클라이언트 연결 하나당 세션 컨테이너 하나가 실행될 수 있다.
-
-Docker 실행은 먼저 `semantic` 구성을 배포해 Runtime이 실행 중인 상태에서 수행한다.
-
-```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml \
-  -f deploy/compose/compose_semantic.yaml run --rm --no-deps mcp
-```
+MCP는 클라이언트 연결마다 STDIO 프로세스를 실행한다. Runtime bundle 변경 뒤
+MCP 프로세스와 클라이언트 연결을 재시작해 discovery를 갱신한다.
 
 ## 검증
 
@@ -90,9 +78,8 @@ uv run --locked --project backend --all-extras pytest backend/tests/entrypoints/
 uv run --locked --project backend --extra mcp python .agents/skills/test-teoria-mcp/scripts/smoke_test.py --discovery-only
 ```
 
-저장소의 `.codex/config.toml`은 `--project backend` 환경에서
-`.codex/run_teoria_mcp.py`를 실행하고, 이 bridge가 Compose network에서 현재 MCP 이미지를 시작한다.
-현재 업무 Capability가 없으므로 discovery-only 검증의 정상 Tool 수는 0이다.
+discovery-only 검증은 초기화·Tool 조회를 확인한다. 반환 Tool 목록은 연결한 Runtime의
+공개 Capability 설정과 비교하며, 과거 조달 Tool을 검증 목적으로 재활성화하지 않는다.
 
 MCP는 STDIO protocol을 사용하므로 애플리케이션 로그를 표준 출력에 추가하지 않는다.
 환경변수의 기본값은 [환경 설정](../deployment/configuration.md), 실제 실행 계약은

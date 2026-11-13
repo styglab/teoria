@@ -36,6 +36,8 @@ ingress_class=
 cluster_domain=cluster.local
 render_only=false
 pause_workers=false
+settings_revision=
+mlflow_settings_revision=
 shift 3
 while (( $# )); do
   case "$1" in
@@ -55,6 +57,17 @@ done
 case "$component" in platform|database|storage|workflow|mlflow|openmetadata|all) ;; *) echo 'Invalid deployment component' >&2; exit 1 ;; esac
 [[ "$overlay" == k3s || "$overlay" == k3d || "$overlay" == generic ]] || { echo 'Choose --overlay k3s, k3d or generic' >&2; exit 1; }
 if [[ "$overlay" == k3d ]]; then
+  repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+  access_cli=$repository_root/backend/src/teoria/entrypoints/k3d_remote_access.py
+  if [[ -f "$access_cli" && ( "$render_only" != true || -z "$model_registry_host" ) ]]; then
+    configured_registry=$(python3 "$access_cli" --root "$repository_root" --registry-host)
+    if [[ -n "$configured_registry" ]]; then
+      [[ -z "$model_registry_host" || "$model_registry_host" == "$configured_registry" ]] || { echo 'k3d Registry must match remote_access.env; apply address changes first.' >&2; exit 1; }
+      [[ -z "$model_registry_url" || "$model_registry_url" == "https://$configured_registry" ]] || { echo 'k3d Registry URL must match remote_access.env.' >&2; exit 1; }
+      model_registry_host=$configured_registry
+      model_registry_url=https://$configured_registry
+    fi
+  fi
   storage_class=${storage_class:-teoria-local}
   model_registry_host=${model_registry_host:-harbor.teoria.localhost}
   model_registry_url=${model_registry_url:-https://$model_registry_host}
@@ -94,14 +107,18 @@ command -v python3 >/dev/null
 if [[ "$render_only" != true ]]; then
   exec 9>"${HOME}/.teoria-deploy.lock"
   flock -w 1200 9
+  if [[ "$overlay" == k3d && -f "$access_cli" ]]; then
+    applied_registry=$(python3 "$access_cli" --root "$repository_root" --registry-host)
+    [[ -z "$applied_registry" || "$applied_registry" == "$model_registry_host" ]] || { echo 'k3d access changed while waiting for deployment; retry with the applied Registry.' >&2; exit 1; }
+  fi
 fi
 scratch=$(mktemp -d "$root/.release_XXXXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 trap 'echo "Deployment failed; existing PVCs and release files are retained. Check Kubernetes Job/Pod status." >&2' ERR
 render() {
-  python3 - "$root" "$scratch" "$1" "$image_prefix" "$revision" "$public_host" "$model_registry_host" "$model_registry_url" "$overlay" "$storage_class" "$ingress_class" "$cluster_domain" "$shared_storage_class" "$pause_workers" <<'PY'
+  python3 - "$root" "$scratch" "$1" "$image_prefix" "$revision" "$public_host" "$model_registry_host" "$model_registry_url" "$overlay" "$storage_class" "$ingress_class" "$cluster_domain" "$shared_storage_class" "$pause_workers" "$settings_revision" "$mlflow_settings_revision" <<'PY'
 import json,os,sys
-root,out,resource,prefix,revision,host,registry_host,registry_url,overlay,storage_class,ingress_class,cluster_domain,shared_storage_class,pause_workers=sys.argv[1:]
+root,out,resource,prefix,revision,host,registry_host,registry_url,overlay,storage_class,ingress_class,cluster_domain,shared_storage_class,pause_workers,settings_revision,mlflow_settings_revision=sys.argv[1:]
 resource_path=root+'/overlays/'+overlay if resource=='teoria' else root+'/base/'+resource
 images=['runtime','authoring','admin-ui','pipelines','metadata-worker','opa','opa-builder','ingestion','admin','mlflow','model-dispatcher','specification-job','legal-job']
 config={'apiVersion':'kustomize.config.k8s.io/v1beta1','kind':'Kustomization',
@@ -113,6 +130,13 @@ def patch(kind,name,body):
 def environment(kind,name,values):
     patch(kind,name,{'apiVersion':'batch/v1' if kind=='Job' else 'apps/v1','kind':kind,'metadata':{'name':name},
         'spec':{'template':{'spec':{'containers':[{'name':name,'env':values}]}}}})
+# Stable revision: environment inputs changing must replace Pods even with the same image/YAML.
+workload_revision=settings_revision if resource=='teoria' else mlflow_settings_revision if resource=='services/mlflow' else ''
+if workload_revision:
+    names=['admin-api','runtime-api','policy-control-plane','opa'] if resource=='teoria' else ['mlflow'] if resource=='services/mlflow' else []
+    for name in names:
+        patch('Deployment',name,{'apiVersion':'apps/v1','kind':'Deployment','metadata':{'name':name},
+            'spec':{'template':{'metadata':{'annotations':{'teoria.io/settings-revision':workload_revision}}}}})
 if resource=='teoria':
     patch('Ingress','teoria',[{'op':'replace','path':'/spec/rules/0/host','value':host},
         {'op':'replace','path':'/spec/tls/0/hosts/0','value':host}])
@@ -212,6 +236,28 @@ kubectl get nodes >/dev/null
 if [[ "$overlay" == k3d ]]; then
   kubectl get nodes -o json | python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin)["items"])==1 else "The k3d overlay requires one node")'
 fi
+goods_replicas=0
+legal_replicas=0
+if [[ "$component" == platform || "$component" == all || "$component" == mlflow ]]; then
+  if ! connections=$(kubectl -n teoria get configmap teoria-mlops-connections -o json); then
+    echo 'Register connections.env first: envs/settings.sh apply --env dev|prod --context CONTEXT --role connections.' >&2
+    exit 1
+  fi
+  activation=$(python3 -c '
+import json,sys
+values=json.load(sys.stdin).get("data",{})
+keys=["TEORIA_MODEL_STORAGE_ENDPOINT"] if sys.argv[1]=="mlflow" else ["TEORIA_ENVIRONMENT","PREFECT_API_URL","MLFLOW_TRACKING_URI","TEORIA_MODEL_STORAGE_ENDPOINT","TEORIA_OPENMETADATA_BASE_URL","TEORIA_METADATA_SYNC_SCHEDULE_ENABLED","TEORIA_SPECIFICATION_PROCESSING_ENABLED","TEORIA_LEGAL_INFORMATION_ENABLED"]
+missing=[key for key in keys if not values.get(key)]
+if missing:sys.exit("Add explicit teoria-mlops-connections keys: "+", ".join(missing))
+if sys.argv[1]!="mlflow" and values["TEORIA_ENVIRONMENT"] not in {"development","test","production"}:sys.exit("TEORIA_ENVIRONMENT must be development, test or production")
+keys += [key for key in ("TEORIA_SPECIFICATION_UPLOAD_ENABLED",) if key in values and sys.argv[1]!="mlflow"]
+if sys.argv[1]!="mlflow" and values.get("TEORIA_SPECIFICATION_UPLOAD_ENABLED")=="true" and values.get("TEORIA_SPECIFICATION_PROCESSING_ENABLED")!="true":sys.exit("Document uploads require specification processing")
+for key in keys:
+    if key.endswith("_ENABLED") and values[key] not in {"true","false"}:sys.exit(key+" must be true or false")
+print("0 0") if sys.argv[1]=="mlflow" else print(int(values.get("TEORIA_SPECIFICATION_PROCESSING_ENABLED")=="true"),int(values.get("TEORIA_LEGAL_INFORMATION_ENABLED")=="true"))
+' "$component" <<< "$connections")
+  read -r goods_replicas legal_replicas <<< "$activation"
+fi
 kubectl create namespace teoria --dry-run=client -o yaml | kubectl apply -f -
 required_secrets=(teoria-secrets teoria-registry)
 case "$component" in platform|all) required_secrets+=(teoria-tls model-control) ;; database|mlflow) required_secrets+=(model-control) ;; esac
@@ -249,27 +295,7 @@ if missing:sys.exit("Configure model-control keys: "+", ".join(missing))
 ' "$component"
     ;;
 esac
-goods_replicas=0
-legal_replicas=0
-if [[ "$component" == platform || "$component" == all || "$component" == mlflow ]]; then
-  if ! kubectl -n teoria get configmap teoria-mlops-connections >/dev/null 2>&1; then
-    kubectl -n teoria create configmap teoria-mlops-connections --from-env-file="$root/connections.env.example"
-  fi
-  connections=$(kubectl -n teoria get configmap teoria-mlops-connections -o json)
-  activation=$(python3 -c '
-import json,sys
-values=json.load(sys.stdin).get("data",{})
-keys=["TEORIA_MODEL_STORAGE_ENDPOINT"] if sys.argv[1]=="mlflow" else ["PREFECT_API_URL","MLFLOW_TRACKING_URI","TEORIA_MODEL_STORAGE_ENDPOINT","TEORIA_OPENMETADATA_BASE_URL","TEORIA_METADATA_SYNC_SCHEDULE_ENABLED","TEORIA_SPECIFICATION_PROCESSING_ENABLED","TEORIA_LEGAL_INFORMATION_ENABLED"]
-missing=[key for key in keys if not values.get(key)]
-if missing:sys.exit("Add explicit teoria-mlops-connections keys: "+", ".join(missing))
-keys += [key for key in ("TEORIA_SPECIFICATION_UPLOAD_ENABLED",) if key in values]
-if values.get("TEORIA_SPECIFICATION_UPLOAD_ENABLED")=="true" and values.get("TEORIA_SPECIFICATION_PROCESSING_ENABLED")!="true":sys.exit("Document uploads require specification processing")
-for key in keys:
-    if key.endswith("_ENABLED") and values[key] not in {"true","false"}:sys.exit(key+" must be true or false")
-print(int(values.get("TEORIA_SPECIFICATION_PROCESSING_ENABLED")=="true"),int(values.get("TEORIA_LEGAL_INFORMATION_ENABLED")=="true"))
-' "$component" <<< "$connections")
-  read -r goods_replicas legal_replicas <<< "$activation"
-fi
+
 if [[ "$component" == platform || "$component" == all ]]; then
   kubectl -n teoria-models get secret model-images >/dev/null
   kubectl -n teoria-models get secret model-workload >/dev/null
@@ -304,6 +330,27 @@ value=json.load(sys.stdin).get("data",{}).get("auth.json")
 if not value or not isinstance(json.loads(base64.b64decode(value)),dict):sys.exit("Configure role-specific Codex auth.json Secret")
 '
   done
+fi
+if [[ "$component" == platform || "$component" == all || "$component" == mlflow ]]; then
+  settings_secrets=(teoria-secrets model-control)
+  if [[ ( "$component" == platform || "$component" == all ) && "$goods_replicas" == 1 ]]; then settings_secrets+=(specification-processing); fi
+  secret_revisions=()
+  for name in "${settings_secrets[@]}"; do
+    secret_revisions+=("$(kubectl -n teoria get secret "$name" -o json | python3 -c '
+import json,sys
+metadata=json.load(sys.stdin).get("metadata",{})
+print(json.dumps({"uid":metadata.get("uid"),"resourceVersion":metadata.get("resourceVersion")}))
+')")
+  done
+  input_revisions=$(python3 -c '
+import hashlib,json,sys
+settings=json.load(sys.stdin).get("data",{})
+identities=[json.loads(value) for value in sys.argv[1:]]
+def revision(values,resources):
+    return hashlib.sha256(json.dumps([values,resources],sort_keys=True,separators=(",",":")).encode()).hexdigest()
+print(revision(settings,identities),revision({"TEORIA_MODEL_STORAGE_ENDPOINT":settings.get("TEORIA_MODEL_STORAGE_ENDPOINT")},identities[:2]))
+' "${secret_revisions[@]}" <<< "$connections")
+  read -r settings_revision mlflow_settings_revision <<< "$input_revisions"
 fi
 for selected in "${components[@]}"; do
   case "$selected" in

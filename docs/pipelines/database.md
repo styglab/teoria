@@ -7,7 +7,7 @@ Runtime은 게시된 Database Source 계약으로 정규 relation을 읽으며 m
 - `ingestion`: 실행 감사, 원본 Provider 응답, Checkpoint
 - `legal_information`: 법령·버전·원문 snapshot·조문·첨부와 검색 뷰
 - `public_procurement`: 규격서 실행·문서별 상태·산출물 참조·표준관리 workflow와 물품 공고 복원 기반
-- `mlops_demo`: 선택형 모델 운영 데모의 고객·활동 데이터
+- `mlops_demo`: 이전 합성 모델 예제의 DB 이력; 활성 학습·수집 경로가 아니다
 
 파일명은 적용 순서를 포함한 `<3자리 번호>_<설명>.sql`을 사용한다. 적용된 파일명은 `ingestion.schema_migrations`에 기록되므로 이미 적용한 migration 파일을 수정하지 않고 새 파일을 추가한다.
 
@@ -17,7 +17,7 @@ uv run --locked --project backend \
   --migrations backend/migrations/data
 ```
 
-실행에는 `TEORIA_PIPELINE_DATA_DATABASE_URL`이 필요하다. 로컬 Compose에서는 `postgres-migrate` 일회성 서비스가 같은 명령을 실행한다.
+실행에는 `TEORIA_PIPELINE_DATA_DATABASE_URL`이 필요하다. Kubernetes의 Data DB migration은 `postgres-migrate` Job으로 명시적으로 실행한다. 플랫폼 갱신과 구분한다.
 
 ## 규격서 실행과 참조
 

@@ -88,7 +88,7 @@ Runner는 `platform/ontology/runtime/capability/runner.py`, Source 실행은 `pl
 artifact 검증·구성은 `platform/ontology/contracts/artifact.py`, App DB snapshot 조회는
 `platform/ontology/bindings/publication_export.py`, 명령은 `entrypoints/commands/registry.py`에서 찾는다.
 Runtime cache는 `runtime/cache/`가 소유한다. Redis 장애는 실행을 막지 않고 캐시 없이
-동작한다. 정책 bundle 빌드·서명·서비스 시작 순서는 [Compose](../deployment/compose.md)를 따른다.
+동작한다. 정책 bundle 빌드·서명·서비스 시작 순서는 [Kubernetes 배포](../deployment/kubernetes.md)를 따른다.
 
 Source DB 실행은 native async PostgreSQL을 사용한다. HTTP부터 Repository까지 `await`를
 연결하며 transaction·승인·취소 경계를 보존한다. 이전 시장 분석 reader는 비활성 보관했다.
@@ -160,8 +160,8 @@ TEORIA_GOODS_RUNTIME_VIEW_SHA256=실제_파일_SHA256
 Runtime은 파일 hash·내부 checksum·version 디렉터리·개념 소유 관계와 bundle의 게시 version/checksum을 검증한다.
 불일치는 시작을 차단한다. 활성 Capability에 고정 view가 없거나 검증된 bundle 없이 view만 지정해도 시작하지 않는다.
 요청 중에는 메모리에 적재한 불변 view만 읽으며 작성 DB·Admin API·원본 Registry를 조회하지 않는다.
-Compose는 기존 read-only `runtime-artifacts` 볼륨에 view를 배치하고 위 환경변수로 선택한다.
-K3s에서는 같은 파일을 PVC에 배치하고 동일 환경변수를 명시한다. 실제 배포 성공은 별도 검증한다.
+Kubernetes의 `runtime-artifacts` PVC에 view를 배치하고 Runtime에 읽기 전용으로 마운트한다.
+위 환경변수를 명시하며 실제 배포 성공은 별도 검증한다.
 
 FormatID의 프로파일 적용 결과에서 **게시 의미로 조회**를 열면 `metadata_admin` 인증을 가진 Admin → Runtime HTTP 경계를 거친다.
 run/document로 범위를 고정하고 최대 100개씩 조회하며 게시되지 않은 문서를 빈 성공으로 표시하지 않는다.

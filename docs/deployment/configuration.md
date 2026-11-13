@@ -9,17 +9,22 @@
 | 대상 | 기준 위치 |
 |---|---|
 | Python 설정·기본값 | `backend/src/teoria/settings.py` |
-| 일반 연결 주소·도메인 실행 여부 | `deploy/kubernetes/connections.env.example` → ConfigMap |
-| 플랫폼·서비스 비밀값 | `deploy/kubernetes/secrets.env.example` → `teoria-secrets` |
-| 모델 controller 비밀값 | `deploy/kubernetes/control.env.example` → `model-control` |
-| 모델 Job·서빙 비밀값 | `deploy/kubernetes/workload.env.example` → `model-workload` |
+| 일반 연결 주소·도메인 실행 여부 | `deploy/kubernetes/envs/dev/connections.env.example` → ConfigMap |
+| 플랫폼·서비스 비밀값 | `deploy/kubernetes/envs/dev/secrets.env.example` → `teoria-secrets` |
+| 모델 controller 비밀값 | `deploy/kubernetes/envs/dev/control.env.example` → `model-control` |
+| 모델 Job·서빙 비밀값 | `deploy/kubernetes/envs/dev/workload.env.example` → `model-workload` |
+| 규격서 처리 비밀값 | `deploy/kubernetes/envs/dev/specification.env.example` → `specification-processing` |
+| Harbor 관리자·암호화 키 | `deploy/kubernetes/envs/dev/harbor_secrets.env.example` → `harbor-secrets` |
+| Harbor Helm 입력 | `deploy/kubernetes/envs/dev/harbor_values.yaml.example`; 실제 YAML은 Git 제외 |
+| k3d 호스트 입력 | `deploy/kubernetes/envs/dev/k3d.env.example`; `local.sh`가 실제 `k3d.env`를 자동으로 읽음 |
 | 컨테이너 실행·Secret 주입 | `deploy/kubernetes/base/`의 소유 리소스 |
 | 환경별 저장소·Ingress | `deploy/kubernetes/overlays/` |
 | Prefect pool·queue·Job 정책 | `deploy/kubernetes/prefect/` |
 
 API는 `bootstrap_settings()`를 통해 환경변수와 명시적 `TEORIA_ENV_FILE`을 읽는다.
 운영 컨테이너는 호스트의 `.env`를 자동으로 읽지 않는다.
-소스 checkout에 실제 비밀번호·토큰을 저장하지 않고 보안 운영 경로에서 Secret을 준비한다.
+실제 비밀번호·토큰은 Git에서 제외한 `envs/dev`·`envs/prod` 또는 보안 운영 경로의 파일에서 준비한다.
+위 표는 개발 예시 경로이며 운영은 같은 이름의 `envs/prod` 예시를 사용한다.
 
 ## 통합 플랫폼과 도메인 설정
 
@@ -34,8 +39,12 @@ Kubernetes 정의는 Metadata·Ontology·MLOps를 함께 활성화한다.
 | `TEORIA_METADATA_SYNC_SCHEDULE_ENABLED` | `false` | Teoria Data DB 메타데이터 정기 동기화 |
 
 값은 `true` 또는 `false`다. 입력·저장소·소유 API 인증·법령 키 등 해당 기능의 실행 조건을 준비한 뒤 활성화한다.
-설정을 바꾼 후 플랫폼을 다시 배포하면 API와 Worker·Flow 등록에 함께 반영한다.
-배포는 기존 ConfigMap을 기본값으로 덮어쓰지 않는다.
+Teoria API·Runtime·정책 서비스·Worker·migration/등록 Job의 실행 환경은 같은 ConfigMap의 `TEORIA_ENVIRONMENT`로 정한다.
+개발 예시는 `development`, 운영 예시는 `production`이며 클러스터 종류와 별개다.
+기존 ConfigMap에도 이 키를 추가해야 새 Teoria Pod와 Job을 실행할 수 있다.
+
+환경별 파일을 수정하고 `settings.sh apply --role connections`로 등록한 뒤 플랫폼을 배포하면 API와 Worker·Flow 등록에 함께 반영한다.
+배포는 예시 파일을 자동 등록하지 않는다. 기존 ConfigMap의 필수 값을 검증하고 설정 revision을 통해 Pod 교체에 반영한다.
 
 ## DB·객체 저장소·Registry
 
@@ -106,3 +115,10 @@ OIDC 설정은 해당 환경변수를 Admin Deployment에
 않았으며 현재 관리자 연결창은 access token 입력을 사용한다. 실제 SSO 구성은 issuer·client와
 역할 설정, 만료·키 교체·개인별 승인 기록을 해당 환경에서 확인한 뒤 완료로 기록한다.
 OIDC 연결만으로 문서·속성 단위 접근 정책이나 작성자/승인자 분리가 완성되는 것은 아니다.
+
+## 환경별 파일 위치와 반영
+
+실제 비밀값은 `deploy/kubernetes/envs/dev/`·`prod/`의 역할별 `*.env` 또는 운영자 보안 경로에 둔다.
+예시만 Git에 포함하며 실제 파일은 Git·이미지 빌드에서 제외한다.
+[환경별 설정·인증정보 준비와 반영](../../deploy/kubernetes/envs/README.md)에 따라 초기화하고 context를 명시해 등록한다.
+배포 YAML이 참조하는 기존 Secret 이름과 namespace는 변경하지 않는다.

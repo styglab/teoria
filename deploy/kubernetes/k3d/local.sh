@@ -5,21 +5,26 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)
 action=${1:-help}
 shift || true
 if [[ "$action" == --help || "$action" == -h ]]; then action=help; fi
-export TEORIA_K3D_DATA_DIR=${TEORIA_K3D_DATA_DIR:-$HOME/.local/share/teoria/k3d}
-export KUBECONFIG=${TEORIA_K3D_KUBECONFIG:-$root/deploy/kubernetes/k3d/.local/kubeconfig}
-export TEORIA_K3D_HTTP_PORT=${TEORIA_K3D_HTTP_PORT:-8080}
-export TEORIA_K3D_HTTPS_PORT=${TEORIA_K3D_HTTPS_PORT:-8443}
+configured_inputs=$(python3 "$root/backend/src/teoria/entrypoints/k3d_local_state.py" settings --root "$root")
+mapfile -t configured <<< "$configured_inputs"
+export TEORIA_K3D_DATA_DIR=${configured[0]:-$HOME/.local/share/teoria/k3d}
+export KUBECONFIG=${configured[1]:-$root/deploy/kubernetes/k3d/.local/kubeconfig}
+export TEORIA_K3D_API_SERVER=${configured[2]:-}
+export TEORIA_K3D_HTTP_PORT=${configured[3]:-8080}
+export TEORIA_K3D_HTTPS_PORT=${configured[4]:-8443}
 local_dir=$root/deploy/kubernetes/k3d/.local
-revision=${TEORIA_K3D_REVISION:-}
+revision=${configured[5]:-}
 if [[ -z "$revision" && ( "$action" == build || "$action" == deploy || "$action" == render ) ]]; then
   revision=$(git -C "$root" rev-parse HEAD)
 fi
 image_prefix=harbor.teoria.localhost/teoria
 registry_options=()
-if [[ -f "$local_dir/remote_access/config.json" ]]; then
-  registry_host=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["harbor_url"].removeprefix("https://"))' "$local_dir/remote_access/config.json")
-  image_prefix=$registry_host/teoria
-  registry_options=(--model-registry-host "$registry_host" --model-registry-url "https://$registry_host")
+if [[ "$action" == build || "$action" == deploy || "$action" == render ]]; then
+  registry_host=$(python3 "$root/backend/src/teoria/entrypoints/k3d_remote_access.py" --root "$root" --registry-host)
+  if [[ -n "$registry_host" ]]; then
+    image_prefix=$registry_host/teoria
+    registry_options=(--model-registry-host "$registry_host" --model-registry-url "https://$registry_host")
+  fi
 fi
 check_context() {
   [[ $(kubectl config current-context) == k3d-teoria ]] || {
@@ -121,7 +126,7 @@ PYHOSTS
       'opa deploy/image_builds/opa/Dockerfile runtime'
       'opa-builder deploy/image_builds/opa/Dockerfile bundle_builder'
       'ingestion deploy/image_builds/openmetadata/Dockerfile -'
-      'mlflow backend/Dockerfile mlflow'
+      'mlflow deploy/image_builds/mlflow/Dockerfile -'
       'model-dispatcher backend/Dockerfile model-dispatcher'
     )
     for spec in "${image_specs[@]}"; do

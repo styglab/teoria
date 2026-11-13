@@ -28,7 +28,10 @@ spec:
               name: teoria-mlops-connections
               key: TEORIA_METADATA_SYNC_SCHEDULE_ENABLED
         - name: TEORIA_ENVIRONMENT
-          value: production
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_ENVIRONMENT
         - name: TEORIA_PIPELINE_PATH
           value: /app/backend
         - name: PREFECT_API_URL

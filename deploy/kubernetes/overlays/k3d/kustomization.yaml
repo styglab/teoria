@@ -5,7 +5,13 @@ resources:
 patches:
 - target:
     kind: PersistentVolumeClaim
-  patch: "- op: add\n  path: /spec/storageClassName\n  value: teoria-local\n"
+  patch: |-
+    - op: add
+      path: /spec/storageClassName
+      value: teoria-local
 - target:
     kind: Ingress
-  patch: "- op: add\n  path: /spec/ingressClassName\n  value: traefik\n"
+  patch: |-
+    - op: add
+      path: /spec/ingressClassName
+      value: traefik

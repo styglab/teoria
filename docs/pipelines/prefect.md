@@ -13,7 +13,7 @@
 | `specification-document-processing` | `mode=document_processing`과 고정 표준을 포함한 manifest | 수동 |
 | `openmetadata-postgres-metadata-sync` | 허용된 ingestion image | 매일 05:00 Asia/Seoul |
 
-규격서 pool은 개발·운영 모두 `teoria-specification-k3s`다. 이름은 기존 실행 이력 호환을 위해 유지한다.
+규격서 pool은 클러스터 종류와 무관하게 `teoria-specification`을 사용한다.
 queue는 `documents`, 전체 동시 실행 상한은 기본 2개이며 각 Deployment는 중복 실행을 막는다.
 Metadata는 별도 `teoria-metadata` pool에서 동시 실행 1개다.
 이전 `teoria-ingestion` pool과 해당 배포는 이력을 보존한 일시정지 상태로 유지한다.
@@ -39,6 +39,17 @@ bash deploy/kubernetes/k3d/local.sh deploy
 `deploy/kubernetes/prefect/`에 둔다. 등록 명령은 공통 선언과 환경 설정을
 합성한 Prefect YAML을 만들어 실제 `prefect deploy`에 전달한다. 원본 설정 파일은 수정하지 않는다.
 자동화 등록은 과거 수집 pool을 재개하지 않는다.
+
+규격서·법령 등록 Job과 Worker는 `teoria-mlops-connections` ConfigMap의
+`TEORIA_ENVIRONMENT`를 읽는다. dev 예시는 `development`, prod 예시는 `production`이다.
+등록 코드는 이 값만 허용 목록으로 실제 Kubernetes Job에 전달하며,
+값이 없거나 `development`·`test`·`production` 이외이면 등록을 중단한다.
+공통 `execution.yaml`에 운영 환경을 고정하지 않는다.
+
+기존 `teoria-specification-k3s`·`teoria-legal-information-k3s` pool에서 전환할 때는
+기존 pool 일시정지 → 실행 중 작업 종료 확인 → 새 등록 Job 실행 → Worker 교체 순서를 따른다.
+Deployment 이름은 유지하고 실행 pool만 새 이름으로 등록한다. 과거 pool과 실행 이력은 삭제하지 않는다.
+이 저장소 변경은 실행 중인 클러스터의 전환 완료를 의미하지 않는다.
 
 Prefect UI의 규격서 Deployment에서 `manifest` 객체를 입력해 실행하거나,
 [규격서 파이프라인](../domains/goods/specifications/pipeline.md)의 CLI를 사용한다.

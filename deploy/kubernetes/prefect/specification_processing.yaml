@@ -1,5 +1,5 @@
 pools:
-- name: teoria-specification-k3s
+- name: teoria-specification
   type: kubernetes
   concurrency_limit: 2
   concurrency_limit_env: TEORIA_PIPELINE_CONCURRENCY
@@ -14,13 +14,13 @@ pools:
 deployments:
 - name: specification-standard-management
   work_pool:
-    name: teoria-specification-k3s
+    name: teoria-specification
     work_queue_name: documents
 - name: specification-document-processing
   work_pool:
-    name: teoria-specification-k3s
+    name: teoria-specification
     work_queue_name: documents
 - name: specification-standard-workflow
   work_pool:
-    name: teoria-specification-k3s
+    name: teoria-specification
     work_queue_name: documents

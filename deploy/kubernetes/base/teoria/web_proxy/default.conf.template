@@ -16,6 +16,10 @@ server {
     }
     location /admin-api/ {
         set $api admin-api.teoria.svc.${TEORIA_CLUSTER_DOMAIN}:8001;
+        # Some authoring calls wait for bounded inference; schedules/jobs remain asynchronous.
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 120s;
         rewrite ^/admin-api/(.*)$ /$1 break;
         proxy_pass http://$api;
         proxy_set_header Authorization $http_authorization;
@@ -25,6 +29,9 @@ server {
     }
     location /runtime-api/ {
         set $runtime runtime-api.teoria.svc.${TEORIA_CLUSTER_DOMAIN}:8000;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 180s;
+        proxy_send_timeout 120s;
         rewrite ^/runtime-api/(.*)$ /$1 break;
         proxy_pass http://$runtime;
         proxy_set_header Authorization $http_authorization;
@@ -54,6 +61,8 @@ server {
         proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
     }
     location /prefect/api/ {
+        proxy_read_timeout 3600s; # Prefect event/WebSocket connections.
+        proxy_send_timeout 120s;
         set $prefect_api prefect-server.teoria.svc.${TEORIA_CLUSTER_DOMAIN}:4200;
         rewrite ^/prefect/api/(.*)$ /api/$1 break;
         proxy_pass http://$prefect_api;

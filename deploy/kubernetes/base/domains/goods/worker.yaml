@@ -24,11 +24,17 @@ spec:
             memory: 1Gi
         env:
         - name: TEORIA_ENVIRONMENT
-          value: production
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_ENVIRONMENT
         - name: TEORIA_PIPELINE_PATH
           value: /app/backend
         - name: PREFECT_API_URL
-          value: http://prefect-server:4200/api
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: PREFECT_API_URL
         - name: PREFECT_API_AUTH_STRING
           valueFrom:
             secretKeyRef:
@@ -41,7 +47,7 @@ spec:
         - worker
         - start
         - --pool
-        - teoria-specification-k3s
+        - teoria-specification
         - --type
         - kubernetes
       imagePullSecrets:

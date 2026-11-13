@@ -336,3 +336,6 @@ backend/references/**
 
 # Temporary offline/lifecycle manifest rendering.
 deploy/kubernetes/.release_*/
+
+# Private environment-specific Harbor Helm overrides.
+/deploy/kubernetes/envs/*/harbor_values.yaml

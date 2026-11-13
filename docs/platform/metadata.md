@@ -55,15 +55,19 @@ Codex subprocess의 schema 응답을 검증하고 선택 컬럼·게시 Concept�
 `TEORIA_ASSESSMENT_ENABLED=true`와 선택적 `TEORIA_ASSESSMENT_CODEX_MODEL`을 설정한다.
 모델이 비면 로그인한 Codex CLI 설정을 사용하며 다른 gateway로 fallback하지 않는다.
 모델 요청과 실제 Worker 설정이 다르면 `assessment_model_changed`로 실패한다.
-규격서와 분리된 `metadata-model-auth` 볼륨에 로그인한 뒤 동일한 배포 구성으로 반영한다.
+규격서와 분리된 `metadata-model-auth` PVC에 Codex 인증을 준비한다.
+동일한 authoring 이미지와 PVC를 사용하는 관리용 Pod에서 UID/GID 10001로
+`codex login --device-auth`를 수행한다. 인증정보를 이미지나 Git에 기록하지 않는다.
+`TEORIA_ASSESSMENT_ENABLED`는 `teoria-secrets`에서 관리한다. 인증·설정을 준비한 뒤 실행한다.
 
 ```bash
-docker compose --env-file deploy/compose/.env -f deploy/compose/compose.yaml \
-  -f deploy/compose/compose_semantic.yaml run --rm --no-deps \
-  --entrypoint codex metadata-assessment-worker login --device-auth
-bash deploy/compose/deploy.sh build
-bash deploy/compose/deploy.sh deploy
+bash deploy/kubernetes/k3d/local.sh deploy --component platform
+kubectl -n teoria scale deployment/metadata-assessment-worker --replicas=1
+kubectl -n teoria rollout status deployment/metadata-assessment-worker
 ```
+
+Worker는 기본 replicas=0이다. 인증 준비·기능 설정·실제 진단 성공은 각각 확인한다.
+운영 k3s·일반 Kubernetes는 해당 context에서 공통 배포 진입점을 사용한다.
 
 ## 제안 검토·적용·복구
 
@@ -108,7 +112,8 @@ Ontology 변경 검토에는 `ontology_owner`가 추가로 필요하다. 승인�
 
 자산 상세에서 요청을 복사하거나 FQN을 지정한다. 세 Skill은 제안·초안까지만 작성한다.
 검토 대기열 제출 요청이 있으면 검증 후 pending Suggestion으로 제출하고 직접 승인·적용하지 않는다.
-API 주소는 CLI 인자 → `TEORIA_ADMIN_BASE_URL` → Compose 기본값 순이며 bearer는 환경변수로 전달한다.
+API 주소는 CLI 인자 또는 `TEORIA_ADMIN_BASE_URL`로 접근 가능한 Kubernetes Admin API 주소를 명시한다.
+CLI의 과거 localhost 기본값에 의존하지 않으며 bearer는 환경변수로 전달한다.
 제안 bundle은 [공통 schema](../../.agents/skills/enrich-metadata-asset/references/proposal_bundle.schema.json)를 따른다.
 
 ## 법령 근거

@@ -32,6 +32,14 @@ def kubernetes_job_template(
         / "execution.yaml"
     )
     policy = yaml.safe_load(path.read_text())
+    environment = dict(policy["environment"])
+    for name in policy.get("environment_from_env", []):
+        value = os.getenv(name)
+        if not value:
+            raise ValueError(f"{name} is required for Kubernetes Job registration")
+        environment[name] = value
+    if environment.get("TEORIA_ENVIRONMENT") not in {"development", "test", "production"}:
+        raise ValueError("TEORIA_ENVIRONMENT must be development, test or production")
     template = KubernetesWorker.get_default_base_job_template()
     properties = template["variables"]["properties"]
     defaults = dict(policy["defaults"])
@@ -60,7 +68,7 @@ def kubernetes_job_template(
         pod["volumes"] = [{"name": "codex-auth", "secret": {"secretName": codex_secret, "defaultMode": 0o440}}]
         pod["containers"][0]["volumeMounts"] = [{"name": "codex-auth", "mountPath": "/var/run/teoria/codex", "readOnly": True}]
     # Never materialize the dispatcher's credentials into the Job declaration.
-    template["job_configuration"]["env"] = dict(policy["environment"])
+    template["job_configuration"]["env"] = environment
     if codex_secret:
         template["job_configuration"]["env"]["TEORIA_CODEX_AUTH_PATH"] = "/var/run/teoria/codex/auth.json"
         template["job_configuration"]["env"]["TEORIA_SPECIFICATION_REQUIRE_OBJECT_STORAGE"] = "true"

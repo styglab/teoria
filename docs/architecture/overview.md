@@ -130,6 +130,11 @@ Teoria는 Prefect·MLflow의 권위를 유지하며 모델 실행을 Ontology의
 Kubernetes는 Metadata·Ontology·MLOps를 하나의 Teoria 구성으로 배포한다.
 `base/teoria/`는 플랫폼 실행·권한·Job, `base/services/`는 기반 서비스·초기화,
 `base/domains/`는 도메인 Worker·등록 Job을 소유한다.
+외부 서비스의 커스텀 이미지 빌드(MLflow 서버·OPA·OpenMetadata ingestion)는
+`deploy/image_builds/`, Teoria API·Worker 빌드는 `backend/Dockerfile`이 소유한다.
+Python 의존성 잠금은 백엔드에서 통합 관리하되 MLflow 서버는 전용 그룹만 설치한다.
+이는 위 Palantir 참조의 서비스·배포 책임 구분을 Teoria에 적용한 것으로,
+Palantir의 내부 패키지 구조를 재현한 것이 아니다.
 공통 조립은 `base/teoria/kustomization.yaml`, 환경 차이는 `overlays/`가 관리한다.
 기능 조합 프로필과 `--modules`·`--features` 선택은 제거했다.
 도메인 API·Worker·일정은 운영 ConfigMap으로 활성화하며 기본 비활성화한다.
@@ -139,3 +144,22 @@ K3s도 공통 UI 프록시를 사용하며 같은 배포 진입점에서 `--over
 로컬 k3d는 같은 K3s 리소스를 재사용하고 `--overlay k3d`로 로컬 인증서·보존 저장소를 선택한다.
 클러스터·개발 Registry 수명주기는 `deploy/kubernetes/k3d/`가 소유한다.
 공유 산출물의 다중 노드 접근·저장소 선택과 검증 범위는 [Kubernetes 배포](../deployment/kubernetes.md)를 따른다.
+
+개발 IP 접속은 `k3d/.local/remote_access.env`를 기준으로 Nginx·Harbor·플랫폼 연결을 일치시킨다.
+`--check`는 변경 계획만 출력하고, `--apply`는 이전 상태를 기록해 적용·검증·실패 복구를 수행한다.
+일반 배포는 적용 완료 주소를 사용하며 미적용 변경·미완료 복구를 우회하지 않는다.
+이는 k3d 운영 입력 정리이며 플랫폼의 Metadata·Ontology·MLOps 책임을 변경하지 않는다.
+[원격 접속과 복구](../deployment/k3d.md#원격-접속-변경과-복구)를 따른다.
+
+환경별 일반 설정과 인증정보는 `envs/dev`·`envs/prod`에서 준비하고 `envs/settings.sh`로 명시적으로 등록한다.
+배포는 예시 파일을 읽어 ConfigMap을 만들지 않으며, 등록된 입력의 revision 변경을 Pod 교체에 연결한다.
+Secret 본문을 revision에 노출하지 않고 리소스 UID·resourceVersion만 사용한다.
+
+서비스 입력과 Harbor values는 `envs/`가 소유한다. `.local`은 재사용할 접속·인증서·복구 상태와
+반입 cache에 한정하고 이전 설치 스크립트·보고서는 비공개 `.artifacts/k3d_legacy/`에 보관한다.
+호스트 포트·경로는 `envs/dev/k3d.env`에서 읽으며 이관은 클러스터 리소스와 저장소 본문을 변경하지 않는다.
+
+운영 환경값은 `teoria-mlops-connections` ConfigMap이 소유하며 Teoria 프로세스가 함께 사용한다.
+OpenMetadata의 수집 설정은 서비스 소유 ConfigMap, 실행 순서·일정은 기존 Prefect가 소유한다.
+MCP는 로컬 STDIO 프로세스에서 Runtime HTTP API만 호출한다. 이 변경은 위 Palantir 참조의
+서비스·배포 책임 구분을 따르며 데이터·Ontology 권위와 미구현 AI/AIP 범위는 바꾸지 않는다.

@@ -136,17 +136,24 @@ Worker는 Ontology 저장소를 직접 변경하지 않고 인증된 Admin HTTP 
 | `deploy/kubernetes/base/teoria/` | 공통 API·UI·Ingress·선택 Runtime·Worker·모델 실행 권한·등록 Job |
 | `deploy/kubernetes/base/domains/` | 규격서 처리·법령 수집 등 도메인 Worker |
 | `deploy/kubernetes/base/teoria/kustomization.yaml` | Metadata·Ontology·MLOps 통합 플랫폼 조립 |
-| `deploy/image_builds/` | OPA·OpenMetadata ingestion 이미지 빌드 입력 |
+| `deploy/image_builds/` | MLflow 서버·OPA·OpenMetadata ingestion 실행 환경의 이미지 빌드 입력 |
+| `deploy/kubernetes/envs/dev/`, `envs/prod/` | 환경별 일반 설정·역할별 Secret·Harbor values 예시와 Git 제외 실제 입력; dev/k3d.env는 개발 호스트 설정; context를 명시해 등록 |
 | `deploy/kubernetes/harbor/` | 독립 Harbor Helm release·고정 chart 검증·환경별 values |
 | `deploy/kubernetes/overlays/k3s/` | K3s 전용 overlay·EC2 설치 설정 |
-| `deploy/kubernetes/k3d/`, `deploy/kubernetes/overlays/k3d/` | 로컬 클러스터·Harbor DNS/TLS·보존 스토리지·원격 IP 진입과 k3d overlay |
+| `deploy/kubernetes/k3d/`, `deploy/kubernetes/overlays/k3d/` | 로컬 클러스터·Harbor DNS/TLS·보존 스토리지·원격 IP 접속 입력/프록시 템플릿과 k3d overlay |
 | `backend/tests/platform/`, `domains/`, `apps/` | 소유 코드에 대응하는 테스트 |
 | `backend/tests/integration/` | 백엔드 모듈 간 연동·실환경 검사 |
 | `tests/documentation/` | 문서 링크·목차 검사 |
 | `archive/kory_parser/` | 별도 설치·실행하는 문서 파서·사용 문서·라이선스 |
 | `archive/kory_parser_evaluation/` | 파서 회귀 테스트·평가·벤치마크·Codex 개선 실행기 |
 
+Teoria API·Worker 이미지는 `backend/Dockerfile`, 외부 서비스의 커스텀 이미지는
+`deploy/image_builds/`에서 빌드한다. Prefect·MinIO 서버는 공식 이미지를 사용한다.
+MLflow·Prefect·S3 클라이언트와 Teoria Flow·Task는 백엔드의 소유 기능에 유지한다.
 Python 의존성과 잠금은 `backend/pyproject.toml`, `backend/uv.lock` 한곳에서 관리한다.
+MLflow 서버 이미지도 같은 잠금의 `mlflow-server` 그룹만 설치한다.
+OpenMetadata 수집 YAML은 `deploy/kubernetes/base/services/openmetadata/ingestion_config.yaml`의
+ConfigMap이 소유하며 일회성 Job에 마운트한다. 이미지에 운영 수집 설정을 포함하지 않는다.
 역할별 이미지·권한은 유지한다. 기존 URL·CLI·산출물 ID·적용 migration·게시 artifact는 구조 변경으로 수정하지 않는다.
 
 [아키텍처](overview.md) · [개발 안내](../development.md)

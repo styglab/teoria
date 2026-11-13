@@ -10,7 +10,7 @@ Teoria의 통합 Kubernetes 구성에서 별도 수명주기로 설치·업그�
 [통합 배포](kubernetes.md)의 DB·Secret을 준비한 뒤 실행한다.
 
 ```bash
-source deploy/kubernetes/k3d/.local/session.env
+export KUBECONFIG="$PWD/deploy/kubernetes/k3d/.local/kubeconfig"
 bash deploy/kubernetes/k3d/local.sh deploy --component database
 bash deploy/kubernetes/k3d/local.sh deploy --component openmetadata
 ```
@@ -51,8 +51,19 @@ Job은 허용한 고정 이미지와 전용 인증정보만 사용한다. 모델
 - 공통 Flow·일정: `backend/config/metadata_management/prefect_deployments.yaml`
 - 환경별 pool·실행 정책: `deploy/kubernetes/prefect/metadata_management.yaml`
 - 이미지 빌드: `deploy/image_builds/openmetadata/Dockerfile`
-- Teoria Data DB 수집 설정: `deploy/image_builds/openmetadata/ingestion/teoria-postgres.yaml.example`
+- Teoria Data DB 수집 설정: `deploy/kubernetes/base/services/openmetadata/ingestion_config.yaml`
 - 실행 코드: `backend/src/teoria/platform/data/metadata/ingestion/`
+
+`openmetadata-ingestion-config` ConfigMap을 실제 Job의 `/config`에 읽기 전용으로 마운트한다.
+이미지는 공식 ingestion 실행 환경만 포함하고 수집 설정은 포함하지 않는다.
+주소·스키마 필터 변경은 해당 YAML 수정 후 `--component openmetadata`로 반영한다.
+새 Job은 새 설정을 사용하며 이미지 재빌드가 필요하지 않다. 실행 중인 Job은 완료 후 다시 실행한다.
+비밀번호·bot token은 기존 Secret에서 주입하고 ConfigMap에는 환경변수 참조만 둔다.
+기존 `mlops_demo` 필터는 보존한 DB·메타데이터 이력의 호환 설정이며 활성 예제 수집을 뜻하지 않는다.
+관리 대상 스키마 변경은 OpenMetadata의 삭제 표시 영향도 함께 검토한다.
+
+Docker 단독 실행을 검증하는 경우에는 `TEORIA_OPENMETADATA_INGESTION_CONFIG_FILE`로
+Docker daemon 호스트에서도 접근 가능한 수집 YAML 경로를 명시한다. 컨테이너에 읽기 전용으로 마운트한다.
 
 위 기본 ingestion 설정은 기존 Teoria Data PostgreSQL을 대상으로 한다. 다른 원천에 그대로 적용하지 않는다.
 OpenMetadata의 metadata·description·owner·tag·glossary·lineage를 Teoria DB에 복제하지 않는다.

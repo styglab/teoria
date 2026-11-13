@@ -50,7 +50,7 @@ Teoria 화면에서 태그를 선택해 digest를 확인하고 학습·서빙 �
 
 ## Harbor 설치
 
-기준은 Harbor Helm chart **1.19.4 / Harbor 2.15.4**다. 외부 환경에서 chart를 확보한다.
+버전과 SHA256의 기준 파일은 [`harbor/chart.json`](../../deploy/kubernetes/harbor/chart.json)이다. 현재 고정 버전은 Harbor Helm chart **1.19.4 / Harbor 2.15.4**다. 외부 환경에서 chart를 확보한다.
 
 ```bash
 helm repo add harbor https://helm.goharbor.io
@@ -63,13 +63,13 @@ sha256sum /path/to/export/harbor-1.19.4.tgz
 설치 스크립트는 이 checksum을 검증하고 로컬 chart만 사용하며 외부 chart를 다운로드하지 않는다.
 버전 변경은 checksum·values·템플릿 검증을 함께 갱신한다.
 
-`values.example.yaml`을 checkout 밖으로 복사해 권한을 제한한다.
+`envs/dev/harbor_values.yaml.example` 또는 `envs/prod/harbor_values.yaml.example`을 실제 환경 입력으로 복사해 권한을 제한한다. 실제 YAML은 Git·이미지 빌드 대상에서 제외된다. checkout 밖에서도 `--values`로 지정할 수 있다.
 Harbor URL·IngressClass·스토리지와 internal DB 초기 암호를 실제 환경에 맞춰 설정한다.
 인증정보를 담은 values나 렌더링 결과는 Git·로그에 보관하지 않는다.
 
 ```bash
 mkdir -p "$HOME/.config/teoria"
-cp deploy/kubernetes/harbor/values.example.yaml "$HOME/.config/teoria/harbor_values.yaml"
+cp deploy/kubernetes/envs/prod/harbor_values.yaml.example "$HOME/.config/teoria/harbor_values.yaml"
 chmod 600 "$HOME/.config/teoria/harbor_values.yaml"
 # CHANGE_ME와 URL을 변경한다. k3d는 URL과 host 모두 harbor.teoria.localhost 사용.
 ```

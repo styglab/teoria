@@ -11,17 +11,17 @@
 
 인증값은 `TEORIA_CONNECTOR_MOLEG_LAW_API_KEY`에 설정한다. Provider 요청의
 `OC`에 전달되며 Registry·로그에는 값 대신 환경변수 이름만 사용한다.
-Docker 배포는 `deploy/compose/.env`, 로컬 실행은 `.env` 또는 아래처럼
-`TEORIA_ENV_FILE`로 선택한다. Data DB migration은 운영 변경 전에 별도 검토하고
+Kubernetes 배포는 환경별 Secret을 사용한다. 호스트 CLI 실행은 접근을 제한한
+`TEORIA_ENV_FILE`을 명시한다. Data DB migration은 운영 변경 전에 별도 검토하고
 격리된 DB에서 먼저 검증한다.
 
 ```bash
-export TEORIA_ENV_FILE=deploy/compose/.env
+export TEORIA_ENV_FILE=/secure/teoria/legal_information.env
 # 로컬 DB 주소 또는 격리된 테스트 DB 주소를 설정한다.
 export TEORIA_PIPELINE_DATA_DATABASE_URL='postgresql://.../teoria_data'
 uv run --locked --project backend teoria-pipelines migrate
 uv run --locked --project backend --group orchestration \
-  teoria-pipelines law sync --pipelines pipelines
+  teoria-pipelines law sync --pipelines backend
 ```
 
 `backend/config/legal_information/collection_targets.yaml`은 수집 범위다. 초기 범위는 개인정보 보호법,
@@ -33,12 +33,12 @@ uv run --locked --project backend --group orchestration \
 ```bash
 # 한 대상만 수집: 전체 수집과 별도 checkpoint를 사용한다.
 uv run --locked --project backend --group orchestration \
-  teoria-pipelines law sync --pipelines pipelines \
+  teoria-pipelines law sync --pipelines backend \
   --target personal_information_protection_act
 
 # 모든 연혁 본문을 재확인한다.
 uv run --locked --project backend --group orchestration \
-  teoria-pipelines law sync --pipelines pipelines --reconcile-all
+  teoria-pipelines law sync --pipelines backend --reconcile-all
 
 # 저장된 원문을 재가공한다. 법제처 호출이나 API 인증값이 필요하지 않다.
 uv run --locked --project backend --group orchestration \
@@ -145,8 +145,9 @@ Suggestion→Review→Application 절차를 거쳐 OpenMetadata에 적용해야 
 ## 현재 전용 배포
 
 법령 작업은 `backend/config/legal_information/prefect_deployments.yaml`에 정의한다.
-Compose `prefect-law-deploy`가 `teoria-legal-information` pool과 `laws` queue에 등록하고,
-`prefect-law-worker`가 동시 실행 1개·CPU 1·메모리 2GiB 상한으로 실행한다.
-기존 조달 수집 pool을 재개하지 않는다. 월~토 04:15 변경 동기화,
-일요일 04:15 전체 연혁 보정을 실행한다(Asia/Seoul).
-K3s는 전용 dispatcher와 `teoria-legal-information-secrets`를 사용하며 실제 클러스터 검증은 별도다.
+Kubernetes의 `legal-register` Job이 `teoria-legal-information` pool과 `laws` queue에 등록하고,
+`prefect-law-worker`가 실행한다. 활성화 여부는 운영 ConfigMap의
+`TEORIA_LEGAL_INFORMATION_ENABLED`로 관리한다.
+동시 실행 상한은 1개이며 월~토 04:15 변경 동기화, 일요일 04:15 전체 연혁 보정을 실행한다(Asia/Seoul).
+전용 `teoria-legal-information-secrets`를 사용하며 기존 조달 수집 pool을 재개하지 않는다.
+실제 클러스터 실행 성공은 별도로 검증한다.

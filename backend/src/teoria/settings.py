@@ -86,6 +86,14 @@ class Settings(BaseSettings):
     runtime_artifact_path: Path | None = None
     runtime_artifact_store: Path | None = None
 
+    @field_validator("image_registry_ca_pem", mode="before")
+    @classmethod
+    def registry_ca_from_env(cls, value):
+        # kubectl --from-env-file accepts a single physical line per value.
+        if isinstance(value, str) and value.startswith("-----BEGIN CERTIFICATE-----"):
+            return value.replace(r"\n", "\n")
+        return value
+
     @field_validator("openmetadata_public_url")
     @classmethod
     def public_console_url(cls, value: str) -> str:

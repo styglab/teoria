@@ -24,6 +24,9 @@ async def test_queue_priority_concurrency_and_slot_release(
 ):
     if backend == "kubernetes":
         pytest.importorskip("prefect_kubernetes")
+    monkeypatch.setenv("TEORIA_ENVIRONMENT", "test")
+    from prefect.settings import PREFECT_API_URL
+    monkeypatch.setenv("PREFECT_API_URL", str(PREFECT_API_URL.value()))
     monkeypatch.setenv("TEORIA_PIPELINE_JOB_IMAGE", "ghcr.io/example/pipelines:test")
     monkeypatch.setenv("TEORIA_PIPELINE_CONCURRENCY", "2")
 

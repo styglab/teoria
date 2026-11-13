@@ -82,11 +82,29 @@ def test_platform_always_combines_metadata_ontology_and_mlops(kubectl, overlay):
     assert "prefect-register" not in jobs
     for name, kind in (("goods-register", "ingestion"), ("legal-register", "legal-information")):
         assert jobs[name]["spec"]["template"]["spec"]["containers"][0]["command"][-1] == kind
+        feature = "specification_processing" if kind == "ingestion" else "legal_information"
+        policy = yaml.safe_load((KUBE / "prefect" / (feature + ".yaml")).read_text())
+        worker = workloads["prefect-worker" if kind == "ingestion" else "prefect-law-worker"]
+        container = worker["spec"]["template"]["spec"]["containers"][0]
+        assert container["command"][container["command"].index("--pool") + 1] == policy["pools"][0]["name"]
+        for resource in (worker, jobs[name]):
+            environment = next(e for e in resource["spec"]["template"]["spec"]["containers"][0]["env"] if e["name"] == "TEORIA_ENVIRONMENT")
+            assert environment["valueFrom"]["configMapKeyRef"] == {
+                "name": "teoria-mlops-connections", "key": "TEORIA_ENVIRONMENT",
+            }
+            endpoint = next(e for e in resource["spec"]["template"]["spec"]["containers"][0]["env"] if e["name"] == "PREFECT_API_URL")
+            assert endpoint["valueFrom"]["configMapKeyRef"] == {
+                "name": "teoria-mlops-connections", "key": "PREFECT_API_URL",
+            }
     for resource in resources:
         if resource["kind"] in {"Deployment", "StatefulSet", "Job"}:
             for container in resource["spec"]["template"]["spec"]["containers"]:
                 for entry in container.get("env", []):
                     assert not ("value" in entry and "valueFrom" in entry), entry
+                    if entry["name"] == "TEORIA_ENVIRONMENT":
+                        assert entry["valueFrom"]["configMapKeyRef"] == {
+                            "name": "teoria-mlops-connections", "key": "TEORIA_ENVIRONMENT",
+                        }
 
 
 @pytest.mark.parametrize("overlay", ["generic", "k3s", "k3d"])
@@ -213,7 +231,7 @@ elif 'get' in args and 'secret' in args and 'json' in args:
     elif 'specification-codex' in args or 'authoring-codex' in args:print(json.dumps(codex))
     else:print(json.dumps({'type':'Opaque','data':data}))
 elif 'get' in args and 'configmap' in args and 'json' in args:
-    print(json.dumps({'data':{**{key:'http://synthetic.example' for key in ('PREFECT_API_URL','TEORIA_MODEL_STORAGE_ENDPOINT','MLFLOW_TRACKING_URI','TEORIA_OPENMETADATA_BASE_URL')},'TEORIA_METADATA_SYNC_SCHEDULE_ENABLED':'false','TEORIA_SPECIFICATION_PROCESSING_ENABLED':os.environ['TEORIA_TEST_DOMAINS_ENABLED'],'TEORIA_LEGAL_INFORMATION_ENABLED':os.environ['TEORIA_TEST_DOMAINS_ENABLED']}}))
+    print(json.dumps({'data':{'TEORIA_ENVIRONMENT':'production',**{key:'http://synthetic.example' for key in ('PREFECT_API_URL','TEORIA_MODEL_STORAGE_ENDPOINT','MLFLOW_TRACKING_URI','TEORIA_OPENMETADATA_BASE_URL')},'TEORIA_METADATA_SYNC_SCHEDULE_ENABLED':'false','TEORIA_SPECIFICATION_PROCESSING_ENABLED':os.environ['TEORIA_TEST_DOMAINS_ENABLED'],'TEORIA_LEGAL_INFORMATION_ENABLED':os.environ['TEORIA_TEST_DOMAINS_ENABLED']}}))
 elif 'get' in args and 'job' in args:
     print('{"status":{"succeeded":1}}')
 elif 'create' in args and 'namespace' in args:
@@ -229,6 +247,13 @@ else:
     calls = [json.loads(line) for line in record.read_text().splitlines()]
     objects = [item for call in calls for r in call["objects"] if r for item in (r["items"] if r["kind"] == "List" else [r])]
     applied = [(r["kind"], r["metadata"]["name"]) for r in objects]
+    import re
+    for name in ('admin-api','runtime-api','policy-control-plane','opa'):
+        workload = next(r for r in objects if r['kind']=='Deployment' and r['metadata']['name']==name)
+        revision = workload['spec']['template']['metadata']['annotations']['teoria.io/settings-revision']
+        assert re.fullmatch(r'[a-f0-9]{64}', revision)
+        assert 'synthetic-only' not in str(workload['spec']['template']['metadata']['annotations'])
+    assert not any('create' in c['args'] and 'configmap' in c['args'] for c in calls)
     assert applied.index(("Job", "app-postgres-migrate")) < applied.index(("Deployment", "admin-api"))
     assert applied.index(("Job", "runtime-artifact-check")) < applied.index(("Deployment", "runtime-api"))
     assert applied.index(("Job", "metadata-register")) > applied.index(("Deployment", "admin-api"))
@@ -260,11 +285,18 @@ def test_deployment_images_are_built_by_ci_and_local_build():
     workflow = yaml.safe_load((ROOT / '.github/workflows/deploy_k3s.yaml').read_text())
     entries = workflow['jobs']['build']['strategy']['matrix']['include']
     published = {entry['name'] for entry in entries}
+    ci_builds = {entry['name']: (entry['dockerfile'], entry.get('target', '-')) for entry in entries}
+    assert len(ci_builds) == len(entries), 'Duplicate CI image name'
     local_script = (KUBE / 'k3d/local.sh').read_text()
-    local = set(re.findall(r"^      '([a-z-]+) [^']+'$", local_script, re.MULTILINE))
-    assert published == local
+    local_entries = re.findall(r"^      '([a-z-]+) ([^ ]+) ([^ ]+)'$", local_script, re.MULTILINE)
+    local_builds = {name: (dockerfile, target) for name, dockerfile, target in local_entries}
+    assert len(local_builds) == len(local_entries), 'Duplicate local image name'
+    assert ci_builds == local_builds
     for entry in entries:
-        assert (ROOT / entry['dockerfile']).is_file(), entry
+        dockerfile = ROOT / entry['dockerfile']
+        assert dockerfile.is_file(), entry
+        if target := entry.get('target'):
+            assert re.search(r'^FROM .+ AS ' + re.escape(target) + r'$', dockerfile.read_text(), re.MULTILINE | re.IGNORECASE), entry
     required = set()
     for path in (KUBE / 'base').rglob('*.yaml'):
         for resource in yaml.safe_load_all(path.read_text()):
@@ -279,3 +311,64 @@ def test_deployment_images_are_built_by_ci_and_local_build():
                     if value['name'].endswith('_IMAGE') and reference.startswith('teoria/'):
                         required.add(reference.removeprefix('teoria/').split(':')[0])
     assert required | {'ingestion'} == published
+
+
+@pytest.mark.parametrize('component', ['platform','all','mlflow'])
+def test_missing_connections_fails_before_any_cluster_write(tmp_path, component):
+    import json
+    import sys
+    wrapper=tmp_path/'kubectl'
+    record=tmp_path/'calls.jsonl'
+    wrapper.write_text(f'#!{sys.executable}\n'+'''
+import json,os,sys
+args=sys.argv[1:]
+with open(os.environ['TEORIA_TEST_CONFIG_CALLS'],'a') as stream:stream.write(json.dumps(args)+'\\n')
+if 'get' in args and 'configmap' in args:sys.exit(1)
+if 'get' not in args:sys.exit('attempted a cluster mutation before checking connections')
+print('{}')
+''')
+    wrapper.chmod(0o755)
+    result=subprocess.run(['bash',str(KUBE/'deploy.sh'),'registry.example/teoria','a'*40,'teoria.example',
+                           '--overlay','k3s','--component',component],capture_output=True,text=True,
+        env={**os.environ,'PATH':str(tmp_path)+os.pathsep+os.environ['PATH'],'TEORIA_TEST_CONFIG_CALLS':str(record)})
+    assert result.returncode != 0
+    assert 'settings.sh apply' in result.stderr
+    calls=[json.loads(line) for line in record.read_text().splitlines()]
+    assert all('get' in args for args in calls)
+    assert not any('create' in args or 'apply' in args or 'delete' in args for args in calls)
+
+
+def test_mlflow_uses_settings_revision_without_requiring_enabled_domain_secrets(kubectl, tmp_path):
+    import json
+    import sys
+    wrapper=tmp_path/'kubectl'
+    record=tmp_path/'calls.jsonl'
+    wrapper.write_text(f'#!{sys.executable}\n'+'''
+import base64,json,os,sys,yaml
+args=sys.argv[1:]
+if args[0]=='kustomize':os.execv(os.environ['TEORIA_TEST_REAL_KUBECTL'],[os.environ['TEORIA_TEST_REAL_KUBECTL'],*args])
+body=sys.stdin.read() if args[-2:]==['-f','-'] else ''
+objects=list(yaml.safe_load_all(body)) if body else []
+with open(os.environ['TEORIA_TEST_CONFIG_CALLS'],'a') as stream:stream.write(json.dumps({'args':args,'objects':objects})+'\\n')
+if 'get' in args and 'configmap' in args:
+    print(json.dumps({'data':{'TEORIA_MODEL_STORAGE_ENDPOINT':'http://minio:9000','TEORIA_SPECIFICATION_PROCESSING_ENABLED':os.environ.get('TEORIA_TEST_DOMAIN_FLAG','true')}}))
+elif 'get' in args and 'secret' in args and 'json' in args:
+    if 'specification-processing' in args:sys.exit('unrelated domain Secret requested')
+    print(json.dumps({'metadata':{'uid':'synthetic-id','resourceVersion':'1'},'data':{key:base64.b64encode(b'synthetic-only').decode() for key in ['TEORIA_MINIO_ROOT_USER','TEORIA_MINIO_ROOT_PASSWORD','MLFLOW_BACKEND_STORE_URI']}}))
+elif 'create' in args and 'namespace' in args:
+    print(json.dumps({'apiVersion':'v1','kind':'Namespace','metadata':{'name':'teoria'}}))
+else:print('{}')
+''')
+    wrapper.chmod(0o755)
+    for domain_flag in ('true','false'):
+        result=subprocess.run(['bash',str(KUBE/'deploy.sh'),'registry.example/teoria','a'*40,'teoria.example',
+                               '--overlay','k3s','--component','mlflow'],capture_output=True,text=True,
+            env={**kubectl,'TEORIA_TEST_CONFIG_CALLS':str(record),'TEORIA_TEST_DOMAIN_FLAG':domain_flag})
+        assert result.returncode == 0, result.stderr
+    calls=[json.loads(line) for line in record.read_text().splitlines()]
+    workloads=[r for call in calls for r in call['objects'] if r and r['kind']=='Deployment' and r['metadata']['name']=='mlflow']
+    assert len(workloads) == 2
+    revisions={r['spec']['template']['metadata']['annotations']['teoria.io/settings-revision'] for r in workloads}
+    assert len(revisions) == 1  # An unrelated domain activation change must not restart MLflow.
+    assert len(revisions.pop()) == 64
+    assert not any('create' in call['args'] and 'configmap' in call['args'] for call in calls)

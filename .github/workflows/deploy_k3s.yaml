@@ -42,7 +42,7 @@ jobs:
           - {name: opa, dockerfile: deploy/image_builds/opa/Dockerfile, target: runtime}
           - {name: opa-builder, dockerfile: deploy/image_builds/opa/Dockerfile, target: bundle_builder}
           - {name: ingestion, dockerfile: deploy/image_builds/openmetadata/Dockerfile}
-          - {name: mlflow, dockerfile: backend/Dockerfile, target: mlflow}
+          - {name: mlflow, dockerfile: deploy/image_builds/mlflow/Dockerfile}
           - {name: model-dispatcher, dockerfile: backend/Dockerfile, target: model-dispatcher}
     steps:
       - uses: actions/checkout@v4

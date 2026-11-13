@@ -59,7 +59,7 @@ FormatID 화면은 apps/formatid이며 플랫폼 정의와 분리한다.
 
 | 제한 | 현재 범위 |
 |---|---|
-| 업로드 | Compose에서 설정한 저장소, 요청당 파일 하나·40MB 이하·지원 형식 |
+| 업로드 | 규격서 처리 설정의 MinIO/S3 저장소, 요청당 파일 하나·40MB 이하·지원 형식 |
 | 권한 | 업로드는 metadata_admin, 실행은 허용된 workflow 권한 |
 | 결과 조회 | Data DB에 등록된 참조·허용 저장소 경계·checksum 검사 |
 | JSON 미리보기 | 등록된 MinIO/S3 또는 허용된 개발용 로컬 참조, 5MB 이하 |
@@ -116,8 +116,8 @@ npm --prefix frontend run test:e2e
 고대비 모드에서는 시스템 선택 모양과 명확한 포커스를 사용한다.
 
 탐색 상태는 URL로 복원하고 큰 관계도는 필요할 때 적재한다.
-Compose의 gateway는 UI와 내부 API proxy를, K3s는 UI와 서비스별 ingress 구성을 사용한다.
-[배포 안내](../deployment/compose.md)와 [개발 경계](../development.md)를 따른다.
+개발 k3d·운영 Kubernetes 모두 공통 UI Nginx 프록시와 Ingress를 사용한다.
+[배포 안내](../deployment/kubernetes.md)와 [개발 경계](../development.md)를 따른다.
 
 
 ## 화면 회귀 검사와 조회 정책

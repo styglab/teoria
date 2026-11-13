@@ -23,7 +23,10 @@ spec:
             cpu: '1'
         env:
         - name: TEORIA_ENVIRONMENT
-          value: production
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_ENVIRONMENT
         - name: TEORIA_APP_DATABASE_URL
           valueFrom:
             secretKeyRef:

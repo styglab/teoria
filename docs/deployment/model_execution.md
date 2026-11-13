@@ -22,8 +22,10 @@ MLflow·MinIO·Prefect·PostgreSQL은 [통합 배포](kubernetes.md)의 별도 �
 서빙은 모델별 Docker 컨테이너 또는 Deployment·Service로 실행한다. 실행 이미지는 허용 Registry의 고정 digest만 받는다.
 이미지·파라미터와 실행 상태는 Prefect, 모델 버전은 MLflow, 활성·이전 서빙 참조와 요청 주체는 Application DB가 소유한다.
 
-`teoria-mlflow`는 MLflow 서버·S3·PostgreSQL 연결용 이미지다. backend의 `mlflow-server`
-의존성 그룹만 설치하며 Teoria 애플리케이션·Prefect·수집 계약은 포함하지 않는다.
+`teoria-mlflow`는 MLflow 서버·S3·PostgreSQL 연결용 이미지다.
+`deploy/image_builds/mlflow/Dockerfile`을 저장소 루트 빌드 컨텍스트로 사용한다.
+Python 의존성은 단일 `backend/pyproject.toml`·`backend/uv.lock`에서 관리하고,
+이 이미지는 `mlflow-server` 그룹만 설치한다. Teoria 애플리케이션·Prefect·수집 계약은 포함하지 않는다.
 `teoria-model-dispatcher`는 Prefect와 컨테이너 실행을 담당하는 별도 공통 Worker 이미지다.
 
 ## 개발 k3d 시작
@@ -32,7 +34,7 @@ MLflow·MinIO·Prefect·PostgreSQL은 [통합 배포](kubernetes.md)의 별도 �
 클러스터·Secret·게시 artifact를 준비한 뒤 다음 명령을 사용한다.
 
 ```bash
-source deploy/kubernetes/k3d/.local/session.env
+export KUBECONFIG="$PWD/deploy/kubernetes/k3d/.local/kubeconfig"
 bash deploy/kubernetes/k3d/local.sh render
 bash deploy/kubernetes/k3d/local.sh deploy --component all
 bash deploy/kubernetes/k3d/local.sh status
@@ -153,8 +155,9 @@ MinIO 관리자 계정과 기존 외부 Registry 연결·조회 계정을 준비
 Worker는 `model-control`의 `TEORIA_MODEL_STORAGE_ACCESS_KEY`·`TEORIA_MODEL_STORAGE_SECRET_KEY`로
 학습 결과를 읽고 `teoria-mlops` bucket에 로그를 보존한다. 모델 컨테이너용 S3 계정과 분리하고
 결과 bucket 읽기·로그 bucket 쓰기 권한만 부여한다. 모델 계정에는 입력 읽기·결과 쓰기만 부여한다.
-추가로 다음 Secret을 준비한다. `deploy/kubernetes/control.env.example`과 `workload.env.example`을
-checkout 밖의 보안 경로에 복사해 실제 값을 채우고 `kubectl create secret generic ... --from-env-file=...`로 생성한다.
+추가로 다음 Secret을 준비한다. `envs/dev`·`envs/prod`의 `control.env.example`·`workload.env.example`을 기준으로
+해당 환경 폴더 또는 운영자 보안 경로에 실제 파일을 준비한다.
+[설정 등록 도구](../../deploy/kubernetes/envs/README.md)에서 대상 kubeconfig·context와 역할을 명시해 등록한다. 일반 설정도 `--role connections`로 먼저 등록한다.
 credential은 보안 파일에서 생성하며 예시 값을 운영에 쓰지 않는다.
 
 | namespace | Secret | 내용 |

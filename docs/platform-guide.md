@@ -59,7 +59,7 @@ Draft를 검토·승인·게시하며 게시한 revision은 직접 수정하지 
 별도 선택 영역인 **MLOps**에서 모델·버전·평가를 조회한다.
 MLOps는 업무 종류와 무관하게 모델을 운영한다. 학습 파라미터·평가는 MLflow에서, 서빙 상태는 모델별 배포 목록에서 조회한다.
 추론 결과를 업무 판단·승인에 사용하는 기능은 해당 도메인과 업무 앱이 맡는다.
-Compose에서는 공통 Worker가 학습마다 전용 컨테이너를 실행하고, 배포 요청에 따라 모델별 서빙 컨테이너를 생성한다.
+Kubernetes에서는 공통 Worker가 학습 Job과 모델별 서빙 Deployment·Service를 생성한다.
 
 물품 2.0.0의 마지막 운영 검증 상태는 Draft이며 현재 상태는 재확인이 필요하다.
 의미 비교나 승인 API 구현만으로 실제 물품 Runtime이 활성화되지는 않는다.
@@ -80,16 +80,37 @@ Kubernetes MLOps는 PostgreSQL·MinIO·Prefect·MLflow·Teoria를 독립 배포 
 
 MLOps는 [공통 모델 실행 계약](deployment/model_execution.md)으로 외부 학습·서빙 이미지를 실행한다.
 이미지의 학습·서빙 실행 명령은 요청의 `command`에 명시한다.
-Compose 개발 환경과 Kubernetes는 같은 입력을 사용하며 실행 방식만 다르다.
+개발 k3d와 운영 Kubernetes는 같은 모델 실행 계약을 사용한다.
 고객 이탈 샘플의 소스·Dockerfile·이미지는 [archive/customer_churn](../archive/customer_churn/README.md)에 보관한다.
 플랫폼 내부 예제 API·전용 Flow·테스트 폼과 구형 구현 보관본은 제거했으며 같은 이미지에서 학습과 서빙을 실행한다.
 
 Kubernetes는 [공통 base와 환경별 overlay](deployment/kubernetes.md)를 사용한다. 일반 클러스터는 generic,
 기존 EC2 K3s는 k3s overlay를 선택하며 모델 실행·API 계약은 같다. 운영 환경별 검증 여부는 별도로 기록한다.
 로컬 Kubernetes는 [k3d 실행 안내](deployment/k3d.md)의 단일 노드 클러스터와 k3d overlay를 사용한다.
-기존 Semantic 배포를 공유하며 Compose의 규격서 처리 전체 배포와 같은 범위로 간주하지 않는다.
+개발 환경도 통합 플랫폼 배포를 사용하며 규격서 처리 활성화와 운영 검증은 별도로 수행한다.
 
-배포 구조 정리로 이미지 빌드 입력을 `deploy/image_builds/`로 옮기고, 작업 배정 Worker와 규격서·법령 실행 이미지를 분리했다.
+외부 서비스의 커스텀 이미지 빌드 입력은 `deploy/image_builds/`가 소유한다.
+MLflow 서버 빌드도 이 위치로 분리했으며 Python 의존성 잠금은 백엔드와 공유한다.
+Teoria API·Worker 빌드는 백엔드에 유지하고, 작업 배정 Worker와 규격서·법령 실행 이미지를 분리했다.
 규격서 API 인증·S3·역할별 Codex 연결과 업로드 설정을 추가했으며, OpenMetadata 콘솔 주소는 별도 공개 URL을 사용한다.
 [최초 설치 절차](deployment/bootstrap.md)에 따라 기반 서비스·계정·승인 artifact·플랫폼을 순서대로 준비한다.
 실제 통합 신규 설치와 규격서 실행은 아직 운영 검증 전이다.
+
+k3d IP 접속은 설정 입력·Nginx 템플릿을 배포 폴더에서 관리하고, 적용 전 계획·실패 복구·연결 검사를 제공한다.
+[원격 접속 절차](deployment/k3d.md#원격-ip-접속)를 따른다. 격리 프록시 검증과 실제 개발 환경 적용은 구분한다.
+
+개발·운영 Secret 입력은 [envs/dev·prod](../deploy/kubernetes/envs/README.md)로 구분한다.
+역할별 Secret 참조는 유지하며 실제 env 파일은 Git·이미지에서 제외한다.
+
+일반 연결 설정도 환경별 `connections.env`로 관리하고 `settings.sh`에서 ConfigMap·Secret을 명시적으로 등록한다.
+배포는 예시 자동 등록을 하지 않으며 플랫폼·MLflow 입력 revision 변경 시 필요한 Pod를 교체한다.
+
+개발 `.local`은 접속·인증서·복구 상태와 cache를 보관한다. 서비스 입력은 `envs/dev`,
+이전 설치 스크립트·로그는 비공개 `.artifacts/k3d_legacy/`로 분리한다.
+정리 검증은 실제 클러스터 재기동·운영 배포 검증과 구분한다.
+
+운영 설정 정리로 Teoria 프로세스의 환경값을 공통 ConfigMap에서 주입하고,
+MCP는 로컬 STDIO 프로세스에서 명시한 Runtime HTTP API로 연결한다.
+OpenMetadata ingestion 설정은 서비스 소유 ConfigMap으로 분리해 Job에 마운트한다.
+물품 의미·정규화·Runtime 계약과 법령 검색 DB 검사를 CI 실행 범위에 포함한다.
+실제 클러스터 적용·ingestion 성공은 별도 운영 검증 대상이다.

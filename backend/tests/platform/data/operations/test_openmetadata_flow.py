@@ -8,6 +8,14 @@ from teoria.platform.data.metadata.ingestion.openmetadata import (
 )
 
 
+@pytest.fixture(autouse=True)
+def ingestion_configuration(monkeypatch, tmp_path):
+    configuration = tmp_path / "ingestion.yaml"
+    configuration.write_text("source: {}\n")
+    monkeypatch.setenv("TEORIA_OPENMETADATA_INGESTION_CONFIG_FILE", str(configuration))
+    return configuration
+
+
 def test_required_environment_rejects_missing_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -19,6 +27,7 @@ def test_required_environment_rejects_missing_value(
 
 def test_ingestion_task_runs_and_removes_ephemeral_container(
     monkeypatch: pytest.MonkeyPatch,
+    ingestion_configuration,
 ) -> None:
     monkeypatch.setenv("TEORIA_METADATA_DB_PASSWORD", "database-secret")
     monkeypatch.setenv("OPENMETADATA_INGESTION_BOT_TOKEN", "jwt-secret")
@@ -55,6 +64,9 @@ def test_ingestion_task_runs_and_removes_ephemeral_container(
     assert call.kwargs["auto_remove"] is False
     assert call.kwargs["nano_cpus"] == 1_000_000_000
     assert call.kwargs["mem_limit"] == "2g"
+    assert call.kwargs["volumes"] == {
+        str(ingestion_configuration): {"bind": "/config/teoria-postgres.yaml", "mode": "ro"},
+    }
     assert call.kwargs["environment"] == {
         "TEORIA_METADATA_DB_PASSWORD": "database-secret",
         "OPENMETADATA_INGESTION_BOT_TOKEN": "jwt-secret",
@@ -177,7 +189,12 @@ def test_kubernetes_ingestion_job_scopes_credentials_and_cleans_up(
     assert namespace == "teoria-test"
     pod = body["spec"]["template"]["spec"]
     assert pod["automountServiceAccountToken"] is False
-    assert "volumes" not in pod
+    assert pod["volumes"] == [{
+        "name": "ingestion-config", "configMap": {"name": "openmetadata-ingestion-config"},
+    }]
+    assert pod["containers"][0]["volumeMounts"] == [{
+        "name": "ingestion-config", "mountPath": "/config", "readOnly": True,
+    }]
     assert {e["name"] for e in pod["containers"][0]["env"]} == {
         "TEORIA_METADATA_DB_PASSWORD",
         "OPENMETADATA_INGESTION_BOT_TOKEN",

@@ -15,7 +15,8 @@ overrides:
   memory_limit: TEORIA_JOB_MEMORY_LIMIT
 image_pull_secret: teoria-registry
 environment:
-  TEORIA_ENVIRONMENT: production
   TEORIA_PIPELINE_PATH: /app/backend
-  PREFECT_API_URL: http://prefect-server.teoria.svc:4200/api
   PREFECT_API_AUTH_STRING: null
+environment_from_env:
+- TEORIA_ENVIRONMENT
+- PREFECT_API_URL

@@ -32,11 +32,17 @@ spec:
             cpu: '1'
         env:
         - name: TEORIA_ENVIRONMENT
-          value: production
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_ENVIRONMENT
         - name: TEORIA_OPENMETADATA_ENABLED
           value: 'true'
         - name: TEORIA_OPENMETADATA_BASE_URL
-          value: http://openmetadata-server:8585/api
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_OPENMETADATA_BASE_URL
         - name: TEORIA_APP_DATABASE_URL
           valueFrom:
             secretKeyRef:

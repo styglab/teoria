@@ -92,7 +92,28 @@ K3s 별도 배포 폴더와 호환 스크립트를 제거하고 EC2 workflow·�
 Registry pull·로컬 DNS/TLS 서비스 응답·클러스터 재생성 후 데이터 재접속을 확인했다.
 전체 서비스·규격서 처리와 운영 검증 여부는 [k3d 안내](deployment/k3d.md)의 범위와 구분한다.
 
-배포 구조 정리로 이미지 빌드 입력을 `deploy/image_builds/`로 옮기고, 작업 배정 Worker와 규격서·법령 실행 이미지를 분리했다.
+외부 서비스의 커스텀 이미지 빌드 입력은 `deploy/image_builds/`가 소유한다.
+MLflow 서버 빌드도 이 위치로 분리했으며 Python 의존성 잠금은 백엔드와 공유한다.
+Teoria API·Worker 빌드는 백엔드에 유지하고, 작업 배정 Worker와 규격서·법령 실행 이미지를 분리했다.
 규격서 API 인증·S3·역할별 Codex 연결과 업로드 설정을 추가했으며, OpenMetadata 콘솔 주소는 별도 공개 URL을 사용한다.
 [최초 설치 절차](deployment/bootstrap.md)에 따라 기반 서비스·계정·승인 artifact·플랫폼을 순서대로 준비한다.
 실제 통합 신규 설치와 규격서 실행은 아직 운영 검증 전이다.
+
+k3d IP 접속은 설정 입력·Nginx 템플릿을 배포 폴더에서 관리하고, 적용 전 계획·실패 복구·연결 검사를 제공한다.
+[원격 접속 절차](deployment/k3d.md#원격-ip-접속)를 따른다. 격리 프록시 검증과 실제 개발 환경 적용은 구분한다.
+
+개발·운영 Secret 입력은 [envs/dev·prod](../deploy/kubernetes/envs/README.md)로 구분한다.
+역할별 Secret 참조는 유지하며 실제 env 파일은 Git·이미지에서 제외한다.
+
+일반 연결 설정도 환경별 `connections.env`로 관리하고 `settings.sh`에서 ConfigMap·Secret을 명시적으로 등록한다.
+배포는 예시 자동 등록을 하지 않으며 플랫폼·MLflow 입력 revision 변경 시 필요한 Pod를 교체한다.
+
+개발 `.local`은 접속·인증서·복구 상태와 cache를 보관한다. 서비스 입력은 `envs/dev`,
+이전 설치 스크립트·로그는 비공개 `.artifacts/k3d_legacy/`로 분리한다.
+정리 검증은 실제 클러스터 재기동·운영 배포 검증과 구분한다.
+
+운영 설정 정리로 Teoria 프로세스의 환경값을 공통 ConfigMap에서 주입하고,
+MCP는 로컬 STDIO 프로세스에서 명시한 Runtime HTTP API로 연결한다.
+OpenMetadata ingestion 설정은 서비스 소유 ConfigMap으로 분리해 Job에 마운트한다.
+물품 의미·정규화·Runtime 계약과 법령 검색 DB 검사를 CI 실행 범위에 포함한다.
+실제 클러스터 적용·ingestion 성공은 별도 운영 검증 대상이다.

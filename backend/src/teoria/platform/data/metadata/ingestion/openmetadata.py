@@ -6,6 +6,7 @@ import os
 import math
 import re
 from contextlib import ExitStack
+from pathlib import Path
 from typing import Any
 
 from prefect import flow, get_run_logger, task
@@ -63,6 +64,9 @@ def run_openmetadata_ingestion_container(
         raise ValueError(
             "TEORIA_OPENMETADATA_INGESTION_MEMORY must be a positive Docker memory size"
         )
+    configuration = Path(_required_environment("TEORIA_OPENMETADATA_INGESTION_CONFIG_FILE")).resolve()
+    if not configuration.is_file():
+        raise ValueError("OpenMetadata ingestion configuration file does not exist")
     logger = get_run_logger()
     with ExitStack() as cleanup:
         client = docker.from_env()
@@ -73,6 +77,7 @@ def run_openmetadata_ingestion_container(
             command=["ingest", "-c", "/config/teoria-postgres.yaml"],
             entrypoint=["metadata"],
             environment=environment,
+            volumes={str(configuration): {"bind": "/config/teoria-postgres.yaml", "mode": "ro"}},
             network=network,
             detach=True,
             auto_remove=False,

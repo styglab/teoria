@@ -27,10 +27,12 @@
 
 ## 배포·운영
 
-- [배포 시작 안내](../deploy/README.md): Compose에 익숙한 개발자를 위한 구조와 명령
+- [배포 시작 안내](../deploy/README.md): Kubernetes 배포 구조와 명령
 - [Kubernetes](deployment/kubernetes.md) · [K3s](deployment/k3s.md) · [환경 설정](deployment/configuration.md)
 - [모델 실행·서빙](deployment/model_execution.md) · [모델 이미지 Registry](deployment/image_registry.md)
 - [Prefect](pipelines/prefect.md) · [Connector](pipelines/connectors.md) · [Data DB](pipelines/database.md)
 - [OpenMetadata Server·수집](deployment/openmetadata.md) · [법령 수집](pipelines/domains/legal_information.md)
+
+- [이전 Compose 안내](deployment/compose.md): 폐기 경로·이관 시 주의사항
 
 검증 증거: [물품 Draft 준비](verification/goods_native_draft_preparation_2026_11_09.md).

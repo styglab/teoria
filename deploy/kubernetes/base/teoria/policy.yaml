@@ -24,7 +24,10 @@ spec:
             cpu: '1'
         env:
         - name: TEORIA_ENVIRONMENT
-          value: production
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_ENVIRONMENT
         - name: TEORIA_OPA_BUNDLE_PATH
           value: /var/lib/teoria/opa/teoria.tar.gz
         - name: TEORIA_APP_DATABASE_URL
@@ -104,7 +107,10 @@ spec:
             cpu: '1'
         env:
         - name: TEORIA_ENVIRONMENT
-          value: production
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_ENVIRONMENT
         - name: TEORIA_OPA_CONTROL_PLANE_TOKEN
           valueFrom:
             secretKeyRef:

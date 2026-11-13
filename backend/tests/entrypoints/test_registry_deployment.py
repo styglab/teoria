@@ -73,7 +73,17 @@ def test_docker_context_excludes_private_deployment_state_and_keeps_parser(tmp_p
         'deploy/kubernetes/kubeconfig': False,
         'backend/src/teoria/settings.py': True,
         'archive/kory_parser/src/kory_parser/__init__.py': True,
-        'deploy/kubernetes/specification.env.example': True,
+        'deploy/kubernetes/envs/dev/specification.env.example': True,
+        'deploy/kubernetes/envs/prod/secrets.env.example': True,
+        'deploy/kubernetes/envs/dev/secrets.env': False,
+        'deploy/kubernetes/envs/prod/control.env': False,
+        'deploy/kubernetes/envs/dev/connections.env': False,
+        'deploy/kubernetes/envs/prod/connections.env': False,
+        'deploy/kubernetes/envs/dev/connections.env.example': True,
+        'deploy/kubernetes/envs/dev/harbor_values.yaml': False,
+        'deploy/kubernetes/envs/prod/harbor_values.yaml': False,
+        'deploy/kubernetes/envs/dev/harbor_values.yaml.example': True,
+        '.artifacts/k3d_legacy/credentials.json': False,
     }
     for name in samples:
         path = tmp_path / name

@@ -35,8 +35,8 @@ Bash·Python 3·`flock`·Kustomize를 지원하는 kubectl과 대상 클러스�
 
 1. `KUBECONFIG`, 대상 노드, Ingress controller·IngressClass를 확인한다.
 2. 플랫폼·Harbor 이미지와 TLS·Registry pull 인증을 준비한다.
-3. [secrets.env.example](../../deploy/kubernetes/secrets.env.example), [control.env.example](../../deploy/kubernetes/control.env.example),
-   [workload.env.example](../../deploy/kubernetes/workload.env.example)을 기준으로 역할별 Secret을 준비한다.
+3. [envs/dev·prod](../../deploy/kubernetes/envs/README.md)의 예시로 역할별 실제 env 파일을 준비하고
+   대상 context를 명시해 Secret을 등록한다.
 4. 연결 ConfigMap과 이미 검토·게시된 Runtime artifact를 준비한다.
 5. 일반 Kubernetes에는 Runtime·정책 산출물을 공유할 RWX StorageClass를 지정한다.
 
@@ -50,15 +50,17 @@ Bash·Python 3·`flock`·Kustomize를 지원하는 kubectl과 대상 클러스�
 
 ## 연결·도메인 실행 설정
 
-[connections.env.example](../../deploy/kubernetes/connections.env.example)을 보안 운영 경로로 복사해 주소를 설정한다.
-예시는 비밀값을 포함하지 않는다.
+[환경별 설정 도구](../../deploy/kubernetes/envs/README.md)에서 실제 `connections.env`를 준비하고 등록한다.
 
 ```bash
-kubectl -n teoria create configmap teoria-mlops-connections \
-  --from-env-file=/secure/teoria_connections.env --dry-run=client -o yaml | kubectl apply -f -
+# k3d 예시. 다른 클러스터는 해당 kubeconfig와 context를 사용한다.
+export KUBECONFIG="${TEORIA_K3D_KUBECONFIG:-deploy/kubernetes/k3d/.local/kubeconfig}"
+bash deploy/kubernetes/envs/settings.sh init --env dev
+# envs/dev/connections.env와 필요한 인증정보 파일을 수정한 후:
+bash deploy/kubernetes/envs/settings.sh apply --env dev --context k3d-teoria --role connections
 ```
 
-기존 ConfigMap 이름을 유지한다. 배포는 기존 값을 기본값으로 덮어쓰지 않고 필요한 키가 없으면 중단한다.
+기존 ConfigMap 이름을 유지한다. 배포는 예시를 자동 등록하거나 기존 값을 덮어쓰지 않는다. ConfigMap이 없거나 필요한 키가 빠지면 변경 전에 중단한다.
 이전에 MLOps만 설치했다면 OpenMetadata 연결·토큰·Runtime artifact·Data DB와 아래 운영 설정을 추가해야 한다.
 
 | 설정 | 기본값 | 역할 |
@@ -68,7 +70,7 @@ kubectl -n teoria create configmap teoria-mlops-connections \
 | `TEORIA_LEGAL_INFORMATION_ENABLED` | `false` | 법령 API·Worker·선언된 일정 |
 
 도메인 활성화 전 원천·API 인증·객체 저장소·모델 추론 인증 등 소유 기능의 실행 조건을 별도로 충족한다.
-값을 `true`로 바꾼 뒤 플랫폼을 배포하면 해당 API가 활성화되고 도메인 Worker가 1개 실행된다.
+파일의 값을 `true`로 바꾸고 `--role connections`로 등록한 뒤 플랫폼을 배포하면 해당 API가 활성화되고 도메인 Worker가 1개 실행된다.
 `false`이면 API는 비활성화하고 Worker는 0개로 두며 해당 Flow의 일정을 비활성화한다.
 공통 Flow에 일정이 선언되지 않았다면 자동으로 새 일정을 만들지 않는다.
 규격서 Job에는 법령 키나 모델 실행 자격증명을 넘기지 않는다. 역할별 Job Secret은 분리한다.
@@ -125,5 +127,11 @@ Harbor·이미지 빌드·외부 이미지 반입은 `all`에도 포함하지 �
 [Palantir Architecture Center](https://www.palantir.com/docs/foundry/architecture-center/overview/)의 기능·서비스 책임 구분이다.
 Teoria는 현재 도구·DB·메타데이터 권위를 유지하며 미구현 AI/AIP를 실행 구성에 추가하지 않는다.
 
-이미지 빌드 입력은 `deploy/image_builds/`에 두며, Python·UI 이미지는 소유 프로젝트의 Dockerfile을 사용한다.
+외부 서비스의 커스텀 이미지 빌드 입력은 `deploy/image_builds/`에 둔다.
+Teoria API·Worker는 `backend/Dockerfile`, UI는 `frontend/Dockerfile`에서 빌드한다.
+MLflow 서버는 `deploy/image_builds/mlflow/Dockerfile`에서 빌드하며,
+Prefect·MinIO 서버는 Kubernetes 정의에서 공식 이미지를 직접 사용한다.
 빈 환경의 설치와 도메인 활성화는 [최초 설치 절차](bootstrap.md)를 따른다.
+
+설정 등록 후 플랫폼·MLflow 배포는 입력 revision을 반영해 환경변수를 사용하는 Pod를 교체한다.
+[변경별 반영 범위](../../deploy/kubernetes/envs/README.md#3-서비스에-반영)를 따른다.

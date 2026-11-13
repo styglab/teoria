@@ -7,7 +7,7 @@ API·UI·Runtime·역할별 Worker 이미지는 분리하며, 서비스 갱신 �
 ## 현재 개발 환경의 일상 명령
 
 ```bash
-source deploy/kubernetes/k3d/.local/session.env
+export KUBECONFIG="$PWD/deploy/kubernetes/k3d/.local/kubeconfig"
 
 bash deploy/kubernetes/k3d/local.sh render > /tmp/teoria_platform.yaml
 bash deploy/kubernetes/k3d/local.sh deploy
@@ -16,7 +16,7 @@ bash deploy/kubernetes/k3d/local.sh status
 
 `render`는 클러스터에 접속하지 않는다. `deploy` 기본값은 Teoria만 갱신한다.
 이미지를 직접 빌드할 때는 `local.sh build`를 사용한다. 외부에서 검증한 이미지를 반입하면 빌드는 생략한다.
-현재 로컬 설정은 `.local/session.env`가 제공한다. 새 환경은 [k3d 설치](../docs/deployment/k3d.md)를 따른다.
+`local.sh`는 `envs/dev/k3d.env`의 호스트 설정을 자동으로 읽는다. 새 환경은 [k3d 설치](../docs/deployment/k3d.md)를 따른다.
 
 ## 최초 설치와 일상 갱신
 
@@ -59,7 +59,8 @@ kubernetes/
   prefect/                  pool·queue·실행 Job 정책
   harbor/                   독립 Harbor Helm release
   k3d/                      개발 클러스터·원격 접속 관리
-  connections.env.example   연결 주소·도메인 실행 설정 예시
+  envs/dev/, envs/prod/      환경별 일반 설정·역할별 Secret 입력·예시
+  envs/settings.sh           초기화·명시한 context에 ConfigMap/Secret 등록
 ```
 
 `base/teoria/kustomization.yaml`이 공통 플랫폼을 조립하고, `overlays/`는 저장소·Ingress 차이를 적용한다.
@@ -68,9 +69,11 @@ kubernetes/
 
 ## 데이터와 운영 설정
 
-연결 주소와 도메인 실행 설정은 [connections.env.example](kubernetes/connections.env.example)을 따른다.
+연결 주소와 도메인 실행 설정은 [환경별 connections.env](kubernetes/envs/README.md)을 따른다.
 ConfigMap 이름 `teoria-mlops-connections`는 기존 연결 설정을 보존하기 위해 유지한다.
-비밀번호·토큰은 역할별 Secret, 데이터는 PVC·객체 저장소에 둔다.
+실제 파일을 명시적으로 등록한 후 배포한다. 예시 파일은 자동 등록하지 않는다.
+비밀번호·토큰은 [envs/dev·prod](kubernetes/envs/README.md)의 역할별 파일에서 Kubernetes Secret으로 등록한다.
+데이터는 PVC·객체 저장소에 둔다.
 기존 ConfigMap을 기본값으로 덮어쓰거나 PVC·DB 이력을 자동 삭제하지 않는다.
 
 규격서 처리·법령 수집과 특정 DB의 메타데이터 정기 동기화는 기본 비활성화다.
@@ -94,5 +97,16 @@ bash deploy/kubernetes/k3d/local.sh up
 [Palantir Architecture Center](https://www.palantir.com/docs/foundry/architecture-center/overview/)의 기능·서비스 책임 구분을 참고하며
 Teoria의 현재 구현과 운영 도구를 유지한다.
 
-이미지 빌드 입력은 `deploy/image_builds/`에 두며, Python·UI 이미지는 소유 프로젝트의 Dockerfile을 사용한다.
+외부 서비스의 커스텀 이미지 빌드 입력은 `deploy/image_builds/`에 둔다.
+Teoria API·Worker는 `backend/Dockerfile`, UI는 `frontend/Dockerfile`에서 빌드한다.
+MLflow 서버는 `deploy/image_builds/mlflow/Dockerfile`에서 빌드하며,
+Prefect·MinIO 서버는 Kubernetes 정의에서 공식 이미지를 직접 사용한다.
+`image_builds/opa/`는 OPA runtime·서명 bundle builder의 Dockerfile, 기동 스크립트와
+bundle에 넣을 Rego 정책·테스트를 소유한다. `image_builds/openmetadata/`는 공식 ingestion
+이미지의 실행 환경 빌드 입력이다. 수집 설정은 서비스 소유 ConfigMap에서 주입한다. 둘 다 CI와 로컬 빌드가 같은 경로를 사용한다.
+Kubernetes 리소스는 `kubernetes/base/`에 유지하고 이미지 입력은 클러스터 overlay와 분리한다.
 빈 환경의 설치와 도메인 활성화는 [최초 설치 절차](../docs/deployment/bootstrap.md)를 따른다.
+
+k3d 원격 IP 접속은 `k3d/.local/remote_access.env`에서 관리한다.
+`remote_access.sh --check`로 확인하고 `--apply`로 반영한다. 실패 시 이전 설정을 복구하며,
+복구가 남은 경우 `--recover`를 사용한다. [원격 접속 절차](../docs/deployment/k3d.md#원격-ip-접속)를 따른다.

@@ -1,13 +1,12 @@
-# Copy outside the checkout, chmod 600 and replace every CHANGE_ME.
+# Copy to harbor_values.yaml in this environment folder (Git/build excluded), chmod 600 and fill values.
 # The DB password is an initial setting; updates require a DB rotation procedure.
-externalURL: https://harbor.example.com
+externalURL: https://harbor.teoria.localhost
 expose:
   ingress:
     hosts:
-      core: harbor.example.com
+      core: harbor.teoria.localhost
     # generic: set the installed IngressClass; k3d/k3s use traefik.
     # className: public
-# k3d: change both addresses above to harbor.teoria.localhost.
 database:
   internal:
     password: CHANGE_ME

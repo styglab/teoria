@@ -21,7 +21,10 @@ spec:
         - ingestion
         env:
         - name: TEORIA_ENVIRONMENT
-          value: production
+          valueFrom:
+            configMapKeyRef:
+              name: teoria-mlops-connections
+              key: TEORIA_ENVIRONMENT
         - name: TEORIA_PIPELINE_PATH
           value: /app/backend
         - name: PREFECT_API_URL

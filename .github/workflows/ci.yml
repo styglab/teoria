@@ -65,7 +65,13 @@ jobs:
       - run: uv run --project backend --locked --extra api teoria validate backend/contracts/runtime
       - run: uv run --project backend --locked teoria-pipelines validate backend
       - run: uv run --project backend --locked --extra api teoria-pipelines validate-integration backend --platform-registries backend/contracts/runtime
-      - run: uv run --project backend --locked --all-extras pytest backend/tests/integration/test_provider_reference_ownership.py
+      - name: Test domain and Runtime contracts without external services
+        run: >-
+          uv run --project backend --locked --all-extras --group orchestration pytest
+          backend/tests/integration/test_provider_reference_ownership.py
+          backend/tests/integration/test_goods_normalization_contract.py
+          backend/tests/integration/test_document_api_meanings.py
+          backend/tests/integration/test_goods_runtime_view.py
 
   application-db-integration:
     runs-on: ubuntu-latest
@@ -120,9 +126,10 @@ jobs:
           with psycopg.connect(os.environ["TEORIA_TEST_DATA_DATABASE_URL"], autocommit=True) as connection:
               connection.execute("CREATE ROLE teoria_pipeline")
               connection.execute("CREATE ROLE teoria_runtime")
+              connection.execute("CREATE ROLE teoria_metadata")
           PY
       - name: Test Pipeline database integration
-        run: uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/integration/data_operations
+        run: uv run --project backend --locked --all-extras --group orchestration pytest backend/tests/integration/data_operations backend/tests/integration/test_law_search_contract.py
       - name: Test Pipeline and Platform contracts
         run: uv run --project backend --locked --all-extras --group orchestration pytest tests/integration
       - run: uv run --project backend --locked --all-extras --group orchestration teoria-pipelines validate-integration backend --platform-registries backend/contracts/runtime
@@ -168,9 +175,9 @@ jobs:
         run: |
           docker build --target admin -t teoria-kubernetes-proxy-client:validation -f backend/Dockerfile .
           docker pull nginx:1.27-alpine
-          TEORIA_TEST_KUBERNETES_PROXY_DOCKER=1 TEORIA_KUBERNETES_PROXY_CLIENT_IMAGE=teoria-kubernetes-proxy-client:validation \
+          TEORIA_TEST_KUBERNETES_PROXY_DOCKER=1 TEORIA_TEST_K3D_ACCESS_DOCKER=1 TEORIA_KUBERNETES_PROXY_CLIENT_IMAGE=teoria-kubernetes-proxy-client:validation \
             uv run --project backend --locked --all-extras --group orchestration --group docker-orchestration \
-            pytest backend/tests/integration/test_kubernetes_proxy_docker.py -q
+            pytest backend/tests/integration/test_kubernetes_proxy_docker.py backend/tests/integration/test_k3d_access_proxy_docker.py -q
       - name: Test Registry through the shared edge proxy
         run: |
           docker pull registry:3.1.2

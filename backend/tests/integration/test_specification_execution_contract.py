@@ -53,6 +53,8 @@ def test_service_token_cannot_reuse_admin_credential():
 
 async def test_real_prefect_template_uses_role_configuration_and_distinct_execution_images(monkeypatch):
     pytest.importorskip("prefect_kubernetes")
+    monkeypatch.setenv("PREFECT_API_URL", "http://prefect.external.test:4200/api")
+    monkeypatch.setenv("TEORIA_ENVIRONMENT", "development")
     root = Path(__file__).resolve().parents[3] / "backend"
     for kind, image in [("ingestion", "specification-job"), ("legal-information", "legal-job")]:
         pool = load_execution_policy(root, kind, "kubernetes")["pools"][0]

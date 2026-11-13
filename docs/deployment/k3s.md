@@ -32,7 +32,7 @@ GitHub main → CI → GHCR의 commit SHA 이미지 → EC2 SSH → deploy.sh
 | HTTPS와 요청 경로 | `deploy/kubernetes/base/teoria/ingress.yaml` |
 | 순서가 있는 초기화·migration·등록 | `deploy/kubernetes/base/teoria/`, `base/services/<service>/` |
 | 배포 순서·대기·실패 처리 | `deploy/kubernetes/deploy.sh --overlay k3s` |
-| 환경별 인증정보의 키 목록 | `deploy/kubernetes/secrets.env.example` |
+| 환경별 인증정보의 키 목록 | `deploy/kubernetes/envs/prod/secrets.env.example` |
 | 이미지 빌드·EC2 배포 | `.github/workflows/deploy_k3s.yaml` |
 
 Kustomize는 `kubectl`에 포함된 기능만 사용한다. Helmfile이나 별도 GitOps 서버는 필요하지 않다.
@@ -81,20 +81,21 @@ GitHub 호스티드 runner가 SSH에 접근할 경로를 준비한다. 그 경�
 
 ## 인증정보와 최초 데이터
 
-비밀값을 Git에 넣지 않는다. 예제 파일을 checkout 밖으로 복사해 `CHANGE_ME`와 URL을 채운다.
+비밀값을 Git에 넣지 않는다. [envs/prod](../../deploy/kubernetes/envs/README.md)의 예시로
+운영자 환경의 실제 파일을 준비하고 `CHANGE_ME`와 URL을 채운다.
 역할별 암호와 DSN의 암호는 같아야 하며, DSN 암호는 URL encoding한다.
 
 ```bash
-kubectl create namespace teoria
-cp deploy/kubernetes/secrets.env.example /secure/teoria-secrets.env
-chmod 600 /secure/teoria-secrets.env
-# 파일을 채운 다음 실행한다.
-kubectl -n teoria create secret generic teoria-secrets \
-  --from-env-file=/secure/teoria-secrets.env
-kubectl -n teoria create secret docker-registry teoria-registry \
+# KUBE_CONTEXT는 운영 대상 context 이름으로 지정한다.
+kubectl --context "$KUBE_CONTEXT" create namespace teoria
+bash deploy/kubernetes/envs/settings.sh init --env prod --dir /secure/teoria/prod
+# /secure/teoria/prod/connections.env와 secrets.env를 채운 다음 실행한다.
+bash deploy/kubernetes/envs/settings.sh apply --env prod --context "$KUBE_CONTEXT" --role connections --dir /secure/teoria/prod
+bash deploy/kubernetes/envs/settings.sh apply --env prod --context "$KUBE_CONTEXT" --role platform --dir /secure/teoria/prod
+kubectl --context "$KUBE_CONTEXT" -n teoria create secret docker-registry teoria-registry \
   --docker-server=ghcr.io --docker-username="$GHCR_USER" \
   --docker-password="$GHCR_READ_TOKEN"
-kubectl -n teoria create secret tls teoria-tls \
+kubectl --context "$KUBE_CONTEXT" -n teoria create secret tls teoria-tls \
   --cert=/secure/fullchain.pem --key=/secure/privkey.pem
 ```
 
@@ -151,7 +152,7 @@ GitHub Environment `production`을 만들고 다음을 설정한다. 자동 배�
 
 - CI에서 K3s API 서버의 server dry-run으로 매니페스트를 검증한다.
 - `CI`가 성공한 `main` push만 이미지 빌드·배포한다. PR·fork 실행 결과는 배포하지 않는다.
-- 이미지 9종은 commit SHA tag로 저장한다. `latest`로 배포하지 않는다.
+- CI·로컬 빌드에 선언된 이미지는 commit SHA tag로 저장한다. `latest`로 배포하지 않는다.
 - EC2에는 Git에 커밋된 `deploy/kubernetes/`를 전달한다. 비밀값은 GitHub에서 전송하지 않고
   사전 생성된 클러스터 Secret을 사용하며 수집 namespace에 필요한 키만 동기화한다.
 - GitHub concurrency와 EC2의 파일 lock으로 배포를 직렬화한다. 이미 더 최신 main이 있으면 과거 실행을 건너뛴다.
@@ -175,34 +176,31 @@ Kubernetes Job이다. Docker socket·Docker daemon·Airflow를 요구하지 않�
 
 ## 정해진 자원 안에서 파이프라인 병렬 실행
 
-수집 Flow·Task와 `backend/config/specification_processing/prefect_deployments.yaml`의 기본 파라미터·스케줄은 공통이다.
-K3s Pool·Queue는 `deploy/kubernetes/prefect/`, namespace·자원·Secret 주입 정책은 그 안의 `execution.yaml`에서 읽는다.
-Compose는 기존 `teoria-ingestion` Process Worker 내부에서 실행한다. K3s는 등록 시
-work pool만 `teoria-ingestion-k3s`로 바꾸고, Kubernetes Worker가 실행마다 별도 Job을 만든다.
-Flow마다 Docker·Kubernetes 분기 코드를 넣지 않는다.
+규격서 Flow·Task와 `backend/config/specification_processing/prefect_deployments.yaml`의 기본 파라미터는 공통이다.
+Kubernetes Pool·Queue는 `deploy/kubernetes/prefect/`, namespace·자원·Secret 주입 정책은
+그 안의 `execution.yaml`에서 읽는다. 규격서는 `teoria-specification` / `documents`,
+법령은 `teoria-legal-information` / `laws`를 사용하며 실행마다 별도 Kubernetes Job을 만든다.
 
-기본 정책은 다음과 같다. EC2의 사양과 서비스에 남길 자원을 고려해 배포 전에 조정한다.
+기본 정책은 다음과 같다. EC2 사양과 기반 서비스 자원을 고려해 조정한다.
 
 | 설정 | 기본값 | 변경 위치 |
 |---|---|---|
-| 수집 전체 requests 예산 | CPU 2·메모리 4Gi | `deploy/kubernetes/base/teoria/pipeline_execution/resource_quota.yaml` |
-| 수집 전체 limits 예산 | CPU 4·메모리 8Gi | 같은 ResourceQuota |
-| 작업당 requests | CPU 1·메모리 2Gi | 등록 Job의 `TEORIA_JOB_CPU_REQUEST`, `TEORIA_JOB_MEMORY_REQUEST` |
-| 작업당 limits | CPU 2·메모리 4Gi | 등록 Job의 `TEORIA_JOB_CPU_LIMIT`, `TEORIA_JOB_MEMORY_LIMIT` |
-| 수집 동시 실행 상한 | 2 | 등록 Job의 `TEORIA_PIPELINE_CONCURRENCY` |
-| Backfill·보정 동시 실행 상한 | 1 | 등록 Job의 `TEORIA_PIPELINE_BACKFILL_CONCURRENCY` |
+| 작업 전체 requests 예산 | CPU 2·메모리 4Gi | `deploy/kubernetes/base/teoria/pipeline_execution/resource_quota.yaml` |
+| 작업 전체 limits 예산 | CPU 4·메모리 8Gi | 같은 ResourceQuota |
+| 작업당 requests | CPU 1·메모리 2Gi | `deploy/kubernetes/prefect/execution.yaml` |
+| 작업당 limits | CPU 2·메모리 4Gi | 같은 실행 정책 |
+| 규격서 Pool·Queue 동시 실행 상한 | 2 | 등록 Job의 `TEORIA_PIPELINE_CONCURRENCY` |
+| 법령 Pool·Queue 동시 실행 상한 | 1 | `deploy/kubernetes/prefect/legal_information.yaml` |
 
 공통 등록 명령은 `teoria-pipelines register --backend kubernetes --kind all`이다.
-작업당 기본값은 `backend/src/teoria/integrations/prefect/deployment.py`, 운영 override는
-`deploy/kubernetes/base/domains/*/register.yaml`의 환경변수로 관리한다. Prefect work pool의
-base job template에 등록되며, Deployment의 `work_pool.job_variables`로 작업별 CPU·메모리를
-다르게 지정할 수도 있다. 등록 Job이 원본 YAML을 임시 사본으로 변환하므로
-공통 Flow 선언의 스케줄·입력 파라미터는 바뀌지 않는다.
+작업 자원 override는 등록 Job의 `TEORIA_JOB_CPU_REQUEST`·`TEORIA_JOB_MEMORY_REQUEST`·
+`TEORIA_JOB_CPU_LIMIT`·`TEORIA_JOB_MEMORY_LIMIT`로 전달한다. 등록 코드는 이를 Prefect
+base job template에 반영한다. 원본 Flow 선언의 스케줄·입력 파라미터는 바꾸지 않는다.
 
-최신 수집은 `latest` Queue, Backfill·보정은 `backfill` Queue를 사용한다.
-기본 동시 실행 상한 내에서 최대 2개 Job을 생성하되 Backfill·보정은 1개까지만 실행한다.
-나머지는 Prefect에서 대기한다. 최신 수집을 먼저 선택하며 이미 실행 중인 작업을 선점하지 않는다.
-같은 Deployment 중복 실행은 기존 `CANCEL_NEW` 정책이 먼저 적용된다.
+규격서 Deployment는 `ENQUEUE`, 법령 Deployment는 `CANCEL_NEW` 중복 실행 정책을 사용한다.
+이전 조달 수집의 `latest`·`backfill` Queue와 Backfill 등록은 현재 실행 범위가 아니다.
+규격서와 법령은 같은 namespace 자원 예산을 공유하므로 Pool별 동시 실행 상한 외에
+Quota와 실제 노드 여유를 함께 확인한다.
 Kubernetes는 requests와 실제 노드의 예약 가능한 자원을 기준으로 Pod를 배치하고,
 CPU limit 초과 사용을 제한하며 메모리 limit 초과 시 프로세스가 종료될 수 있다.
 Quota는 `teoria-pipelines` namespace에만 적용되므로 API·DB·Prefect Server 예산과 구분된다.

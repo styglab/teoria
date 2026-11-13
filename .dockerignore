@@ -47,3 +47,4 @@ deploy/kubernetes/.release_*/
 **/*secret*.yaml
 **/*secret*.yml
 **/*.oci
+deploy/kubernetes/envs/*/harbor_values.yaml
